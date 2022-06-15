@@ -1,0 +1,81 @@
+---
+WRITE_TO_S3_PARQUET:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/processed/write_some_parquet.parquet"
+      file_type: "parquet"
+  CLOUD:
+    type: "s3_file"
+    s3:
+      bucket: "[[ MOCK_BUCKET ]]"
+      file_path: "test/write_some_parquet.parquet"
+      file_type: "parquet"
+
+WRITE_TO_S3_CSV:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/processed/write_some_csv.csv"
+      file_type: "csv"
+  CLOUD:
+    type: "s3_file"
+    s3:
+      bucket: "[[ MOCK_BUCKET ]]"
+      file_path: "test/write_some_csv.csv"
+      file_type: "csv"
+
+WRITE_TO_S3_JSON:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/processed/write_some_json.json"
+      file_type: "json"
+  CLOUD:
+    type: "s3_file"
+    s3:
+      bucket: "[[ MOCK_BUCKET ]]"
+      file_path: "test/write_some_json.json"
+      file_type: "json"
+
+WRITE_TO_S3_HDF:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/processed/write_some_h5.h5"
+      file_type: "hdf"
+  CLOUD:
+    type: "s3_file"
+    s3:
+      bucket: "[[ MOCK_BUCKET ]]"
+      file_path: "test/write_some_h5.h5"
+      file_type: "hdf"
+
+WRITE_TO_KAFKA_JSON:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/processed/write_kafka_messages.json"
+      file_type: "json"
+    options:
+      orient: "records"
+  CLOUD:
+    type: "kafka"
+    kafka:
+      kafka_server: "[[ KAFKA_SERVER ]]"
+      kafka_topic: "[[ KAFKA_TOPIC ]]"
+
+WRITE_TO_PG_PARQUET:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/processed/write_kafka_messages.parquet"
+      file_type: "parquet"
+  CLOUD:
+    type: "postgres"
+    postgres:
+      db_host: "[[ DB_HOST ]]"
+      db_port: "[[ DB_PORT ]]"
+      db_name: "[[ DB_NAME ]]"
+      db_user: "[[ DB_USER ]]"
+      db_password: "[[ DB_PASS ]]"

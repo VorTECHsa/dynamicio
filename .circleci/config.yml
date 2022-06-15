@@ -1,0 +1,79 @@
+---
+version: 2.1
+
+jobs:
+  build:
+    working_directory: ~/project
+    docker:
+      - image: cimg/python:3.8
+    steps:
+      - checkout
+      - run:
+          name: "Install requirements"
+          command: |
+            pip install --upgrade pip
+            pip install -r requirements.txt
+            pip install -r requirements-dev.txt
+      - run:
+          name: "Code Quality Check"
+          command: |
+            black dynamicio
+            black tests
+            flake8 --verbose dynamicio
+            flake8 --verbose tests
+            pylint -v dynamicio
+            pylint -v tests
+            yamllint -v dynamicio
+            yamllint -v tests
+      - run:
+          name: "Run Python Tests"
+          command: |
+            pytest --cache-clear --cov=dynamicio tests/
+      - persist_to_workspace:
+          root: ./
+          paths:
+            - ./
+
+  publish_artifact:
+    working_directory: ~/project
+    docker:
+      - image: cimg/python:3.8
+    steps:
+      - attach_workspace:
+          at: ./
+      - run:
+          name: "Install build requirements"
+          command: |
+            pip install --upgrade pip
+            pip install -r requirements-build.txt
+#     TODO: Update to work with pypi
+#      - run:
+#          name: "Build package"
+#          command: |
+#            BUILD_VERSION=${CIRCLE_TAG:1} python setup.py sdist bdist_wheel
+#      - run:
+#          name: "Publish"
+#          command: |
+#            twine upload --repository codeartifact dist/*
+
+workflows:
+  version: 2
+  main:
+    jobs:
+      - build:
+          filters: # required since `deploy` has tag filters AND requires `build`
+            tags:
+              only: /v.*/ # tag needs to start with a v, e.g. v0.0.1
+          context:
+            - rnd-pmmt-profile
+
+      - publish_artifact:
+          requires:
+            - build
+          filters:
+            tags:
+              only: /v.*/
+            branches:
+              ignore: /.*/
+          context:
+            - rnd-pmmt-profile

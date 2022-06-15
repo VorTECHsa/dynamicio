@@ -1,0 +1,18 @@
+columns:
+  bar:
+    metrics: []
+    type: int64
+    validations: {}
+  baz:
+    metrics: []
+    type: object
+    validations: {}
+  foo:
+    metrics: []
+    type: object
+    validations: {}
+  id:
+    metrics: []
+    type: object
+    validations: {}
+name: some_pg_parquet_to_read

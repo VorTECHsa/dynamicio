@@ -1,0 +1,83 @@
+---
+READ_FROM_ATHENA:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/input/some_parquet_to_read.parquet"
+      file_type: "parquet"
+  CLOUD:
+    type: "athena"
+    athena:
+      db_host: "[[ DB_HOST ]]"
+      db_port: "[[ DB_PORT ]]"
+      db_name: "[[ DB_NAME ]]"
+      db_user: "[[ DB_USER ]]"
+      db_password: "[[ DB_PASS ]]"
+
+READ_MOCK_S3_CSV:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/input/some_csv_to_read.csv"
+      file_type: "csv"
+  CLOUD:
+    type: "s3"
+    s3:
+      bucket: "[[ MOCK_BUCKET ]]"
+      file_path: "[[ MOCK_KEY ]]"
+      file_type: "csv"
+  # Missing SCHEMA
+
+READ_FROM_S3_JSON:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/external/json_with_more_columns.json"
+      file_type: "json"
+  CLOUD:
+    type: "s3"
+    s3:
+      bucket: "[[ MOCK_BUCKET ]]"
+      file_path: "[[ MOCK_KEY ]]"
+      file_type: "json"
+
+READ_FROM_S3_HDF:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/external/h5_with_more_columns.h5"
+      file_type: "hdf"
+  CLOUD:
+    type: "s3"
+    s3:
+      bucket: "[[ MOCK_BUCKET ]]"
+      file_path: "[[ MOCK_KEY ]]"
+      file_type: "hdf"
+
+WRITE_TO_S3_PARQUET:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/external/some_parquet_with_schema_dictated_column_order.parquet"
+      file_type: "parquet"
+  CLOUD:
+    type: "s3"
+    s3:
+      bucket: "[[ MOCK_BUCKET ]]"
+      file_path: "test/write_some_parquet.parquet"
+      file_type: "parquet"
+
+WRITE_TO_S3_CSV:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/external/write_some_csv.csv"
+      file_type: "csv"
+  CLOUD:
+    type: "s3"
+    s3:
+      bucket: "[[ MOCK_BUCKET ]]"
+      file_path: "test/write_some_csv.csv"
+      file_type: "csv"
+  schema:
+    file_path: "[[ TEST_RESOURCES ]]/schemas/write_to_s3_csv.yaml"

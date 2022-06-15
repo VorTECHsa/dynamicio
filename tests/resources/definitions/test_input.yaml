@@ -1,0 +1,120 @@
+---
+READ_FROM_S3_CSV_ALT:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/input/some_csv_to_read.csv"
+      file_type: "csv"
+  CLOUD:
+    type: "s3"
+    s3:
+      bucket: "[[ MOCK_BUCKET ]]"
+      file_path: "[[ MOCK_KEY ]]"
+      file_type: "csv"
+
+READ_FROM_S3_CSV:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/input/some_csv_to_read.csv"
+      file_type: "csv"
+  CLOUD:
+    type: "s3"
+    s3:
+      bucket: "[[ MOCK_BUCKET ]]"
+      file_path: "[[ MOCK_KEY ]]"
+      file_type: "csv"
+  schema:
+    file_path: "[[ TEST_RESOURCES ]]/schemas/read_from_s3_csv.yaml"
+
+READ_FROM_S3_JSON:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/input/some_json_to_read.json"
+      file_type: "json"
+  CLOUD:
+    type: "s3"
+    s3:
+      bucket: "[[ MOCK_BUCKET ]]"
+      file_path: "[[ MOCK_KEY ]]"
+      file_type: "json"
+
+READ_FROM_S3_HDF:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/input/some_hdf_to_read.h5"
+      file_type: "hdf"
+  CLOUD:
+    type: "s3"
+    s3:
+      bucket: "[[ MOCK_BUCKET ]]"
+      file_path: "[[ MOCK_KEY ]]"
+      file_type: "hdf"
+
+READ_FROM_S3_PARQUET:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/input/some_parquet_to_read.parquet"
+      file_type: "parquet"
+  CLOUD:
+    type: "s3"
+    s3:
+      bucket: "[[ MOCK_BUCKET ]]"
+      file_path: "s3:sample-prefix/[[ MOCK_KEY ]]"
+      file_type: "parquet"
+
+READ_FROM_POSTGRES:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/input/some_pg_parquet_to_read.parquet"
+      file_type: "parquet"
+  CLOUD:
+    type: "postgres"
+    postgres:
+      db_host: "[[ DB_HOST ]]"
+      db_port: "[[ DB_PORT ]]"
+      db_name: "[[ DB_NAME ]]"
+      db_user: "[[ DB_USER ]]"
+      db_password: "[[ DB_PASS ]]"
+
+READ_FROM_KAFKA:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/input/some_parquet_to_read.parquet"
+      file_type: "parquet"
+  CLOUD:
+    type: "kafka"
+    kafka:
+      kafka_server: "[[ KAFKA_SERVER ]]"
+      kafka_topic: "[[ KAFKA_TOPIC ]]"
+
+TEMPLATED_FILE_PATH:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/input/{file_name_to_replace}.csv"
+      file_type: "csv"
+  CLOUD:
+    type: "s3"
+    s3:
+      bucket: "[[ MOCK_BUCKET ]]"
+      file_path: "path/to/{file_name_to_replace}.csv"
+      file_type: "csv"
+
+READ_FROM_PARQUET_TEMPLATED:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/input/{file_name_to_replace}.parquet"
+      file_type: "parquet"
+  CLOUD:
+    type: "s3"
+    s3:
+      bucket: "[[ MOCK_BUCKET ]]"
+      file_path: "path/to/{file_name_to_replace}.parquet"
+      file_type: "parquet"

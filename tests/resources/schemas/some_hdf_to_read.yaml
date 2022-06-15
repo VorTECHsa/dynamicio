@@ -1,0 +1,14 @@
+columns:
+  id:
+    metrics: []
+    type: int64
+    validations: {}
+  bar:
+    metrics: []
+    type: int64
+    validations: {}
+  foo_name:
+    metrics: []
+    type: object
+    validations: {}
+name: some_hdf_to_read

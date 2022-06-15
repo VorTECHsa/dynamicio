@@ -1,0 +1,357 @@
+appName: dynamicio-docs-{{ requiredEnv "CIRCLE_BRANCH" | replace "_" "-" | replace "/" "-" | lower }}
+
+# [Required]
+# Type: String
+# Docker image reposistory
+image: 874568069660.dkr.ecr.eu-west-1.amazonaws.com/pmmt/dynamicio-docs
+
+# [Required]
+# Type: String
+# Docker image tag
+tag: {{requiredEnv "CIRCLE_SHA1"}}
+
+# [Required]
+# Type: String
+# The Service Account name that will manage AWS access (This should be created on Terraform)
+serviceAccountName: schemexa-api
+
+# [Optional]
+# Type: Integer
+# What port will the app expose?
+port: 4000
+
+# [Optional]
+# Type: Map
+# Configuration to be passed in as environment variables
+env:
+
+# [Optional]
+# Type: Map
+# Secrets to be passed in as environment variables
+secrets:
+  {}
+  # key: value
+
+# Type: Integer
+# Minimum number of pods
+minPods: 1
+
+# [Optional]
+# Type: Integer
+# Default: value of minPods
+# Maximum number of pods
+maxPods:
+
+# [Optional]
+# Type: String
+# Example: 0.5, 1024m, 1
+# Minimum CPU usage of each pod
+cpuMinUsage: 100m
+
+# Type: String
+# Example: 0.5, 1024m, 1
+# Maximum CPU usage of each pod
+cpuMaxUsage: 300m
+
+# [Optional]
+# Type: Integer
+# Example: 70
+# Average CPU usage in percentage among all the pods
+cpuAverageUsage:
+
+# [Optional]
+# Type: String
+# Example: 500Mi, 2Gi, 1Ti
+# Minimum memory usage of each pod
+memoryMinUsage: 100Mi
+
+# Type: String
+# Example: 500Mi, 2Gi, 1Ti
+# Maximum memory usage of each pod
+memoryMaxUsage: 150Mi
+
+# Type: Any valid yaml
+# Values to override the entrypoint when starting the application
+entrypoint: []
+
+# Type: Any valid yaml
+# Values to override the arguments when starting the application
+arguments: []
+
+# Type: Map
+# Additional annotation to add to the pod
+pod_annotations:
+  {}
+  # cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
+
+# Type: Boolean
+# Experiment feature that should only be used with care in k8s prod
+# Turning on this feature will:
+# - Allow the cluster to automatically choose the right resources request based on historical usage.
+# - Disable cpuAverageUsage.
+autoscale_resources: false
+
+# Type: String
+# Name of the cluster that is being deployed into
+# Possible values:
+# - develop: development k8s cluster
+# - prod: production k8s cluster
+clusterName: develop
+
+permission:
+  # [Optional]
+  # Type: String
+  # Example: arn:aws:iam::AWS_ACCOUNT_ID:role/IAM_ROLE_NAME
+  # ARN of the role that the application will have
+  awsRole:
+
+# [Required]
+# Type: String
+# Possible values:
+# - non-critical
+# - critical
+# Label alert level to route alerts to critical or non-critical Slack channels
+vortexa_alert_level: non-critical
+
+###
+# More information when configuring healthcheck.
+# https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/#configure-probes
+healthcheck:
+  ###
+  # livenessProbe is useful to detect internal error of the application. For instance:
+  #   - The app may crash after running for some time.
+  #   - The app is not in a functional state and requires a restart (it is unable to restart itself).
+  livenessProbe:
+    # Type: Boolean
+    # When livenessProbe is enabled and a pod is marked as failed for this healthcheck,
+    # Kubernetes will automatically retart that pod.
+    enabled: false
+
+    # Type: String
+    # Relative url path to check for the pod health
+    # Other examples: /healthcheck, /healthz
+    urlPath: /healthcheck
+
+    # Type: Integer
+    # Number of seconds after the container has started before the probes are initiated.
+    initialDelaySeconds: 30
+
+    # Type: Integer
+    # How often (in seconds) to perform the probe or duration between 2 consecutive probes
+    periodSeconds: 10
+
+    # Type: Integer
+    # Number of seconds after which the probe times out.
+    timeoutSeconds: 3
+
+    # Type: Integer
+    # Minimum consecutive successes for the probe to be considered successful after having failed.
+    successThreshold: 1
+
+    # Type: Integer
+    # When a Pod starts and the probe fails, the system will try failureThreshold times before marking it as failed.
+    # Each check is consider failed if the response code is not between 200 and 399
+    failureThreshold: 2
+
+  ###
+  # readinessProbe is useful to detect the availabily of the app's dependencies. For instance:
+  #   - The app reads data from a database but it detect that the DB cannot be reached.
+  #   - The app needs to make API calls to another service but that service is not available.
+  readinessProbe:
+    # Type: Boolean
+    # When readinessProbe is enabled and a pod is marked as failed for this healthcheck,
+    # Kubernetes will immediately stop sending traffic to this pod.
+    enabled: false
+
+    # Type: String
+    # Relative url path to check for the pod health
+    # Other examples: /healthcheck, /healthz
+    urlPath: /
+
+    # Type: Integer
+    # Number of seconds after the container has started before the probes are initiated.
+    initialDelaySeconds: 5
+
+    # Type: Integer
+    # How often (in seconds) to perform the probe or duration between 2 consecutive probes
+    periodSeconds: 10
+
+    # Type: Integer
+    # Number of seconds after which the probe times out.
+    timeoutSeconds: 3
+
+    # Type: Integer
+    # Minimum consecutive successes for the probe to be considered successful after having failed.
+    successThreshold: 1
+
+    # Type: Integer
+    # When a Pod starts and the probe fails, the system will try failureThreshold times before marking it as failed.
+    # Each check is consider failed if the response code is not between 200 and 399
+    failureThreshold: 3
+
+persistence:
+  # Type: Boolean
+  # Will the app need persistence storage
+  enabled: false
+
+  # Type: Boolean
+  # Can the storage be shared between all the pods of this app?
+  sharedBetweenPods: true
+
+  # Type: String
+  # Quality of the persistent volume.
+  # This only takes effect when: sharedBetweenPods == false || maxPods == 1
+  # Possible values:
+  # - normal-cheap: The speed for this storage type is average but the cost is low. Minimum storage is 500Gi
+  # - fast-expensive: The speed for this storage type is fast but the cost is expensive
+  quality: fast-expensive
+
+  # Type: String
+  # Other examples: 500Mi, 2Gi, 1Ti
+  size: 500Mi
+
+  # Type: String
+  # The app can access the persistence storage locally at this absolute path
+  # Required if enabled is true
+  # Example: /app/vortexa/data
+  localPath:
+
+  # [Optional]
+  # Type: String
+  # Overwrite the owner permission of the mounted volume
+  # If this is not specified, the mounted directory is owned by root by default so other user cannot write to it
+  # drwxr-xr-x 3 root    root    4096 Sep 16 03:11 data
+  # Example: 5000
+  owner:
+
+exposeApp:
+  # Type: Boolean
+  #
+  # If this flag is set to true, the app can be accessed from outside of k8s cluster.
+  # Set it to false if the app should only be reached by other apps within the same cluster.
+  #
+  # The url will be auto-generated with format of:
+  # - For "vpn" scope: <appName>.kube.<clusterName>.vortexa.com
+  #   e.g. api.kube.develop.vortexa.com
+  # - For "internet" scope: <appName>.public.kube.<clusterName>.vortexa.com
+  #   e.g. api.public.kube.prod.vortexa.com
+  enabled: true
+
+  # Type: String
+  # Scope to control the level of access for the urls (both default and extra urls)
+  # Possible values:
+  # - vpn:
+  #     + Can only be accessed if connected to VPN or office network.
+  #     + Use this scope when the target users are Vortexa internal users.
+  #     + Existing use cases: lenses-green.kube.prod.vortexa.com, lawgiver.kube.prod.vortexa.com
+  # - internet:
+  #     + Can be accessed from the Internet.
+  #     + Use this scope when the target users are general public users
+  #       or services from the Internet like GitHub, etc.
+  #     + Exisitng use cases: atlantis.public.kube.develop.vortexa.com
+  scope: vpn
+
+  # Type: List
+  # In addition to the default url to be exposed, extra urls can be provided in case customized urls are desired.
+  # Make sure that the extra urls are pointing to the default generated url (CNAME)
+  #
+  # NOTE:
+  # - The extra urls will follow the scope as defined above.
+  #   For example:
+  #     When one of the extra urls is api.vortexa.com and the scope is set to vpn,
+  #     user can only make an api call to this url if he/she is within Vortexa's network.
+  #     path defaults to "/" or can be specified for each host
+  extraUrls:
+    # - host: api.vortexa.com
+    #   path: /foo
+
+# Note: only use this if you know what you are doing.
+# The main purpose of this is to make the chart more extensible by allowing us to manipulate
+# features that are not cover by the flags above or are not even introduced by k8s yet.
+advancedConfigs:
+  # Add or override nested flags
+  override:
+    # Use this to override configs of controller e.g. deployment, statefulset or pod manifest
+    controller:
+      {}
+      # template:
+      #     spec:
+      #       terminationGracePeriodSeconds: 300
+
+    # Use this to override metadata of controller e.g. deployment, statefulset
+    controller_metadata:
+      {}
+      # labels:
+      #   key: value
+      # annotations:
+      #   key: value
+
+    # Add or override any flags for base container
+    # Note that container manifest is different from pod template.
+    container:
+      {}
+      # imagePullPolicy: IfNotPresent
+
+  # Add additional element to the attributes that we are interested in.
+  # Note that the interface is designed like this because Helm does not support merging arrays.
+  extra:
+    initContainers:
+      []
+      # - name: initContainer
+      #   image: alpine
+
+    containers:
+      []
+      # - name: container
+      #   image: nginx
+
+    volumes:
+      []
+      # - name: cache
+      #   emptyDir: {}
+
+    volumeMounts:
+      []
+      # - mountPath: /cache
+      #   name: cache
+
+    ports:
+      []
+      # - name: "extra_pod"
+      #   containerPort: 200
+      #   protocol: TCP
+
+    env: []
+
+    envFrom:
+      []
+      # - secretRef:
+      #     name: secret
+      # - configMapRef:
+      #     name: configmap
+
+    configmaps:
+      []
+      # - name: extra
+      #   content:
+      #     key: value
+      #   mountAsPath:
+      #     mountPath: /opt/file.txt
+      #     subPath: file.txt
+      #     items:
+      #       - key: log_level
+      #         path: log_level
+      #   mountAsEnv: false
+
+    secrets:
+      []
+      # - name: extra
+      #   content:
+      #     key: value
+      #   mountAsPath:
+      #     mountPath: /opt/file.txt
+      #     subPath: file.txt
+      #     items:
+      #       - key: log_level
+      #         path: log_level
+      #   mountAsEnv: false

@@ -1,0 +1,80 @@
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+---
+repos:
+  - repo: local
+    hooks:
+      - id: gitlint
+        name: gitlint
+        language: python
+        entry: gitlint
+        args: [--staged, --msg-filename]
+        stages: [commit-msg]
+
+  - repo: local
+    hooks:
+      - id: formatting
+        name: "isort and black"
+        exclude: ^(tests/conftest.py)
+        entry: bash -c '(isort "$@" && black "$@") || true; git add -u' --
+        language: system
+        types: [python]
+        stages: [commit]
+
+  - repo: local
+    hooks:
+      - id: pylint
+        name: pylint
+        entry: pylint
+        language: system
+        types: [python]
+        stages: [commit]
+
+  - repo: local
+    hooks:
+      - id: pydocstyle
+        name: pydocstyle
+        exclude: ^(tests/.*)
+        language: system
+        entry: pydocstyle
+        stages: [commit]
+
+  - repo: local
+    hooks:
+      - id: flake8
+        name: flake8
+        entry: flake8
+        language: system
+        types: [python]
+        stages: [commit]
+
+  - repo: local
+    hooks:
+      - id: yamllint
+        name: yamllint
+        description: This hook runs yamllint.
+        entry: yamllint
+        language: python
+        types: [file, yaml]
+        stages: [commit]
+
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        description: Static type checking
+        entry: mypy dynamicio/
+        language: system
+        types: [python]
+        stages: [commit]
+        pass_filenames: false
+
+  - repo: local
+    hooks:
+      - id: pytest-check
+        name: pytest-check
+        entry: python -m pytest tests --cov=dynamicio --cov-report=html --cov-report=xml -v
+        exclude: ^(.github|.circleci|docs|.flake8|.gitlint|.pylintrc|.docs.Dockerfile|README.md|Makefile|setup.py)
+        language: system
+        pass_filenames: false
+        stages: [commit]

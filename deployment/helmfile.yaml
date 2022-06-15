@@ -1,0 +1,10 @@
+releases:
+  - namespace: pmmt
+    chart: vortexa/vortexa-common
+    version: 3.2.4
+    values:
+      - release_basename: dynamicio-docs
+      - conf/values-{{ .Environment.Name }}.yaml.gotmpl
+      - image: 874568069660.dkr.ecr.eu-west-1.amazonaws.com/pmmt/dynamicio-docs
+      - tag: '{{ requiredEnv "CIRCLE_SHA1" }}'
+      - vortexa_alert_level: non-critical
