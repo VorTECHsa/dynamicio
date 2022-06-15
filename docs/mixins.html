@@ -1,0 +1,2096 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
+<meta name="generator" content="pdoc 0.10.0" />
+<title>dynamicio.mixins API documentation</title>
+<meta name="description" content="Implements all dynamic(i/o) mixins." />
+<link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
+<link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/typography.min.css" integrity="sha256-7l/o7C8jubJiy74VsKTidCy1yBkRtiUGbVkYBylBqUg=" crossorigin>
+<link rel="stylesheet preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.1.1/styles/github.min.css" crossorigin>
+<style>:root{--highlight-color:#fe9}.flex{display:flex !important}body{line-height:1.5em}#content{padding:20px}#sidebar{padding:30px;overflow:hidden}#sidebar > *:last-child{margin-bottom:2cm}.http-server-breadcrumbs{font-size:130%;margin:0 0 15px 0}#footer{font-size:.75em;padding:5px 30px;border-top:1px solid #ddd;text-align:right}#footer p{margin:0 0 0 1em;display:inline-block}#footer p:last-child{margin-right:30px}h1,h2,h3,h4,h5{font-weight:300}h1{font-size:2.5em;line-height:1.1em}h2{font-size:1.75em;margin:1em 0 .50em 0}h3{font-size:1.4em;margin:25px 0 10px 0}h4{margin:0;font-size:105%}h1:target,h2:target,h3:target,h4:target,h5:target,h6:target{background:var(--highlight-color);padding:.2em 0}a{color:#058;text-decoration:none;transition:color .3s ease-in-out}a:hover{color:#e82}.title code{font-weight:bold}h2[id^="header-"]{margin-top:2em}.ident{color:#900}pre code{background:#f8f8f8;font-size:.8em;line-height:1.4em}code{background:#f2f2f1;padding:1px 4px;overflow-wrap:break-word}h1 code{background:transparent}pre{background:#f8f8f8;border:0;border-top:1px solid #ccc;border-bottom:1px solid #ccc;margin:1em 0;padding:1ex}#http-server-module-list{display:flex;flex-flow:column}#http-server-module-list div{display:flex}#http-server-module-list dt{min-width:10%}#http-server-module-list p{margin-top:0}.toc ul,#index{list-style-type:none;margin:0;padding:0}#index code{background:transparent}#index h3{border-bottom:1px solid #ddd}#index ul{padding:0}#index h4{margin-top:.6em;font-weight:bold}@media (min-width:200ex){#index .two-column{column-count:2}}@media (min-width:300ex){#index .two-column{column-count:3}}dl{margin-bottom:2em}dl dl:last-child{margin-bottom:4em}dd{margin:0 0 1em 3em}#header-classes + dl > dd{margin-bottom:3em}dd dd{margin-left:2em}dd p{margin:10px 0}.name{background:#eee;font-weight:bold;font-size:.85em;padding:5px 10px;display:inline-block;min-width:40%}.name:hover{background:#e0e0e0}dt:target .name{background:var(--highlight-color)}.name > span:first-child{white-space:nowrap}.name.class > span:nth-child(2){margin-left:.4em}.inherited{color:#999;border-left:5px solid #eee;padding-left:1em}.inheritance em{font-style:normal;font-weight:bold}.desc h2{font-weight:400;font-size:1.25em}.desc h3{font-size:1em}.desc dt code{background:inherit}.source summary,.git-link-div{color:#666;text-align:right;font-weight:400;font-size:.8em;text-transform:uppercase}.source summary > *{white-space:nowrap;cursor:pointer}.git-link{color:inherit;margin-left:1em}.source pre{max-height:500px;overflow:auto;margin:0}.source pre code{font-size:12px;overflow:visible}.hlist{list-style:none}.hlist li{display:inline}.hlist li:after{content:',\2002'}.hlist li:last-child:after{content:none}.hlist .hlist{display:inline;padding-left:1em}img{max-width:100%}td{padding:0 .5em}.admonition{padding:.1em .5em;margin-bottom:1em}.admonition-title{font-weight:bold}.admonition.note,.admonition.info,.admonition.important{background:#aef}.admonition.todo,.admonition.versionadded,.admonition.tip,.admonition.hint{background:#dfd}.admonition.warning,.admonition.versionchanged,.admonition.deprecated{background:#fd4}.admonition.error,.admonition.danger,.admonition.caution{background:lightpink}</style>
+<style media="screen and (min-width: 700px)">@media screen and (min-width:700px){#sidebar{width:30%;height:100vh;overflow:auto;position:sticky;top:0}#content{width:70%;max-width:100ch;padding:3em 4em;border-left:1px solid #ddd}pre code{font-size:1em}.item .name{font-size:1em}main{display:flex;flex-direction:row-reverse;justify-content:flex-end}.toc ul ul,#index ul{padding-left:1.5em}.toc > ul > li{margin-top:.5em}}</style>
+<style media="print">@media print{#sidebar h1{page-break-before:always}.source{display:none}}@media print{*{background:transparent !important;color:#000 !important;box-shadow:none !important;text-shadow:none !important}a[href]:after{content:" (" attr(href) ")";font-size:90%}a[href][title]:after{content:none}abbr[title]:after{content:" (" attr(title) ")"}.ir a:after,a[href^="javascript:"]:after,a[href^="#"]:after{content:""}pre,blockquote{border:1px solid #999;page-break-inside:avoid}thead{display:table-header-group}tr,img{page-break-inside:avoid}img{max-width:100% !important}@page{margin:0.5cm}p,h2,h3{orphans:3;widows:3}h1,h2,h3,h4,h5,h6{page-break-after:avoid}}</style>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.1.1/highlight.min.js" integrity="sha256-Uv3H6lx7dJmRfRvH8TH6kJD1TSK1aFcwgx+mdg3epi8=" crossorigin></script>
+<script>window.addEventListener('DOMContentLoaded', () => hljs.initHighlighting())</script>
+</head>
+<body>
+<main>
+<article id="content">
+<header>
+<h1 class="title">Module <code>dynamicio.mixins</code></h1>
+</header>
+<section id="section-intro">
+<p>Implements all dynamic(i/o) mixins.</p>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">&#34;&#34;&#34;Implements all dynamic(i/o) mixins.&#34;&#34;&#34;
+# pylint: disable=no-member, protected-access, too-few-public-methods
+__all__ = [
+    &#34;WithLocal&#34;,
+    &#34;WithS3File&#34;,
+    &#34;WithS3PathPrefix&#34;,
+    &#34;WithLocalBatch&#34;,
+    &#34;WithPostgres&#34;,
+    &#34;WithKafka&#34;,
+    &#34;args_of&#34;,
+    &#34;get_string_template_field_names&#34;,
+    &#34;resolve_template&#34;,
+]
+
+import glob
+import inspect
+import os
+import string
+import tempfile
+from contextlib import contextmanager
+from functools import wraps
+from types import FunctionType
+from typing import Any, Callable, Collection, Generator, Iterable, Mapping, MutableMapping, Optional, Union
+
+import boto3  # type: ignore
+import pandas as pd  # type: ignore
+import simplejson
+from awscli.clidriver import create_clidriver  # type: ignore
+from fastparquet import ParquetFile, write  # type: ignore
+from kafka import KafkaProducer  # type: ignore
+from magic_logger import logger
+from pyarrow.parquet import read_table, write_table  # type: ignore # pylint: disable=no-name-in-module
+from sqlalchemy import create_engine  # type: ignore
+from sqlalchemy.orm import Query  # type: ignore
+from sqlalchemy.orm.session import Session as SqlAlchemySession  # type: ignore
+from sqlalchemy.orm.session import sessionmaker  # type: ignore
+
+Session = sessionmaker(autoflush=True)
+
+
+@contextmanager
+def pickle_protocol(protocol: Optional[int]):
+    &#34;&#34;&#34;Downgrade to the provided pickle protocol within the context manager.
+
+    Args:
+        protocol: The number of the protocol HIGHEST_PROTOCOL to downgrade to. Defaults to 4, which covers python 3.4 and higher.
+    &#34;&#34;&#34;
+    import pickle  # pylint: disable=import-outside-toplevel
+
+    previous = pickle.HIGHEST_PROTOCOL
+    try:
+        pickle.HIGHEST_PROTOCOL = 4
+        if protocol:
+            pickle.HIGHEST_PROTOCOL = protocol
+        yield
+    finally:
+        pickle.HIGHEST_PROTOCOL = previous
+
+
+@contextmanager
+def session_for(connection_string: str) -&gt; Generator[SqlAlchemySession, None, None]:
+    &#34;&#34;&#34;Connect to a database using `connection_string` and returns an active session to that connection.
+
+    Args:
+        connection_string:
+
+    Yields:
+        Active session
+    &#34;&#34;&#34;
+    engine = create_engine(connection_string)
+    session = Session(bind=engine)
+
+    try:
+        yield session
+    finally:
+        session.close()  # pylint: disable=no-member
+
+
+def awscli_runner(*cmd: str):
+    &#34;&#34;&#34;Runs the awscli command provided.
+
+    Args:
+        *cmd: A list of args used in the command.
+
+    Raises:
+        A runtime error exception is raised if download fails.
+
+    Example:
+
+        &gt;&gt;&gt; awscli_runner(&#34;s3&#34;, &#34;sync&#34;, &#34;s3://mock-bucket/mock-key&#34;, &#34;.&#34;)
+    &#34;&#34;&#34;
+    # Run
+    exit_code = create_clidriver().main(cmd)
+
+    if exit_code &gt; 0:
+        raise RuntimeError(f&#34;AWS CLI exited with code {exit_code}&#34;)
+
+
+def allow_options(options: Union[Iterable, FunctionType]):
+    &#34;&#34;&#34;Validate **options for a decorated reader function.
+
+    Args:
+        options: A set of valid options for a reader (e.g. `pandas.read_parquet` or `pandas.read_csv`)
+
+    Returns:
+        read_with_valid_options: The input function called with modified options.
+    &#34;&#34;&#34;
+
+    def _filter_out_irrelevant_options(kwargs: Mapping, valid_options: Iterable):
+        filtered_options = {}
+        invalid_options = {}
+        for key_arg in kwargs.keys():
+            if key_arg in valid_options:
+                filtered_options[key_arg] = kwargs[key_arg]
+            else:
+                invalid_options[key_arg] = kwargs[key_arg]
+        if len(invalid_options) &gt; 0:
+            logger.warning(
+                f&#34;Options {invalid_options} were not used because they were not supported by the read or write method configured for this source. &#34;
+                &#34;Check if you expected any of those to have been used by the operation!&#34;
+            )
+        return filtered_options
+
+    def read_with_valid_options(func):
+        @wraps(func)
+        def _(*args, **kwargs):
+            if callable(options):
+                return func(*args, **_filter_out_irrelevant_options(kwargs, args_of(options)))
+            return func(*args, **_filter_out_irrelevant_options(kwargs, options))
+
+        return _
+
+    return read_with_valid_options
+
+
+def args_of(func):
+    &#34;&#34;&#34;Retrieve allowed options for a given function.
+
+    Args:
+        func: A function like, e.g., pd.read_csv
+
+    Returns:
+        A set of allowed options
+    &#34;&#34;&#34;
+    return set(inspect.signature(func).parameters.keys())
+
+
+def get_string_template_field_names(s: str) -&gt; Collection[str]:  # pylint: disable=C0103
+    &#34;&#34;&#34;Given a string `s`, it parses the string to identify any template fields and returns the names of those fields.
+
+     If `s` is not a string template, the returned `Collection` is empty.
+
+    Args:
+        s:
+
+    Returns:
+        Collection[str]
+
+    Example:
+
+        &gt;&gt;&gt; get_string_template_field_names(&#34;abc{def}{efg}&#34;)
+        [&#34;def&#34;, &#34;efg&#34;]
+        &gt;&gt;&gt; get_string_template_field_names(&#34;{0}-{1}&#34;)
+        [&#34;0&#34;, &#34;1&#34;]
+        &gt;&gt;&gt; get_string_template_field_names(&#34;hello world&#34;)
+        []
+    &#34;&#34;&#34;
+    # string.Formatter.parse returns a 4-tuple of:
+    # `literal_text`, `field_name`, `form_at_spec`, `conversion`
+    # More info here https://docs.python.org/3.8/library/string.html#string.Formatter.parse
+    field_names = [group[1] for group in string.Formatter().parse(s) if group[1] is not None]
+
+    return field_names
+
+
+def resolve_template(path: str, options: MutableMapping[str, Any]) -&gt; str:  # pylint: disable=C0103
+    &#34;&#34;&#34;Given a string `path`, it attempts to replace all templates fields with values provided in `options`.
+
+    If `path` is not a string template, `path` is returned.
+
+    Args:
+        path: A string which is either a template, e.g. /path/to/file/{replace_me}.h5 or just a path /path/to/file/dont_replace_me.h5
+        options: A dynamic name for the &#34;replace_me&#34; field in the templated string. e.g. {&#34;replace_me&#34;: &#34;name_of_file&#34;}
+
+    Returns:
+        str: Returns a static path replaced with the value in the options mapping.
+
+    Raises:
+        ValueError: if any template fields in s are not named using valid Python identifiers
+        ValueError: if a given template field cannot be resolved in `options`
+    &#34;&#34;&#34;
+    fields = get_string_template_field_names(path)
+
+    if len(fields) == 0:
+        return path
+
+    if not all(field.isidentifier() for field in fields):
+        raise ValueError(f&#34;Expected valid Python identifiers, found {fields}&#34;)
+
+    if not all(field in options for field in fields):
+        raise ValueError(f&#34;Expected values for all fields in {fields}, found {list(options.keys())}&#34;)
+
+    path = path.format(**{field: options[field] for field in fields})
+    for field in fields:
+        options.pop(field)
+
+    return path
+
+
+class WithLocal:
+    &#34;&#34;&#34;Handles local I/O operations.&#34;&#34;&#34;
+
+    sources_config: Mapping
+    schema: Mapping
+    options: MutableMapping[str, Any]
+
+    def _read_from_local(self) -&gt; pd.DataFrame:
+        &#34;&#34;&#34;Read a local file as a `DataFrame`.
+
+        The configuration object is expected to have two keys:
+            - `file_path`
+            - `file_type`
+
+        To actually read the file, a method is dynamically invoked by name, using
+        &#34;_read_{file_type}_file&#34;.
+
+        Returns:
+            DataFrame
+        &#34;&#34;&#34;
+        local_config = self.sources_config[&#34;local&#34;]
+        file_path = resolve_template(local_config[&#34;file_path&#34;], self.options)
+        file_type = local_config[&#34;file_type&#34;]
+
+        return getattr(self, f&#34;_read_{file_type}_file&#34;)(file_path, self.schema, **self.options)
+
+    def _write_to_local(self, df: pd.DataFrame):
+        &#34;&#34;&#34;Write a dataframe locally based on the {file_type} of the config_io configuration.
+
+        The configuration object is expected to have two keys:
+
+            - `file_path`
+            - `file_type`
+
+        To actually write the file, a method is dynamically invoked by name, using
+        &#34;_write_{file_type}_file&#34;.
+
+        Args:
+            df: The dataframe to be written out.
+        &#34;&#34;&#34;
+        local_config = self.sources_config[&#34;local&#34;]
+        file_path = resolve_template(local_config[&#34;file_path&#34;], self.options)
+        file_type = local_config[&#34;file_type&#34;]
+
+        getattr(self, f&#34;_write_{file_type}_file&#34;)(df, file_path, **self.options)
+
+    @staticmethod
+    @allow_options(pd.read_hdf)
+    def _read_hdf_file(file_path: str, schema: Mapping[str, str], **options: Any) -&gt; pd.DataFrame:
+        &#34;&#34;&#34;Read a HDF file as a DataFrame using `pd.read_hdf`.
+
+        All `options` are passed directly to `pd.read_hdf`.
+
+        Args:
+            file_path: The path to the hdf file to be read.
+            options: The pandas `read_hdf` options.
+
+        Returns:
+            DataFrame: The dataframe read from the hdf file.
+        &#34;&#34;&#34;
+        df = pd.read_hdf(file_path, **options)
+        columns = [column for column in df.columns.to_list() if column in schema.keys()]
+        df = df[columns]
+        return df
+
+    @staticmethod
+    @allow_options(pd.read_csv)
+    def _read_csv_file(file_path: str, schema: Mapping[str, str], **options: Any) -&gt; pd.DataFrame:
+        &#34;&#34;&#34;Read a CSV file as a DataFrame using `pd.read_csv`.
+
+        All `options` are passed directly to `pd.read_csv`.
+
+        Args:
+            file_path: The path to the csv file to be read.
+            options: The pandas `read_csv` options.
+
+        Returns:
+            DataFrame: The dataframe read from the csv file.
+        &#34;&#34;&#34;
+        options[&#34;usecols&#34;] = list(schema.keys())
+        return pd.read_csv(file_path, **options)
+
+    @staticmethod
+    @allow_options(pd.read_json)
+    def _read_json_file(file_path: str, schema: Mapping[str, str], **options: Any) -&gt; pd.DataFrame:
+        &#34;&#34;&#34;Read a json file as a DataFrame using `pd.read_hdf`.
+
+        All `options` are passed directly to `pd.read_hdf`.
+
+        Args:
+            file_path:
+            options:
+
+        Returns:
+            DataFrame
+        &#34;&#34;&#34;
+        df = pd.read_json(file_path, **options)
+        columns = [column for column in df.columns.to_list() if column in schema.keys()]
+        df = df[columns]
+        return df
+
+    @staticmethod
+    def _read_parquet_file(file_path: str, schema: Mapping[str, str], **options: Any) -&gt; pd.DataFrame:
+        &#34;&#34;&#34;Read a Parquet file as a DataFrame using `pd.read_parquet`.
+
+        All `options` are passed directly to `pd.read_parquet`.
+
+        Args:
+            file_path: The path to the parquet file to be read.
+            options: The pandas `read_parquet` options.
+
+        Returns:
+            DataFrame: The dataframe read from the parquet file.
+        &#34;&#34;&#34;
+        options[&#34;columns&#34;] = list(schema.keys())
+
+        if options.get(&#34;engine&#34;) == &#34;fastparquet&#34;:
+            return WithLocal.__read_with_fastparquet(file_path, **options)
+        return WithLocal.__read_with_pyarrow(file_path, **options)
+
+    @classmethod
+    @allow_options([*args_of(pd.read_parquet), *args_of(read_table)])
+    def __read_with_pyarrow(cls, file_path: str, **options: Any) -&gt; pd.DataFrame:
+        return pd.read_parquet(file_path, **options)
+
+    @classmethod
+    @allow_options([*args_of(pd.read_parquet), *args_of(ParquetFile)])
+    def __read_with_fastparquet(cls, file_path: str, **options: Any) -&gt; pd.DataFrame:
+        return pd.read_parquet(file_path, **options)
+
+    @staticmethod
+    @allow_options([*args_of(pd.DataFrame.to_hdf), *[&#34;protocol&#34;]])
+    def _write_hdf_file(df: pd.DataFrame, file_path: str, **options: Any):
+        &#34;&#34;&#34;Write a dataframe to hdf using `df.to_hdf`.
+
+        All `options` are passed directly to `df.to_hdf`.
+
+        Args:
+            df: A dataframe write out.
+            file_path: The location where the file needs to be written.
+            options: The pandas `to_hdf` options.
+
+                - The pandas `to_hdf` options, &amp;;
+                - protocol: The pickle protocol to use for writing the hdf file out; a value &lt;=5.
+        &#34;&#34;&#34;
+        with pickle_protocol(protocol=options.pop(&#34;protocol&#34;, None)):
+            df.to_hdf(file_path, key=&#34;df&#34;, mode=&#34;w&#34;, **options)
+
+    @staticmethod
+    @allow_options(pd.DataFrame.to_csv)
+    def _write_csv_file(df: pd.DataFrame, file_path: str, **options: Any):
+        &#34;&#34;&#34;Write a dataframe as a CSV file using `df.to_csv`.
+
+        All `options` are passed directly to `df.to_csv`.
+
+        Args:
+            df: A dataframe write out.
+            file_path: The location where the file needs to be written.
+            options: Options relative to writing a csv file.
+        &#34;&#34;&#34;
+        df.to_csv(file_path, **options)
+
+    @staticmethod
+    @allow_options(pd.DataFrame.to_json)
+    def _write_json_file(df: pd.DataFrame, file_path: str, **options: Any):
+        &#34;&#34;&#34;Write a dataframe as a json file using `df.to_json`.
+
+        All `options` are passed directly to `df.to_json`.
+
+        Args:
+            df: A dataframe write out.
+            file_path: The location where the file needs to be written.
+            options: Options relative to writing a json file.
+        &#34;&#34;&#34;
+        df.to_json(file_path, **options)
+
+    @staticmethod
+    def _write_parquet_file(df: pd.DataFrame, file_path: str, **options: Any):
+        &#34;&#34;&#34;Write a dataframe as a parquet file using `df.to_parquet`.
+
+        All `options` are passed directly to `df.to_parquet`.
+
+        Args:
+            df: A dataframe write out.
+            file_path: The location where the file needs to be written.
+            options: Options relative to writing a parquet file.
+        &#34;&#34;&#34;
+        if options.get(&#34;engine&#34;) == &#34;fastparquet&#34;:
+            return WithLocal.__write_with_fastparquet(df, file_path, **options)
+        return WithLocal.__write_with_pyarrow(df, file_path, **options)
+
+    @classmethod
+    @allow_options([*args_of(pd.DataFrame.to_parquet), *args_of(write_table)])
+    def __write_with_pyarrow(cls, df: pd.DataFrame, filepath: str, **options: Any) -&gt; pd.DataFrame:
+        return df.to_parquet(filepath, **options)
+
+    @classmethod
+    @allow_options([*args_of(pd.DataFrame.to_parquet), *args_of(write)])
+    def __write_with_fastparquet(cls, df: pd.DataFrame, filepath: str, **options: Any) -&gt; pd.DataFrame:
+        return df.to_parquet(filepath, **options)
+
+
+class WithLocalBatch(WithLocal):
+    &#34;&#34;&#34;Responsible for batch reading local files.&#34;&#34;&#34;
+
+    def _read_from_local_batch(self) -&gt; pd.DataFrame:
+        &#34;&#34;&#34;Reads a set of files for a specified file type, concatenates them and returns a dataframe.
+
+        Returns:
+            A concatenated dataframe composed of all files read through local_batch.
+        &#34;&#34;&#34;
+        local_batch_config = self.sources_config[&#34;local&#34;]
+
+        file_type = local_batch_config[&#34;file_type&#34;]
+        filtering_file_type = file_type
+        if filtering_file_type == &#34;hdf&#34;:
+            filtering_file_type = &#34;h5&#34;
+
+        files = glob.glob(f&#34;{local_batch_config[&#39;path_prefix&#39;]}/*.{filtering_file_type}&#34;)
+
+        dfs_to_concatenate = []
+        for file in files:
+            file_to_load = os.path.join(local_batch_config[&#34;path_prefix&#34;], file)
+            dfs_to_concatenate.append(getattr(self, f&#34;_read_{file_type}_file&#34;)(file_to_load, self.schema, **self.options))  # type: ignore
+
+        return pd.concat(dfs_to_concatenate).reset_index(drop=True)
+
+
+class WithS3PathPrefix(WithLocal):
+    &#34;&#34;&#34;Handles I/O operations for AWS S3; implements read operations only.
+
+    This mixin assumes that the directories it reads from will only contain a single file-type.
+    &#34;&#34;&#34;
+
+    def _write_to_s3_path_prefix(self, df: pd.DataFrame):
+        &#34;&#34;&#34;Write a DataFrame to an S3 path prefix.
+
+        The configuration object is expected to have the following keys:
+            - `bucket`
+            - `path_prefix`
+            - `file_type`
+
+        Args:
+            df (pd.DataFrame): the DataFrame to be written to S3
+
+        Raises:
+            ValueError: In case `path_prefix` is missing from config
+            ValueError: In case the `partition_cols` arg is missing while trying to write a parquet file
+        &#34;&#34;&#34;
+        s3_config = self.sources_config[&#34;s3&#34;]
+        if &#34;path_prefix&#34; not in s3_config:
+            raise ValueError(&#34;`path_prefix` is required to write multiple files to an S3 key&#34;)
+
+        file_type = s3_config[&#34;file_type&#34;]
+        if file_type != &#34;parquet&#34;:
+            raise ValueError(f&#34;File type not supported: {file_type}, only parquet files can be written to an S3 key&#34;)
+        if &#34;partition_cols&#34; not in self.options:
+            raise ValueError(&#34;`partition_cols` is required as an option to write partitioned parquet files to S3&#34;)
+
+        bucket = s3_config[&#34;bucket&#34;]
+        path_prefix = s3_config[&#34;path_prefix&#34;]
+        full_path_prefix = resolve_template(f&#34;s3://{bucket}/{path_prefix}&#34;, self.options)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._write_parquet_file(df, temp_dir, **self.options)
+            awscli_runner(
+                &#34;s3&#34;,
+                &#34;sync&#34;,
+                temp_dir,
+                full_path_prefix,
+                &#34;--acl&#34;,
+                &#34;bucket-owner-full-control&#34;,
+                &#34;--only-show-errors&#34;,
+                &#34;--exact-timestamps&#34;,
+            )
+
+    def _read_from_s3_path_prefix(self) -&gt; pd.DataFrame:
+        &#34;&#34;&#34;Read all files under a path prefix from an S3 bucket as a `DataFrame`.
+
+        The configuration object is expected to have the following keys:
+            - `bucket`
+            - `path_prefix`
+            - `file_type`
+
+        To actually read the file, a method is dynamically invoked by name, using
+        &#34;_read_{file_type}_path_prefix&#34;.
+
+        Returns:
+            DataFrame
+        &#34;&#34;&#34;
+        s3_config = self.sources_config[&#34;s3&#34;]
+        if &#34;path_prefix&#34; not in s3_config:
+            raise ValueError(&#34;`path_prefix` is required to read multiple files from an S3 source&#34;)
+
+        file_type = s3_config[&#34;file_type&#34;]
+        if file_type not in {&#34;parquet&#34;, &#34;csv&#34;, &#34;hdf&#34;, &#34;json&#34;}:
+            raise ValueError(f&#34;File type not supported: {file_type}&#34;)
+
+        bucket = s3_config[&#34;bucket&#34;]
+        path_prefix = s3_config[&#34;path_prefix&#34;]
+        full_path_prefix = resolve_template(f&#34;s3://{bucket}/{path_prefix}&#34;, self.options)
+
+        # The `no_disk_space` option should be used only when reading a subset of columns from S3
+        if self.options.pop(&#34;no_disk_space&#34;, False) and file_type == &#34;parquet&#34;:
+            return self._read_parquet_file(full_path_prefix, self.schema, **self.options)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # aws-cli is shown to be up to 6 times faster when downloading the complete dataset from S3 than using the boto3
+            # client or pandas directly. This is because aws-cli uses the parallel downloader, which is much faster than the
+            # boto3 client.
+            awscli_runner(
+                &#34;s3&#34;,
+                &#34;sync&#34;,
+                full_path_prefix,
+                temp_dir,
+                &#34;--acl&#34;,
+                &#34;bucket-owner-full-control&#34;,
+                &#34;--only-show-errors&#34;,
+                &#34;--exact-timestamps&#34;,
+            )
+
+            dfs = []
+            for file in os.listdir(temp_dir):
+                df = getattr(self, f&#34;_read_{file_type}_file&#34;)(os.path.join(temp_dir, file), self.schema, **self.options)  # type: ignore
+                if len(df) &gt; 0:
+                    dfs.append(df)
+
+            return pd.concat(dfs, ignore_index=True)
+
+
+class WithS3File(WithLocal):
+    &#34;&#34;&#34;Handles I/O operations for AWS S3.
+
+    All files are persisted to disk first using boto3 as this has proven to be faster than reading them into memory.
+    Note that reading things into memory is available for csv, json and parquet types only. Unfortunately, until support
+    for generic buffer is added to read_hdf, we need to download and persists the file to disk first anyway.
+
+    Options:
+        no_disk_space: If `True`, then s3fs + fsspec will be used to read data directly into memory.
+    &#34;&#34;&#34;
+
+    boto3_client = boto3.client(&#34;s3&#34;)
+
+    @contextmanager
+    def _s3_reader(self, s3_bucket: str, s3_key: str) -&gt; Generator:
+        &#34;&#34;&#34;Contextmanager to abstract reading different file types in S3.
+
+        Args:
+            s3_bucket: The S3 bucket from where to read the file.
+            s3_key: The file-path to the target file to be read.
+
+        Returns:
+            The local file path from where the file can be read, once it has been downloaded there by the boto3.client.
+
+        &#34;&#34;&#34;
+        with tempfile.NamedTemporaryFile(&#34;wb&#34;) as target_file:
+            # Download the file from S3
+            self.boto3_client.download_fileobj(s3_bucket, s3_key, target_file)
+            # Yield local file path to body of `with` statement
+            target_file.flush()
+            yield target_file
+
+    @contextmanager
+    def _s3_writer(self, s3_bucket: str, s3_key: str) -&gt; Generator:
+        &#34;&#34;&#34;Contextmanager to abstract loading different file types to S3.
+
+        Args:
+            s3_bucket: The S3 bucket to upload the file to.
+            s3_key: The file-path where the target file should be uploaded to.
+
+        Returns:
+            The local file path where to actually write the file, to be read and uploaded by boto3.client.
+        &#34;&#34;&#34;
+        with tempfile.NamedTemporaryFile(&#34;wb&#34;) as target_file:
+            # Yield local file path to body of `with` statement
+            yield target_file
+            target_file.flush()
+
+            # Upload the file to S3
+            self.boto3_client.upload_file(target_file.name, s3_bucket, s3_key, ExtraArgs={&#34;ACL&#34;: &#34;bucket-owner-full-control&#34;})
+
+    def _read_from_s3_file(self) -&gt; pd.DataFrame:
+        &#34;&#34;&#34;Read a file from an S3 bucket as a `DataFrame`.
+
+        The configuration object is expected to have the following keys:
+            - `bucket`
+            - `file_path`
+            - `file_type`
+
+        To actually read the file, a method is dynamically invoked by name, using &#34;_read_{file_type}_file&#34;.
+
+        Returns:
+            DataFrame
+        &#34;&#34;&#34;
+        s3_config = self.sources_config[&#34;s3&#34;]
+        if &#34;file_path&#34; not in s3_config:
+            raise ValueError(&#34;`file_path` is required for reading a file from an S3 source&#34;)
+
+        file_type = s3_config[&#34;file_type&#34;]
+        file_path = resolve_template(s3_config[&#34;file_path&#34;], self.options)
+        bucket = s3_config[&#34;bucket&#34;]
+
+        logger.info(f&#34;[s3] Started downloading: s3://{s3_config[&#39;bucket&#39;]}/{file_path}&#34;)
+        if file_type in [&#34;csv&#34;, &#34;json&#34;, &#34;parquet&#34;] and self.options.pop(&#34;no_disk_space&#34;, None):
+            return getattr(self, f&#34;_read_{file_type}_file&#34;)(f&#34;s3://{s3_config[&#39;bucket&#39;]}/{file_path}&#34;, self.schema, **self.options)  # type: ignore
+        with self._s3_reader(s3_bucket=bucket, s3_key=file_path) as target_file:  # type: ignore
+            return getattr(self, f&#34;_read_{file_type}_file&#34;)(target_file.name, self.schema, **self.options)  # type: ignore
+
+    def _write_to_s3_file(self, df: pd.DataFrame):
+        &#34;&#34;&#34;Write a dataframe to s3 based on the {file_type} of the config_io configuration.
+
+        The configuration object is expected to have two keys:
+
+            - `file_path`
+            - `file_type`
+
+        To actually write the file, a method is dynamically invoked by name, using &#34;_write_{file_type}_file&#34;.
+
+        Args:
+            df: The dataframe to be written out
+        &#34;&#34;&#34;
+        s3_config = self.sources_config[&#34;s3&#34;]
+        file_path = resolve_template(s3_config[&#34;file_path&#34;], self.options)
+        file_type = s3_config[&#34;file_type&#34;]
+
+        logger.info(f&#34;[s3] Started uploading: s3://{s3_config[&#39;bucket&#39;]}/{file_path}&#34;)
+        if file_type in [&#34;csv&#34;, &#34;json&#34;, &#34;parquet&#34;]:
+            getattr(self, f&#34;_write_{file_type}_file&#34;)(df, f&#34;s3://{s3_config[&#39;bucket&#39;]}/{file_path}&#34;, **self.options)  # type: ignore
+        elif file_type == &#34;hdf&#34;:
+            with self._s3_writer(s3_bucket=s3_config[&#34;bucket&#34;], s3_key=file_path) as target_file:  # type: ignore
+                self._write_hdf_file(df, target_file.name, **self.options)  # type: ignore
+        else:
+            raise ValueError(f&#34;File type: {file_type} not supported!&#34;)
+        logger.info(f&#34;[s3] Finished uploading: s3://{s3_config[&#39;bucket&#39;]}/{file_path}&#34;)
+
+
+class WithPostgres:
+    &#34;&#34;&#34;Handles I/O operations for Postgres.&#34;&#34;&#34;
+
+    sources_config: Mapping
+    schema: Mapping
+    options: MutableMapping[str, Any]
+
+    def _read_from_postgres(self) -&gt; pd.DataFrame:
+        &#34;&#34;&#34;Read data from postgres as a `DataFrame`.
+
+        The configuration object is expected to have the following keys:
+            - `db_user`
+            - `db_password`
+            - `db_host`
+            - `db_port`
+            - `db_name`
+
+        Returns:
+            DataFrame
+        &#34;&#34;&#34;
+        postgres_config = self.sources_config[&#34;postgres&#34;]
+        db_user = postgres_config[&#34;db_user&#34;]
+        db_password = postgres_config[&#34;db_password&#34;]
+        db_host = postgres_config[&#34;db_host&#34;]
+        db_port = postgres_config[&#34;db_port&#34;]
+        db_name = postgres_config[&#34;db_name&#34;]
+
+        connection_string = f&#34;postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}&#34;
+
+        model = self.options.get(&#34;model&#34;)
+        sql_query = self.options.get(&#34;sql_query&#34;)
+
+        query = None
+
+        if model and sql_query:
+            raise ValueError(&#34;Only one of `model` and `sql_query` must be provided&#34;)
+        if model is None and sql_query is None:
+            raise ValueError(&#34;One of `model` and `sql_query` must be provided&#34;)
+
+        if model:
+            query = Query(self._get_table_columns(model))
+        else:
+            query = sql_query
+
+        with session_for(connection_string) as session:
+            return self._read_database(session, query, **self.options)
+
+    @staticmethod
+    def _get_table_columns(model):
+        if model:
+            return list(model.__table__.columns)
+        raise ValueError(&#34;A model must be provided&#34;)
+
+    @staticmethod
+    @allow_options([*args_of(pd.read_sql), *[&#34;model&#34;]])
+    def _read_database(session: SqlAlchemySession, query: Union[str, Query], **options: Any) -&gt; pd.DataFrame:
+        &#34;&#34;&#34;Run `query` against active `session` and returns the result as a `DataFrame`.
+
+        Args:
+            session: Active session
+            query: If a `Query` object is given, it should be unbound. If a `str` is given, the
+                value is used as-is.
+
+        Returns:
+            DataFrame
+        &#34;&#34;&#34;
+        if options.get(&#34;model&#34;):
+            options.pop(&#34;model&#34;)
+
+        if isinstance(query, Query):
+            query = query.with_session(session).statement
+        return pd.read_sql(sql=query, con=session.get_bind(), **options)
+
+    @allow_options({&#34;model&#34;})
+    def _write_to_postgres(self, df: pd.DataFrame):
+        &#34;&#34;&#34;Write a dataframe to postgres based on the {file_type} of the config_io configuration.
+
+        Args:
+            df: The dataframe to be written
+        &#34;&#34;&#34;
+        # engine = sqlalchemy.create_engine(f&#34;postgresql://{USER}:{PASSWORD}@{HOST}:{PORT}/{DB_NAME}&#34;)
+        # conn = engine.connect()
+        # cm_volumes.to_sql(&#34;cm_volumes&#34;, engine, if_exists=&#34;append&#34;, index=False)
+
+        postgres_config = self.sources_config[&#34;postgres&#34;]
+        db_user = postgres_config[&#34;db_user&#34;]
+        db_password = postgres_config[&#34;db_password&#34;]
+        db_host = postgres_config[&#34;db_host&#34;]
+        db_port = postgres_config[&#34;db_port&#34;]
+        db_name = postgres_config[&#34;db_name&#34;]
+
+        connection_string = f&#34;postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}&#34;
+
+        with session_for(connection_string) as session:
+            self._write_to_database(session, self.options[&#34;model&#34;].__tablename__, df)  # type: ignore
+
+    @staticmethod
+    def _write_to_database(session: SqlAlchemySession, table_name: str, df: pd.DataFrame):
+        &#34;&#34;&#34;Write a dataframe to any database provided a session with a data model and a table name.
+
+        Args:
+            session: Generated from a data model and a table name
+            table_name: The name of the table to read from a DB
+            df: The dataframe to be written out
+        &#34;&#34;&#34;
+        df.to_sql(name=table_name, con=session.get_bind(), if_exists=&#34;replace&#34;, index=False)
+        session.commit()
+
+
+class WithKafka:
+    &#34;&#34;&#34;Handles I/O operations for Kafka.
+
+    If a `key_generator` option is provided, which should be a Callable taking a tuple(idx, row) and
+    returning a string that will serve as the message&#39;s key, then teh callable will be invoked prior to
+    serialising the key.
+
+    If a `document_transformer` option is provided, which should be a Callable taking a `Mapping`
+    as its only argument and return a `Mapping`, then this callable will be invoked prior to
+    serializing each document. This can be used, for example, to add metadata to each document
+    that will be written to the target Kafka topic.
+
+    Args:
+        options: Keyword-arguments passed to the KafkaProducer constructor (see KafkaProducer.DEFAULT_CONFIG.keys()).
+        We also use/allow 2 more options:
+        - `key_generator`, which is a callable that defines the keying policy to be used for sending keyed-messages to Kafka, and;
+        - `document_transformer`, which is a callable manipulates the messages/rows sent to Kafka as values.`.
+
+    Example:
+        &gt;&gt;&gt; # Given
+        &gt;&gt;&gt; keyed_test_df = pd.DataFrame.from_records(
+        &gt;&gt;&gt;     [
+        &gt;&gt;&gt;         [&#34;key-01&#34;, &#34;cm_1&#34;, &#34;id_1&#34;, 1000, &#34;ABC&#34;],
+        &gt;&gt;&gt;         [&#34;key-02&#34;, &#34;cm_2&#34;, &#34;id_2&#34;, 1000, &#34;ABC&#34;],
+        &gt;&gt;&gt;         [&#34;key-03&#34;, &#34;cm_3&#34;, &#34;id_3&#34;, 1000, &#34;ABC&#34;],
+        &gt;&gt;&gt;     ],
+        &gt;&gt;&gt;     columns=[&#34;key&#34;, &#34;id&#34;, &#34;foo&#34;, &#34;bar&#34;, &#34;baz&#34;],
+        &gt;&gt;&gt; ).set_index(&#34;key&#34;)
+        &gt;&gt;&gt;
+        &gt;&gt;&gt; kafka_cloud_config = IOConfig(
+        &gt;&gt;&gt;     path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, &#34;processed.yaml&#34;)),
+        &gt;&gt;&gt;     env_identifier=&#34;CLOUD&#34;,
+        &gt;&gt;&gt;     dynamic_vars=constants,
+        &gt;&gt;&gt; ).get(source_key=&#34;WRITE_TO_KAFKA_JSON&#34;)
+        &gt;&gt;&gt;
+        &gt;&gt;&gt; write_kafka_io = WriteKafkaIO(kafka_cloud_config, key_generator=lambda key, _: key, document_transformer=lambda doc: doc[&#34;new_field&#34;]=&#34;new_value&#34;)
+        &gt;&gt;&gt;
+        &gt;&gt;&gt; # When
+        &gt;&gt;&gt; with patch.object(mixins, &#34;KafkaProducer&#34;) as mock__kafka_producer:
+        &gt;&gt;&gt;     mock__kafka_producer.DEFAULT_CONFIG = KafkaProducer.DEFAULT_CONFIG
+        &gt;&gt;&gt;     mock_producer = MockKafkaProducer()
+        &gt;&gt;&gt;     mock__kafka_producer.return_value = mock_producer
+        &gt;&gt;&gt;     write_kafka_io.write(keyed_test_df)
+        &gt;&gt;&gt;
+        &gt;&gt;&gt; # Then
+        &gt;&gt;&gt; assert mock_producer.my_stream == [
+        &gt;&gt;&gt;     {&#34;key&#34;: &#34;key-01&#34;, &#34;value&#34;: {&#34;bar&#34;: 1000, &#34;baz&#34;: &#34;ABC&#34;, &#34;foo&#34;: &#34;id_1&#34;, &#34;id&#34;: &#34;cm_1&#34;, &#34;new_field&#34;: &#34;new_value&#34;}},
+        &gt;&gt;&gt;     {&#34;key&#34;: &#34;key-02&#34;, &#34;value&#34;: {&#34;bar&#34;: 1000, &#34;baz&#34;: &#34;ABC&#34;, &#34;foo&#34;: &#34;id_2&#34;, &#34;id&#34;: &#34;cm_2&#34;, &#34;new_field&#34;: &#34;new_value&#34;}},
+        &gt;&gt;&gt;     {&#34;key&#34;: &#34;key-03&#34;, &#34;value&#34;: {&#34;bar&#34;: 1000, &#34;baz&#34;: &#34;ABC&#34;, &#34;foo&#34;: &#34;id_3&#34;, &#34;id&#34;: &#34;cm_3&#34;, &#34;new_field&#34;: &#34;new_value&#34;}},
+        &gt;&gt;&gt; ]
+    &#34;&#34;&#34;
+
+    sources_config: Mapping
+    schema: Mapping
+    options: MutableMapping[str, Any]
+    __kafka_config: Optional[Mapping] = None
+    __producer: Optional[KafkaProducer] = None
+    __key_generator: Optional[Callable[[Any, Mapping[Any, Any]], Optional[str]]] = None
+    __document_transformer: Optional[Callable[[Mapping[Any, Any]], Mapping[Any, Any]]] = None
+
+    def _write_to_kafka(self, df: pd.DataFrame) -&gt; None:
+        &#34;&#34;&#34;Given a dataframe where each row is a message to be sent to a Kafka Topic, iterate through all rows and send them to a Kafka topic.
+
+         The topic is defined in `self.sources_config[&#34;kafka&#34;]` and using a kafka producer, which is flushed at the
+         end of this process.
+
+        Args:
+            df: A dataframe where each row is a message to be sent to a Kafka Topic.
+        &#34;&#34;&#34;
+        if self.__key_generator is None:
+            self.__key_generator = lambda _, __: None
+            if self.options.get(&#34;key_generator&#34;) is not None:
+                self.__key_generator = self.options.pop(&#34;key_generator&#34;)
+
+        if self.__document_transformer is None:
+            self.__document_transformer = lambda value: value
+            if self.options.get(&#34;document_transformer&#34;) is not None:
+                self.__document_transformer = self.options.pop(&#34;document_transformer&#34;)
+
+        if self.__producer is None:
+            self.__producer = self._get_producer(self.sources_config[&#34;kafka&#34;][&#34;kafka_server&#34;], **self.options)
+
+        self._send_messages(df=df, topic=self.sources_config[&#34;kafka&#34;][&#34;kafka_topic&#34;])
+
+    @allow_options(KafkaProducer.DEFAULT_CONFIG.keys())
+    def _get_producer(self, server: str, **options: MutableMapping[str, Any]) -&gt; KafkaProducer:
+        &#34;&#34;&#34;Generate and return a Kafka Producer.
+
+        Default options are used to generate the producer. Specifically:
+            - `bootstrap_servers`: Passed on through the source_config
+            - `value_serializer`: Uses a default_value_serializer defined in this mixin
+
+        More options can be added to the producer by passing them as keyword arguments, through valid options.
+
+        These can also override the default options.
+
+        Args:
+            server: The host name.
+            **options: Keyword arguments to pass to the KafkaProducer.
+
+        Returns:
+            A Kafka producer instance.
+        &#34;&#34;&#34;
+        self.__kafka_config = {
+            **{
+                &#34;bootstrap_servers&#34;: server,
+                &#34;compression_type&#34;: &#34;snappy&#34;,
+                &#34;key_serializer&#34;: self._default_key_serializer,
+                &#34;value_serializer&#34;: self._default_value_serializer,
+            },
+            **options,
+        }
+        return KafkaProducer(**self.__kafka_config)
+
+    def _send_messages(self, df: pd.DataFrame, topic: str) -&gt; None:
+        logger.info(f&#34;Sending {len(df)} messages to Kafka topic:{topic}.&#34;)
+
+        indices = df.index.values  # possibly non-unique indices
+        if len(set(indices)) != len(indices):
+            logger.warning(&#34;Messages have non-unique keys. This may cause issues in your downstream logic.&#34;)
+
+        messages = df.reset_index(drop=True).to_dict(&#34;records&#34;)
+        for idx, message in zip(indices, messages):
+            self.__producer.send(topic, key=self.__key_generator(idx, message), value=self.__document_transformer(message))  # type: ignore
+
+        self.__producer.flush()  # type: ignore
+
+    @staticmethod
+    def _default_key_serializer(key: Optional[str]) -&gt; Optional[bytes]:
+        if key:
+            return key.encode(&#34;utf-8&#34;)
+        return None
+
+    @staticmethod
+    def _default_value_serializer(value: Mapping) -&gt; bytes:
+        return simplejson.dumps(value, ignore_nan=True).encode(&#34;utf-8&#34;)
+
+    def _read_from_kafka(self) -&gt; Iterable[Mapping]:
+        &#34;&#34;&#34;Read messages from a Kafka Topic and convert them to separate dataframes.
+
+        Returns:
+            Multiple dataframes, one per message read from the Kafka topic of interest.
+        &#34;&#34;&#34;
+        # TODO: Implement kafka reader</code></pre>
+</details>
+</section>
+<section>
+</section>
+<section>
+</section>
+<section>
+<h2 class="section-title" id="header-functions">Functions</h2>
+<dl>
+<dt id="dynamicio.mixins.args_of"><code class="name flex">
+<span>def <span class="ident">args_of</span></span>(<span>func)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Retrieve allowed options for a given function.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>func</code></strong></dt>
+<dd>A function like, e.g., pd.read_csv</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>A set of allowed options</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def args_of(func):
+    &#34;&#34;&#34;Retrieve allowed options for a given function.
+
+    Args:
+        func: A function like, e.g., pd.read_csv
+
+    Returns:
+        A set of allowed options
+    &#34;&#34;&#34;
+    return set(inspect.signature(func).parameters.keys())</code></pre>
+</details>
+</dd>
+<dt id="dynamicio.mixins.get_string_template_field_names"><code class="name flex">
+<span>def <span class="ident">get_string_template_field_names</span></span>(<span>s: str) ‑> Collection[str]</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Given a string <code>s</code>, it parses the string to identify any template fields and returns the names of those fields.</p>
+<p>If <code>s</code> is not a string template, the returned <code>Collection</code> is empty.</p>
+<h2 id="args">Args</h2>
+<p>s:</p>
+<h2 id="returns">Returns</h2>
+<p>Collection[str]</p>
+<h2 id="example">Example</h2>
+<pre><code class="language-python-repl">&gt;&gt;&gt; get_string_template_field_names(&quot;abc{def}{efg}&quot;)
+[&quot;def&quot;, &quot;efg&quot;]
+&gt;&gt;&gt; get_string_template_field_names(&quot;{0}-{1}&quot;)
+[&quot;0&quot;, &quot;1&quot;]
+&gt;&gt;&gt; get_string_template_field_names(&quot;hello world&quot;)
+[]
+</code></pre></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_string_template_field_names(s: str) -&gt; Collection[str]:  # pylint: disable=C0103
+    &#34;&#34;&#34;Given a string `s`, it parses the string to identify any template fields and returns the names of those fields.
+
+     If `s` is not a string template, the returned `Collection` is empty.
+
+    Args:
+        s:
+
+    Returns:
+        Collection[str]
+
+    Example:
+
+        &gt;&gt;&gt; get_string_template_field_names(&#34;abc{def}{efg}&#34;)
+        [&#34;def&#34;, &#34;efg&#34;]
+        &gt;&gt;&gt; get_string_template_field_names(&#34;{0}-{1}&#34;)
+        [&#34;0&#34;, &#34;1&#34;]
+        &gt;&gt;&gt; get_string_template_field_names(&#34;hello world&#34;)
+        []
+    &#34;&#34;&#34;
+    # string.Formatter.parse returns a 4-tuple of:
+    # `literal_text`, `field_name`, `form_at_spec`, `conversion`
+    # More info here https://docs.python.org/3.8/library/string.html#string.Formatter.parse
+    field_names = [group[1] for group in string.Formatter().parse(s) if group[1] is not None]
+
+    return field_names</code></pre>
+</details>
+</dd>
+<dt id="dynamicio.mixins.resolve_template"><code class="name flex">
+<span>def <span class="ident">resolve_template</span></span>(<span>path: str, options: MutableMapping[str, Any]) ‑> str</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Given a string <code>path</code>, it attempts to replace all templates fields with values provided in <code>options</code>.</p>
+<p>If <code>path</code> is not a string template, <code>path</code> is returned.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>path</code></strong></dt>
+<dd>A string which is either a template, e.g. /path/to/file/{replace_me}.h5 or just a path /path/to/file/dont_replace_me.h5</dd>
+<dt><strong><code>options</code></strong></dt>
+<dd>A dynamic name for the "replace_me" field in the templated string. e.g. {"replace_me": "name_of_file"}</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>str</code></dt>
+<dd>Returns a static path replaced with the value in the options mapping.</dd>
+</dl>
+<h2 id="raises">Raises</h2>
+<dl>
+<dt><code>ValueError</code></dt>
+<dd>if any template fields in s are not named using valid Python identifiers</dd>
+<dt><code>ValueError</code></dt>
+<dd>if a given template field cannot be resolved in <code>options</code></dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def resolve_template(path: str, options: MutableMapping[str, Any]) -&gt; str:  # pylint: disable=C0103
+    &#34;&#34;&#34;Given a string `path`, it attempts to replace all templates fields with values provided in `options`.
+
+    If `path` is not a string template, `path` is returned.
+
+    Args:
+        path: A string which is either a template, e.g. /path/to/file/{replace_me}.h5 or just a path /path/to/file/dont_replace_me.h5
+        options: A dynamic name for the &#34;replace_me&#34; field in the templated string. e.g. {&#34;replace_me&#34;: &#34;name_of_file&#34;}
+
+    Returns:
+        str: Returns a static path replaced with the value in the options mapping.
+
+    Raises:
+        ValueError: if any template fields in s are not named using valid Python identifiers
+        ValueError: if a given template field cannot be resolved in `options`
+    &#34;&#34;&#34;
+    fields = get_string_template_field_names(path)
+
+    if len(fields) == 0:
+        return path
+
+    if not all(field.isidentifier() for field in fields):
+        raise ValueError(f&#34;Expected valid Python identifiers, found {fields}&#34;)
+
+    if not all(field in options for field in fields):
+        raise ValueError(f&#34;Expected values for all fields in {fields}, found {list(options.keys())}&#34;)
+
+    path = path.format(**{field: options[field] for field in fields})
+    for field in fields:
+        options.pop(field)
+
+    return path</code></pre>
+</details>
+</dd>
+</dl>
+</section>
+<section>
+<h2 class="section-title" id="header-classes">Classes</h2>
+<dl>
+<dt id="dynamicio.mixins.WithKafka"><code class="flex name class">
+<span>class <span class="ident">WithKafka</span></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Handles I/O operations for Kafka.</p>
+<p>If a <code>key_generator</code> option is provided, which should be a Callable taking a tuple(idx, row) and
+returning a string that will serve as the message's key, then teh callable will be invoked prior to
+serialising the key.</p>
+<p>If a <code>document_transformer</code> option is provided, which should be a Callable taking a <code>Mapping</code>
+as its only argument and return a <code>Mapping</code>, then this callable will be invoked prior to
+serializing each document. This can be used, for example, to add metadata to each document
+that will be written to the target Kafka topic.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>options</code></strong></dt>
+<dd>Keyword-arguments passed to the KafkaProducer constructor (see KafkaProducer.DEFAULT_CONFIG.keys()).</dd>
+</dl>
+<p>We also use/allow 2 more options:
+- <code>key_generator</code>, which is a callable that defines the keying policy to be used for sending keyed-messages to Kafka, and;
+- <code>document_transformer</code>, which is a callable manipulates the messages/rows sent to Kafka as values.`.</p>
+<h2 id="example">Example</h2>
+<pre><code class="language-python-repl">&gt;&gt;&gt; # Given
+&gt;&gt;&gt; keyed_test_df = pd.DataFrame.from_records(
+&gt;&gt;&gt;     [
+&gt;&gt;&gt;         [&quot;key-01&quot;, &quot;cm_1&quot;, &quot;id_1&quot;, 1000, &quot;ABC&quot;],
+&gt;&gt;&gt;         [&quot;key-02&quot;, &quot;cm_2&quot;, &quot;id_2&quot;, 1000, &quot;ABC&quot;],
+&gt;&gt;&gt;         [&quot;key-03&quot;, &quot;cm_3&quot;, &quot;id_3&quot;, 1000, &quot;ABC&quot;],
+&gt;&gt;&gt;     ],
+&gt;&gt;&gt;     columns=[&quot;key&quot;, &quot;id&quot;, &quot;foo&quot;, &quot;bar&quot;, &quot;baz&quot;],
+&gt;&gt;&gt; ).set_index(&quot;key&quot;)
+&gt;&gt;&gt;
+&gt;&gt;&gt; kafka_cloud_config = IOConfig(
+&gt;&gt;&gt;     path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, &quot;processed.yaml&quot;)),
+&gt;&gt;&gt;     env_identifier=&quot;CLOUD&quot;,
+&gt;&gt;&gt;     dynamic_vars=constants,
+&gt;&gt;&gt; ).get(source_key=&quot;WRITE_TO_KAFKA_JSON&quot;)
+&gt;&gt;&gt;
+&gt;&gt;&gt; write_kafka_io = WriteKafkaIO(kafka_cloud_config, key_generator=lambda key, _: key, document_transformer=lambda doc: doc[&quot;new_field&quot;]=&quot;new_value&quot;)
+&gt;&gt;&gt;
+&gt;&gt;&gt; # When
+&gt;&gt;&gt; with patch.object(mixins, &quot;KafkaProducer&quot;) as mock__kafka_producer:
+&gt;&gt;&gt;     mock__kafka_producer.DEFAULT_CONFIG = KafkaProducer.DEFAULT_CONFIG
+&gt;&gt;&gt;     mock_producer = MockKafkaProducer()
+&gt;&gt;&gt;     mock__kafka_producer.return_value = mock_producer
+&gt;&gt;&gt;     write_kafka_io.write(keyed_test_df)
+&gt;&gt;&gt;
+&gt;&gt;&gt; # Then
+&gt;&gt;&gt; assert mock_producer.my_stream == [
+&gt;&gt;&gt;     {&quot;key&quot;: &quot;key-01&quot;, &quot;value&quot;: {&quot;bar&quot;: 1000, &quot;baz&quot;: &quot;ABC&quot;, &quot;foo&quot;: &quot;id_1&quot;, &quot;id&quot;: &quot;cm_1&quot;, &quot;new_field&quot;: &quot;new_value&quot;}},
+&gt;&gt;&gt;     {&quot;key&quot;: &quot;key-02&quot;, &quot;value&quot;: {&quot;bar&quot;: 1000, &quot;baz&quot;: &quot;ABC&quot;, &quot;foo&quot;: &quot;id_2&quot;, &quot;id&quot;: &quot;cm_2&quot;, &quot;new_field&quot;: &quot;new_value&quot;}},
+&gt;&gt;&gt;     {&quot;key&quot;: &quot;key-03&quot;, &quot;value&quot;: {&quot;bar&quot;: 1000, &quot;baz&quot;: &quot;ABC&quot;, &quot;foo&quot;: &quot;id_3&quot;, &quot;id&quot;: &quot;cm_3&quot;, &quot;new_field&quot;: &quot;new_value&quot;}},
+&gt;&gt;&gt; ]
+</code></pre></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class WithKafka:
+    &#34;&#34;&#34;Handles I/O operations for Kafka.
+
+    If a `key_generator` option is provided, which should be a Callable taking a tuple(idx, row) and
+    returning a string that will serve as the message&#39;s key, then teh callable will be invoked prior to
+    serialising the key.
+
+    If a `document_transformer` option is provided, which should be a Callable taking a `Mapping`
+    as its only argument and return a `Mapping`, then this callable will be invoked prior to
+    serializing each document. This can be used, for example, to add metadata to each document
+    that will be written to the target Kafka topic.
+
+    Args:
+        options: Keyword-arguments passed to the KafkaProducer constructor (see KafkaProducer.DEFAULT_CONFIG.keys()).
+        We also use/allow 2 more options:
+        - `key_generator`, which is a callable that defines the keying policy to be used for sending keyed-messages to Kafka, and;
+        - `document_transformer`, which is a callable manipulates the messages/rows sent to Kafka as values.`.
+
+    Example:
+        &gt;&gt;&gt; # Given
+        &gt;&gt;&gt; keyed_test_df = pd.DataFrame.from_records(
+        &gt;&gt;&gt;     [
+        &gt;&gt;&gt;         [&#34;key-01&#34;, &#34;cm_1&#34;, &#34;id_1&#34;, 1000, &#34;ABC&#34;],
+        &gt;&gt;&gt;         [&#34;key-02&#34;, &#34;cm_2&#34;, &#34;id_2&#34;, 1000, &#34;ABC&#34;],
+        &gt;&gt;&gt;         [&#34;key-03&#34;, &#34;cm_3&#34;, &#34;id_3&#34;, 1000, &#34;ABC&#34;],
+        &gt;&gt;&gt;     ],
+        &gt;&gt;&gt;     columns=[&#34;key&#34;, &#34;id&#34;, &#34;foo&#34;, &#34;bar&#34;, &#34;baz&#34;],
+        &gt;&gt;&gt; ).set_index(&#34;key&#34;)
+        &gt;&gt;&gt;
+        &gt;&gt;&gt; kafka_cloud_config = IOConfig(
+        &gt;&gt;&gt;     path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, &#34;processed.yaml&#34;)),
+        &gt;&gt;&gt;     env_identifier=&#34;CLOUD&#34;,
+        &gt;&gt;&gt;     dynamic_vars=constants,
+        &gt;&gt;&gt; ).get(source_key=&#34;WRITE_TO_KAFKA_JSON&#34;)
+        &gt;&gt;&gt;
+        &gt;&gt;&gt; write_kafka_io = WriteKafkaIO(kafka_cloud_config, key_generator=lambda key, _: key, document_transformer=lambda doc: doc[&#34;new_field&#34;]=&#34;new_value&#34;)
+        &gt;&gt;&gt;
+        &gt;&gt;&gt; # When
+        &gt;&gt;&gt; with patch.object(mixins, &#34;KafkaProducer&#34;) as mock__kafka_producer:
+        &gt;&gt;&gt;     mock__kafka_producer.DEFAULT_CONFIG = KafkaProducer.DEFAULT_CONFIG
+        &gt;&gt;&gt;     mock_producer = MockKafkaProducer()
+        &gt;&gt;&gt;     mock__kafka_producer.return_value = mock_producer
+        &gt;&gt;&gt;     write_kafka_io.write(keyed_test_df)
+        &gt;&gt;&gt;
+        &gt;&gt;&gt; # Then
+        &gt;&gt;&gt; assert mock_producer.my_stream == [
+        &gt;&gt;&gt;     {&#34;key&#34;: &#34;key-01&#34;, &#34;value&#34;: {&#34;bar&#34;: 1000, &#34;baz&#34;: &#34;ABC&#34;, &#34;foo&#34;: &#34;id_1&#34;, &#34;id&#34;: &#34;cm_1&#34;, &#34;new_field&#34;: &#34;new_value&#34;}},
+        &gt;&gt;&gt;     {&#34;key&#34;: &#34;key-02&#34;, &#34;value&#34;: {&#34;bar&#34;: 1000, &#34;baz&#34;: &#34;ABC&#34;, &#34;foo&#34;: &#34;id_2&#34;, &#34;id&#34;: &#34;cm_2&#34;, &#34;new_field&#34;: &#34;new_value&#34;}},
+        &gt;&gt;&gt;     {&#34;key&#34;: &#34;key-03&#34;, &#34;value&#34;: {&#34;bar&#34;: 1000, &#34;baz&#34;: &#34;ABC&#34;, &#34;foo&#34;: &#34;id_3&#34;, &#34;id&#34;: &#34;cm_3&#34;, &#34;new_field&#34;: &#34;new_value&#34;}},
+        &gt;&gt;&gt; ]
+    &#34;&#34;&#34;
+
+    sources_config: Mapping
+    schema: Mapping
+    options: MutableMapping[str, Any]
+    __kafka_config: Optional[Mapping] = None
+    __producer: Optional[KafkaProducer] = None
+    __key_generator: Optional[Callable[[Any, Mapping[Any, Any]], Optional[str]]] = None
+    __document_transformer: Optional[Callable[[Mapping[Any, Any]], Mapping[Any, Any]]] = None
+
+    def _write_to_kafka(self, df: pd.DataFrame) -&gt; None:
+        &#34;&#34;&#34;Given a dataframe where each row is a message to be sent to a Kafka Topic, iterate through all rows and send them to a Kafka topic.
+
+         The topic is defined in `self.sources_config[&#34;kafka&#34;]` and using a kafka producer, which is flushed at the
+         end of this process.
+
+        Args:
+            df: A dataframe where each row is a message to be sent to a Kafka Topic.
+        &#34;&#34;&#34;
+        if self.__key_generator is None:
+            self.__key_generator = lambda _, __: None
+            if self.options.get(&#34;key_generator&#34;) is not None:
+                self.__key_generator = self.options.pop(&#34;key_generator&#34;)
+
+        if self.__document_transformer is None:
+            self.__document_transformer = lambda value: value
+            if self.options.get(&#34;document_transformer&#34;) is not None:
+                self.__document_transformer = self.options.pop(&#34;document_transformer&#34;)
+
+        if self.__producer is None:
+            self.__producer = self._get_producer(self.sources_config[&#34;kafka&#34;][&#34;kafka_server&#34;], **self.options)
+
+        self._send_messages(df=df, topic=self.sources_config[&#34;kafka&#34;][&#34;kafka_topic&#34;])
+
+    @allow_options(KafkaProducer.DEFAULT_CONFIG.keys())
+    def _get_producer(self, server: str, **options: MutableMapping[str, Any]) -&gt; KafkaProducer:
+        &#34;&#34;&#34;Generate and return a Kafka Producer.
+
+        Default options are used to generate the producer. Specifically:
+            - `bootstrap_servers`: Passed on through the source_config
+            - `value_serializer`: Uses a default_value_serializer defined in this mixin
+
+        More options can be added to the producer by passing them as keyword arguments, through valid options.
+
+        These can also override the default options.
+
+        Args:
+            server: The host name.
+            **options: Keyword arguments to pass to the KafkaProducer.
+
+        Returns:
+            A Kafka producer instance.
+        &#34;&#34;&#34;
+        self.__kafka_config = {
+            **{
+                &#34;bootstrap_servers&#34;: server,
+                &#34;compression_type&#34;: &#34;snappy&#34;,
+                &#34;key_serializer&#34;: self._default_key_serializer,
+                &#34;value_serializer&#34;: self._default_value_serializer,
+            },
+            **options,
+        }
+        return KafkaProducer(**self.__kafka_config)
+
+    def _send_messages(self, df: pd.DataFrame, topic: str) -&gt; None:
+        logger.info(f&#34;Sending {len(df)} messages to Kafka topic:{topic}.&#34;)
+
+        indices = df.index.values  # possibly non-unique indices
+        if len(set(indices)) != len(indices):
+            logger.warning(&#34;Messages have non-unique keys. This may cause issues in your downstream logic.&#34;)
+
+        messages = df.reset_index(drop=True).to_dict(&#34;records&#34;)
+        for idx, message in zip(indices, messages):
+            self.__producer.send(topic, key=self.__key_generator(idx, message), value=self.__document_transformer(message))  # type: ignore
+
+        self.__producer.flush()  # type: ignore
+
+    @staticmethod
+    def _default_key_serializer(key: Optional[str]) -&gt; Optional[bytes]:
+        if key:
+            return key.encode(&#34;utf-8&#34;)
+        return None
+
+    @staticmethod
+    def _default_value_serializer(value: Mapping) -&gt; bytes:
+        return simplejson.dumps(value, ignore_nan=True).encode(&#34;utf-8&#34;)
+
+    def _read_from_kafka(self) -&gt; Iterable[Mapping]:
+        &#34;&#34;&#34;Read messages from a Kafka Topic and convert them to separate dataframes.
+
+        Returns:
+            Multiple dataframes, one per message read from the Kafka topic of interest.
+        &#34;&#34;&#34;
+        # TODO: Implement kafka reader</code></pre>
+</details>
+<h3>Subclasses</h3>
+<ul class="hlist">
+<li><a title="dynamicio.UnifiedIO" href="index.html#dynamicio.UnifiedIO">UnifiedIO</a></li>
+</ul>
+<h3>Class variables</h3>
+<dl>
+<dt id="dynamicio.mixins.WithKafka.options"><code class="name">var <span class="ident">options</span> : MutableMapping[str, Any]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.mixins.WithKafka.schema"><code class="name">var <span class="ident">schema</span> : Mapping[~KT, +VT_co]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.mixins.WithKafka.sources_config"><code class="name">var <span class="ident">sources_config</span> : Mapping[~KT, +VT_co]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+</dd>
+<dt id="dynamicio.mixins.WithLocal"><code class="flex name class">
+<span>class <span class="ident">WithLocal</span></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Handles local I/O operations.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class WithLocal:
+    &#34;&#34;&#34;Handles local I/O operations.&#34;&#34;&#34;
+
+    sources_config: Mapping
+    schema: Mapping
+    options: MutableMapping[str, Any]
+
+    def _read_from_local(self) -&gt; pd.DataFrame:
+        &#34;&#34;&#34;Read a local file as a `DataFrame`.
+
+        The configuration object is expected to have two keys:
+            - `file_path`
+            - `file_type`
+
+        To actually read the file, a method is dynamically invoked by name, using
+        &#34;_read_{file_type}_file&#34;.
+
+        Returns:
+            DataFrame
+        &#34;&#34;&#34;
+        local_config = self.sources_config[&#34;local&#34;]
+        file_path = resolve_template(local_config[&#34;file_path&#34;], self.options)
+        file_type = local_config[&#34;file_type&#34;]
+
+        return getattr(self, f&#34;_read_{file_type}_file&#34;)(file_path, self.schema, **self.options)
+
+    def _write_to_local(self, df: pd.DataFrame):
+        &#34;&#34;&#34;Write a dataframe locally based on the {file_type} of the config_io configuration.
+
+        The configuration object is expected to have two keys:
+
+            - `file_path`
+            - `file_type`
+
+        To actually write the file, a method is dynamically invoked by name, using
+        &#34;_write_{file_type}_file&#34;.
+
+        Args:
+            df: The dataframe to be written out.
+        &#34;&#34;&#34;
+        local_config = self.sources_config[&#34;local&#34;]
+        file_path = resolve_template(local_config[&#34;file_path&#34;], self.options)
+        file_type = local_config[&#34;file_type&#34;]
+
+        getattr(self, f&#34;_write_{file_type}_file&#34;)(df, file_path, **self.options)
+
+    @staticmethod
+    @allow_options(pd.read_hdf)
+    def _read_hdf_file(file_path: str, schema: Mapping[str, str], **options: Any) -&gt; pd.DataFrame:
+        &#34;&#34;&#34;Read a HDF file as a DataFrame using `pd.read_hdf`.
+
+        All `options` are passed directly to `pd.read_hdf`.
+
+        Args:
+            file_path: The path to the hdf file to be read.
+            options: The pandas `read_hdf` options.
+
+        Returns:
+            DataFrame: The dataframe read from the hdf file.
+        &#34;&#34;&#34;
+        df = pd.read_hdf(file_path, **options)
+        columns = [column for column in df.columns.to_list() if column in schema.keys()]
+        df = df[columns]
+        return df
+
+    @staticmethod
+    @allow_options(pd.read_csv)
+    def _read_csv_file(file_path: str, schema: Mapping[str, str], **options: Any) -&gt; pd.DataFrame:
+        &#34;&#34;&#34;Read a CSV file as a DataFrame using `pd.read_csv`.
+
+        All `options` are passed directly to `pd.read_csv`.
+
+        Args:
+            file_path: The path to the csv file to be read.
+            options: The pandas `read_csv` options.
+
+        Returns:
+            DataFrame: The dataframe read from the csv file.
+        &#34;&#34;&#34;
+        options[&#34;usecols&#34;] = list(schema.keys())
+        return pd.read_csv(file_path, **options)
+
+    @staticmethod
+    @allow_options(pd.read_json)
+    def _read_json_file(file_path: str, schema: Mapping[str, str], **options: Any) -&gt; pd.DataFrame:
+        &#34;&#34;&#34;Read a json file as a DataFrame using `pd.read_hdf`.
+
+        All `options` are passed directly to `pd.read_hdf`.
+
+        Args:
+            file_path:
+            options:
+
+        Returns:
+            DataFrame
+        &#34;&#34;&#34;
+        df = pd.read_json(file_path, **options)
+        columns = [column for column in df.columns.to_list() if column in schema.keys()]
+        df = df[columns]
+        return df
+
+    @staticmethod
+    def _read_parquet_file(file_path: str, schema: Mapping[str, str], **options: Any) -&gt; pd.DataFrame:
+        &#34;&#34;&#34;Read a Parquet file as a DataFrame using `pd.read_parquet`.
+
+        All `options` are passed directly to `pd.read_parquet`.
+
+        Args:
+            file_path: The path to the parquet file to be read.
+            options: The pandas `read_parquet` options.
+
+        Returns:
+            DataFrame: The dataframe read from the parquet file.
+        &#34;&#34;&#34;
+        options[&#34;columns&#34;] = list(schema.keys())
+
+        if options.get(&#34;engine&#34;) == &#34;fastparquet&#34;:
+            return WithLocal.__read_with_fastparquet(file_path, **options)
+        return WithLocal.__read_with_pyarrow(file_path, **options)
+
+    @classmethod
+    @allow_options([*args_of(pd.read_parquet), *args_of(read_table)])
+    def __read_with_pyarrow(cls, file_path: str, **options: Any) -&gt; pd.DataFrame:
+        return pd.read_parquet(file_path, **options)
+
+    @classmethod
+    @allow_options([*args_of(pd.read_parquet), *args_of(ParquetFile)])
+    def __read_with_fastparquet(cls, file_path: str, **options: Any) -&gt; pd.DataFrame:
+        return pd.read_parquet(file_path, **options)
+
+    @staticmethod
+    @allow_options([*args_of(pd.DataFrame.to_hdf), *[&#34;protocol&#34;]])
+    def _write_hdf_file(df: pd.DataFrame, file_path: str, **options: Any):
+        &#34;&#34;&#34;Write a dataframe to hdf using `df.to_hdf`.
+
+        All `options` are passed directly to `df.to_hdf`.
+
+        Args:
+            df: A dataframe write out.
+            file_path: The location where the file needs to be written.
+            options: The pandas `to_hdf` options.
+
+                - The pandas `to_hdf` options, &amp;;
+                - protocol: The pickle protocol to use for writing the hdf file out; a value &lt;=5.
+        &#34;&#34;&#34;
+        with pickle_protocol(protocol=options.pop(&#34;protocol&#34;, None)):
+            df.to_hdf(file_path, key=&#34;df&#34;, mode=&#34;w&#34;, **options)
+
+    @staticmethod
+    @allow_options(pd.DataFrame.to_csv)
+    def _write_csv_file(df: pd.DataFrame, file_path: str, **options: Any):
+        &#34;&#34;&#34;Write a dataframe as a CSV file using `df.to_csv`.
+
+        All `options` are passed directly to `df.to_csv`.
+
+        Args:
+            df: A dataframe write out.
+            file_path: The location where the file needs to be written.
+            options: Options relative to writing a csv file.
+        &#34;&#34;&#34;
+        df.to_csv(file_path, **options)
+
+    @staticmethod
+    @allow_options(pd.DataFrame.to_json)
+    def _write_json_file(df: pd.DataFrame, file_path: str, **options: Any):
+        &#34;&#34;&#34;Write a dataframe as a json file using `df.to_json`.
+
+        All `options` are passed directly to `df.to_json`.
+
+        Args:
+            df: A dataframe write out.
+            file_path: The location where the file needs to be written.
+            options: Options relative to writing a json file.
+        &#34;&#34;&#34;
+        df.to_json(file_path, **options)
+
+    @staticmethod
+    def _write_parquet_file(df: pd.DataFrame, file_path: str, **options: Any):
+        &#34;&#34;&#34;Write a dataframe as a parquet file using `df.to_parquet`.
+
+        All `options` are passed directly to `df.to_parquet`.
+
+        Args:
+            df: A dataframe write out.
+            file_path: The location where the file needs to be written.
+            options: Options relative to writing a parquet file.
+        &#34;&#34;&#34;
+        if options.get(&#34;engine&#34;) == &#34;fastparquet&#34;:
+            return WithLocal.__write_with_fastparquet(df, file_path, **options)
+        return WithLocal.__write_with_pyarrow(df, file_path, **options)
+
+    @classmethod
+    @allow_options([*args_of(pd.DataFrame.to_parquet), *args_of(write_table)])
+    def __write_with_pyarrow(cls, df: pd.DataFrame, filepath: str, **options: Any) -&gt; pd.DataFrame:
+        return df.to_parquet(filepath, **options)
+
+    @classmethod
+    @allow_options([*args_of(pd.DataFrame.to_parquet), *args_of(write)])
+    def __write_with_fastparquet(cls, df: pd.DataFrame, filepath: str, **options: Any) -&gt; pd.DataFrame:
+        return df.to_parquet(filepath, **options)</code></pre>
+</details>
+<h3>Subclasses</h3>
+<ul class="hlist">
+<li><a title="dynamicio.UnifiedIO" href="index.html#dynamicio.UnifiedIO">UnifiedIO</a></li>
+<li><a title="dynamicio.mixins.WithLocalBatch" href="#dynamicio.mixins.WithLocalBatch">WithLocalBatch</a></li>
+<li><a title="dynamicio.mixins.WithS3File" href="#dynamicio.mixins.WithS3File">WithS3File</a></li>
+<li><a title="dynamicio.mixins.WithS3PathPrefix" href="#dynamicio.mixins.WithS3PathPrefix">WithS3PathPrefix</a></li>
+</ul>
+<h3>Class variables</h3>
+<dl>
+<dt id="dynamicio.mixins.WithLocal.options"><code class="name">var <span class="ident">options</span> : MutableMapping[str, Any]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.mixins.WithLocal.schema"><code class="name">var <span class="ident">schema</span> : Mapping[~KT, +VT_co]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.mixins.WithLocal.sources_config"><code class="name">var <span class="ident">sources_config</span> : Mapping[~KT, +VT_co]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+</dd>
+<dt id="dynamicio.mixins.WithLocalBatch"><code class="flex name class">
+<span>class <span class="ident">WithLocalBatch</span></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Responsible for batch reading local files.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class WithLocalBatch(WithLocal):
+    &#34;&#34;&#34;Responsible for batch reading local files.&#34;&#34;&#34;
+
+    def _read_from_local_batch(self) -&gt; pd.DataFrame:
+        &#34;&#34;&#34;Reads a set of files for a specified file type, concatenates them and returns a dataframe.
+
+        Returns:
+            A concatenated dataframe composed of all files read through local_batch.
+        &#34;&#34;&#34;
+        local_batch_config = self.sources_config[&#34;local&#34;]
+
+        file_type = local_batch_config[&#34;file_type&#34;]
+        filtering_file_type = file_type
+        if filtering_file_type == &#34;hdf&#34;:
+            filtering_file_type = &#34;h5&#34;
+
+        files = glob.glob(f&#34;{local_batch_config[&#39;path_prefix&#39;]}/*.{filtering_file_type}&#34;)
+
+        dfs_to_concatenate = []
+        for file in files:
+            file_to_load = os.path.join(local_batch_config[&#34;path_prefix&#34;], file)
+            dfs_to_concatenate.append(getattr(self, f&#34;_read_{file_type}_file&#34;)(file_to_load, self.schema, **self.options))  # type: ignore
+
+        return pd.concat(dfs_to_concatenate).reset_index(drop=True)</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li><a title="dynamicio.mixins.WithLocal" href="#dynamicio.mixins.WithLocal">WithLocal</a></li>
+</ul>
+<h3>Subclasses</h3>
+<ul class="hlist">
+<li><a title="dynamicio.UnifiedIO" href="index.html#dynamicio.UnifiedIO">UnifiedIO</a></li>
+</ul>
+<h3>Class variables</h3>
+<dl>
+<dt id="dynamicio.mixins.WithLocalBatch.options"><code class="name">var <span class="ident">options</span> : MutableMapping[str, Any]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.mixins.WithLocalBatch.schema"><code class="name">var <span class="ident">schema</span> : Mapping[~KT, +VT_co]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.mixins.WithLocalBatch.sources_config"><code class="name">var <span class="ident">sources_config</span> : Mapping[~KT, +VT_co]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+</dd>
+<dt id="dynamicio.mixins.WithPostgres"><code class="flex name class">
+<span>class <span class="ident">WithPostgres</span></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Handles I/O operations for Postgres.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class WithPostgres:
+    &#34;&#34;&#34;Handles I/O operations for Postgres.&#34;&#34;&#34;
+
+    sources_config: Mapping
+    schema: Mapping
+    options: MutableMapping[str, Any]
+
+    def _read_from_postgres(self) -&gt; pd.DataFrame:
+        &#34;&#34;&#34;Read data from postgres as a `DataFrame`.
+
+        The configuration object is expected to have the following keys:
+            - `db_user`
+            - `db_password`
+            - `db_host`
+            - `db_port`
+            - `db_name`
+
+        Returns:
+            DataFrame
+        &#34;&#34;&#34;
+        postgres_config = self.sources_config[&#34;postgres&#34;]
+        db_user = postgres_config[&#34;db_user&#34;]
+        db_password = postgres_config[&#34;db_password&#34;]
+        db_host = postgres_config[&#34;db_host&#34;]
+        db_port = postgres_config[&#34;db_port&#34;]
+        db_name = postgres_config[&#34;db_name&#34;]
+
+        connection_string = f&#34;postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}&#34;
+
+        model = self.options.get(&#34;model&#34;)
+        sql_query = self.options.get(&#34;sql_query&#34;)
+
+        query = None
+
+        if model and sql_query:
+            raise ValueError(&#34;Only one of `model` and `sql_query` must be provided&#34;)
+        if model is None and sql_query is None:
+            raise ValueError(&#34;One of `model` and `sql_query` must be provided&#34;)
+
+        if model:
+            query = Query(self._get_table_columns(model))
+        else:
+            query = sql_query
+
+        with session_for(connection_string) as session:
+            return self._read_database(session, query, **self.options)
+
+    @staticmethod
+    def _get_table_columns(model):
+        if model:
+            return list(model.__table__.columns)
+        raise ValueError(&#34;A model must be provided&#34;)
+
+    @staticmethod
+    @allow_options([*args_of(pd.read_sql), *[&#34;model&#34;]])
+    def _read_database(session: SqlAlchemySession, query: Union[str, Query], **options: Any) -&gt; pd.DataFrame:
+        &#34;&#34;&#34;Run `query` against active `session` and returns the result as a `DataFrame`.
+
+        Args:
+            session: Active session
+            query: If a `Query` object is given, it should be unbound. If a `str` is given, the
+                value is used as-is.
+
+        Returns:
+            DataFrame
+        &#34;&#34;&#34;
+        if options.get(&#34;model&#34;):
+            options.pop(&#34;model&#34;)
+
+        if isinstance(query, Query):
+            query = query.with_session(session).statement
+        return pd.read_sql(sql=query, con=session.get_bind(), **options)
+
+    @allow_options({&#34;model&#34;})
+    def _write_to_postgres(self, df: pd.DataFrame):
+        &#34;&#34;&#34;Write a dataframe to postgres based on the {file_type} of the config_io configuration.
+
+        Args:
+            df: The dataframe to be written
+        &#34;&#34;&#34;
+        # engine = sqlalchemy.create_engine(f&#34;postgresql://{USER}:{PASSWORD}@{HOST}:{PORT}/{DB_NAME}&#34;)
+        # conn = engine.connect()
+        # cm_volumes.to_sql(&#34;cm_volumes&#34;, engine, if_exists=&#34;append&#34;, index=False)
+
+        postgres_config = self.sources_config[&#34;postgres&#34;]
+        db_user = postgres_config[&#34;db_user&#34;]
+        db_password = postgres_config[&#34;db_password&#34;]
+        db_host = postgres_config[&#34;db_host&#34;]
+        db_port = postgres_config[&#34;db_port&#34;]
+        db_name = postgres_config[&#34;db_name&#34;]
+
+        connection_string = f&#34;postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}&#34;
+
+        with session_for(connection_string) as session:
+            self._write_to_database(session, self.options[&#34;model&#34;].__tablename__, df)  # type: ignore
+
+    @staticmethod
+    def _write_to_database(session: SqlAlchemySession, table_name: str, df: pd.DataFrame):
+        &#34;&#34;&#34;Write a dataframe to any database provided a session with a data model and a table name.
+
+        Args:
+            session: Generated from a data model and a table name
+            table_name: The name of the table to read from a DB
+            df: The dataframe to be written out
+        &#34;&#34;&#34;
+        df.to_sql(name=table_name, con=session.get_bind(), if_exists=&#34;replace&#34;, index=False)
+        session.commit()</code></pre>
+</details>
+<h3>Subclasses</h3>
+<ul class="hlist">
+<li><a title="dynamicio.UnifiedIO" href="index.html#dynamicio.UnifiedIO">UnifiedIO</a></li>
+</ul>
+<h3>Class variables</h3>
+<dl>
+<dt id="dynamicio.mixins.WithPostgres.options"><code class="name">var <span class="ident">options</span> : MutableMapping[str, Any]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.mixins.WithPostgres.schema"><code class="name">var <span class="ident">schema</span> : Mapping[~KT, +VT_co]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.mixins.WithPostgres.sources_config"><code class="name">var <span class="ident">sources_config</span> : Mapping[~KT, +VT_co]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+</dd>
+<dt id="dynamicio.mixins.WithS3File"><code class="flex name class">
+<span>class <span class="ident">WithS3File</span></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Handles I/O operations for AWS S3.</p>
+<p>All files are persisted to disk first using boto3 as this has proven to be faster than reading them into memory.
+Note that reading things into memory is available for csv, json and parquet types only. Unfortunately, until support
+for generic buffer is added to read_hdf, we need to download and persists the file to disk first anyway.</p>
+<h2 id="options">Options</h2>
+<p>no_disk_space: If <code>True</code>, then s3fs + fsspec will be used to read data directly into memory.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class WithS3File(WithLocal):
+    &#34;&#34;&#34;Handles I/O operations for AWS S3.
+
+    All files are persisted to disk first using boto3 as this has proven to be faster than reading them into memory.
+    Note that reading things into memory is available for csv, json and parquet types only. Unfortunately, until support
+    for generic buffer is added to read_hdf, we need to download and persists the file to disk first anyway.
+
+    Options:
+        no_disk_space: If `True`, then s3fs + fsspec will be used to read data directly into memory.
+    &#34;&#34;&#34;
+
+    boto3_client = boto3.client(&#34;s3&#34;)
+
+    @contextmanager
+    def _s3_reader(self, s3_bucket: str, s3_key: str) -&gt; Generator:
+        &#34;&#34;&#34;Contextmanager to abstract reading different file types in S3.
+
+        Args:
+            s3_bucket: The S3 bucket from where to read the file.
+            s3_key: The file-path to the target file to be read.
+
+        Returns:
+            The local file path from where the file can be read, once it has been downloaded there by the boto3.client.
+
+        &#34;&#34;&#34;
+        with tempfile.NamedTemporaryFile(&#34;wb&#34;) as target_file:
+            # Download the file from S3
+            self.boto3_client.download_fileobj(s3_bucket, s3_key, target_file)
+            # Yield local file path to body of `with` statement
+            target_file.flush()
+            yield target_file
+
+    @contextmanager
+    def _s3_writer(self, s3_bucket: str, s3_key: str) -&gt; Generator:
+        &#34;&#34;&#34;Contextmanager to abstract loading different file types to S3.
+
+        Args:
+            s3_bucket: The S3 bucket to upload the file to.
+            s3_key: The file-path where the target file should be uploaded to.
+
+        Returns:
+            The local file path where to actually write the file, to be read and uploaded by boto3.client.
+        &#34;&#34;&#34;
+        with tempfile.NamedTemporaryFile(&#34;wb&#34;) as target_file:
+            # Yield local file path to body of `with` statement
+            yield target_file
+            target_file.flush()
+
+            # Upload the file to S3
+            self.boto3_client.upload_file(target_file.name, s3_bucket, s3_key, ExtraArgs={&#34;ACL&#34;: &#34;bucket-owner-full-control&#34;})
+
+    def _read_from_s3_file(self) -&gt; pd.DataFrame:
+        &#34;&#34;&#34;Read a file from an S3 bucket as a `DataFrame`.
+
+        The configuration object is expected to have the following keys:
+            - `bucket`
+            - `file_path`
+            - `file_type`
+
+        To actually read the file, a method is dynamically invoked by name, using &#34;_read_{file_type}_file&#34;.
+
+        Returns:
+            DataFrame
+        &#34;&#34;&#34;
+        s3_config = self.sources_config[&#34;s3&#34;]
+        if &#34;file_path&#34; not in s3_config:
+            raise ValueError(&#34;`file_path` is required for reading a file from an S3 source&#34;)
+
+        file_type = s3_config[&#34;file_type&#34;]
+        file_path = resolve_template(s3_config[&#34;file_path&#34;], self.options)
+        bucket = s3_config[&#34;bucket&#34;]
+
+        logger.info(f&#34;[s3] Started downloading: s3://{s3_config[&#39;bucket&#39;]}/{file_path}&#34;)
+        if file_type in [&#34;csv&#34;, &#34;json&#34;, &#34;parquet&#34;] and self.options.pop(&#34;no_disk_space&#34;, None):
+            return getattr(self, f&#34;_read_{file_type}_file&#34;)(f&#34;s3://{s3_config[&#39;bucket&#39;]}/{file_path}&#34;, self.schema, **self.options)  # type: ignore
+        with self._s3_reader(s3_bucket=bucket, s3_key=file_path) as target_file:  # type: ignore
+            return getattr(self, f&#34;_read_{file_type}_file&#34;)(target_file.name, self.schema, **self.options)  # type: ignore
+
+    def _write_to_s3_file(self, df: pd.DataFrame):
+        &#34;&#34;&#34;Write a dataframe to s3 based on the {file_type} of the config_io configuration.
+
+        The configuration object is expected to have two keys:
+
+            - `file_path`
+            - `file_type`
+
+        To actually write the file, a method is dynamically invoked by name, using &#34;_write_{file_type}_file&#34;.
+
+        Args:
+            df: The dataframe to be written out
+        &#34;&#34;&#34;
+        s3_config = self.sources_config[&#34;s3&#34;]
+        file_path = resolve_template(s3_config[&#34;file_path&#34;], self.options)
+        file_type = s3_config[&#34;file_type&#34;]
+
+        logger.info(f&#34;[s3] Started uploading: s3://{s3_config[&#39;bucket&#39;]}/{file_path}&#34;)
+        if file_type in [&#34;csv&#34;, &#34;json&#34;, &#34;parquet&#34;]:
+            getattr(self, f&#34;_write_{file_type}_file&#34;)(df, f&#34;s3://{s3_config[&#39;bucket&#39;]}/{file_path}&#34;, **self.options)  # type: ignore
+        elif file_type == &#34;hdf&#34;:
+            with self._s3_writer(s3_bucket=s3_config[&#34;bucket&#34;], s3_key=file_path) as target_file:  # type: ignore
+                self._write_hdf_file(df, target_file.name, **self.options)  # type: ignore
+        else:
+            raise ValueError(f&#34;File type: {file_type} not supported!&#34;)
+        logger.info(f&#34;[s3] Finished uploading: s3://{s3_config[&#39;bucket&#39;]}/{file_path}&#34;)</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li><a title="dynamicio.mixins.WithLocal" href="#dynamicio.mixins.WithLocal">WithLocal</a></li>
+</ul>
+<h3>Subclasses</h3>
+<ul class="hlist">
+<li><a title="dynamicio.UnifiedIO" href="index.html#dynamicio.UnifiedIO">UnifiedIO</a></li>
+</ul>
+<h3>Class variables</h3>
+<dl>
+<dt id="dynamicio.mixins.WithS3File.boto3_client"><code class="name">var <span class="ident">boto3_client</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.mixins.WithS3File.options"><code class="name">var <span class="ident">options</span> : MutableMapping[str, Any]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.mixins.WithS3File.schema"><code class="name">var <span class="ident">schema</span> : Mapping[~KT, +VT_co]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.mixins.WithS3File.sources_config"><code class="name">var <span class="ident">sources_config</span> : Mapping[~KT, +VT_co]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+</dd>
+<dt id="dynamicio.mixins.WithS3PathPrefix"><code class="flex name class">
+<span>class <span class="ident">WithS3PathPrefix</span></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Handles I/O operations for AWS S3; implements read operations only.</p>
+<p>This mixin assumes that the directories it reads from will only contain a single file-type.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class WithS3PathPrefix(WithLocal):
+    &#34;&#34;&#34;Handles I/O operations for AWS S3; implements read operations only.
+
+    This mixin assumes that the directories it reads from will only contain a single file-type.
+    &#34;&#34;&#34;
+
+    def _write_to_s3_path_prefix(self, df: pd.DataFrame):
+        &#34;&#34;&#34;Write a DataFrame to an S3 path prefix.
+
+        The configuration object is expected to have the following keys:
+            - `bucket`
+            - `path_prefix`
+            - `file_type`
+
+        Args:
+            df (pd.DataFrame): the DataFrame to be written to S3
+
+        Raises:
+            ValueError: In case `path_prefix` is missing from config
+            ValueError: In case the `partition_cols` arg is missing while trying to write a parquet file
+        &#34;&#34;&#34;
+        s3_config = self.sources_config[&#34;s3&#34;]
+        if &#34;path_prefix&#34; not in s3_config:
+            raise ValueError(&#34;`path_prefix` is required to write multiple files to an S3 key&#34;)
+
+        file_type = s3_config[&#34;file_type&#34;]
+        if file_type != &#34;parquet&#34;:
+            raise ValueError(f&#34;File type not supported: {file_type}, only parquet files can be written to an S3 key&#34;)
+        if &#34;partition_cols&#34; not in self.options:
+            raise ValueError(&#34;`partition_cols` is required as an option to write partitioned parquet files to S3&#34;)
+
+        bucket = s3_config[&#34;bucket&#34;]
+        path_prefix = s3_config[&#34;path_prefix&#34;]
+        full_path_prefix = resolve_template(f&#34;s3://{bucket}/{path_prefix}&#34;, self.options)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self._write_parquet_file(df, temp_dir, **self.options)
+            awscli_runner(
+                &#34;s3&#34;,
+                &#34;sync&#34;,
+                temp_dir,
+                full_path_prefix,
+                &#34;--acl&#34;,
+                &#34;bucket-owner-full-control&#34;,
+                &#34;--only-show-errors&#34;,
+                &#34;--exact-timestamps&#34;,
+            )
+
+    def _read_from_s3_path_prefix(self) -&gt; pd.DataFrame:
+        &#34;&#34;&#34;Read all files under a path prefix from an S3 bucket as a `DataFrame`.
+
+        The configuration object is expected to have the following keys:
+            - `bucket`
+            - `path_prefix`
+            - `file_type`
+
+        To actually read the file, a method is dynamically invoked by name, using
+        &#34;_read_{file_type}_path_prefix&#34;.
+
+        Returns:
+            DataFrame
+        &#34;&#34;&#34;
+        s3_config = self.sources_config[&#34;s3&#34;]
+        if &#34;path_prefix&#34; not in s3_config:
+            raise ValueError(&#34;`path_prefix` is required to read multiple files from an S3 source&#34;)
+
+        file_type = s3_config[&#34;file_type&#34;]
+        if file_type not in {&#34;parquet&#34;, &#34;csv&#34;, &#34;hdf&#34;, &#34;json&#34;}:
+            raise ValueError(f&#34;File type not supported: {file_type}&#34;)
+
+        bucket = s3_config[&#34;bucket&#34;]
+        path_prefix = s3_config[&#34;path_prefix&#34;]
+        full_path_prefix = resolve_template(f&#34;s3://{bucket}/{path_prefix}&#34;, self.options)
+
+        # The `no_disk_space` option should be used only when reading a subset of columns from S3
+        if self.options.pop(&#34;no_disk_space&#34;, False) and file_type == &#34;parquet&#34;:
+            return self._read_parquet_file(full_path_prefix, self.schema, **self.options)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # aws-cli is shown to be up to 6 times faster when downloading the complete dataset from S3 than using the boto3
+            # client or pandas directly. This is because aws-cli uses the parallel downloader, which is much faster than the
+            # boto3 client.
+            awscli_runner(
+                &#34;s3&#34;,
+                &#34;sync&#34;,
+                full_path_prefix,
+                temp_dir,
+                &#34;--acl&#34;,
+                &#34;bucket-owner-full-control&#34;,
+                &#34;--only-show-errors&#34;,
+                &#34;--exact-timestamps&#34;,
+            )
+
+            dfs = []
+            for file in os.listdir(temp_dir):
+                df = getattr(self, f&#34;_read_{file_type}_file&#34;)(os.path.join(temp_dir, file), self.schema, **self.options)  # type: ignore
+                if len(df) &gt; 0:
+                    dfs.append(df)
+
+            return pd.concat(dfs, ignore_index=True)</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li><a title="dynamicio.mixins.WithLocal" href="#dynamicio.mixins.WithLocal">WithLocal</a></li>
+</ul>
+<h3>Subclasses</h3>
+<ul class="hlist">
+<li><a title="dynamicio.UnifiedIO" href="index.html#dynamicio.UnifiedIO">UnifiedIO</a></li>
+</ul>
+<h3>Class variables</h3>
+<dl>
+<dt id="dynamicio.mixins.WithS3PathPrefix.options"><code class="name">var <span class="ident">options</span> : MutableMapping[str, Any]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.mixins.WithS3PathPrefix.schema"><code class="name">var <span class="ident">schema</span> : Mapping[~KT, +VT_co]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.mixins.WithS3PathPrefix.sources_config"><code class="name">var <span class="ident">sources_config</span> : Mapping[~KT, +VT_co]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+</dd>
+</dl>
+</section>
+</article>
+<nav id="sidebar">
+<h1>Index</h1>
+<div class="toc">
+<ul></ul>
+</div>
+<ul id="index">
+<li><h3>Super-module</h3>
+<ul>
+<li><code><a title="dynamicio" href="index.html">dynamicio</a></code></li>
+</ul>
+</li>
+<li><h3><a href="#header-functions">Functions</a></h3>
+<ul class="">
+<li><code><a title="dynamicio.mixins.args_of" href="#dynamicio.mixins.args_of">args_of</a></code></li>
+<li><code><a title="dynamicio.mixins.get_string_template_field_names" href="#dynamicio.mixins.get_string_template_field_names">get_string_template_field_names</a></code></li>
+<li><code><a title="dynamicio.mixins.resolve_template" href="#dynamicio.mixins.resolve_template">resolve_template</a></code></li>
+</ul>
+</li>
+<li><h3><a href="#header-classes">Classes</a></h3>
+<ul>
+<li>
+<h4><code><a title="dynamicio.mixins.WithKafka" href="#dynamicio.mixins.WithKafka">WithKafka</a></code></h4>
+<ul class="">
+<li><code><a title="dynamicio.mixins.WithKafka.options" href="#dynamicio.mixins.WithKafka.options">options</a></code></li>
+<li><code><a title="dynamicio.mixins.WithKafka.schema" href="#dynamicio.mixins.WithKafka.schema">schema</a></code></li>
+<li><code><a title="dynamicio.mixins.WithKafka.sources_config" href="#dynamicio.mixins.WithKafka.sources_config">sources_config</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="dynamicio.mixins.WithLocal" href="#dynamicio.mixins.WithLocal">WithLocal</a></code></h4>
+<ul class="">
+<li><code><a title="dynamicio.mixins.WithLocal.options" href="#dynamicio.mixins.WithLocal.options">options</a></code></li>
+<li><code><a title="dynamicio.mixins.WithLocal.schema" href="#dynamicio.mixins.WithLocal.schema">schema</a></code></li>
+<li><code><a title="dynamicio.mixins.WithLocal.sources_config" href="#dynamicio.mixins.WithLocal.sources_config">sources_config</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="dynamicio.mixins.WithLocalBatch" href="#dynamicio.mixins.WithLocalBatch">WithLocalBatch</a></code></h4>
+<ul class="">
+<li><code><a title="dynamicio.mixins.WithLocalBatch.options" href="#dynamicio.mixins.WithLocalBatch.options">options</a></code></li>
+<li><code><a title="dynamicio.mixins.WithLocalBatch.schema" href="#dynamicio.mixins.WithLocalBatch.schema">schema</a></code></li>
+<li><code><a title="dynamicio.mixins.WithLocalBatch.sources_config" href="#dynamicio.mixins.WithLocalBatch.sources_config">sources_config</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="dynamicio.mixins.WithPostgres" href="#dynamicio.mixins.WithPostgres">WithPostgres</a></code></h4>
+<ul class="">
+<li><code><a title="dynamicio.mixins.WithPostgres.options" href="#dynamicio.mixins.WithPostgres.options">options</a></code></li>
+<li><code><a title="dynamicio.mixins.WithPostgres.schema" href="#dynamicio.mixins.WithPostgres.schema">schema</a></code></li>
+<li><code><a title="dynamicio.mixins.WithPostgres.sources_config" href="#dynamicio.mixins.WithPostgres.sources_config">sources_config</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="dynamicio.mixins.WithS3File" href="#dynamicio.mixins.WithS3File">WithS3File</a></code></h4>
+<ul class="">
+<li><code><a title="dynamicio.mixins.WithS3File.boto3_client" href="#dynamicio.mixins.WithS3File.boto3_client">boto3_client</a></code></li>
+<li><code><a title="dynamicio.mixins.WithS3File.options" href="#dynamicio.mixins.WithS3File.options">options</a></code></li>
+<li><code><a title="dynamicio.mixins.WithS3File.schema" href="#dynamicio.mixins.WithS3File.schema">schema</a></code></li>
+<li><code><a title="dynamicio.mixins.WithS3File.sources_config" href="#dynamicio.mixins.WithS3File.sources_config">sources_config</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="dynamicio.mixins.WithS3PathPrefix" href="#dynamicio.mixins.WithS3PathPrefix">WithS3PathPrefix</a></code></h4>
+<ul class="">
+<li><code><a title="dynamicio.mixins.WithS3PathPrefix.options" href="#dynamicio.mixins.WithS3PathPrefix.options">options</a></code></li>
+<li><code><a title="dynamicio.mixins.WithS3PathPrefix.schema" href="#dynamicio.mixins.WithS3PathPrefix.schema">schema</a></code></li>
+<li><code><a title="dynamicio.mixins.WithS3PathPrefix.sources_config" href="#dynamicio.mixins.WithS3PathPrefix.sources_config">sources_config</a></code></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</nav>
+</main>
+<footer id="footer">
+<p>Generated by <a href="https://pdoc3.github.io/pdoc" title="pdoc: Python API documentation generator"><cite>pdoc</cite> 0.10.0</a>.</p>
+</footer>
+</body>
+</html>

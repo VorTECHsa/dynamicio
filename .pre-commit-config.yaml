@@ -34,7 +34,7 @@ repos:
     hooks:
       - id: pydocstyle
         name: pydocstyle
-        exclude: ^(tests/.*)
+        exclude: ^(tests/.*|demo/*)
         language: system
         entry: pydocstyle
         stages: [commit]

@@ -31,10 +31,7 @@ class TestMetricsLogger:
             log_metric(dataset="Test-DataSet", column="A", metric="B", value=float("inf"))
 
         # Then
-        assert (
-            getattr(caplog.records[0], "message")
-            == '{"message": "METRIC", "dataset": "Test-DataSet", "column": "A", "metric": "B", "value": Infinity}'
-        )
+        assert getattr(caplog.records[0], "message") == '{"message": "METRIC", "dataset": "Test-DataSet", "column": "A", "metric": "B", "value": Infinity}'
 
 
 class TestMin:
@@ -50,10 +47,7 @@ class TestMin:
             log_min()
 
         # Then
-        assert (
-            getattr(caplog.records[0], "message")
-            == '{"message": "METRIC", "dataset": "Test-DataSet", "column": "weight_a", "metric": "Min", "value": 5.0}'
-        )
+        assert getattr(caplog.records[0], "message") == '{"message": "METRIC", "dataset": "Test-DataSet", "column": "weight_a", "metric": "Min", "value": 5.0}'
 
 
 class TestMax:
@@ -69,10 +63,7 @@ class TestMax:
             log_max()
 
         # Then
-        assert (
-            getattr(caplog.records[0], "message")
-            == '{"message": "METRIC", "dataset": "Test-DataSet", "column": "weight_a", "metric": "Max", "value": 9.0}'
-        )
+        assert getattr(caplog.records[0], "message") == '{"message": "METRIC", "dataset": "Test-DataSet", "column": "weight_a", "metric": "Max", "value": 9.0}'
 
 
 class TestMean:
@@ -88,10 +79,7 @@ class TestMean:
             log_mean()
 
         # Then
-        assert (
-            getattr(caplog.records[0], "message")
-            == '{"message": "METRIC", "dataset": "Test-DataSet", "column": "weight_a", "metric": "Mean", "value": 6.6}'
-        )
+        assert getattr(caplog.records[0], "message") == '{"message": "METRIC", "dataset": "Test-DataSet", "column": "weight_a", "metric": "Mean", "value": 6.6}'
 
 
 class TestStd:
@@ -107,10 +95,7 @@ class TestStd:
             log_std()
 
         # Then
-        assert (
-            getattr(caplog.records[0], "message")
-            == '{"message": "METRIC", "dataset": "Test-DataSet", "column": "weight_a", "metric": "Std", "value": 1.429840705968481}'
-        )
+        assert getattr(caplog.records[0], "message") == '{"message": "METRIC", "dataset": "Test-DataSet", "column": "weight_a", "metric": "Std", "value": 1.429840705968481}'
 
 
 class TestVariance:
@@ -126,10 +111,7 @@ class TestVariance:
             log_var()
 
         # Then
-        assert (
-            getattr(caplog.records[0], "message")
-            == '{"message": "METRIC", "dataset": "Test-DataSet", "column": "weight_a", "metric": "Variance", "value": 2.0444444444444443}'
-        )
+        assert getattr(caplog.records[0], "message") == '{"message": "METRIC", "dataset": "Test-DataSet", "column": "weight_a", "metric": "Variance", "value": 2.0444444444444443}'
 
 
 class TestCounts:
@@ -145,10 +127,7 @@ class TestCounts:
             log_counts()
 
         # Then
-        assert (
-            getattr(caplog.records[0], "message")
-            == '{"message": "METRIC", "dataset": "Test-DataSet", "column": "weight_a", "metric": "Counts", "value": 10.0}'
-        )
+        assert getattr(caplog.records[0], "message") == '{"message": "METRIC", "dataset": "Test-DataSet", "column": "weight_a", "metric": "Counts", "value": 10.0}'
 
 
 class TestUniqueCounts:
@@ -164,10 +143,7 @@ class TestUniqueCounts:
             log_unique_counts()
 
         # Then
-        assert (
-            getattr(caplog.records[0], "message")
-            == '{"message": "METRIC", "dataset": "Test-DataSet", "column": "weight_a", "metric": "UniqueCounts", "value": 5.0}'
-        )
+        assert getattr(caplog.records[0], "message") == '{"message": "METRIC", "dataset": "Test-DataSet", "column": "weight_a", "metric": "UniqueCounts", "value": 5.0}'
 
 
 class TestCountsPerLabel:
@@ -185,16 +161,9 @@ class TestCountsPerLabel:
         # Then
         assert (
             (len(caplog.records) == 3)
+            and (getattr(caplog.records[0], "message") == '{"message": "METRIC", "dataset": "Test-DataSet", "column": "activity-discharge", "metric": "CountsPerLabel", "value": 5.0}')
+            and (getattr(caplog.records[1], "message") == '{"message": "METRIC", "dataset": "Test-DataSet", "column": "activity-load", "metric": "CountsPerLabel", "value": 2.0}')
             and (
-                getattr(caplog.records[0], "message")
-                == '{"message": "METRIC", "dataset": "Test-DataSet", "column": "activity-discharge", "metric": "CountsPerLabel", "value": 5.0}'
-            )
-            and (
-                getattr(caplog.records[1], "message")
-                == '{"message": "METRIC", "dataset": "Test-DataSet", "column": "activity-load", "metric": "CountsPerLabel", "value": 2.0}'
-            )
-            and (
-                getattr(caplog.records[2], "message")
-                == '{"message": "METRIC", "dataset": "Test-DataSet", "column": "activity-pass_through", "metric": "CountsPerLabel", "value": 3.0}'
+                getattr(caplog.records[2], "message") == '{"message": "METRIC", "dataset": "Test-DataSet", "column": "activity-pass_through", "metric": "CountsPerLabel", "value": 3.0}'
             )
         )

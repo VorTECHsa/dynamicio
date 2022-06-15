@@ -49,6 +49,8 @@ update-test-coverage:
 
 generate-docs:
 	@python -m pdoc --force --html ${CODE_DIR} -o docs
+	@mv docs/dynamicio/* docs
+	@rm -rf docs/dynamicio
 
 build-locally:
 	# You may need to run: `make aws-code-artifact-auth` before this command

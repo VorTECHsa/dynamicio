@@ -80,9 +80,9 @@ class TestCli:
 
     @pytest.mark.unit
     def test_when_single_flag_is_used__generate_schema_for__is_called_once(self):
-        with patch.object(cli.argparse.ArgumentParser, "parse_args") as mocked__parse_args, patch.object(
-            cli, "generate_schema_for"
-        ) as mocked__generate_schema_for, patch.object(cli, "open") as mocked__open, patch.object(cli.yaml, "safe_dump") as mocked__dump:
+        with patch.object(cli.argparse.ArgumentParser, "parse_args") as mocked__parse_args, patch.object(cli, "generate_schema_for") as mocked__generate_schema_for, patch.object(
+            cli, "open"
+        ) as mocked__open, patch.object(cli.yaml, "safe_dump") as mocked__dump:
             # Given
             mocked__parse_args.return_value = argparse.Namespace(batch=False, single=True, path="the_one.parquet", output=".")
             mocked__generate_schema_for.return_value = {"name": "the_one", "columns": {}}
@@ -311,9 +311,7 @@ class TestCli:
             os.remove(output_yaml_2)
 
     @pytest.mark.unit
-    def test_cli_runner_prints_an_invalid_dataset_type_warning_when_invoked_with_batch_flag_and_a_dir_with_an_invalid_path_but_is_not_interrupted(
-        self, capsys
-    ):
+    def test_cli_runner_prints_an_invalid_dataset_type_warning_when_invoked_with_batch_flag_and_a_dir_with_an_invalid_path_but_is_not_interrupted(self, capsys):
 
         with patch.object(cli.argparse.ArgumentParser, "parse_args") as mocked__parse_args:
             with patch.object(cli.glob, "glob") as mocked__glob:

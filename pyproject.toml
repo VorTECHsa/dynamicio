@@ -13,6 +13,7 @@ exclude = '''
     | \venv
     | \flake8
     | docs
+    | demo
   )/
   | tests/conftest.py
 )

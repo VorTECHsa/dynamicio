@@ -1,6 +1,4 @@
-[![CircleCI](https://circleci.com/gh/VorTECHsa/dynamicio/tree/master.svg?style=svg&circle-token=89b9d61021f23c1c848c30e2c278b4a638bfad5b)](https://circleci.com/gh/VorTECHsa/dynamicio/tree/master)
 [![Coverage Status](./docs/coverage_report/coverage-badge.svg?dummy=8484744)]()
-[<img src="https://img.shields.io/badge/slack-@vortexa/pmmt_issues-purple.svg?logo=slack">](https://vortexa.slack.com/archives/CV58WAMRD)
 
 <img src="docs/images/logo-transparent.png" width="500"> <img src="docs/images/wrapped-panda.png" width="100">
 
@@ -92,6 +90,9 @@ To install `dynamic(i/o)` you need to first authenticate with AWS Code Artifact.
 ```shell
 >> pip install dynamicio
 ```
+
+## API Documentation
+Read our docs here: https://vortechsa.github.io/dynamicio/
 
 ## How to use
 

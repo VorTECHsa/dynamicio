@@ -35,11 +35,7 @@ class TestHasUniqueValues:
         validation = has_unique_values("TEST", df, column="activity")
 
         # Then
-        assert (
-            not validation.valid
-            and validation.value == 3
-            and validation.message == "Values ['discharge', 'pass_through', 'load'] for TEST[activity] are duplicated!"
-        )
+        assert not validation.valid and validation.value == 3 and validation.message == "Values ['discharge', 'pass_through', 'load'] for TEST[activity] are duplicated!"
 
 
 class TestHasNoNullValues:
@@ -127,11 +123,7 @@ class TestHasAcceptablePercentageOfNulls:
         validation = has_acceptable_percentage_of_nulls("TEST", df, column="duration_b", threshold=0.2)
 
         # Then
-        assert (
-            not validation.valid
-            and validation.value == 0.3
-            and validation.message == "Percentage of nulls of for TEST[duration_b] is 0.3 which exceeds threshold: 0.2"
-        )
+        assert not validation.valid and validation.value == 0.3 and validation.message == "Percentage of nulls of for TEST[duration_b] is 0.3 which exceeds threshold: 0.2"
 
     @pytest.mark.unit
     def test_returns_false_if_threshold_is_exceeded(self, input_df):
@@ -142,11 +134,7 @@ class TestHasAcceptablePercentageOfNulls:
         validation = has_acceptable_percentage_of_nulls("TEST", df, column="duration_a", threshold=0.09)
 
         # Then
-        assert (
-            not validation.valid
-            and validation.value == 0.1
-            and validation.message == "Percentage of nulls of for TEST[duration_a] is 0.1 which exceeds threshold: 0.09"
-        )
+        assert not validation.valid and validation.value == 0.1 and validation.message == "Percentage of nulls of for TEST[duration_a] is 0.1 which exceeds threshold: 0.09"
 
 
 class TestHasAcceptableCategoricalValues:
@@ -186,11 +174,7 @@ class TestHasAcceptableCategoricalValues:
         validation = has_acceptable_categorical_values("TEST", df, column="activity", categorical_values={"load", "pass_through"})
 
         # Then
-        assert (
-            not validation.valid
-            and validation.value == 5
-            and validation.message == "Values {'discharge'} for TEST[activity] are not acceptable for 5 cells"
-        )
+        assert not validation.valid and validation.value == 5 and validation.message == "Values {'discharge'} for TEST[activity] are not acceptable for 5 cells"
 
     @pytest.mark.unit
     def test_returns_true_if_nulls_are_an_allowed_categorical_value(self, input_df):
@@ -386,9 +370,7 @@ class TestIsBetween:
         validation = is_between("TEST", df, column="weight_a", lower=4, upper=10)
 
         # Then
-        assert (
-            validation.valid is True and validation.value == 0 and validation.message == "All values of TEST[weight_a] is between 4 and 10 thresholds"
-        )
+        assert validation.valid is True and validation.value == 0 and validation.message == "All values of TEST[weight_a] is between 4 and 10 thresholds"
 
     @pytest.mark.integration
     def test_returns_false_if_any_column_values_are_below_the_lower_bound(self, input_df):
@@ -399,11 +381,7 @@ class TestIsBetween:
         validation = is_between("TEST", df, column="weight_a", lower=6, upper=10)
 
         # Then
-        assert (
-            not validation.valid
-            and validation.value == 0.5
-            and validation.message == "5 cell values for TEST[weight_a] are either below 6 or above 10"
-        )
+        assert not validation.valid and validation.value == 0.5 and validation.message == "5 cell values for TEST[weight_a] are either below 6 or above 10"
 
     @pytest.mark.integration
     def test_returns_false_if_any_column_values_are_above_the_upper_bound(self, input_df):
@@ -414,11 +392,7 @@ class TestIsBetween:
         validation = is_between("TEST", df, column="weight_a", lower=4, upper=8)
 
         # Then
-        assert (
-            not validation.valid
-            and validation.value == 0.3
-            and validation.message == "3 cell values for TEST[weight_a] are either below 4 or above 8"
-        )
+        assert not validation.valid and validation.value == 0.3 and validation.message == "3 cell values for TEST[weight_a] are either below 4 or above 8"
 
     @pytest.mark.integration
     def test_returns_true_if_all_column_values_are_within_bounds_bounds_included(self, input_df):
@@ -429,9 +403,7 @@ class TestIsBetween:
         validation = is_between("TEST", df, column="weight_a", lower=5, upper=9, include_left=True, include_right=True)
 
         # Then
-        assert (
-            validation.valid is True and validation.value == 0 and validation.message == "All values of TEST[weight_a] is between 5 and 9 thresholds"
-        )
+        assert validation.valid is True and validation.value == 0 and validation.message == "All values of TEST[weight_a] is between 5 and 9 thresholds"
 
     @pytest.mark.integration
     def test_returns_true_if_all_column_values_are_between_upper_and_lower_bounds_irrespective_of_nulls(self, input_df):
@@ -442,6 +414,4 @@ class TestIsBetween:
         validation = is_between("TEST", df, column="weight_b", lower=4, upper=10)
 
         # Then
-        assert (
-            validation.valid is True and validation.value == 0 and validation.message == "All values of TEST[weight_b] is between 4 and 10 thresholds"
-        )
+        assert validation.valid is True and validation.value == 0 and validation.message == "All values of TEST[weight_b] is between 4 and 10 thresholds"

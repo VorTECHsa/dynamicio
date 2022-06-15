@@ -5,7 +5,6 @@ import pytest
 from demo.src.runner_selection import choose_module
 from demo.src.runners import staging, transform
 
-
 AIRFLOW_TASK_MODULES = {"staging": staging, "transform": transform}
 
 

@@ -55,7 +55,7 @@ setuptools.setup(
     name="dynamicio",
     version=get_version(),
     author="Christos Hadjinikolis, Radu Ghitescu",
-    author_email="christos.hadjinikolis@vortexa.com, radu.ghitescu@vortexa.com",
+    author_email="christos.hadjinikolis@gmail.com, radu.ghitescu@gmail.com",
     description="Panda's wrapper for IO operations",
     long_description=get_readme(),
     long_description_content_type="text/markdown",
