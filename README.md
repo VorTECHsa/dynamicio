@@ -1,6 +1,6 @@
 [![Coverage Status](./docs/coverage_report/coverage-badge.svg?dummy=8484744)]()
 
-<img src="docs/images/logo-transparent.png" width="500"> <img src="docs/images/wrapped-panda.png" width="100">
+<img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/logo-transparent.png" width="500"> <img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/wrapped-panda.png" width="100">
 
 
 A repository for hosting the `dynamicio` library, used as a wrapper for `pandas` i/o operations.
@@ -67,7 +67,7 @@ lifting the burden of having to mock i/o function returns that would otherwise i
 
 ## Supported sources and data formats:
 
-<img src="docs/images/supported_sources.png" width="600">
+<img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/supported_sources.png" width="600">
 
 - **S3** (or local) Input & Output:
   - `parquet`
@@ -115,7 +115,8 @@ Suppose you want to ingest the `foo` and `bar` datasets, respectively from `S3` 
 to S3 for further processing.
 
 Assume you want to build a pipeline that looks something like the image below:
-![sample pipeline](docs/images/sample-pipeline.png)
+
+<img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/sample-pipeline.png" width="600">
 
 Assume the below repository structure, which implements this pipeline, for the purpose of this tutorial:
 
@@ -1022,6 +1023,6 @@ class TestPipeline:
 
 # Last notes
 
-Hope this was helpful. Please do reach out with comments and your views about how the library or the docs can be improved.
+Hope this was helpful. 
 
-You can also advise the API docs under `docs/dynamicio/index.html`.
+Please do reach out with comments and your views about how the library or the docs can be improved, and by all means, come along and contribute to our project!

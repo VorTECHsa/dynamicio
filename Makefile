@@ -53,9 +53,13 @@ generate-docs:
 	@rm -rf docs/dynamicio
 
 build-locally:
-	# You may need to run: `make aws-code-artifact-auth` before this command
 	@${VENV_BIN_PATH}/pip install --upgrade build
 	@BUILD_VERSION=3.0.37 ${VENV_BIN_PATH}/python setup.py sdist bdist_wheel # Add a <some_version>, e.g. 0.2.3
+
+upload-package:
+	@${VENV_BIN_PATH}/pip install --upgrade twine
+	@${VENV_BIN_PATH}/twine check dist/*
+	@${VENV_BIN_PATH}/twine upload dist/*
 
 tag-release-candidate:
 	@echo "The latest tag is:'$(shell git tag | sort -V | tail -1)'." \
