@@ -1,0 +1,899 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
+<meta name="generator" content="pdoc 0.10.0" />
+<title>dynamicio.validations API documentation</title>
+<meta name="description" content="Implements the Validator class responsible for various generic data validations and metrics generation." />
+<link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
+<link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/typography.min.css" integrity="sha256-7l/o7C8jubJiy74VsKTidCy1yBkRtiUGbVkYBylBqUg=" crossorigin>
+<link rel="stylesheet preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.1.1/styles/github.min.css" crossorigin>
+<style>:root{--highlight-color:#fe9}.flex{display:flex !important}body{line-height:1.5em}#content{padding:20px}#sidebar{padding:30px;overflow:hidden}#sidebar > *:last-child{margin-bottom:2cm}.http-server-breadcrumbs{font-size:130%;margin:0 0 15px 0}#footer{font-size:.75em;padding:5px 30px;border-top:1px solid #ddd;text-align:right}#footer p{margin:0 0 0 1em;display:inline-block}#footer p:last-child{margin-right:30px}h1,h2,h3,h4,h5{font-weight:300}h1{font-size:2.5em;line-height:1.1em}h2{font-size:1.75em;margin:1em 0 .50em 0}h3{font-size:1.4em;margin:25px 0 10px 0}h4{margin:0;font-size:105%}h1:target,h2:target,h3:target,h4:target,h5:target,h6:target{background:var(--highlight-color);padding:.2em 0}a{color:#058;text-decoration:none;transition:color .3s ease-in-out}a:hover{color:#e82}.title code{font-weight:bold}h2[id^="header-"]{margin-top:2em}.ident{color:#900}pre code{background:#f8f8f8;font-size:.8em;line-height:1.4em}code{background:#f2f2f1;padding:1px 4px;overflow-wrap:break-word}h1 code{background:transparent}pre{background:#f8f8f8;border:0;border-top:1px solid #ccc;border-bottom:1px solid #ccc;margin:1em 0;padding:1ex}#http-server-module-list{display:flex;flex-flow:column}#http-server-module-list div{display:flex}#http-server-module-list dt{min-width:10%}#http-server-module-list p{margin-top:0}.toc ul,#index{list-style-type:none;margin:0;padding:0}#index code{background:transparent}#index h3{border-bottom:1px solid #ddd}#index ul{padding:0}#index h4{margin-top:.6em;font-weight:bold}@media (min-width:200ex){#index .two-column{column-count:2}}@media (min-width:300ex){#index .two-column{column-count:3}}dl{margin-bottom:2em}dl dl:last-child{margin-bottom:4em}dd{margin:0 0 1em 3em}#header-classes + dl > dd{margin-bottom:3em}dd dd{margin-left:2em}dd p{margin:10px 0}.name{background:#eee;font-weight:bold;font-size:.85em;padding:5px 10px;display:inline-block;min-width:40%}.name:hover{background:#e0e0e0}dt:target .name{background:var(--highlight-color)}.name > span:first-child{white-space:nowrap}.name.class > span:nth-child(2){margin-left:.4em}.inherited{color:#999;border-left:5px solid #eee;padding-left:1em}.inheritance em{font-style:normal;font-weight:bold}.desc h2{font-weight:400;font-size:1.25em}.desc h3{font-size:1em}.desc dt code{background:inherit}.source summary,.git-link-div{color:#666;text-align:right;font-weight:400;font-size:.8em;text-transform:uppercase}.source summary > *{white-space:nowrap;cursor:pointer}.git-link{color:inherit;margin-left:1em}.source pre{max-height:500px;overflow:auto;margin:0}.source pre code{font-size:12px;overflow:visible}.hlist{list-style:none}.hlist li{display:inline}.hlist li:after{content:',\2002'}.hlist li:last-child:after{content:none}.hlist .hlist{display:inline;padding-left:1em}img{max-width:100%}td{padding:0 .5em}.admonition{padding:.1em .5em;margin-bottom:1em}.admonition-title{font-weight:bold}.admonition.note,.admonition.info,.admonition.important{background:#aef}.admonition.todo,.admonition.versionadded,.admonition.tip,.admonition.hint{background:#dfd}.admonition.warning,.admonition.versionchanged,.admonition.deprecated{background:#fd4}.admonition.error,.admonition.danger,.admonition.caution{background:lightpink}</style>
+<style media="screen and (min-width: 700px)">@media screen and (min-width:700px){#sidebar{width:30%;height:100vh;overflow:auto;position:sticky;top:0}#content{width:70%;max-width:100ch;padding:3em 4em;border-left:1px solid #ddd}pre code{font-size:1em}.item .name{font-size:1em}main{display:flex;flex-direction:row-reverse;justify-content:flex-end}.toc ul ul,#index ul{padding-left:1.5em}.toc > ul > li{margin-top:.5em}}</style>
+<style media="print">@media print{#sidebar h1{page-break-before:always}.source{display:none}}@media print{*{background:transparent !important;color:#000 !important;box-shadow:none !important;text-shadow:none !important}a[href]:after{content:" (" attr(href) ")";font-size:90%}a[href][title]:after{content:none}abbr[title]:after{content:" (" attr(title) ")"}.ir a:after,a[href^="javascript:"]:after,a[href^="#"]:after{content:""}pre,blockquote{border:1px solid #999;page-break-inside:avoid}thead{display:table-header-group}tr,img{page-break-inside:avoid}img{max-width:100% !important}@page{margin:0.5cm}p,h2,h3{orphans:3;widows:3}h1,h2,h3,h4,h5,h6{page-break-after:avoid}}</style>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.1.1/highlight.min.js" integrity="sha256-Uv3H6lx7dJmRfRvH8TH6kJD1TSK1aFcwgx+mdg3epi8=" crossorigin></script>
+<script>window.addEventListener('DOMContentLoaded', () => hljs.initHighlighting())</script>
+</head>
+<body>
+<main>
+<article id="content">
+<header>
+<h1 class="title">Module <code>dynamicio.validations</code></h1>
+</header>
+<section id="section-intro">
+<p>Implements the Validator class responsible for various generic data validations and metrics generation.</p>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">&#34;&#34;&#34;Implements the Validator class responsible for various generic data validations and metrics generation.&#34;&#34;&#34;
+__all__ = [
+    &#34;has_unique_values&#34;,
+    &#34;has_no_null_values&#34;,
+    &#34;has_acceptable_percentage_of_nulls&#34;,
+    &#34;has_acceptable_categorical_values&#34;,
+    &#34;is_greater_than&#34;,
+    &#34;is_greater_than_or_equal&#34;,
+    &#34;is_lower_than&#34;,
+    &#34;is_lower_than_or_equal&#34;,
+    &#34;is_between&#34;,
+]
+
+import operator
+from typing import NamedTuple, Set
+
+import pandas as pd  # type: ignore
+
+
+class ValidationResult(NamedTuple):
+    &#34;&#34;&#34;A NamedTuple for capturing different outputs after a validation.&#34;&#34;&#34;
+
+    valid: bool
+    message: str
+    value: float
+
+
+def has_unique_values(dataset: str, df: pd.DataFrame, column: str) -&gt; ValidationResult:
+    &#34;&#34;&#34;Checks if values in column are unique.
+
+    Args:
+        dataset: Name fo the dataset_name
+        df: A pandas DataFrame
+        column: The column to be validated
+
+    Returns:
+        An instance of  ValidationResult where `Validation.Result.valid` is a bool indicate the success of the validation,
+        `Validation.Result.message` is a message (usually used in exceptions), and  `Validation.Result.value` is no_of_duplicated_elements
+    &#34;&#34;&#34;
+    counts = df[column].value_counts()
+    if not (counts &gt; 1).any():
+        return ValidationResult(valid=True, message=f&#34;{dataset}[{column}] has unique values&#34;, value=0)
+
+    duplicates = counts[counts &gt; 1].index.to_list()
+    return ValidationResult(valid=False, message=f&#34;Values {duplicates} for {dataset}[{column}] are duplicated!&#34;, value=len(duplicates))
+
+
+def has_no_null_values(dataset: str, df: pd.DataFrame, column: str) -&gt; ValidationResult:
+    &#34;&#34;&#34;Checks if column has any null values (including NaN and NaT values).
+
+    Args:
+        dataset: Name fo the dataset_name
+        df: A pandas DataFrame
+        column: The column to be validated
+
+    Returns:
+        An instance of  ValidationResult where `Validation.Result.valid` is a bool indicate the success of the validation,
+        `Validation.Result.message` is a message (usually used in exceptions), and  `Validation.Result.value` is no_of_nulls
+    &#34;&#34;&#34;
+    mask = df[column].isnull()
+    no_of_nulls = mask.sum()
+    return ValidationResult(valid=not mask.any(), message=f&#34;{dataset}[{column}] has {no_of_nulls} nulls&#34;, value=no_of_nulls)
+
+
+def has_acceptable_percentage_of_nulls(
+    dataset: str,
+    df: pd.DataFrame,
+    column: str,
+    threshold: float,
+) -&gt; ValidationResult:
+    &#34;&#34;&#34;Checks if a provided threshold of max nulls has been exceeded.
+
+    Note: For an empty df the validation will always be successful
+
+    Args:
+        dataset: Name fo the dataset_name
+        df: A pandas DataFrame
+        column: The column to be validated
+        threshold: Maximum allowed threshold
+
+    Returns:
+        An instance of ValidationResult where `Validation.Result.valid` is a bool indicate the success of the validation,
+        `Validation.Result.message` is a message (usually used in exceptions), and  `Validation.Result.value` is percentage_of_nulls
+    &#34;&#34;&#34;
+    if threshold &lt;= 0 or threshold &gt;= 1:
+        raise ValueError(f&#34;Threshold value: {threshold} must be a value between 0 and 1.&#34;)
+
+    no_of_nulls = df[column].isnull().sum()
+    if len(df) == 0:
+        percentage_of_nulls = 0
+    else:
+        percentage_of_nulls = no_of_nulls / len(df)
+
+    if percentage_of_nulls &lt; threshold:
+        return ValidationResult(
+            valid=True,
+            message=f&#34;Percentage of nulls of for {dataset}[{column}] is {percentage_of_nulls}&#34;,
+            value=percentage_of_nulls,
+        )
+    return ValidationResult(
+        valid=False,
+        message=f&#34;Percentage of nulls of for {dataset}[{column}] is {percentage_of_nulls} which exceeds threshold: {threshold}&#34;,
+        value=percentage_of_nulls,
+    )
+
+
+def has_acceptable_categorical_values(dataset: str, df: pd.DataFrame, column: str, categorical_values: Set[str]) -&gt; ValidationResult:
+    &#34;&#34;&#34;Checks if the column only has allowed categorical values as per the set provided.
+
+    Note:
+        Ignores nulls
+
+    Args:
+        dataset: Name fo the dataset_name
+        df: A DataFrame
+        column: The DataFrame column to be validated
+        categorical_values: The allowed set of categorical values
+
+    Returns:
+        An instance of ValidationResult where `Validation.Result.valid` is a bool indicate the success of the validation,
+        `Validation.Result.message` is a message (usually used in exceptions), and `Validation.Result.value` is no_of_not_acceptable
+    &#34;&#34;&#34;
+    unique_values = set(df[column][df[column].notna()].unique())
+    if unique_values.issubset(categorical_values):
+        return ValidationResult(valid=True, message=f&#34;Categorical values for {dataset}[{column}] are acceptable&#34;, value=0)
+
+    count_invalid = (~df[column].isin(categorical_values)).sum()
+    return ValidationResult(
+        valid=False,
+        message=f&#34;Values {unique_values - set(categorical_values)} for {dataset}[{column}] are not acceptable for {count_invalid} cells&#34;,
+        value=count_invalid,
+    )
+
+
+def is_greater_than(
+    dataset: str,
+    df: pd.DataFrame,
+    column: str,
+    threshold: float,
+) -&gt; ValidationResult:
+    &#34;&#34;&#34;Confirms column values are above a given threshold.
+
+    Args:
+        dataset: Name fo the dataset_name
+        df: A DataFrame
+        column: The DataFrame column to be validated
+        threshold: A lower bound threshold not to be exceeded
+
+    Returns:
+        An instance of ValidationResult where `Validation.Result.valid` is a bool indicate the success of the validation,
+        `Validation.Result.message` is a message (usually used in exceptions), and `Validation.Result.value` is the
+        percentage of invalid values
+    &#34;&#34;&#34;
+    no_nulls_for_column_df = df[~df[column].isnull()][column]
+    valid = no_nulls_for_column_df &gt; threshold
+
+    if valid.all():
+        return ValidationResult(valid=True, message=f&#34;All values of {dataset}[{column}] are above {threshold}&#34;, value=0)
+
+    no_of_invalid = (~valid).sum()
+    return ValidationResult(
+        valid=False,
+        message=f&#34;{no_of_invalid} cell values for {dataset}[{column}] are below {threshold}&#34;,
+        value=no_of_invalid / len(no_nulls_for_column_df),
+    )
+
+
+def is_greater_than_or_equal(
+    dataset: str,
+    df: pd.DataFrame,
+    column: str,
+    threshold: float,
+) -&gt; ValidationResult:
+    &#34;&#34;&#34;Confirms column values are above a given threshold.
+
+    Args:
+        dataset: Name fo the dataset_name
+        df: A DataFrame
+        column: The DataFrame column to be validated
+        threshold: A lower bound threshold not to be exceeded
+
+    Returns:
+        An instance of ValidationResult where `Validation.Result.valid` is a bool indicate the success of the validation,
+        `Validation.Result.message` is a message (usually used in exceptions), and `Validation.Result.value` is the
+        percentage of invalid values
+    &#34;&#34;&#34;
+    no_nulls_for_column_df = df[~df[column].isnull()][column]
+    valid = no_nulls_for_column_df &gt;= threshold
+
+    if valid.all():
+        return ValidationResult(valid=True, message=f&#34;All values of {dataset}[{column}] are above {threshold}&#34;, value=0)
+
+    no_of_invalid = (~valid).sum()
+    return ValidationResult(
+        valid=False,
+        message=f&#34;{no_of_invalid} cell values for {dataset}[{column}] are below {threshold}&#34;,
+        value=no_of_invalid / len(no_nulls_for_column_df),
+    )
+
+
+def is_lower_than(
+    dataset: str,
+    df: pd.DataFrame,
+    column: str,
+    threshold: float,
+) -&gt; ValidationResult:
+    &#34;&#34;&#34;Confirms column values are below a given threshold.
+
+    IMPORTANT NOTE: Ignores nulls!
+
+    Args:
+        dataset: Name fo the dataset_name
+        df: A DataFrame
+        column: The DataFrame column to be validated
+        threshold: A lower bound threshold not to be exceeded
+
+    Returns:
+        An instance of ValidationResult where `Validation.Result.valid` is a bool indicate the success of the validation,
+        `Validation.Result.message` is a message (usually used in exceptions), and `Validation.Result.value` is the percentage of
+        invalid values
+    &#34;&#34;&#34;
+    no_nulls_for_column_df = df[~df[column].isnull()][column]
+    valid = no_nulls_for_column_df &lt; threshold  # pd.DataFrame
+
+    if valid.all():
+        return ValidationResult(valid=True, message=f&#34;All values of {dataset}[{column}] are below {threshold}&#34;, value=0)
+
+    no_of_invalid = (~valid).sum()
+    return ValidationResult(
+        valid=False,
+        message=f&#34;{no_of_invalid} cell values for {dataset}[{column}] are above {threshold}&#34;,
+        value=no_of_invalid / len(no_nulls_for_column_df),
+    )
+
+
+def is_lower_than_or_equal(
+    dataset: str,
+    df: pd.DataFrame,
+    column: str,
+    threshold: float,
+) -&gt; ValidationResult:
+    &#34;&#34;&#34;Confirms column values are below a given threshold.
+
+    IMPORTANT NOTE: Ignores nulls!
+
+    Args:
+        dataset: Name fo the dataset_name
+        df: A DataFrame
+        column: The DataFrame column to be validated
+        threshold: A lower bound threshold not to be exceeded
+
+    Returns:
+        An instance of ValidationResult where `Validation.Result.valid` is a bool indicate the success of the validation,
+        `Validation.Result.message` is a message (usually used in exceptions), and `Validation.Result.value` is the percentage of
+        invalid values
+    &#34;&#34;&#34;
+    no_nulls_for_column_df = df[~df[column].isnull()][column]
+    valid = no_nulls_for_column_df &lt;= threshold
+
+    if valid.all():
+        return ValidationResult(valid=True, message=f&#34;All values of {dataset}[{column}] are below {threshold}&#34;, value=0)
+
+    no_of_invalid = (~valid).sum()
+    return ValidationResult(
+        valid=False,
+        message=f&#34;{no_of_invalid} cell values for {dataset}[{column}] are above {threshold}&#34;,
+        value=no_of_invalid / len(no_nulls_for_column_df),
+    )
+
+
+def is_between(
+    dataset: str,
+    df: pd.DataFrame,
+    column: str,
+    lower: float,
+    upper: float,
+    include_left: bool = False,
+    include_right: bool = False,
+) -&gt; ValidationResult:
+    &#34;&#34;&#34;Confirms column values are between a lower bound and an upper bound thresholds.
+
+    IMPORTANT NOTE: Ignores nulls!
+
+    Args:
+        dataset: Name fo the dataset_name
+        df: A DataFrame
+        column: The DataFrame column to be validated
+        lower: The lower bound (left)
+        upper: The upper bound (right)
+        include_left: `left &lt;= df[column]`
+        include_right: `df[column] &lt;=right`
+
+    Returns:
+        An instance of ValidationResult where `Validation.Result.valid` is a bool indicate the success of the validation,
+        `Validation.Result.message` is a message (usually used in exceptions), and `Validation.Result.value` is the percentage of
+        invalid values
+    &#34;&#34;&#34;
+    no_nulls_for_column_df = df[~df[column].isnull()][column]
+    lower_bound_operator = operator.ge if include_left else operator.gt
+    upper_bound_operator = operator.le if include_right else operator.lt
+
+    valid = lower_bound_operator(no_nulls_for_column_df, lower) &amp; upper_bound_operator(no_nulls_for_column_df, upper)
+
+    if valid.all():
+        return ValidationResult(valid=True, message=f&#34;All values of {dataset}[{column}] is between {lower} and {upper} thresholds&#34;, value=0)
+
+    no_of_invalid = (~valid).sum()
+    return ValidationResult(
+        valid=False,
+        message=f&#34;{no_of_invalid} cell values for {dataset}[{column}] are either below {lower} or above {upper}&#34;,
+        value=no_of_invalid / len(no_nulls_for_column_df),
+    )</code></pre>
+</details>
+</section>
+<section>
+</section>
+<section>
+</section>
+<section>
+<h2 class="section-title" id="header-functions">Functions</h2>
+<dl>
+<dt id="dynamicio.validations.has_acceptable_categorical_values"><code class="name flex">
+<span>def <span class="ident">has_acceptable_categorical_values</span></span>(<span>dataset: str, df: pandas.core.frame.DataFrame, column: str, categorical_values: Set[str]) ‑> dynamicio.validations.ValidationResult</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Checks if the column only has allowed categorical values as per the set provided.</p>
+<h2 id="note">Note</h2>
+<p>Ignores nulls</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>dataset</code></strong></dt>
+<dd>Name fo the dataset_name</dd>
+<dt><strong><code>df</code></strong></dt>
+<dd>A DataFrame</dd>
+<dt><strong><code>column</code></strong></dt>
+<dd>The DataFrame column to be validated</dd>
+<dt><strong><code>categorical_values</code></strong></dt>
+<dd>The allowed set of categorical values</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>An instance of ValidationResult where <code>Validation.Result.valid</code> is a bool indicate the success of the validation,
+<code>Validation.Result.message</code> is a message (usually used in exceptions), and <code>Validation.Result.value</code> is no_of_not_acceptable</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def has_acceptable_categorical_values(dataset: str, df: pd.DataFrame, column: str, categorical_values: Set[str]) -&gt; ValidationResult:
+    &#34;&#34;&#34;Checks if the column only has allowed categorical values as per the set provided.
+
+    Note:
+        Ignores nulls
+
+    Args:
+        dataset: Name fo the dataset_name
+        df: A DataFrame
+        column: The DataFrame column to be validated
+        categorical_values: The allowed set of categorical values
+
+    Returns:
+        An instance of ValidationResult where `Validation.Result.valid` is a bool indicate the success of the validation,
+        `Validation.Result.message` is a message (usually used in exceptions), and `Validation.Result.value` is no_of_not_acceptable
+    &#34;&#34;&#34;
+    unique_values = set(df[column][df[column].notna()].unique())
+    if unique_values.issubset(categorical_values):
+        return ValidationResult(valid=True, message=f&#34;Categorical values for {dataset}[{column}] are acceptable&#34;, value=0)
+
+    count_invalid = (~df[column].isin(categorical_values)).sum()
+    return ValidationResult(
+        valid=False,
+        message=f&#34;Values {unique_values - set(categorical_values)} for {dataset}[{column}] are not acceptable for {count_invalid} cells&#34;,
+        value=count_invalid,
+    )</code></pre>
+</details>
+</dd>
+<dt id="dynamicio.validations.has_acceptable_percentage_of_nulls"><code class="name flex">
+<span>def <span class="ident">has_acceptable_percentage_of_nulls</span></span>(<span>dataset: str, df: pandas.core.frame.DataFrame, column: str, threshold: float) ‑> dynamicio.validations.ValidationResult</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Checks if a provided threshold of max nulls has been exceeded.</p>
+<p>Note: For an empty df the validation will always be successful</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>dataset</code></strong></dt>
+<dd>Name fo the dataset_name</dd>
+<dt><strong><code>df</code></strong></dt>
+<dd>A pandas DataFrame</dd>
+<dt><strong><code>column</code></strong></dt>
+<dd>The column to be validated</dd>
+<dt><strong><code>threshold</code></strong></dt>
+<dd>Maximum allowed threshold</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>An instance of ValidationResult where <code>Validation.Result.valid</code> is a bool indicate the success of the validation,
+<code>Validation.Result.message</code> is a message (usually used in exceptions), and
+<code>Validation.Result.value</code> is percentage_of_nulls</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def has_acceptable_percentage_of_nulls(
+    dataset: str,
+    df: pd.DataFrame,
+    column: str,
+    threshold: float,
+) -&gt; ValidationResult:
+    &#34;&#34;&#34;Checks if a provided threshold of max nulls has been exceeded.
+
+    Note: For an empty df the validation will always be successful
+
+    Args:
+        dataset: Name fo the dataset_name
+        df: A pandas DataFrame
+        column: The column to be validated
+        threshold: Maximum allowed threshold
+
+    Returns:
+        An instance of ValidationResult where `Validation.Result.valid` is a bool indicate the success of the validation,
+        `Validation.Result.message` is a message (usually used in exceptions), and  `Validation.Result.value` is percentage_of_nulls
+    &#34;&#34;&#34;
+    if threshold &lt;= 0 or threshold &gt;= 1:
+        raise ValueError(f&#34;Threshold value: {threshold} must be a value between 0 and 1.&#34;)
+
+    no_of_nulls = df[column].isnull().sum()
+    if len(df) == 0:
+        percentage_of_nulls = 0
+    else:
+        percentage_of_nulls = no_of_nulls / len(df)
+
+    if percentage_of_nulls &lt; threshold:
+        return ValidationResult(
+            valid=True,
+            message=f&#34;Percentage of nulls of for {dataset}[{column}] is {percentage_of_nulls}&#34;,
+            value=percentage_of_nulls,
+        )
+    return ValidationResult(
+        valid=False,
+        message=f&#34;Percentage of nulls of for {dataset}[{column}] is {percentage_of_nulls} which exceeds threshold: {threshold}&#34;,
+        value=percentage_of_nulls,
+    )</code></pre>
+</details>
+</dd>
+<dt id="dynamicio.validations.has_no_null_values"><code class="name flex">
+<span>def <span class="ident">has_no_null_values</span></span>(<span>dataset: str, df: pandas.core.frame.DataFrame, column: str) ‑> dynamicio.validations.ValidationResult</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Checks if column has any null values (including NaN and NaT values).</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>dataset</code></strong></dt>
+<dd>Name fo the dataset_name</dd>
+<dt><strong><code>df</code></strong></dt>
+<dd>A pandas DataFrame</dd>
+<dt><strong><code>column</code></strong></dt>
+<dd>The column to be validated</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>An instance of
+ValidationResult where <code>Validation.Result.valid</code> is a bool indicate the success of the validation,
+<code>Validation.Result.message</code> is a message (usually used in exceptions), and
+<code>Validation.Result.value</code> is no_of_nulls</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def has_no_null_values(dataset: str, df: pd.DataFrame, column: str) -&gt; ValidationResult:
+    &#34;&#34;&#34;Checks if column has any null values (including NaN and NaT values).
+
+    Args:
+        dataset: Name fo the dataset_name
+        df: A pandas DataFrame
+        column: The column to be validated
+
+    Returns:
+        An instance of  ValidationResult where `Validation.Result.valid` is a bool indicate the success of the validation,
+        `Validation.Result.message` is a message (usually used in exceptions), and  `Validation.Result.value` is no_of_nulls
+    &#34;&#34;&#34;
+    mask = df[column].isnull()
+    no_of_nulls = mask.sum()
+    return ValidationResult(valid=not mask.any(), message=f&#34;{dataset}[{column}] has {no_of_nulls} nulls&#34;, value=no_of_nulls)</code></pre>
+</details>
+</dd>
+<dt id="dynamicio.validations.has_unique_values"><code class="name flex">
+<span>def <span class="ident">has_unique_values</span></span>(<span>dataset: str, df: pandas.core.frame.DataFrame, column: str) ‑> dynamicio.validations.ValidationResult</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Checks if values in column are unique.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>dataset</code></strong></dt>
+<dd>Name fo the dataset_name</dd>
+<dt><strong><code>df</code></strong></dt>
+<dd>A pandas DataFrame</dd>
+<dt><strong><code>column</code></strong></dt>
+<dd>The column to be validated</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>An instance of
+ValidationResult where <code>Validation.Result.valid</code> is a bool indicate the success of the validation,
+<code>Validation.Result.message</code> is a message (usually used in exceptions), and
+<code>Validation.Result.value</code> is no_of_duplicated_elements</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def has_unique_values(dataset: str, df: pd.DataFrame, column: str) -&gt; ValidationResult:
+    &#34;&#34;&#34;Checks if values in column are unique.
+
+    Args:
+        dataset: Name fo the dataset_name
+        df: A pandas DataFrame
+        column: The column to be validated
+
+    Returns:
+        An instance of  ValidationResult where `Validation.Result.valid` is a bool indicate the success of the validation,
+        `Validation.Result.message` is a message (usually used in exceptions), and  `Validation.Result.value` is no_of_duplicated_elements
+    &#34;&#34;&#34;
+    counts = df[column].value_counts()
+    if not (counts &gt; 1).any():
+        return ValidationResult(valid=True, message=f&#34;{dataset}[{column}] has unique values&#34;, value=0)
+
+    duplicates = counts[counts &gt; 1].index.to_list()
+    return ValidationResult(valid=False, message=f&#34;Values {duplicates} for {dataset}[{column}] are duplicated!&#34;, value=len(duplicates))</code></pre>
+</details>
+</dd>
+<dt id="dynamicio.validations.is_between"><code class="name flex">
+<span>def <span class="ident">is_between</span></span>(<span>dataset: str, df: pandas.core.frame.DataFrame, column: str, lower: float, upper: float, include_left: bool = False, include_right: bool = False) ‑> dynamicio.validations.ValidationResult</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Confirms column values are between a lower bound and an upper bound thresholds.</p>
+<p>IMPORTANT NOTE: Ignores nulls!</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>dataset</code></strong></dt>
+<dd>Name fo the dataset_name</dd>
+<dt><strong><code>df</code></strong></dt>
+<dd>A DataFrame</dd>
+<dt><strong><code>column</code></strong></dt>
+<dd>The DataFrame column to be validated</dd>
+<dt><strong><code>lower</code></strong></dt>
+<dd>The lower bound (left)</dd>
+<dt><strong><code>upper</code></strong></dt>
+<dd>The upper bound (right)</dd>
+<dt><strong><code>include_left</code></strong></dt>
+<dd><code>left &lt;= df[column]</code></dd>
+<dt><strong><code>include_right</code></strong></dt>
+<dd><code>df[column] &lt;=right</code></dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>An instance of ValidationResult where <code>Validation.Result.valid</code> is a bool indicate the success of the validation,
+<code>Validation.Result.message</code> is a message (usually used in exceptions), and <code>Validation.Result.value</code> is the percentage of
+invalid values</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def is_between(
+    dataset: str,
+    df: pd.DataFrame,
+    column: str,
+    lower: float,
+    upper: float,
+    include_left: bool = False,
+    include_right: bool = False,
+) -&gt; ValidationResult:
+    &#34;&#34;&#34;Confirms column values are between a lower bound and an upper bound thresholds.
+
+    IMPORTANT NOTE: Ignores nulls!
+
+    Args:
+        dataset: Name fo the dataset_name
+        df: A DataFrame
+        column: The DataFrame column to be validated
+        lower: The lower bound (left)
+        upper: The upper bound (right)
+        include_left: `left &lt;= df[column]`
+        include_right: `df[column] &lt;=right`
+
+    Returns:
+        An instance of ValidationResult where `Validation.Result.valid` is a bool indicate the success of the validation,
+        `Validation.Result.message` is a message (usually used in exceptions), and `Validation.Result.value` is the percentage of
+        invalid values
+    &#34;&#34;&#34;
+    no_nulls_for_column_df = df[~df[column].isnull()][column]
+    lower_bound_operator = operator.ge if include_left else operator.gt
+    upper_bound_operator = operator.le if include_right else operator.lt
+
+    valid = lower_bound_operator(no_nulls_for_column_df, lower) &amp; upper_bound_operator(no_nulls_for_column_df, upper)
+
+    if valid.all():
+        return ValidationResult(valid=True, message=f&#34;All values of {dataset}[{column}] is between {lower} and {upper} thresholds&#34;, value=0)
+
+    no_of_invalid = (~valid).sum()
+    return ValidationResult(
+        valid=False,
+        message=f&#34;{no_of_invalid} cell values for {dataset}[{column}] are either below {lower} or above {upper}&#34;,
+        value=no_of_invalid / len(no_nulls_for_column_df),
+    )</code></pre>
+</details>
+</dd>
+<dt id="dynamicio.validations.is_greater_than"><code class="name flex">
+<span>def <span class="ident">is_greater_than</span></span>(<span>dataset: str, df: pandas.core.frame.DataFrame, column: str, threshold: float) ‑> dynamicio.validations.ValidationResult</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Confirms column values are above a given threshold.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>dataset</code></strong></dt>
+<dd>Name fo the dataset_name</dd>
+<dt><strong><code>df</code></strong></dt>
+<dd>A DataFrame</dd>
+<dt><strong><code>column</code></strong></dt>
+<dd>The DataFrame column to be validated</dd>
+<dt><strong><code>threshold</code></strong></dt>
+<dd>A lower bound threshold not to be exceeded</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>An instance of ValidationResult where <code>Validation.Result.valid</code> is a bool indicate the success of the validation,
+<code>Validation.Result.message</code> is a message (usually used in exceptions), and <code>Validation.Result.value</code> is the
+percentage of invalid values</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def is_greater_than(
+    dataset: str,
+    df: pd.DataFrame,
+    column: str,
+    threshold: float,
+) -&gt; ValidationResult:
+    &#34;&#34;&#34;Confirms column values are above a given threshold.
+
+    Args:
+        dataset: Name fo the dataset_name
+        df: A DataFrame
+        column: The DataFrame column to be validated
+        threshold: A lower bound threshold not to be exceeded
+
+    Returns:
+        An instance of ValidationResult where `Validation.Result.valid` is a bool indicate the success of the validation,
+        `Validation.Result.message` is a message (usually used in exceptions), and `Validation.Result.value` is the
+        percentage of invalid values
+    &#34;&#34;&#34;
+    no_nulls_for_column_df = df[~df[column].isnull()][column]
+    valid = no_nulls_for_column_df &gt; threshold
+
+    if valid.all():
+        return ValidationResult(valid=True, message=f&#34;All values of {dataset}[{column}] are above {threshold}&#34;, value=0)
+
+    no_of_invalid = (~valid).sum()
+    return ValidationResult(
+        valid=False,
+        message=f&#34;{no_of_invalid} cell values for {dataset}[{column}] are below {threshold}&#34;,
+        value=no_of_invalid / len(no_nulls_for_column_df),
+    )</code></pre>
+</details>
+</dd>
+<dt id="dynamicio.validations.is_greater_than_or_equal"><code class="name flex">
+<span>def <span class="ident">is_greater_than_or_equal</span></span>(<span>dataset: str, df: pandas.core.frame.DataFrame, column: str, threshold: float) ‑> dynamicio.validations.ValidationResult</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Confirms column values are above a given threshold.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>dataset</code></strong></dt>
+<dd>Name fo the dataset_name</dd>
+<dt><strong><code>df</code></strong></dt>
+<dd>A DataFrame</dd>
+<dt><strong><code>column</code></strong></dt>
+<dd>The DataFrame column to be validated</dd>
+<dt><strong><code>threshold</code></strong></dt>
+<dd>A lower bound threshold not to be exceeded</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>An instance of ValidationResult where <code>Validation.Result.valid</code> is a bool indicate the success of the validation,
+<code>Validation.Result.message</code> is a message (usually used in exceptions), and <code>Validation.Result.value</code> is the
+percentage of invalid values</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def is_greater_than_or_equal(
+    dataset: str,
+    df: pd.DataFrame,
+    column: str,
+    threshold: float,
+) -&gt; ValidationResult:
+    &#34;&#34;&#34;Confirms column values are above a given threshold.
+
+    Args:
+        dataset: Name fo the dataset_name
+        df: A DataFrame
+        column: The DataFrame column to be validated
+        threshold: A lower bound threshold not to be exceeded
+
+    Returns:
+        An instance of ValidationResult where `Validation.Result.valid` is a bool indicate the success of the validation,
+        `Validation.Result.message` is a message (usually used in exceptions), and `Validation.Result.value` is the
+        percentage of invalid values
+    &#34;&#34;&#34;
+    no_nulls_for_column_df = df[~df[column].isnull()][column]
+    valid = no_nulls_for_column_df &gt;= threshold
+
+    if valid.all():
+        return ValidationResult(valid=True, message=f&#34;All values of {dataset}[{column}] are above {threshold}&#34;, value=0)
+
+    no_of_invalid = (~valid).sum()
+    return ValidationResult(
+        valid=False,
+        message=f&#34;{no_of_invalid} cell values for {dataset}[{column}] are below {threshold}&#34;,
+        value=no_of_invalid / len(no_nulls_for_column_df),
+    )</code></pre>
+</details>
+</dd>
+<dt id="dynamicio.validations.is_lower_than"><code class="name flex">
+<span>def <span class="ident">is_lower_than</span></span>(<span>dataset: str, df: pandas.core.frame.DataFrame, column: str, threshold: float) ‑> dynamicio.validations.ValidationResult</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Confirms column values are below a given threshold.</p>
+<p>IMPORTANT NOTE: Ignores nulls!</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>dataset</code></strong></dt>
+<dd>Name fo the dataset_name</dd>
+<dt><strong><code>df</code></strong></dt>
+<dd>A DataFrame</dd>
+<dt><strong><code>column</code></strong></dt>
+<dd>The DataFrame column to be validated</dd>
+<dt><strong><code>threshold</code></strong></dt>
+<dd>A lower bound threshold not to be exceeded</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>An instance of ValidationResult where <code>Validation.Result.valid</code> is a bool indicate the success of the validation,
+<code>Validation.Result.message</code> is a message (usually used in exceptions), and <code>Validation.Result.value</code> is the percentage of
+invalid values</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def is_lower_than(
+    dataset: str,
+    df: pd.DataFrame,
+    column: str,
+    threshold: float,
+) -&gt; ValidationResult:
+    &#34;&#34;&#34;Confirms column values are below a given threshold.
+
+    IMPORTANT NOTE: Ignores nulls!
+
+    Args:
+        dataset: Name fo the dataset_name
+        df: A DataFrame
+        column: The DataFrame column to be validated
+        threshold: A lower bound threshold not to be exceeded
+
+    Returns:
+        An instance of ValidationResult where `Validation.Result.valid` is a bool indicate the success of the validation,
+        `Validation.Result.message` is a message (usually used in exceptions), and `Validation.Result.value` is the percentage of
+        invalid values
+    &#34;&#34;&#34;
+    no_nulls_for_column_df = df[~df[column].isnull()][column]
+    valid = no_nulls_for_column_df &lt; threshold  # pd.DataFrame
+
+    if valid.all():
+        return ValidationResult(valid=True, message=f&#34;All values of {dataset}[{column}] are below {threshold}&#34;, value=0)
+
+    no_of_invalid = (~valid).sum()
+    return ValidationResult(
+        valid=False,
+        message=f&#34;{no_of_invalid} cell values for {dataset}[{column}] are above {threshold}&#34;,
+        value=no_of_invalid / len(no_nulls_for_column_df),
+    )</code></pre>
+</details>
+</dd>
+<dt id="dynamicio.validations.is_lower_than_or_equal"><code class="name flex">
+<span>def <span class="ident">is_lower_than_or_equal</span></span>(<span>dataset: str, df: pandas.core.frame.DataFrame, column: str, threshold: float) ‑> dynamicio.validations.ValidationResult</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Confirms column values are below a given threshold.</p>
+<p>IMPORTANT NOTE: Ignores nulls!</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>dataset</code></strong></dt>
+<dd>Name fo the dataset_name</dd>
+<dt><strong><code>df</code></strong></dt>
+<dd>A DataFrame</dd>
+<dt><strong><code>column</code></strong></dt>
+<dd>The DataFrame column to be validated</dd>
+<dt><strong><code>threshold</code></strong></dt>
+<dd>A lower bound threshold not to be exceeded</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>An instance of ValidationResult where <code>Validation.Result.valid</code> is a bool indicate the success of the validation,
+<code>Validation.Result.message</code> is a message (usually used in exceptions), and <code>Validation.Result.value</code> is the percentage of
+invalid values</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def is_lower_than_or_equal(
+    dataset: str,
+    df: pd.DataFrame,
+    column: str,
+    threshold: float,
+) -&gt; ValidationResult:
+    &#34;&#34;&#34;Confirms column values are below a given threshold.
+
+    IMPORTANT NOTE: Ignores nulls!
+
+    Args:
+        dataset: Name fo the dataset_name
+        df: A DataFrame
+        column: The DataFrame column to be validated
+        threshold: A lower bound threshold not to be exceeded
+
+    Returns:
+        An instance of ValidationResult where `Validation.Result.valid` is a bool indicate the success of the validation,
+        `Validation.Result.message` is a message (usually used in exceptions), and `Validation.Result.value` is the percentage of
+        invalid values
+    &#34;&#34;&#34;
+    no_nulls_for_column_df = df[~df[column].isnull()][column]
+    valid = no_nulls_for_column_df &lt;= threshold
+
+    if valid.all():
+        return ValidationResult(valid=True, message=f&#34;All values of {dataset}[{column}] are below {threshold}&#34;, value=0)
+
+    no_of_invalid = (~valid).sum()
+    return ValidationResult(
+        valid=False,
+        message=f&#34;{no_of_invalid} cell values for {dataset}[{column}] are above {threshold}&#34;,
+        value=no_of_invalid / len(no_nulls_for_column_df),
+    )</code></pre>
+</details>
+</dd>
+</dl>
+</section>
+<section>
+</section>
+</article>
+<nav id="sidebar">
+<h1>Index</h1>
+<div class="toc">
+<ul></ul>
+</div>
+<ul id="index">
+<li><h3>Super-module</h3>
+<ul>
+<li><code><a title="dynamicio" href="index.html">dynamicio</a></code></li>
+</ul>
+</li>
+<li><h3><a href="#header-functions">Functions</a></h3>
+<ul class="">
+<li><code><a title="dynamicio.validations.has_acceptable_categorical_values" href="#dynamicio.validations.has_acceptable_categorical_values">has_acceptable_categorical_values</a></code></li>
+<li><code><a title="dynamicio.validations.has_acceptable_percentage_of_nulls" href="#dynamicio.validations.has_acceptable_percentage_of_nulls">has_acceptable_percentage_of_nulls</a></code></li>
+<li><code><a title="dynamicio.validations.has_no_null_values" href="#dynamicio.validations.has_no_null_values">has_no_null_values</a></code></li>
+<li><code><a title="dynamicio.validations.has_unique_values" href="#dynamicio.validations.has_unique_values">has_unique_values</a></code></li>
+<li><code><a title="dynamicio.validations.is_between" href="#dynamicio.validations.is_between">is_between</a></code></li>
+<li><code><a title="dynamicio.validations.is_greater_than" href="#dynamicio.validations.is_greater_than">is_greater_than</a></code></li>
+<li><code><a title="dynamicio.validations.is_greater_than_or_equal" href="#dynamicio.validations.is_greater_than_or_equal">is_greater_than_or_equal</a></code></li>
+<li><code><a title="dynamicio.validations.is_lower_than" href="#dynamicio.validations.is_lower_than">is_lower_than</a></code></li>
+<li><code><a title="dynamicio.validations.is_lower_than_or_equal" href="#dynamicio.validations.is_lower_than_or_equal">is_lower_than_or_equal</a></code></li>
+</ul>
+</li>
+</ul>
+</nav>
+</main>
+<footer id="footer">
+<p>Generated by <a href="https://pdoc3.github.io/pdoc" title="pdoc: Python API documentation generator"><cite>pdoc</cite> 0.10.0</a>.</p>
+</footer>
+</body>
+</html>

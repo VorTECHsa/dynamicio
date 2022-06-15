@@ -1,0 +1,40 @@
+---
+FINAL_FOO:
+  sample:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/processed/final_foo.parquet"
+      file_type: "parquet"
+  actual:
+    type: "s3"
+    s3:
+      bucket: "[[ S3_YOUR_OUTPUT_BUCKET ]]"
+      file_path: "live/data/processed/final_foo.parquet"
+      file_type: "parquet"
+  schema:
+    file_path: "[[ RESOURCES ]]/schemas/processed/final_foo.yaml"
+
+FINAL_BAR:
+  sample:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/processed/final_bar.parquet"
+      file_type: "parquet"
+    options:
+      use_deprecated_int96_timestamps: true
+      coerce_timestamps: "ms"
+      allow_truncated_timestamps: false
+      row_group_size: 1000000
+  actual:
+    type: "kafka"
+    kafka:
+      kafka_server: "[[ KAFKA_SERVER ]]"
+      kafka_topic: "[[ KAFKA_TOPIC ]]"
+    options:
+      compression_type: "snappy"
+      max_in_flight_requests_per_connection: 10
+      batch_size: 262144
+      request_timeout_ms: 60000 # 60s
+      buffer_memory: 134217728  # 128MB
+  schema:
+    file_path: "[[ RESOURCES ]]/schemas/processed/final_bar.yaml"

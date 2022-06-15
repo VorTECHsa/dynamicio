@@ -1,0 +1,7 @@
+[run]
+source = dynamicio
+omit =
+    *__init__*
+
+[report]
+fail_under = 94

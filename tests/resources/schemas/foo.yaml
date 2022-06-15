@@ -1,0 +1,45 @@
+---
+name: foo
+columns:
+  id:
+    type: "object"
+    validations:
+      has_unique_values:
+        apply: true
+        options:
+  name:
+    type: "objet"
+    validations:
+      has_no_null_values:
+        apply: true
+        options:
+  year:
+    type: "float64"
+    validations:
+      is_greater_than:
+        apply: true
+        options:
+          threshold: 1950
+  amount:
+    type: "float64"
+    validations:
+      is_between:
+        apply: true
+        options:
+          lower: 0
+          upper: 1000
+          include_left: false
+          include_right: true # true by default
+  category:
+    type: "object"
+    validations:
+      has_acceptable_categorical_values:
+        apply: true
+        options:
+          categorical_values:
+            - class_a
+            - class_b
+            - class_c
+      has_no_null_values:
+        apply: true
+        options:
