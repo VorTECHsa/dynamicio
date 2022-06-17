@@ -123,7 +123,7 @@ class DynamicDataIO:
         return df
 
     def write(self, df: pd.DataFrame):
-        """Sink data to to a given source based on the sources_config.
+        """Sink data to a given source based on the sources_config.
 
         Args:
             df: The data to be written

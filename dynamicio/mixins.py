@@ -755,20 +755,25 @@ class WithPostgres:
 class WithKafka:
     """Handles I/O operations for Kafka.
 
-    If a `key_generator` option is provided, which should be a Callable taking a tuple(idx, row) and
-    returning a string that will serve as the message's key, then teh callable will be invoked prior to
-    serialising the key.
-
-    If a `document_transformer` option is provided, which should be a Callable taking a `Mapping`
-    as its only argument and return a `Mapping`, then this callable will be invoked prior to
-    serializing each document. This can be used, for example, to add metadata to each document
-    that will be written to the target Kafka topic.
-
     Args:
-        options: Keyword-arguments passed to the KafkaProducer constructor (see KafkaProducer.DEFAULT_CONFIG.keys()).
-        We also use/allow 2 more options:
-        - `key_generator`, which is a callable that defines the keying policy to be used for sending keyed-messages to Kafka, and;
-        - `document_transformer`, which is a callable manipulates the messages/rows sent to Kafka as values.`.
+        - options:
+            - Standard: Keyword-arguments passed to the KafkaProducer constructor (see `KafkaProducer.DEFAULT_CONFIG.keys()`).
+             - Additional Options:
+
+                - `key_generator: Callable[[Any, Mapping], T]`: defines the keying policy to be used for sending keyed-messages to Kafka. It is a `Callable` that takes a
+                `tuple(idx, row)` and returns a string that will serve as the message's key, invoked prior to serialising the key. It defaults to the dataframe's index
+                (which may not be composed of unique values or string type keys). It goes hand in hand with the default `key-serialiser`, which assumes that the keys
+                are strings and encode's them as such.
+
+                - `key_serializer: Callable[T, bytes]`: Custom key serialiser; if not provided, a default key-serializer will be used, applied on a string-key (unless key is None).
+
+                N.B. Providing a custom key-generator that generates a non-string key is best provided alongside a custom key-serializer best suited to handle the custom key-type.
+
+                - `document_transformer: Callable[[Mapping[Any, Any]`: Manipulates the messages/rows sent to Kafka as values. It is  a `Callable` taking a `Mapping` as its only
+                argument and return a `Mapping`, then this callable will be invoked prior to serializing each document. This can be used, for example, to add metadata to each
+                document that will be written to the target  Kafka topic.
+
+                - `value_serializer: Callable[Mapping, bytes]`: Custom value serialiser; if not provided, a default value-serializer will be used applied on a Mapping..
 
     Example:
         >>> # Given
@@ -822,7 +827,7 @@ class WithKafka:
             df: A dataframe where each row is a message to be sent to a Kafka Topic.
         """
         if self.__key_generator is None:
-            self.__key_generator = lambda _, __: None
+            self.__key_generator = lambda idx, __: idx  # default key generator uses the dataframe's index
             if self.options.get("key_generator") is not None:
                 self.__key_generator = self.options.pop("key_generator")
 
@@ -869,12 +874,8 @@ class WithKafka:
     def _send_messages(self, df: pd.DataFrame, topic: str) -> None:
         logger.info(f"Sending {len(df)} messages to Kafka topic:{topic}.")
 
-        indices = df.index.values  # possibly non-unique indices
-        if len(set(indices)) != len(indices):
-            logger.warning("Messages have non-unique keys. This may cause issues in your downstream logic.")
-
         messages = df.reset_index(drop=True).to_dict("records")
-        for idx, message in zip(indices, messages):
+        for idx, message in zip(df.index.values, messages):
             self.__producer.send(topic, key=self.__key_generator(idx, message), value=self.__document_transformer(message))  # type: ignore
 
         self.__producer.flush()  # type: ignore
