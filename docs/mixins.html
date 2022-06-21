@@ -784,20 +784,25 @@ class WithPostgres:
 class WithKafka:
     &#34;&#34;&#34;Handles I/O operations for Kafka.
 
-    If a `key_generator` option is provided, which should be a Callable taking a tuple(idx, row) and
-    returning a string that will serve as the message&#39;s key, then teh callable will be invoked prior to
-    serialising the key.
-
-    If a `document_transformer` option is provided, which should be a Callable taking a `Mapping`
-    as its only argument and return a `Mapping`, then this callable will be invoked prior to
-    serializing each document. This can be used, for example, to add metadata to each document
-    that will be written to the target Kafka topic.
-
     Args:
-        options: Keyword-arguments passed to the KafkaProducer constructor (see KafkaProducer.DEFAULT_CONFIG.keys()).
-        We also use/allow 2 more options:
-        - `key_generator`, which is a callable that defines the keying policy to be used for sending keyed-messages to Kafka, and;
-        - `document_transformer`, which is a callable manipulates the messages/rows sent to Kafka as values.`.
+        - options:
+            - Standard: Keyword-arguments passed to the KafkaProducer constructor (see `KafkaProducer.DEFAULT_CONFIG.keys()`).
+             - Additional Options:
+
+                - `key_generator: Callable[[Any, Mapping], T]`: defines the keying policy to be used for sending keyed-messages to Kafka. It is a `Callable` that takes a
+                `tuple(idx, row)` and returns a string that will serve as the message&#39;s key, invoked prior to serialising the key. It defaults to the dataframe&#39;s index
+                (which may not be composed of unique values or string type keys). It goes hand in hand with the default `key-serialiser`, which assumes that the keys
+                are strings and encode&#39;s them as such.
+
+                - `key_serializer: Callable[T, bytes]`: Custom key serialiser; if not provided, a default key-serializer will be used, applied on a string-key (unless key is None).
+
+                N.B. Providing a custom key-generator that generates a non-string key is best provided alongside a custom key-serializer best suited to handle the custom key-type.
+
+                - `document_transformer: Callable[[Mapping[Any, Any]`: Manipulates the messages/rows sent to Kafka as values. It is  a `Callable` taking a `Mapping` as its only argument and
+                return a `Mapping`, then this callable will be invoked prior to serializing each document. This can be used, for example, to add metadata to each
+                document that will be written to the target  Kafka topic.
+
+                - `value_serializer: Callable[Mapping, bytes]`: Custom value serialiser; if not provided, a default value-serializer will be used applied on a Mapping..
 
     Example:
         &gt;&gt;&gt; # Given
@@ -851,7 +856,7 @@ class WithKafka:
             df: A dataframe where each row is a message to be sent to a Kafka Topic.
         &#34;&#34;&#34;
         if self.__key_generator is None:
-            self.__key_generator = lambda _, __: None
+            self.__key_generator = lambda idx, __: idx  # default key generator uses the dataframe&#39;s index
             if self.options.get(&#34;key_generator&#34;) is not None:
                 self.__key_generator = self.options.pop(&#34;key_generator&#34;)
 
@@ -898,12 +903,8 @@ class WithKafka:
     def _send_messages(self, df: pd.DataFrame, topic: str) -&gt; None:
         logger.info(f&#34;Sending {len(df)} messages to Kafka topic:{topic}.&#34;)
 
-        indices = df.index.values  # possibly non-unique indices
-        if len(set(indices)) != len(indices):
-            logger.warning(&#34;Messages have non-unique keys. This may cause issues in your downstream logic.&#34;)
-
         messages = df.reset_index(drop=True).to_dict(&#34;records&#34;)
-        for idx, message in zip(indices, messages):
+        for idx, message in zip(df.index.values, messages):
             self.__producer.send(topic, key=self.__key_generator(idx, message), value=self.__document_transformer(message))  # type: ignore
 
         self.__producer.flush()  # type: ignore
@@ -1085,21 +1086,40 @@ class WithKafka:
 </code></dt>
 <dd>
 <div class="desc"><p>Handles I/O operations for Kafka.</p>
-<p>If a <code>key_generator</code> option is provided, which should be a Callable taking a tuple(idx, row) and
-returning a string that will serve as the message's key, then teh callable will be invoked prior to
-serialising the key.</p>
-<p>If a <code>document_transformer</code> option is provided, which should be a Callable taking a <code>Mapping</code>
-as its only argument and return a <code>Mapping</code>, then this callable will be invoked prior to
-serializing each document. This can be used, for example, to add metadata to each document
-that will be written to the target Kafka topic.</p>
 <h2 id="args">Args</h2>
-<dl>
-<dt><strong><code>options</code></strong></dt>
-<dd>Keyword-arguments passed to the KafkaProducer constructor (see KafkaProducer.DEFAULT_CONFIG.keys()).</dd>
-</dl>
-<p>We also use/allow 2 more options:
-- <code>key_generator</code>, which is a callable that defines the keying policy to be used for sending keyed-messages to Kafka, and;
-- <code>document_transformer</code>, which is a callable manipulates the messages/rows sent to Kafka as values.`.</p>
+<ul>
+<li>options:<ul>
+<li>Standard: Keyword-arguments passed to the KafkaProducer constructor (see <code>KafkaProducer.DEFAULT_CONFIG.keys()</code>).</li>
+<li>
+<p>Additional Options:</p>
+<ul>
+<li>
+<p><code>key_generator: Callable[[Any, Mapping], T]</code>: defines the keying policy to be used for sending keyed-messages to Kafka. It is a <code>Callable</code> that takes a
+<code>tuple(idx, row)</code> and returns a string that will serve as the message's key, invoked prior to serialising the key. It defaults to the dataframe's index
+(which may not be composed of unique values or string type keys). It goes hand in hand with the default <code>key-serialiser</code>, which assumes that the keys
+are strings and encode's them as such.</p>
+</li>
+<li>
+<p><code>key_serializer: Callable[T, bytes]</code>: Custom key serialiser; if not provided, a default key-serializer will be used, applied on a string-key (unless key is None).</p>
+</li>
+</ul>
+<p>N.B. Providing a custom key-generator that generates a non-string key is best provided alongside a custom key-serializer best suited to handle the custom key-type.</p>
+<ul>
+<li>
+<p><code>document_transformer: Callable[[Mapping[Any, Any]</code>: Manipulates the messages/rows sent to Kafka as values. It is
+a <code>Callable</code> taking a <code>Mapping</code> as its only argument and
+return a <code>Mapping</code>, then this callable will be invoked prior to serializing each document. This can be used, for example, to add metadata to each
+document that will be written to the target
+Kafka topic.</p>
+</li>
+<li>
+<p><code>value_serializer: Callable[Mapping, bytes]</code>: Custom value serialiser; if not provided, a default value-serializer will be used applied on a Mapping..</p>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
 <h2 id="example">Example</h2>
 <pre><code class="language-python-repl">&gt;&gt;&gt; # Given
 &gt;&gt;&gt; keyed_test_df = pd.DataFrame.from_records(
@@ -1140,20 +1160,25 @@ that will be written to the target Kafka topic.</p>
 <pre><code class="python">class WithKafka:
     &#34;&#34;&#34;Handles I/O operations for Kafka.
 
-    If a `key_generator` option is provided, which should be a Callable taking a tuple(idx, row) and
-    returning a string that will serve as the message&#39;s key, then teh callable will be invoked prior to
-    serialising the key.
-
-    If a `document_transformer` option is provided, which should be a Callable taking a `Mapping`
-    as its only argument and return a `Mapping`, then this callable will be invoked prior to
-    serializing each document. This can be used, for example, to add metadata to each document
-    that will be written to the target Kafka topic.
-
     Args:
-        options: Keyword-arguments passed to the KafkaProducer constructor (see KafkaProducer.DEFAULT_CONFIG.keys()).
-        We also use/allow 2 more options:
-        - `key_generator`, which is a callable that defines the keying policy to be used for sending keyed-messages to Kafka, and;
-        - `document_transformer`, which is a callable manipulates the messages/rows sent to Kafka as values.`.
+        - options:
+            - Standard: Keyword-arguments passed to the KafkaProducer constructor (see `KafkaProducer.DEFAULT_CONFIG.keys()`).
+             - Additional Options:
+
+                - `key_generator: Callable[[Any, Mapping], T]`: defines the keying policy to be used for sending keyed-messages to Kafka. It is a `Callable` that takes a
+                `tuple(idx, row)` and returns a string that will serve as the message&#39;s key, invoked prior to serialising the key. It defaults to the dataframe&#39;s index
+                (which may not be composed of unique values or string type keys). It goes hand in hand with the default `key-serialiser`, which assumes that the keys
+                are strings and encode&#39;s them as such.
+
+                - `key_serializer: Callable[T, bytes]`: Custom key serialiser; if not provided, a default key-serializer will be used, applied on a string-key (unless key is None).
+
+                N.B. Providing a custom key-generator that generates a non-string key is best provided alongside a custom key-serializer best suited to handle the custom key-type.
+
+                - `document_transformer: Callable[[Mapping[Any, Any]`: Manipulates the messages/rows sent to Kafka as values. It is  a `Callable` taking a `Mapping` as its only argument and
+                return a `Mapping`, then this callable will be invoked prior to serializing each document. This can be used, for example, to add metadata to each
+                document that will be written to the target  Kafka topic.
+
+                - `value_serializer: Callable[Mapping, bytes]`: Custom value serialiser; if not provided, a default value-serializer will be used applied on a Mapping..
 
     Example:
         &gt;&gt;&gt; # Given
@@ -1207,7 +1232,7 @@ that will be written to the target Kafka topic.</p>
             df: A dataframe where each row is a message to be sent to a Kafka Topic.
         &#34;&#34;&#34;
         if self.__key_generator is None:
-            self.__key_generator = lambda _, __: None
+            self.__key_generator = lambda idx, __: idx  # default key generator uses the dataframe&#39;s index
             if self.options.get(&#34;key_generator&#34;) is not None:
                 self.__key_generator = self.options.pop(&#34;key_generator&#34;)
 
@@ -1254,12 +1279,8 @@ that will be written to the target Kafka topic.</p>
     def _send_messages(self, df: pd.DataFrame, topic: str) -&gt; None:
         logger.info(f&#34;Sending {len(df)} messages to Kafka topic:{topic}.&#34;)
 
-        indices = df.index.values  # possibly non-unique indices
-        if len(set(indices)) != len(indices):
-            logger.warning(&#34;Messages have non-unique keys. This may cause issues in your downstream logic.&#34;)
-
         messages = df.reset_index(drop=True).to_dict(&#34;records&#34;)
-        for idx, message in zip(indices, messages):
+        for idx, message in zip(df.index.values, messages):
             self.__producer.send(topic, key=self.__key_generator(idx, message), value=self.__document_transformer(message))  # type: ignore
 
         self.__producer.flush()  # type: ignore

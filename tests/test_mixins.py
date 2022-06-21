@@ -1,5 +1,4 @@
 # pylint: disable=no-member, missing-module-docstring, missing-class-docstring, missing-function-docstring, too-many-public-methods, too-few-public-methods, protected-access, C0103, C0302, R0801
-import logging
 import os
 from tempfile import NamedTemporaryFile
 from typing import Any
@@ -1694,7 +1693,7 @@ class TestKafkaIO:
         } and "WithKafka._default_value_serializer" in str(value_serializer)
 
     @pytest.mark.unit
-    def test_producer_send_method_can_send_messages_with_no_key_if_a_keygen_is_not_provided(self, test_df):
+    def test_producer_send_method_sends_messages_with_index_as_key_by_default_if_a_keygen_is_not_provided(self, test_df):
         # Given
         kafka_cloud_config = IOConfig(
             path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
@@ -1712,13 +1711,13 @@ class TestKafkaIO:
 
         # Then
         assert mock_producer.my_stream == [
-            {"key": None, "value": {"bar": 1000, "baz": "ABC", "foo": "id_1", "id": "cm_1"}},
-            {"key": None, "value": {"bar": 1000, "baz": "ABC", "foo": "id_2", "id": "cm_2"}},
-            {"key": None, "value": {"bar": 1000, "baz": "ABC", "foo": "id_3", "id": "cm_3"}},
+            {"key": 0, "value": {"bar": 1000, "baz": "ABC", "foo": "id_1", "id": "cm_1"}},
+            {"key": 1, "value": {"bar": 1000, "baz": "ABC", "foo": "id_2", "id": "cm_2"}},
+            {"key": 2, "value": {"bar": 1000, "baz": "ABC", "foo": "id_3", "id": "cm_3"}},
         ]
 
     @pytest.mark.unit
-    def test_producer_send_method_can_send_keyed_messages_when_a_keygen_is_provided_with_a_naive_same_key_value(self, test_df):
+    def test_producer_send_method_can_send_keyed_messages_using_a_custom_key_generator(self, test_df):
         # Given
         kafka_cloud_config = IOConfig(
             path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
@@ -1740,102 +1739,6 @@ class TestKafkaIO:
             {"key": "XXX", "value": {"bar": 1000, "baz": "ABC", "foo": "id_2", "id": "cm_2"}},
             {"key": "XXX", "value": {"bar": 1000, "baz": "ABC", "foo": "id_3", "id": "cm_3"}},
         ]
-
-    @pytest.mark.unit
-    def test_producer_send_method_can_use_a_keygen_to_derive_a_key_from_a_dataframes_index(
-        self,
-    ):
-        # Given
-        keyed_test_df = pd.DataFrame.from_records(
-            [
-                ["key-01", "cm_1", "id_1", 1000, "ABC"],
-                ["key-02", "cm_2", "id_2", 1000, "ABC"],
-                ["key-03", "cm_3", "id_3", 1000, "ABC"],
-            ],
-            columns=["key", "id", "foo", "bar", "baz"],
-        ).set_index("key")
-        kafka_cloud_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
-            env_identifier="CLOUD",
-            dynamic_vars=constants,
-        ).get(source_key="WRITE_TO_KAFKA_JSON")
-        write_kafka_io = WriteKafkaIO(kafka_cloud_config, key_generator=lambda key, _: key)
-
-        # When
-        with patch.object(mixins, "KafkaProducer") as mock__kafka_producer:
-            mock__kafka_producer.DEFAULT_CONFIG = KafkaProducer.DEFAULT_CONFIG
-            mock_producer = MockKafkaProducer()
-            mock__kafka_producer.return_value = mock_producer
-            write_kafka_io.write(keyed_test_df)
-
-        # Then
-        assert mock_producer.my_stream == [
-            {"key": "key-01", "value": {"bar": 1000, "baz": "ABC", "foo": "id_1", "id": "cm_1"}},
-            {"key": "key-02", "value": {"bar": 1000, "baz": "ABC", "foo": "id_2", "id": "cm_2"}},
-            {"key": "key-03", "value": {"bar": 1000, "baz": "ABC", "foo": "id_3", "id": "cm_3"}},
-        ]
-
-    @pytest.mark.unit
-    def test_producer_send_method_can_derive_a_key_from_a_dataframes_index_even_if_the_index_is_non_unique(
-        self,
-    ):
-        # Given
-        keyed_test_df = pd.DataFrame.from_records(
-            [
-                ["key-01", "cm_1", "id_1", 1000, "ABC"],
-                ["key-01", "cm_2", "id_2", 1000, "ABC"],  # <-- index is non-unique
-                ["key-02", "cm_3", "id_3", 1000, "ABC"],
-            ],
-            columns=["key", "id", "foo", "bar", "baz"],
-        ).set_index("key")
-        kafka_cloud_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
-            env_identifier="CLOUD",
-            dynamic_vars=constants,
-        ).get(source_key="WRITE_TO_KAFKA_JSON")
-        write_kafka_io = WriteKafkaIO(kafka_cloud_config, key_generator=lambda key, _: key)
-
-        # When
-        with patch.object(mixins, "KafkaProducer") as mock__kafka_producer:
-            mock__kafka_producer.DEFAULT_CONFIG = KafkaProducer.DEFAULT_CONFIG
-            mock_producer = MockKafkaProducer()
-            mock__kafka_producer.return_value = mock_producer
-            write_kafka_io.write(keyed_test_df)
-
-        # Then
-        assert mock_producer.my_stream == [
-            {"key": "key-01", "value": {"bar": 1000, "baz": "ABC", "foo": "id_1", "id": "cm_1"}},
-            {"key": "key-01", "value": {"bar": 1000, "baz": "ABC", "foo": "id_2", "id": "cm_2"}},
-            {"key": "key-02", "value": {"bar": 1000, "baz": "ABC", "foo": "id_3", "id": "cm_3"}},
-        ]
-
-    @pytest.mark.unit
-    def test_producer_send_method_raises_a_warning_if_dataframes_index_is_non_unique(self, caplog):
-        # Given
-        keyed_test_df = pd.DataFrame.from_records(
-            [
-                ["key-01", "cm_1", "id_1", 1000, "ABC"],
-                ["key-01", "cm_2", "id_2", 1000, "ABC"],  # <-- index is non-unique
-                ["key-02", "cm_3", "id_3", 1000, "ABC"],
-            ],
-            columns=["key", "id", "foo", "bar", "baz"],
-        ).set_index("key")
-        kafka_cloud_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
-            env_identifier="CLOUD",
-            dynamic_vars=constants,
-        ).get(source_key="WRITE_TO_KAFKA_JSON")
-        write_kafka_io = WriteKafkaIO(kafka_cloud_config, key_generator=lambda key, _: key)
-
-        # When
-        with caplog.at_level(logging.WARNING):
-            with patch.object(mixins, "KafkaProducer") as mock__kafka_producer:
-                mock__kafka_producer.DEFAULT_CONFIG = KafkaProducer.DEFAULT_CONFIG
-                mock_producer = MockKafkaProducer()
-                mock__kafka_producer.return_value = mock_producer
-                write_kafka_io.write(keyed_test_df)
-
-        assert caplog.records[0].message == "Messages have non-unique keys. This may cause issues in your downstream logic."
 
     @pytest.mark.unit
     @pytest.mark.parametrize(
@@ -1863,7 +1766,7 @@ class TestKafkaIO:
         assert encoded_value == WithKafka._default_value_serializer(value)
 
     @pytest.mark.unit
-    def test_default_key_serialiser_and_transformer_are_used_if_none_are_provided_by_the_user(self):
+    def test_default_key_generator_and_transformer_are_used_if_none_are_provided_by_the_user(self):
         # Given
         keyed_test_df = pd.DataFrame.from_records(
             [
@@ -1888,11 +1791,10 @@ class TestKafkaIO:
 
             # When
             write_kafka_io.write(keyed_test_df)
-            assert write_kafka_io._WithKafka__key_generator("idx", "value") is None
-            assert write_kafka_io._WithKafka__document_transformer("value") == "value"
+            assert (write_kafka_io._WithKafka__key_generator("idx", "value") == "idx") and (write_kafka_io._WithKafka__document_transformer("value") == "value")
 
     @pytest.mark.unit
-    def test_custom_key_serialiser_and_transformer_are_used_if_they_are_provided_by_the_user(self):
+    def test_custom_key_generator_and_transformer_are_used_if_they_are_provided_by_the_user(self):
         # Given
         keyed_test_df = pd.DataFrame.from_records(
             [
@@ -1907,7 +1809,7 @@ class TestKafkaIO:
             env_identifier="CLOUD",
             dynamic_vars=constants,
         ).get(source_key="WRITE_TO_KAFKA_JSON")
-        write_kafka_io = WriteKafkaIO(kafka_cloud_config, key_generator=lambda idx, _: idx, document_transformer=lambda _: "xxx")
+        write_kafka_io = WriteKafkaIO(kafka_cloud_config, key_generator=lambda idx, _: "xxx", document_transformer=lambda _: "xxx")
 
         # When
         with patch.object(mixins, "KafkaProducer") as mock__kafka_producer:
@@ -1917,8 +1819,7 @@ class TestKafkaIO:
 
             # When
             write_kafka_io.write(keyed_test_df)
-            assert write_kafka_io._WithKafka__key_generator("idx", "value") == "idx"
-            assert write_kafka_io._WithKafka__document_transformer("value") == "xxx"
+            assert (write_kafka_io._WithKafka__key_generator("idx", "value") == "xxx") and (write_kafka_io._WithKafka__document_transformer("value") == "xxx")
 
 
 class TestAllowedOptions:

@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=62"]
+build-backend = "setuptools.build_meta"
+
 [tool.black]
 py38 = true
 line-length = 185
@@ -29,5 +33,4 @@ exclude = '''
 
 [tool.pydocstyle]
 convention = 'google'
-# Ignore missing docstring in public function
-add_ignore = 'D103'
+add_ignore = 'D103' # Ignore missing docstring in public function
