@@ -2,6 +2,7 @@
 version: 2.1
 
 jobs:
+
   style_checks:
     working_directory: ~/project
     docker:
