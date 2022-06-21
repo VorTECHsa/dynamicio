@@ -99,6 +99,10 @@ workflows:
   version: 2
   main:
     jobs:
+      - style_checks:
+          filters:
+            tags:
+              only: /v.*/
       - test_python_3_8:
           requires:
             - style_checks
