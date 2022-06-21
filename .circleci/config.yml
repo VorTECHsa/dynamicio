@@ -66,38 +66,6 @@ jobs:
           command: |
             pytest --cache-clear --cov=dynamicio tests/
 
-  test_python_3_10:
-    working_directory: ~/project
-    docker:
-      - image: cimg/python:3.10.4
-    steps:
-      - checkout
-      - run:
-          name: "Remove .python-version file"
-          command: |
-            rm .python-version
-      - run:
-          name: "Install requirements"
-          command: |
-            pip install --upgrade pip
-            pip install -r requirements.txt
-            pip install -r requirements-dev.txt
-      - run:
-          name: "Code Quality Check"
-          command: |
-            black dynamicio
-            black tests
-            flake8 --verbose dynamicio
-            flake8 --verbose tests
-            pylint -v dynamicio
-            pylint -v tests
-            yamllint -v dynamicio
-            yamllint -v tests
-      - run:
-          name: "Run Python Tests"
-          command: |
-            pytest --cache-clear --cov=dynamicio tests/
-
   build_and_publish:
     working_directory: ~/project
     docker:
@@ -129,10 +97,6 @@ workflows:
             tags:
               only: /v.*/
       - test_python_3_9:
-          filters:
-            tags:
-              only: /v.*/
-      - test_python_3_10:
           filters:
             tags:
               only: /v.*/
