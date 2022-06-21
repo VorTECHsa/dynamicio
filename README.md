@@ -1,4 +1,4 @@
-testing public repo settings
+testing public repo settings - dummy change
 
 [![Coverage Status](./docs/coverage_report/coverage-badge.svg?dummy=8484744)]()
 
