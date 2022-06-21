@@ -1,3 +1,5 @@
+testing public repo settings
+
 [![Coverage Status](./docs/coverage_report/coverage-badge.svg?dummy=8484744)]()
 
 <img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/logo-transparent.png" width="500"> <img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/wrapped-panda.png" width="100">
