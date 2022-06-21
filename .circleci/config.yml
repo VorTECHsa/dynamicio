@@ -40,8 +40,10 @@ jobs:
       - image: cimg/python:3.9.13
     steps:
       - checkout
-      - python/install-packages:
-          pkg-manager: pip
+      - run:
+          name: "Remove .python-version file"
+          command: |
+            rm .python-version
       - run:
           name: "Install requirements"
           command: |
@@ -70,8 +72,10 @@ jobs:
       - image: cimg/python:3.10.4
     steps:
       - checkout
-      - python/install-packages:
-          pkg-manager: pip
+      - run:
+          name: "Remove .python-version file"
+          command: |
+            rm .python-version
       - run:
           name: "Install requirements"
           command: |
