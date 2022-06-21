@@ -110,6 +110,10 @@ jobs:
             pip install --upgrade pip
             pip install -r requirements-build.txt
       - run:
+          name: "Build package"
+          command: |
+            BUILD_VERSION=${CIRCLE_TAG:1} python setup.py sdist bdist_wheel
+      - run:
           name: "Publish"
           command: |
             pip install --upgrade twine
