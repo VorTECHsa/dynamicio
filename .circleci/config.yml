@@ -104,7 +104,6 @@ workflows:
           requires:
             - test_python_3_8
             - test_python_3_9
-            - test_python_3_10
           filters:
             tags:
               only: /v.*/
