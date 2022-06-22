@@ -798,8 +798,8 @@ class WithKafka:
 
                 N.B. Providing a custom key-generator that generates a non-string key is best provided alongside a custom key-serializer best suited to handle the custom key-type.
 
-                - `document_transformer: Callable[[Mapping[Any, Any]`: Manipulates the messages/rows sent to Kafka as values. It is  a `Callable` taking a `Mapping` as its only argument and
-                return a `Mapping`, then this callable will be invoked prior to serializing each document. This can be used, for example, to add metadata to each
+                - `document_transformer: Callable[[Mapping[Any, Any]`: Manipulates the messages/rows sent to Kafka as values. It is  a `Callable` taking a `Mapping` as its only
+                argument and return a `Mapping`, then this callable will be invoked prior to serializing each document. This can be used, for example, to add metadata to each
                 document that will be written to the target  Kafka topic.
 
                 - `value_serializer: Callable[Mapping, bytes]`: Custom value serialiser; if not provided, a default value-serializer will be used applied on a Mapping..
@@ -1107,8 +1107,8 @@ are strings and encode's them as such.</p>
 <ul>
 <li>
 <p><code>document_transformer: Callable[[Mapping[Any, Any]</code>: Manipulates the messages/rows sent to Kafka as values. It is
-a <code>Callable</code> taking a <code>Mapping</code> as its only argument and
-return a <code>Mapping</code>, then this callable will be invoked prior to serializing each document. This can be used, for example, to add metadata to each
+a <code>Callable</code> taking a <code>Mapping</code> as its only
+argument and return a <code>Mapping</code>, then this callable will be invoked prior to serializing each document. This can be used, for example, to add metadata to each
 document that will be written to the target
 Kafka topic.</p>
 </li>
@@ -1174,8 +1174,8 @@ Kafka topic.</p>
 
                 N.B. Providing a custom key-generator that generates a non-string key is best provided alongside a custom key-serializer best suited to handle the custom key-type.
 
-                - `document_transformer: Callable[[Mapping[Any, Any]`: Manipulates the messages/rows sent to Kafka as values. It is  a `Callable` taking a `Mapping` as its only argument and
-                return a `Mapping`, then this callable will be invoked prior to serializing each document. This can be used, for example, to add metadata to each
+                - `document_transformer: Callable[[Mapping[Any, Any]`: Manipulates the messages/rows sent to Kafka as values. It is  a `Callable` taking a `Mapping` as its only
+                argument and return a `Mapping`, then this callable will be invoked prior to serializing each document. This can be used, for example, to add metadata to each
                 document that will be written to the target  Kafka topic.
 
                 - `value_serializer: Callable[Mapping, bytes]`: Custom value serialiser; if not provided, a default value-serializer will be used applied on a Mapping..
