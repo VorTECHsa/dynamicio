@@ -1989,6 +1989,22 @@ class TestAllowedOptions:
         # Then
         assert expected_s3_csv_df.equals(s3_csv_df)
 
+    @pytest.mark.integration
+    @patch.object(WithPostgres, "_read_database")
+    def test_when_reading_from_postgres_only_the_model_option_is_considered(self, mock__read_database, test_df):
+        # Given
+        # VALID OPTION: model=ERModel
+        mock__read_database.return_value = test_df
+        postgres_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_POSTGRES")
+
+        # When / Then
+        with pytest.raises(ValueError):
+            ReadPostgresIO(source_config=postgres_config, model=ERModel).read()
+
 
 class TestBatchLocal:
     @pytest.mark.unit
