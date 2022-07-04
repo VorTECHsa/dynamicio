@@ -59,12 +59,16 @@ from fastparquet import ParquetFile, write  # type: ignore
 from kafka import KafkaProducer  # type: ignore
 from magic_logger import logger
 from pyarrow.parquet import read_table, write_table  # type: ignore # pylint: disable=no-name-in-module
-from sqlalchemy import create_engine  # type: ignore
+from sqlalchemy import Boolean, Column, Float, Integer, String, create_engine  # type: ignore
+from sqlalchemy.ext.declarative import declarative_base  # type: ignore
 from sqlalchemy.orm import Query  # type: ignore
 from sqlalchemy.orm.session import Session as SqlAlchemySession  # type: ignore
 from sqlalchemy.orm.session import sessionmaker  # type: ignore
 
 Session = sessionmaker(autoflush=True)
+
+Base = declarative_base()
+_type_lookup = {&#34;boolean&#34;: Boolean, &#34;object&#34;: String(64), &#34;int64&#34;: Integer, &#34;float64&#34;: Float, &#34;int&#34;: Integer}
 
 
 @contextmanager
@@ -701,28 +705,63 @@ class WithPostgres:
 
         connection_string = f&#34;postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}&#34;
 
-        model = self.options.get(&#34;model&#34;)
         sql_query = self.options.get(&#34;sql_query&#34;)
 
         query = None
 
-        if model and sql_query:
-            raise ValueError(&#34;Only one of `model` and `sql_query` must be provided&#34;)
-        if model is None and sql_query is None:
-            raise ValueError(&#34;One of `model` and `sql_query` must be provided&#34;)
+        if self.options.get(&#34;model&#34;):
+            raise ValueError(&#34;`model` must not be provided&#34;)
 
-        if model:
-            query = Query(self._get_table_columns(model))
+        if &#34;schema&#34; not in self.sources_config:
+            schema_dict = self.schema
         else:
+            schema_dict = self.sources_config[&#34;schema&#34;]
+        schema_name = self.sources_config[&#34;name&#34;]
+
+        model = self._generate_model_from_schema(schema_dict, schema_name)
+
+        query = Query(self._get_table_columns(model))
+        if sql_query:
             query = sql_query
 
         with session_for(connection_string) as session:
             return self._read_database(session, query, **self.options)
 
     @staticmethod
+    def _generate_model_from_schema(schema_dict, schema_name):
+        &#34;&#34;&#34;Generates a model from a schema loaded from yaml file.
+        Args:
+            schema_dict&lt;dict&gt;: A dictionary from source_config variable containing
+                                columns and their types
+            schema_name&lt;string&gt;: Name of the schema from schema yaml file.
+
+        Returns:
+            &lt;class &#39;sqlalchemy.orm.decl_api.DeclarativeMeta&#39;&gt;
+        &#34;&#34;&#34;
+        json_cls_schema = {&#34;tablename&#34;: schema_name, &#34;columns&#34;: []}
+
+        for col, dtype in schema_dict.items():
+            new_col = {&#34;name&#34;: col}
+
+            if dtype in _type_lookup:
+                new_col.update({&#34;name&#34;: col, &#34;type&#34;: _type_lookup[dtype]})
+                json_cls_schema[&#34;columns&#34;].append(new_col)
+
+        class_name = &#34;&#34;.join(x.capitalize() or &#34;_&#34; for x in schema_name.split(&#34;_&#34;)) + &#34;Model&#34;
+
+        class_dict = {&#34;clsname&#34;: class_name, &#34;__tablename__&#34;: schema_name, &#34;__table_args__&#34;: {&#34;extend_existing&#34;: True}}
+        class_dict.update({column[&#34;name&#34;]: Column(column[&#34;type&#34;], primary_key=True) if idx == 0 else Column(column[&#34;type&#34;]) for idx, column in enumerate(json_cls_schema[&#34;columns&#34;])})
+        generated_model = type(class_dict[&#34;clsname&#34;], (Base,), class_dict)
+        return generated_model
+
+    @staticmethod
     def _get_table_columns(model):
         if model:
-            return list(model.__table__.columns)
+            tables_colums = []
+            for col in list(model.__table__.columns):
+                tables_colums.append(getattr(model, col.name))
+            return tables_colums
+            # return list(model.__table__.columns)
         raise ValueError(&#34;A model must be provided&#34;)
 
     @staticmethod
@@ -745,7 +784,6 @@ class WithPostgres:
             query = query.with_session(session).statement
         return pd.read_sql(sql=query, con=session.get_bind(), **options)
 
-    @allow_options({&#34;model&#34;})
     def _write_to_postgres(self, df: pd.DataFrame):
         &#34;&#34;&#34;Write a dataframe to postgres based on the {file_type} of the config_io configuration.
 
@@ -765,8 +803,15 @@ class WithPostgres:
 
         connection_string = f&#34;postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}&#34;
 
+        if self.options.get(&#34;model&#34;):
+            raise ValueError(&#34;`model` must not be provided&#34;)
+
+        schema_dict = self.sources_config[&#34;schema&#34;]
+        schema_name = self.sources_config[&#34;name&#34;]
+        model = self._generate_model_from_schema(schema_dict, schema_name)
+
         with session_for(connection_string) as session:
-            self._write_to_database(session, self.options[&#34;model&#34;].__tablename__, df)  # type: ignore
+            self._write_to_database(session, model.__tablename__, df)  # type: ignore
 
     @staticmethod
     def _write_to_database(session: SqlAlchemySession, table_name: str, df: pd.DataFrame):
@@ -1652,28 +1697,63 @@ Kafka topic.</p>
 
         connection_string = f&#34;postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}&#34;
 
-        model = self.options.get(&#34;model&#34;)
         sql_query = self.options.get(&#34;sql_query&#34;)
 
         query = None
 
-        if model and sql_query:
-            raise ValueError(&#34;Only one of `model` and `sql_query` must be provided&#34;)
-        if model is None and sql_query is None:
-            raise ValueError(&#34;One of `model` and `sql_query` must be provided&#34;)
+        if self.options.get(&#34;model&#34;):
+            raise ValueError(&#34;`model` must not be provided&#34;)
 
-        if model:
-            query = Query(self._get_table_columns(model))
+        if &#34;schema&#34; not in self.sources_config:
+            schema_dict = self.schema
         else:
+            schema_dict = self.sources_config[&#34;schema&#34;]
+        schema_name = self.sources_config[&#34;name&#34;]
+
+        model = self._generate_model_from_schema(schema_dict, schema_name)
+
+        query = Query(self._get_table_columns(model))
+        if sql_query:
             query = sql_query
 
         with session_for(connection_string) as session:
             return self._read_database(session, query, **self.options)
 
     @staticmethod
+    def _generate_model_from_schema(schema_dict, schema_name):
+        &#34;&#34;&#34;Generates a model from a schema loaded from yaml file.
+        Args:
+            schema_dict&lt;dict&gt;: A dictionary from source_config variable containing
+                                columns and their types
+            schema_name&lt;string&gt;: Name of the schema from schema yaml file.
+
+        Returns:
+            &lt;class &#39;sqlalchemy.orm.decl_api.DeclarativeMeta&#39;&gt;
+        &#34;&#34;&#34;
+        json_cls_schema = {&#34;tablename&#34;: schema_name, &#34;columns&#34;: []}
+
+        for col, dtype in schema_dict.items():
+            new_col = {&#34;name&#34;: col}
+
+            if dtype in _type_lookup:
+                new_col.update({&#34;name&#34;: col, &#34;type&#34;: _type_lookup[dtype]})
+                json_cls_schema[&#34;columns&#34;].append(new_col)
+
+        class_name = &#34;&#34;.join(x.capitalize() or &#34;_&#34; for x in schema_name.split(&#34;_&#34;)) + &#34;Model&#34;
+
+        class_dict = {&#34;clsname&#34;: class_name, &#34;__tablename__&#34;: schema_name, &#34;__table_args__&#34;: {&#34;extend_existing&#34;: True}}
+        class_dict.update({column[&#34;name&#34;]: Column(column[&#34;type&#34;], primary_key=True) if idx == 0 else Column(column[&#34;type&#34;]) for idx, column in enumerate(json_cls_schema[&#34;columns&#34;])})
+        generated_model = type(class_dict[&#34;clsname&#34;], (Base,), class_dict)
+        return generated_model
+
+    @staticmethod
     def _get_table_columns(model):
         if model:
-            return list(model.__table__.columns)
+            tables_colums = []
+            for col in list(model.__table__.columns):
+                tables_colums.append(getattr(model, col.name))
+            return tables_colums
+            # return list(model.__table__.columns)
         raise ValueError(&#34;A model must be provided&#34;)
 
     @staticmethod
@@ -1696,7 +1776,6 @@ Kafka topic.</p>
             query = query.with_session(session).statement
         return pd.read_sql(sql=query, con=session.get_bind(), **options)
 
-    @allow_options({&#34;model&#34;})
     def _write_to_postgres(self, df: pd.DataFrame):
         &#34;&#34;&#34;Write a dataframe to postgres based on the {file_type} of the config_io configuration.
 
@@ -1716,8 +1795,15 @@ Kafka topic.</p>
 
         connection_string = f&#34;postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}&#34;
 
+        if self.options.get(&#34;model&#34;):
+            raise ValueError(&#34;`model` must not be provided&#34;)
+
+        schema_dict = self.sources_config[&#34;schema&#34;]
+        schema_name = self.sources_config[&#34;name&#34;]
+        model = self._generate_model_from_schema(schema_dict, schema_name)
+
         with session_for(connection_string) as session:
-            self._write_to_database(session, self.options[&#34;model&#34;].__tablename__, df)  # type: ignore
+            self._write_to_database(session, model.__tablename__, df)  # type: ignore
 
     @staticmethod
     def _write_to_database(session: SqlAlchemySession, table_name: str, df: pd.DataFrame):

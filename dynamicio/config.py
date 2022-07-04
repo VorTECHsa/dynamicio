@@ -199,6 +199,7 @@ class IOConfig:
         source_config = self.config[source_key][self.env_identifier]
         if self.config[source_key].get("schema"):
             schema_definition = self._get_schema_definition(source_key)
+            source_config["name"] = schema_definition["name"]
             source_config["schema"] = self._get_schema(schema_definition)
             source_config["validations"] = self._get_validations(schema_definition)
             source_config["metrics"] = self._get_metrics(schema_definition)

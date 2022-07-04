@@ -2,7 +2,7 @@
 import logging
 
 from demo.src import constants, input_config, raw_config
-from demo.src.io import Bar, BarDataModel, Foo, StagedBar, StagedFoo
+from demo.src.io import Bar, Foo, StagedBar, StagedFoo
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ def main() -> None:
     # LOAD DATA
     logger.info("Loading data from live sources...")
 
-    bar_df = Bar(source_config=input_config.get(source_key="BAR"), apply_schema_validations=True, log_schema_metrics=True, model=BarDataModel).read()
+    bar_df = Bar(source_config=input_config.get(source_key="BAR"), apply_schema_validations=True, log_schema_metrics=True).read()
     foo_df = Foo(source_config=input_config.get(source_key="FOO"), apply_schema_validations=True, log_schema_metrics=True).read()
 
     logger.info("Data successfully loaded from live sources...")
