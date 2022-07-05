@@ -726,7 +726,7 @@ which will load the `foo.csv` file as a dataframe.
 Likewise to `S3` resources, `postgres` resources need the same number of options to be defined for their loading.
 
 **Implicitly, dynamicio is able to infer data model from the schema yml files of the source key provided rather than requiring that the schema is explicitly defined.**
-This data model defines the table, the columns andtheir respective SQL types.
+This data model defines the table, the columns and their respective SQL types.
 
 To, then, load from `postgres` you simply do:
 

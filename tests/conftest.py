@@ -11,7 +11,7 @@ import pytest
 
 from dynamicio import WithS3PathPrefix
 from tests import constants
-from tests.mocking.models import ERModel, PgModel
+from tests.mocking.models import ERModel
 
 TEST_SQL_DIR = os.path.dirname(os.path.abspath(__file__)) + "/test_sql/"
 __pickle_loads = pickle.loads
@@ -378,11 +378,6 @@ def test_df():
 @pytest.fixture(scope="class")
 def expected_columns():
     return [ERModel.id, ERModel.foo, ERModel.bar, ERModel.baz]
-
-
-@pytest.fixture(scope="class")
-def model_expected_columns():
-    return [PgModel.id, PgModel.foo, PgModel.bar, PgModel.baz]
 
 
 @pytest.fixture(scope="class")

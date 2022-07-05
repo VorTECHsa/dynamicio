@@ -20,7 +20,7 @@ import tempfile
 from contextlib import contextmanager
 from functools import wraps
 from types import FunctionType
-from typing import Any, Callable, Collection, Generator, Iterable, Mapping, MutableMapping, Optional, Union
+from typing import Any, Callable, Collection, Dict, Generator, Iterable, Mapping, MutableMapping, Optional, Union
 
 import boto3  # type: ignore
 import pandas as pd  # type: ignore
@@ -33,6 +33,7 @@ from pyarrow.parquet import read_table, write_table  # type: ignore # pylint: di
 from sqlalchemy import Boolean, Column, Float, Integer, String, create_engine  # type: ignore
 from sqlalchemy.ext.declarative import declarative_base  # type: ignore
 from sqlalchemy.orm import Query  # type: ignore
+from sqlalchemy.orm.decl_api import DeclarativeMeta  # type: ignore
 from sqlalchemy.orm.session import Session as SqlAlchemySession  # type: ignore
 from sqlalchemy.orm.session import sessionmaker  # type: ignore
 
@@ -680,9 +681,6 @@ class WithPostgres:
 
         query = None
 
-        if self.options.get("model"):
-            raise ValueError("`model` must not be provided")
-
         if "schema" not in self.sources_config:
             schema_dict = self.schema
         else:
@@ -699,18 +697,8 @@ class WithPostgres:
             return self._read_database(session, query, **self.options)
 
     @staticmethod
-    def _generate_model_from_schema(schema_dict, schema_name):
-        """Generates a model from a schema loaded from yaml file.
-
-        Args:
-            schema_dict<dict>: A dictionary from source_config variable containing
-                                columns and their types
-            schema_name<string>: Name of the schema from schema yaml file.
-
-        Returns:
-            <class 'sqlalchemy.orm.decl_api.DeclarativeMeta'>
-        """
-        json_cls_schema = {"tablename": schema_name, "columns": []}
+    def _generate_model_from_schema(schema_dict: Mapping, schema_name: str) -> DeclarativeMeta:
+        json_cls_schema: Dict[str, Any] = {"tablename": schema_name, "columns": []}
 
         for col, dtype in schema_dict.items():
             new_col = {"name": col}
@@ -719,25 +707,24 @@ class WithPostgres:
                 new_col.update({"name": col, "type": _type_lookup[dtype]})
                 json_cls_schema["columns"].append(new_col)
 
-        class_name = "".join(x.capitalize() or "_" for x in schema_name.split("_")) + "Model"
+        class_name = "".join(word.capitalize() or "_" for word in schema_name.split("_")) + "Model"
 
         class_dict = {"clsname": class_name, "__tablename__": schema_name, "__table_args__": {"extend_existing": True}}
         class_dict.update({column["name"]: Column(column["type"], primary_key=True) if idx == 0 else Column(column["type"]) for idx, column in enumerate(json_cls_schema["columns"])})
-        generated_model = type(class_dict["clsname"], (Base,), class_dict)
+
+        generated_model = type(class_name, (Base,), class_dict)
         return generated_model
 
     @staticmethod
     def _get_table_columns(model):
+        tables_colums = []
         if model:
-            tables_colums = []
             for col in list(model.__table__.columns):
                 tables_colums.append(getattr(model, col.name))
-            return tables_colums
-            # return list(model.__table__.columns)
-        raise ValueError("A model must be provided")
+        return tables_colums
 
     @staticmethod
-    @allow_options([*args_of(pd.read_sql), *["model"]])
+    @allow_options(pd.read_sql)
     def _read_database(session: SqlAlchemySession, query: Union[str, Query], **options: Any) -> pd.DataFrame:
         """Run `query` against active `session` and returns the result as a `DataFrame`.
 
@@ -774,9 +761,6 @@ class WithPostgres:
         db_name = postgres_config["db_name"]
 
         connection_string = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
-
-        if self.options.get("model"):
-            raise ValueError("`model` must not be provided")
 
         schema_dict = self.sources_config["schema"]
         schema_name = self.sources_config["name"]
