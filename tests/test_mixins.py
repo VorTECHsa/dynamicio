@@ -34,6 +34,7 @@ from tests.mocking.io import (
     ReadS3ParquetWithDifferentNonCastableDTypeIO,
     ReadS3ParquetWithLessColumnsIO,
     TemplatedFile,
+    WriteExtendedPostgresIO,
     WriteKafkaIO,
     WritePostgresIO,
     WriteS3CsvIO,
@@ -1566,6 +1567,30 @@ class TestPostgresIO:
         assert isinstance(model.__table__.columns, ImmutableColumnCollection)
         for x, y in zip(columns, [PgModel.id, PgModel.foo, PgModel.bar, PgModel.baz]):
             assert str(x) == str(y)
+
+    @pytest.mark.unit
+    def test_to_check_if_dataframe_has_valid_data_types(self):
+        # Given
+        postgres_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="WRITE_TO_PG_PARQUET")
+
+        df = pd.DataFrame.from_records(
+            [
+                ["cm_1", "id_1", 1000, "12/12/2000", True, 12.76],
+                ["cm_2", "id_2", 1000, "01/02/1990", False, 199.76],
+                ["cm_3", "id_3", 1000, "01/05/1990", False, 12.76],
+            ],
+            columns=["id", "foo", "bar", "start_date", "active", "net"],
+        )
+
+        # When
+        is_valid = WriteExtendedPostgresIO(source_config=postgres_cloud_config, show_casting_warnings=True)._has_valid_dtypes(df)
+
+        # Then
+        assert is_valid is True
 
 
 class TestKafkaIO:

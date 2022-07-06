@@ -59,17 +59,27 @@ from fastparquet import ParquetFile, write  # type: ignore
 from kafka import KafkaProducer  # type: ignore
 from magic_logger import logger
 from pyarrow.parquet import read_table, write_table  # type: ignore # pylint: disable=no-name-in-module
-from sqlalchemy import Boolean, Column, Float, Integer, String, create_engine  # type: ignore
+from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, Float, Integer, String, create_engine  # type: ignore
 from sqlalchemy.ext.declarative import declarative_base  # type: ignore
-from sqlalchemy.orm.decl_api import DeclarativeMeta  # type: ignore
 from sqlalchemy.orm import Query  # type: ignore
+from sqlalchemy.orm.decl_api import DeclarativeMeta  # type: ignore
 from sqlalchemy.orm.session import Session as SqlAlchemySession  # type: ignore
 from sqlalchemy.orm.session import sessionmaker  # type: ignore
 
 Session = sessionmaker(autoflush=True)
 
 Base = declarative_base()
-_type_lookup = {&#34;boolean&#34;: Boolean, &#34;object&#34;: String(64), &#34;int64&#34;: Integer, &#34;float64&#34;: Float, &#34;int&#34;: Integer}
+_type_lookup = {
+    &#34;bool&#34;: Boolean,
+    &#34;boolean&#34;: Boolean,
+    &#34;object&#34;: String(64),
+    &#34;int64&#34;: Integer,
+    &#34;float64&#34;: Float,
+    &#34;int&#34;: Integer,
+    &#34;date&#34;: Date,
+    &#34;datetime64[ns]&#34;: DateTime,
+    &#34;bigint&#34;: BigInteger,
+}
 
 
 @contextmanager
