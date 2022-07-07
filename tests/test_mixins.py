@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from kafka import KafkaProducer
+from sqlalchemy.sql.base import ImmutableColumnCollection
 
 from dynamicio import WithLocal, WithPostgres, mixins
 from dynamicio.config import IOConfig
@@ -33,6 +34,7 @@ from tests.mocking.io import (
     ReadS3ParquetWithDifferentNonCastableDTypeIO,
     ReadS3ParquetWithLessColumnsIO,
     TemplatedFile,
+    WriteExtendedPostgresIO,
     WriteKafkaIO,
     WritePostgresIO,
     WriteS3CsvIO,
@@ -40,7 +42,7 @@ from tests.mocking.io import (
     WriteS3JsonIO,
     WriteS3ParquetIO,
 )
-from tests.mocking.models import ERModel
+from tests.mocking.models import ERModel, PgModel
 
 
 class TestGetStringTemplateFieldNames:
@@ -1437,15 +1439,14 @@ class TestPostgresIO:
     @pytest.mark.unit
     def test_when_reading_from_postgres_with_env_as_cloud_get_table_columns_returns_valid_list_of_columns_for_a_model(self, expected_columns):
         # Given
-        pg_local_config = IOConfig(
+        pg_cloud_config = IOConfig(
             path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
             env_identifier="CLOUD",
             dynamic_vars=constants,
         ).get(source_key="READ_FROM_POSTGRES")
 
         # When
-        columns = ReadPostgresIO(source_config=pg_local_config, model=ERModel)._get_table_columns(ERModel)  # pylint: disable=protected-access
-
+        columns = ReadPostgresIO(source_config=pg_cloud_config)._get_table_columns(ERModel)  # pylint: disable=protected-access
         # Then
         assert columns == expected_columns
 
@@ -1461,7 +1462,7 @@ class TestPostgresIO:
         ).get(source_key="READ_FROM_POSTGRES")
 
         # When
-        ReadPostgresIO(source_config=postgres_cloud_config, model=ERModel).read()
+        ReadPostgresIO(source_config=postgres_cloud_config).read()
 
         # Then
         mock__read_from_postgres.assert_called()
@@ -1478,14 +1479,16 @@ class TestPostgresIO:
         ).get(source_key="WRITE_TO_PG_PARQUET")
 
         # When
-        WritePostgresIO(source_config=postgres_cloud_config, model=ERModel).write(df)
+        WritePostgresIO(source_config=postgres_cloud_config).write(df)
 
         # Then
         mock__write_to_postgres.assert_called()
 
     @pytest.mark.unit
-    def test_read_from_postgres_raises_keyerror_if_no_model_or_no_sql_query_in_options(self):
+    @patch.object(WithPostgres, "_read_from_postgres")
+    def test_read_from_postgres_by_implicitly_generating_datamodel_from_schema(self, mock__read_from_postgres, test_df):
         # Given
+        mock__read_from_postgres.return_value = test_df
         postgres_cloud_config = IOConfig(
             path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
             env_identifier="CLOUD",
@@ -1493,8 +1496,8 @@ class TestPostgresIO:
         ).get(source_key="READ_FROM_POSTGRES")
 
         # When / Then
-        with pytest.raises(ValueError):
-            ReadPostgresIO(source_config=postgres_cloud_config).read()
+        ReadPostgresIO(source_config=postgres_cloud_config).read()
+        mock__read_from_postgres.assert_called()
 
     @pytest.mark.unit
     @patch.object(WithPostgres, "_read_database")
@@ -1527,6 +1530,67 @@ class TestPostgresIO:
 
         # Then
         mock__read_sql.assert_called_with(sql="SELECT * FROM example", con=ANY, parse_dates=["date"])
+
+    @pytest.mark.unit
+    def test_generate_model_from_schema_returns_model(self):
+        # Given
+        postgres_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_POSTGRES")
+
+        # When
+        schema = postgres_cloud_config["schema"]
+        schema_name = postgres_cloud_config["name"]
+        model = ReadPostgresIO(source_config=postgres_cloud_config)._generate_model_from_schema(schema, schema_name)
+
+        # Then
+        assert len(model.__table__.columns) == len(schema) and model.__tablename__ == schema_name
+
+    @pytest.mark.unit
+    def test_get_table_columns_from_generated_model_returns_valid_list_of_columns(self):
+        # Given
+        pg_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_POSTGRES")
+
+        # When
+        schema = pg_cloud_config["schema"]
+        schema_name = pg_cloud_config["name"]
+        model = ReadPostgresIO(source_config=pg_cloud_config)._generate_model_from_schema(schema, schema_name)  # pylint: disable=protected-access
+        columns = ReadPostgresIO(source_config=pg_cloud_config)._get_table_columns(model)  # pylint: disable=protected-access
+
+        # Then
+        assert isinstance(model.__table__.columns, ImmutableColumnCollection)
+        for x, y in zip(columns, [PgModel.id, PgModel.foo, PgModel.bar, PgModel.baz]):
+            assert str(x) == str(y)
+
+    @pytest.mark.unit
+    def test_to_check_if_dataframe_has_valid_data_types(self):
+        # Given
+        postgres_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="WRITE_TO_PG_PARQUET")
+
+        df = pd.DataFrame.from_records(
+            [
+                ["cm_1", "id_1", 1000, "12/12/2000", True, 12.76],
+                ["cm_2", "id_2", 1000, "01/02/1990", False, 199.76],
+                ["cm_3", "id_3", 1000, "01/05/1990", False, 12.76],
+            ],
+            columns=["id", "foo", "bar", "start_date", "active", "net"],
+        )
+
+        # When
+        is_valid = WriteExtendedPostgresIO(source_config=postgres_cloud_config, show_casting_warnings=True)._has_valid_dtypes(df)
+
+        # Then
+        assert is_valid is True
 
 
 class TestKafkaIO:
@@ -1920,24 +1984,6 @@ class TestAllowedOptions:
 
         # Then
         assert expected_s3_csv_df.equals(s3_csv_df)
-
-    @pytest.mark.integration
-    @patch.object(WithPostgres, "_read_database")
-    def test_when_reading_from_postgres_only_the_model_option_is_considered(self, mock__read_database, test_df):
-        # Given
-        # VALID OPTION: model=ERModel
-        mock__read_database.return_value = test_df
-        postgres_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
-            env_identifier="CLOUD",
-            dynamic_vars=constants,
-        ).get(source_key="READ_FROM_POSTGRES")
-
-        # When
-        ReadPostgresIO(source_config=postgres_config, model=ERModel).read()
-
-        # Then
-        mock__read_database.assert_called()
 
 
 class TestBatchLocal:

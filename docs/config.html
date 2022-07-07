@@ -275,6 +275,7 @@ class IOConfig:
         source_config = self.config[source_key][self.env_identifier]
         if self.config[source_key].get(&#34;schema&#34;):
             schema_definition = self._get_schema_definition(source_key)
+            source_config[&#34;name&#34;] = schema_definition[&#34;name&#34;]
             source_config[&#34;schema&#34;] = self._get_schema(schema_definition)
             source_config[&#34;validations&#34;] = self._get_validations(schema_definition)
             source_config[&#34;metrics&#34;] = self._get_metrics(schema_definition)
@@ -470,6 +471,7 @@ may reference.</dd>
         source_config = self.config[source_key][self.env_identifier]
         if self.config[source_key].get(&#34;schema&#34;):
             schema_definition = self._get_schema_definition(source_key)
+            source_config[&#34;name&#34;] = schema_definition[&#34;name&#34;]
             source_config[&#34;schema&#34;] = self._get_schema(schema_definition)
             source_config[&#34;validations&#34;] = self._get_validations(schema_definition)
             source_config[&#34;metrics&#34;] = self._get_metrics(schema_definition)
@@ -650,6 +652,7 @@ voyage_data_cloud_mapping = input_config.get(source_key="VOYAGE_DATA")
     source_config = self.config[source_key][self.env_identifier]
     if self.config[source_key].get(&#34;schema&#34;):
         schema_definition = self._get_schema_definition(source_key)
+        source_config[&#34;name&#34;] = schema_definition[&#34;name&#34;]
         source_config[&#34;schema&#34;] = self._get_schema(schema_definition)
         source_config[&#34;validations&#34;] = self._get_validations(schema_definition)
         source_config[&#34;metrics&#34;] = self._get_metrics(schema_definition)

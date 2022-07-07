@@ -104,6 +104,10 @@ class WritePostgresIO(UnifiedIO):
     schema = {"id": "object", "foo": "object", "bar": "int64", "baz": "object"}
 
 
+class WriteExtendedPostgresIO(UnifiedIO):
+    schema = {"id": "object", "foo": "object", "bar": "int64", "start_date": "datetime64[ns]", "active": "bool", "net": "float64"}
+
+
 class WriteKafkaIO(UnifiedIO):
     schema = {"id": "object", "foo": "object", "bar": "int64", "baz": "object"}
 

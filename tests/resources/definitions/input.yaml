@@ -170,6 +170,8 @@ READ_FROM_POSTGRES:
       db_name: "[[ DB_NAME ]]"
       db_user: "[[ DB_USER ]]"
       db_password: "[[ DB_PASS ]]"
+  schema:
+    file_path: "[[ TEST_RESOURCES ]]/schemas/pg.yaml"
 
 READ_FROM_KAFKA:
   LOCAL:

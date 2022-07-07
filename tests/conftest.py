@@ -241,6 +241,7 @@ def expected_s3_csv_local_mapping():
                 "has_no_null_values": {"apply": True, "options": {}},
             },
         },
+        "name": "read_from_s3_csv"
     }
 
 
@@ -273,6 +274,7 @@ def expected_s3_csv_cloud_mapping():
                 "has_no_null_values": {"apply": True, "options": {}},
             },
         },
+        "name": "read_from_s3_csv"
     }
 
 
