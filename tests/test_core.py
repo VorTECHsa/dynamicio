@@ -1,6 +1,9 @@
 # pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring, too-many-public-methods, R0801
+import asyncio
 import logging
 import os
+import time
+from typing import Mapping, Tuple
 from unittest.mock import patch
 
 import numpy as np
@@ -25,6 +28,7 @@ from tests.mocking.io import (
     ReadS3DataWithFalseTypes,
     ReadS3IO,
     ReadS3ParquetIO,
+    WriteS3CsvIO,
     WriteS3CsvWithSchema,
     WriteS3ParquetExternalIO,
 )
@@ -891,3 +895,105 @@ class TestCoreIO:
 
         # Then
         assert config_io.options == {}
+
+
+class TestAsyncCoreIO:
+    @pytest.mark.unit
+    def test_read_is_called_through_async_read(self):
+        # Given
+        s3_csv_local_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_S3_CSV")
+
+        # When
+        with patch.object(dynamicio.core.DynamicDataIO, "read") as mock_read:
+            mock_read.return_value = pd.DataFrame.from_records([[1, "name_a"]], columns=["id", "foo_name"])
+            asyncio.run(ReadS3CsvIO(source_config=s3_csv_local_config).async_read())
+
+        # Then
+        mock_read.assert_called()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_write_is_called_through_async_write(self):
+        # Given
+        df = pd.DataFrame.from_dict({"id": [3, 2, 1, 0], "foo_name": ["a", "b", "c", "d"], "bar": [1, 2, 3, 4]})
+
+        s3_csv_local_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="WRITE_TO_S3_CSV")
+
+        # When
+        with patch.object(dynamicio.core.DynamicDataIO, "write") as mock_write:
+            await asyncio.gather(WriteS3CsvIO(source_config=s3_csv_local_config).async_write(df))
+
+        # Then
+        mock_write.assert_called()
+
+    @pytest.mark.unit
+    def test_async_read_does_indeed_operate_in_parallel(self):
+
+        # Given
+        s3_csv_local_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_S3_CSV")
+
+        def dummy_read(self) -> pd.DataFrame:  # pylint: disable=unused-argument
+            time.sleep(0.1)
+            return pd.DataFrame.from_records([[1, "name_a"]], columns=["id", "foo_name"])
+
+        async def multi_read(config: Mapping[str, str]) -> Tuple:
+            return await asyncio.gather(
+                ReadS3CsvIO(source_config=config).async_read(),
+                ReadS3CsvIO(source_config=config).async_read(),
+                ReadS3CsvIO(source_config=config).async_read(),
+                ReadS3CsvIO(source_config=config).async_read(),
+            )
+
+        # When
+        with patch.object(dynamicio.core.DynamicDataIO, "read", new=dummy_read):
+            start_time = time.time()
+            asyncio.run(multi_read(s3_csv_local_config))
+            duration = time.time() - start_time
+
+        # Then
+        assert duration < 0.125
+
+    @pytest.mark.unit
+    def test_async_write_does_indeed_operate_in_parallel(self):
+
+        # Given
+        df = pd.DataFrame.from_dict({"id": [3, 2, 1, 0], "foo_name": ["a", "b", "c", "d"], "bar": [1, 2, 3, 4]})
+
+        s3_csv_local_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="WRITE_TO_S3_CSV")
+
+        def dummy_write(self, _df: pd.DataFrame) -> bool:  # pylint: disable=unused-argument
+            time.sleep(0.1)
+            return True
+
+        async def multi_write(config: Mapping[str, str], _df: pd.DataFrame) -> Tuple:
+            return await asyncio.gather(
+                WriteS3CsvIO(source_config=config).async_write(_df),
+                WriteS3CsvIO(source_config=config).async_write(_df),
+                WriteS3CsvIO(source_config=config).async_write(_df),
+                WriteS3CsvIO(source_config=config).async_write(_df),
+            )
+
+        # When
+        with patch.object(dynamicio.core.DynamicDataIO, "read", new=dummy_write):
+            start_time = time.time()
+            asyncio.run(multi_write(s3_csv_local_config, df))
+            duration = time.time() - start_time
+
+        # Then
+        assert duration < 0.125
