@@ -50,6 +50,7 @@ jobs:
       - run:
           name: "Run Python Tests"
           command: |
+            pytest --cache-clear demo/tests/
             pytest --cache-clear --cov=dynamicio tests/
 
   test_python_3_9:
