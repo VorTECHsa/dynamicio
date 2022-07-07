@@ -2,12 +2,17 @@
 version: 2.1
 
 jobs:
-  build:
+
+  style_checks:
     working_directory: ~/project
     docker:
-      - image: cimg/python:3.8
+      - image: cimg/python:3.8.13
     steps:
       - checkout
+      - run:
+          name: "Remove .python-version file"
+          command: |
+            rm .python-version
       - run:
           name: "Install requirements"
           command: |
@@ -25,55 +30,129 @@ jobs:
             pylint -v tests
             yamllint -v dynamicio
             yamllint -v tests
+
+  test_python_3_8:
+    working_directory: ~/project
+    docker:
+      - image: cimg/python:3.8.13
+    steps:
+      - checkout
+      - run:
+          name: "Remove .python-version file"
+          command: |
+            rm .python-version
+      - run:
+          name: "Install requirements"
+          command: |
+            pip install --upgrade pip
+            pip install -r requirements.txt
+            pip install -r requirements-dev.txt
       - run:
           name: "Run Python Tests"
           command: |
             pytest --cache-clear --cov=dynamicio tests/
-      - persist_to_workspace:
-          root: ./
-          paths:
-            - ./
 
-  publish_artifact:
+  test_python_3_9:
     working_directory: ~/project
     docker:
-      - image: cimg/python:3.8
+      - image: cimg/python:3.9.13
     steps:
-      - attach_workspace:
-          at: ./
+      - checkout
+      - run:
+          name: "Remove .python-version file"
+          command: |
+            rm .python-version
+      - run:
+          name: "Install requirements"
+          command: |
+            pip install --upgrade pip
+            pip install -r requirements.txt
+            pip install -r requirements-dev.txt
+      - run:
+          name: "Run Python Tests"
+          command: |
+            pytest --cache-clear --cov=dynamicio tests/
+
+  test_python_3_10:
+    working_directory: ~/project
+    docker:
+      - image: cimg/python:3.10.4
+    steps:
+      - checkout
+      - run:
+          name: "Remove .python-version file"
+          command: |
+            rm .python-version
+      - run:
+          name: "Install requirements"
+          command: |
+            pip install --upgrade pip
+            pip install -r requirements.txt
+            pip install -r requirements-dev.txt
+      - run:
+          name: "Run Python Tests"
+          command: |
+            pytest --cache-clear --cov=dynamicio tests/
+
+  build_and_publish:
+    working_directory: ~/project
+    docker:
+      - image: cimg/python:3.8.13
+    steps:
+      - checkout
+      - run:
+          name: "Remove .python-version file"
+          command: |
+            rm .python-version
       - run:
           name: "Install build requirements"
           command: |
             pip install --upgrade pip
             pip install -r requirements-build.txt
-#     TODO: Update to work with pypi
-#      - run:
-#          name: "Build package"
-#          command: |
-#            BUILD_VERSION=${CIRCLE_TAG:1} python setup.py sdist bdist_wheel
-#      - run:
-#          name: "Publish"
-#          command: |
-#            twine upload --repository codeartifact dist/*
+      - run:
+          name: "Build package"
+          command: |
+            BUILD_VERSION=${CIRCLE_TAG:1} python setup.py sdist bdist_wheel
+      - run:
+          name: "Publish"
+          command: |
+            pip install --upgrade twine
+            twine check dist/*
+            twine upload dist/*
 
 workflows:
   version: 2
   main:
     jobs:
-      - build:
-          filters: # required since `deploy` has tag filters AND requires `build`
+      - style_checks:
+          filters:
             tags:
-              only: /v.*/ # tag needs to start with a v, e.g. v0.0.1
-          context:
-            - rnd-pmmt-profile
-
-      - publish_artifact:
+              only: /v.*/
+      - test_python_3_8:
           requires:
-            - build
+            - style_checks
+          filters:
+            tags:
+              only: /v.*/
+      - test_python_3_9:
+          requires:
+            - style_checks
+          filters:
+            tags:
+              only: /v.*/
+      - test_python_3_10:
+          requires:
+            - style_checks
+          filters:
+            tags:
+              only: /v.*/
+      - build_and_publish:
+          requires:
+            - test_python_3_8
+            - test_python_3_9
+            - test_python_3_10
           filters:
             tags:
               only: /v.*/
             branches:
               ignore: /.*/
-          context:
-            - rnd-pmmt-profile

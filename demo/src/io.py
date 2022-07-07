@@ -1,6 +1,6 @@
 """Responsible for configuring io operations for input data."""
 # pylint: disable=too-few-public-methods
-__all__ = ["Foo", "Bar", "StagedFoo", "StagedBar", "BarDataModel", "FinalFoo", "FinalBar"]
+__all__ = ["Foo", "Bar", "StagedFoo", "StagedBar", "FinalFoo", "FinalBar"]
 
 from sqlalchemy import Column, Float, String
 from sqlalchemy.ext.declarative import declarative_base
@@ -55,14 +55,3 @@ class FinalBar(WithLocal, WithKafka, DynamicDataIO):
     """UnifiedIO subclass for cargo movements volumes data."""
 
     schema = SCHEMA_FROM_FILE
-
-
-class BarDataModel(Base):
-    """Sql_alchemy model for Bar table."""
-
-    __tablename__ = "bar"
-
-    column_a = Column(String(64), primary_key=True)
-    column_b = Column(String(64))
-    column_c = Column(Float)
-    column_d = Column(Float)

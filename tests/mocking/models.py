@@ -20,3 +20,14 @@ class ERModel(Base):
     foo = Column(String)
     bar = Column(Integer)
     baz = Column(String)
+
+
+clsdict = {
+    "clsname": "PgModel",
+    "__tablename__": "pg",
+    "id": Column(String(64), primary_key=True, nullable=False),
+    "foo": Column(String(64)),
+    "bar": Column(Integer()),
+    "baz": Column(String(64)),
+}
+PgModel = type(clsdict["clsname"], (Base,), clsdict)

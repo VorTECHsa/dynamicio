@@ -580,17 +580,6 @@ class FinalBar(WithLocal, WithKafka, DynamicDataIO):
 
     schema = SCHEMA_FROM_FILE
 
-
-class BarDataModel(Base):
-    """Sql_alchemy model for Bar table."""
-
-    __tablename__ = "bar"
-
-    column_a = Column(String(64), primary_key=True)
-    column_b = Column(String(64))
-    column_c = Column(Float)
-    column_d = Column(Float)
-
 ```
 
 Instances of the `DynamicDataIO` class **must** define a class `schema`. The schema has the form of a dictionary, associating columns (keys) with `dtypes` (values).
@@ -734,45 +723,15 @@ which will load the `foo.csv` file as a dataframe.
 
 ##### Step 4.3: Loading from `Postgres`
 
-In contrast to `S3` resources, `postgres` resources need additional options to be
-defined for their loading.
+Likewise to `S3` resources, `postgres` resources need the same number of options to be defined for their loading.
 
-Specifically, you need to define a data model, defining the table, the columns and
-their respective SQL types. This is necessary as a different reader is utilised in
-the case of postgres (this need will be addressed in future releases).
-
-The data model definition is also defined in `io.py` and looks like:
-
-```python
-"""
-A module for defining sql_alchemy models.
-"""
-__all__ = ["BarDataModel"]
-
-from sqlalchemy import Column, Float, String
-from sqlalchemy.ext.declarative import declarative_base
-
-Base = declarative_base()
-
-
-class BarDataModel(Base):
-    """
-    Sql_alchemy model for Bar table
-    """
-
-    __tablename__ = "bar"
-
-    column_a = Column(String(64), primary_key=True)
-    column_b = Column(String(64))
-    column_c = Column(Float)
-    column_d = Column(Float)
-
-```
+**Implicitly, dynamicio is able to infer data model from the schema yml files of the source key provided rather than requiring that the schema is explicitly defined.**
+This data model defines the table, the columns and their respective SQL types.
 
 To, then, load from `postgres` you simply do:
 
 ```python
-    bar_df = Bar(source_config=input_config.get(source_key="BAR"), apply_schema_validations=True, log_schema_metrics=True, model=BarDataModel).read()
+    bar_df = Bar(source_config=input_config.get(source_key="BAR"), apply_schema_validations=True, log_schema_metrics=True).read()
 ```
 
 which will load the cargo the movements table as a dataframe.
@@ -909,7 +868,7 @@ def main() -> None:
     # LOAD DATA
     logger.info("Loading data from live sources...")
 
-    bar_df = Bar(source_config=input_config.get(source_key="BAR"), apply_schema_validations=True, log_schema_metrics=True, model=BarDataModel).read()
+    bar_df = Bar(source_config=input_config.get(source_key="BAR"), apply_schema_validations=True, log_schema_metrics=True).read()
     foo_df = Foo(source_config=input_config.get(source_key="FOO"), apply_schema_validations=True, log_schema_metrics=True).read()
 
     logger.info("Data successfully loaded from live sources...")
@@ -1026,3 +985,4 @@ class TestPipeline:
 Hope this was helpful. 
 
 Please do reach out with comments and your views about how the library or the docs can be improved, and by all means, come along and contribute to our project!
+
