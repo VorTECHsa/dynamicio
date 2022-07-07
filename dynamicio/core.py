@@ -263,11 +263,8 @@ class DynamicDataIO:
             bool - `True` if `df` has the given dtypes, `False` otherwise
         """
         dtypes = df.dtypes
-        print("dtypes: ", dtypes)
-        print("\ndf:", df)
 
         for column_name, expected_dtype in self.schema.items():
-            print(f"\n{column_name} ---- {expected_dtype}")
             found_dtype = dtypes[column_name].name
             if found_dtype != expected_dtype:
                 if self.show_casting_warnings:
