@@ -62,6 +62,10 @@ class ReadS3HdfIO(UnifiedIO):
     schema = {"id": "int64", "foo_name": "object", "bar": "int64"}
 
 
+class AsyncReadS3HdfIO(UnifiedIO):
+    schema = {"col_1": "int64", "col_2": "object"}
+
+
 class ReadS3JsonIO(UnifiedIO):
     schema = {"id": "int64", "foo_name": "object", "bar": "int64"}
 
