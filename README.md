@@ -1,7 +1,6 @@
-[![Coverage Status](./docs/coverage_report/coverage-badge.svg?dummy=8484744)]()
+[![Coverage Status](./docs/coverage_report/coverage-badge.svg?dummy=8484744?raw=True)]()
 
-<img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/logo-transparent.png" width="500"> <img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/wrapped-panda.png" width="100">
-
+<img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/logo-transparent.png?raw=True" width="500"> <img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/wrapped-panda.png?raw=True" width="100">
 
 A repository for hosting the `dynamicio` library, used as a wrapper for `pandas` i/o operations.
 
@@ -9,28 +8,50 @@ A repository for hosting the `dynamicio` library, used as a wrapper for `pandas`
 
 ## Why wrap your i/o
 
-With the growing use of microservices&ndash;a norm in today's application deployment patterns&ndash;
-developers were enabled to leverage the isolated nature of a microservice to use whatever language, library or
-framework they saw fit for their requirements. Though this is a convenient outcome, it is also one that
-increases the complexity of a software tech-stack within an organisation's ecosystem.
+Working with `pandas` dataframes has opened up a new world of potential in Data Science. However,
+if you are using `pandas` to support production pipelines, whether ML or ETL, you end up having
+a big part of your code be concerned with I/O operations. 
 
-### The Problem
+### Managing various Resources
+First, it's the various type of resources you need to interact with; object storage (S3 or GCS)
+databases (Athena, Big Query, Postgres), Kafka and many more. For each of these, you have 
+dependencies on various libraries such as `s3fs`, `fsspec`, `gcfs`, `boto3`, `awscli`, `aws-wrangler`,
+`sql-alchemy`, `tables`, `kafka-python` and many more. 
 
-This trade-off is inevitable, and the "negative" consequences don't stop there. More than the need to
-support multiple languages and processing frameworks, data services teams (DST) often end up being driven by the
-requirements dictated by the various processing frameworks used by different developers, which may have
-limitations in terms of the format of data input they can accept or be less optimised to deal with specific
-data types. Therefore, rather than the focus of a DST to be on **configuring access authorisation**, optimisation
-of read **latency** and **throughput**, increasing **fault tolerance** and **high availability**, they end up dealing
-with what format works with, e.g., either `pandas` either `numpy`, `SciPy` or `tensorflow`.
+### Managing Various Data Types
+![data-types](https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/data-types.png?raw=True)
 
-### As far as ML Systems are concerned...
+Then it's the various data types you need handle, `parquet`, `hdfs`, `csv`, `json` and many
+others, each of which come with their own set of configuration `kwargs`, things like the 
+orientation of the dataset (`json`) or the parquet engine you want 
+to use behind the scenes (`pyarrow` or `fastparquet`).
 
-This problem is highlighted as an **ML-System Anti-Pattern** in
-[Hidden Technical Debt in Machine Learning Systems](https://papers.nips.cc/paper/2015/file/86df7dcfd896fcaf2674f757a2463eba-Paper.pdf),
-referred to as **Glue Code**:
+### Validations & Metrics Generation
+Then, it's the need to validate your expectations on the datasets; things like unique or
+null values being allowed in a column, allowing only a specific set of categorical values, or
+numerical values within a specified range. And what about metrics generation? The ability to
+monitor data distributions and how various metrics change with every run, is a significant
+aspect of monitoring the quality of your solution. 
 
-> ML researchers tend to develop general purpose solutions as self-contained packages. A wide variety of these are
+### Testing (Running Local Regression Tests)
+Finally, what about testing your code in different environments? Take, for instance, a traditional
+setup where you have the following 4 environments to work against:
+
+- Local;
+- Develop;
+- Staging, and;
+- Production.
+
+Configuring your code to work against the last 3 `Develop, Staging and Production` can easily be done through
+environment variables, but what about testing locally? What if you want to run your pipelines locally? 
+Well, you can, but usually that entails a big deal of mocking calls to external services. Instead, wouldn't
+it be great if you could seamlessly direct your I/O operations to local sample data.
+
+### So, what do we do about these? 
+This proliferation of I/O operations leads to the emergence of glue code, which can be very difficult to manage. The problem is highlighted 
+as an **ML-System Anti-Pattern** in [Hidden Technical Debt in Machine Learning Systems](https://papers.nips.cc/paper/2015/file/86df7dcfd896fcaf2674f757a2463eba-Paper.pdf)
+
+> ...ML researchers tend to develop general purpose solutions as self-contained packages. A wide variety of these are
 > available as open-source packages at places like `ml-oss.org`, or from in-house code, proprietary packages, and cloud-based platforms.
 >
 > Using generic packages often results in a **glue code** system design pattern, in which a massive amount of supporting
@@ -49,16 +70,11 @@ Quoting from the same paper:
 > An important strategy for combating glue-code is to wrap black-box packages into common API's. This allows supporting
 > infrastructure to be more reusable and reduces the cost of changing packages.
 
-So, as far as a single language is concerned, in this case `Python`, this can be addressed with the use of a wrapper
-which can increase re-usability and decouple processing from the i/o layer.
+Dynamicio (or dynamic(i/o)) serves exactly that; it serves as a convenient wrapper around `pandas` I/O operations. It's a manifestation of 
+the dependency inversion principle--a layer of indirection if you want--which keeps your code DRY and increases re-usability, effectively 
+decoupling business logic from the I/O layer.
 
-`dynamic(i/o)` serves exactly that. In addition, it also serves as a convenient abstraction for defining the
-**input** and **output** sources of your `ETL` pipelines in an amenable way. Furthermore, it is configured in a way that
-allows it to "choose" the appropriate sources to load depending on the environment it is called from (e.g. `local` or
-`cloud`). The latter allows developers to quickly test their pipelines, by directing it to local mock/sample data,
-lifting the burden of having to mock i/o function returns that would otherwise interact with cloud resources.
-
-### Features:
+### Main features
 `dynamic(i/o)` supports:
 * seamless transition between environments; 
 * abstracting away from resource and data types through `resource definitions`; 
@@ -67,7 +83,7 @@ lifting the burden of having to mock i/o function returns that would otherwise i
 
 ## Supported sources and data formats:
 
-<img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/supported_sources.png" width="600">
+<img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/supported_sources.png?raw=True" width="600">
 
 - **S3** (or local) Input & Output:
   - `parquet`
