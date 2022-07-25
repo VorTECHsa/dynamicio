@@ -1,5 +1,5 @@
 [![CircleCI](https://dl.circleci.com/status-badge/img/gh/VorTECHsa/dynamicio/tree/master.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/VorTECHsa/dynamicio/tree/master)
-[![Coverage Status](./docs/coverage_report/coverage-badge.svg?dummy=8484744?raw=True)]()
+[![Coverage Status](https://github.com/VorTECHsa/dynamicio/blob/master/docs/coverage_report/coverage-badge.svg?raw=True)]()
 [<img src="https://img.shields.io/badge/slack-@vortexa/dynamicio_public-purple.svg?logo=slack">](https://join.slack.com/share/enQtMzg2Nzk3ODY3MzEzNi0yNTU1ZmIyN2JkMGFhZjhhZWVjNzA2OWUzNWIyMjMyYmYzZmE4MzBjYWQ3YjdhNjU1MGU2NjFkNzMyZDllMzE2?raw=True)
 
 <img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/logo-transparent.png?raw=True" width="500"> <img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/wrapped-panda.png?raw=True" width="100">
