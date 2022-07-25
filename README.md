@@ -166,7 +166,7 @@ to S3 for further processing.
 
 Assume you want to build a pipeline that looks something like the image below:
 
-<img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/sample-pipeline.png" width="600">
+<img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/sample-pipeline.png?raw=True" width="600">
 
 Assume the below repository structure, which implements this pipeline, for the purpose of this tutorial:
 
