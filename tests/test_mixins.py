@@ -1,7 +1,9 @@
 # pylint: disable=no-member, missing-module-docstring, missing-class-docstring, missing-function-docstring, too-many-public-methods, too-few-public-methods, protected-access, C0103, C0302, R0801
+import asyncio
 import os
+import time
 from tempfile import NamedTemporaryFile
-from typing import Any
+from typing import Any, Mapping, Tuple
 from unittest import mock
 from unittest.mock import ANY, MagicMock, patch
 
@@ -14,11 +16,12 @@ from sqlalchemy.sql.base import ImmutableColumnCollection
 from dynamicio import WithLocal, WithPostgres, mixins
 from dynamicio.config import IOConfig
 from dynamicio.errors import ColumnsDataTypeError
-from dynamicio.mixins import WithKafka, WithS3File, WithS3PathPrefix, args_of, get_string_template_field_names, resolve_template
+from dynamicio.mixins import WithKafka, WithS3File, WithS3PathPrefix, allow_options, args_of, get_string_template_field_names, resolve_template
 from tests import constants
 from tests.conftest import max_pklproto_hdf
 from tests.constants import TEST_RESOURCES
 from tests.mocking.io import (
+    AsyncReadS3HdfIO,
     MockKafkaProducer,
     ReadFromBatchLocalHdf,
     ReadFromBatchLocalParquet,
@@ -727,6 +730,62 @@ class TestLocalIO:
 
         # Then
         mocked__write_with_fastparquet.assert_called()
+
+    @pytest.mark.unit
+    def test_async_read_does_not_operate_in_parallel_for_hdf_files(self):
+
+        # Given
+        s3_hdf_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_S3_HDF")
+
+        async def multi_read(config: Mapping[str, str]) -> Tuple:
+            return await asyncio.gather(
+                AsyncReadS3HdfIO(source_config=config).async_read(),
+                AsyncReadS3HdfIO(source_config=config).async_read(),
+            )
+
+        def dummy_read_hdf(*args, **kwargs) -> pd.DataFrame:  # pylint: disable=unused-argument
+            time.sleep(0.1)
+            return pd.DataFrame.from_dict({"col_1": [3, 2, 1, 0], "col_2": ["a", "b", "c", "d"]})
+
+        # When
+        with patch.object(mixins.pd, "read_hdf", new=dummy_read_hdf):
+            start_time = time.time()
+            asyncio.run(multi_read(s3_hdf_cloud_config))
+            duration = time.time() - start_time
+
+        # Then
+        assert duration >= 0.2
+
+    @pytest.mark.unit
+    def test_async_write_does_not_operate_in_parallel_for_hdf_files(self):
+
+        # Given
+        df = pd.DataFrame.from_dict({"col_1": [3, 2, 1, 0], "col_2": ["a", "b", "c", "d"]})
+        s3_hdf_local_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="WRITE_TO_S3_HDF")
+
+        async def multi_write(config: Mapping[str, str], _df: pd.DataFrame) -> Tuple:
+            return await asyncio.gather(WriteS3HdfIO(source_config=config).async_write(_df), WriteS3HdfIO(source_config=config).async_write(_df))
+
+        @allow_options([*args_of(pd.DataFrame.to_hdf), *["protocol"]])
+        def dummy_to_hdf(*args, **kwargs):  # pylint: disable=unused-argument
+            time.sleep(0.1)
+
+        # When
+        with patch.object(mixins.pd.DataFrame, "to_hdf", new=dummy_to_hdf):
+            start_time = time.time()
+            asyncio.run(multi_write(s3_hdf_local_config, df))
+            duration = time.time() - start_time
+
+        # Then
+        assert duration >= 0.2
 
 
 class TestS3FileIO:

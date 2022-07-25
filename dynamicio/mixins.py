@@ -19,6 +19,7 @@ import string
 import tempfile
 from contextlib import contextmanager
 from functools import wraps
+from threading import Lock
 from types import FunctionType
 from typing import Any, Callable, Collection, Dict, Generator, Iterable, Mapping, MutableMapping, Optional, Union
 
@@ -51,6 +52,8 @@ _type_lookup = {
     "datetime64[ns]": DateTime,
     "bigint": BigInteger,
 }
+
+hdf_lock = Lock()
 
 
 @contextmanager
@@ -275,6 +278,10 @@ class WithLocal:
 
         All `options` are passed directly to `pd.read_hdf`.
 
+        Caveats: As HDFs are not thread-safe, we use a Lock on this operation. This, practically means
+            that when used with asyncio through `async_read()` HDF files will be read sequentially.
+            For more information see: https://pandas.pydata.org/pandas-docs/dev/user_guide/io.html#caveats
+
         Args:
             file_path: The path to the hdf file to be read.
             options: The pandas `read_hdf` options.
@@ -282,7 +289,9 @@ class WithLocal:
         Returns:
             DataFrame: The dataframe read from the hdf file.
         """
-        df = pd.read_hdf(file_path, **options)
+        with hdf_lock:
+            df = pd.read_hdf(file_path, **options)
+
         columns = [column for column in df.columns.to_list() if column in schema.keys()]
         df = df[columns]
         return df
@@ -359,6 +368,10 @@ class WithLocal:
 
         All `options` are passed directly to `df.to_hdf`.
 
+        Caveats: As HDFs are not thread-safe, we use a Lock on this operation. This, practically means
+            that when used with asyncio through `async_read()` HDF files will be written sequentially.
+            For more information see: https://pandas.pydata.org/pandas-docs/dev/user_guide/io.html#caveats
+
         Args:
             df: A dataframe write out.
             file_path: The location where the file needs to be written.
@@ -367,7 +380,7 @@ class WithLocal:
                 - The pandas `to_hdf` options, &;
                 - protocol: The pickle protocol to use for writing the hdf file out; a value <=5.
         """
-        with pickle_protocol(protocol=options.pop("protocol", None)):
+        with pickle_protocol(protocol=options.pop("protocol", None)), hdf_lock:
             df.to_hdf(file_path, key="df", mode="w", **options)
 
     @staticmethod
