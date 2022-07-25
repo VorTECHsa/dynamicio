@@ -1,10 +1,44 @@
+[![CircleCI](https://dl.circleci.com/status-badge/img/gh/VorTECHsa/dynamicio/tree/master.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/VorTECHsa/dynamicio/tree/master)
 [![Coverage Status](./docs/coverage_report/coverage-badge.svg?dummy=8484744?raw=True)]()
+[<img src="https://img.shields.io/badge/slack-@vortexa/dynamicio_public-purple.svg?logo=slack">](https://join.slack.com/share/enQtMzg2Nzk3ODY3MzEzNi0yNTU1ZmIyN2JkMGFhZjhhZWVjNzA2OWUzNWIyMjMyYmYzZmE4MzBjYWQ3YjdhNjU1MGU2NjFkNzMyZDllMzE2?raw=True)
 
 <img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/logo-transparent.png?raw=True" width="500"> <img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/wrapped-panda.png?raw=True" width="100">
 
 A repository for hosting the `dynamicio` library, used as a wrapper for `pandas` i/o operations.
 
 -- Logo illustrated by [Nick Loucas](https://www.linkedin.com/in/nickloucas/)
+
+- [TOC:](https://github.com/VorTECHsa/dynamicio/tree/master#toc-)
+- [Why wrap your i/o](https://github.com/VorTECHsa/dynamicio/tree/master#why-wrap-your-i-o)
+  * [Managing various Resources](https://github.com/VorTECHsa/dynamicio/tree/master#managing-various-resources)
+  * [Managing Various Data Types](https://github.com/VorTECHsa/dynamicio/tree/master#managing-various-data-types)
+  * [Validations & Metrics Generation](https://github.com/VorTECHsa/dynamicio/tree/master#validations---metrics-generation)
+  * [Testing (Running Local Regression Tests)](https://github.com/VorTECHsa/dynamicio/tree/master#testing--running-local-regression-tests-)
+  * [So, what do we do about these?](https://github.com/VorTECHsa/dynamicio/tree/master#so--what-do-we-do-about-these-)
+  * [The Solution](https://github.com/VorTECHsa/dynamicio/tree/master#the-solution)
+  * [Main features](https://github.com/VorTECHsa/dynamicio/tree/master#main-features)
+- [Supported sources and data formats:](https://github.com/VorTECHsa/dynamicio/tree/master#supported-sources-and-data-formats-)
+  * [Coming soon:](https://github.com/VorTECHsa/dynamicio/tree/master#coming-soon-)
+- [Installation](https://github.com/VorTECHsa/dynamicio/tree/master#installation)
+- [API Documentation](https://github.com/VorTECHsa/dynamicio/tree/master#api-documentation)
+- [How to use](https://github.com/VorTECHsa/dynamicio/tree/master#how-to-use)
+  * [Keywords:](https://github.com/VorTECHsa/dynamicio/tree/master#keywords-)
+  * [Let's start](https://github.com/VorTECHsa/dynamicio/tree/master#let-s-start)
+    + [Step 1: Resource Definitions](https://github.com/VorTECHsa/dynamicio/tree/master#step-1--resource-definitions)
+    + [Step 2: Defining your environment variables](https://github.com/VorTECHsa/dynamicio/tree/master#step-2--defining-your-environment-variables)
+    + [Step 3: Read in your resource definitions](https://github.com/VorTECHsa/dynamicio/tree/master#step-3--read-in-your-resource-definitions)
+    + [Step 4: Loading the data resources](https://github.com/VorTECHsa/dynamicio/tree/master#step-4--loading-the-data-resources)
+      - [Step 4.1. `SCHEMA_FROM_FILE`](https://github.com/VorTECHsa/dynamicio/tree/master#step-41--schema-from-file-)
+      - [Step 4.2. Use the dynamicio cli](https://github.com/VorTECHsa/dynamicio/tree/master#step-42-use-the-dynamicio-cli)
+      - [Step 4.3: Loading from `S3`](https://github.com/VorTECHsa/dynamicio/tree/master#step-43--loading-from--s3-)
+      - [Step 4.3: Loading from `Postgres`](https://github.com/VorTECHsa/dynamicio/tree/master#step-43--loading-from--postgres-)
+    + [Step 5: Writing out](https://github.com/VorTECHsa/dynamicio/tree/master#step-5--writing-out)
+    + [Step 6: Full Code](https://github.com/VorTECHsa/dynamicio/tree/master#step-6--full-code)
+  * [Utilising `asyncio`](https://github.com/VorTECHsa/dynamicio/tree/master#utilising--asyncio-)
+- [Testing Locally](https://github.com/VorTECHsa/dynamicio/tree/master#testing-locally)
+- [Last notes](https://github.com/VorTECHsa/dynamicio/tree/master#last-notes)
+
+<small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
 
 ## Why wrap your i/o
 
@@ -708,6 +742,7 @@ and **metrics**:
 - `UniqueCounts`
 - `CountsPerLabel`
 
+##### Step 4.2. Use the dynamicio cli
 The `dynamicio` cli can be used to automatically generate schema definitions for you, provided either a path to
 a dataset (`json`, `parquet`, `hdf`, `csv`) or to a directory. Here is how you can use it:
 
@@ -727,7 +762,7 @@ optional arguments:
 
 The generated schema definitions will not have any validations or metrics automatically selected for you.
 
-##### Step 4.2: Loading from `S3`
+##### Step 4.3: Loading from `S3`
 
 To then load from `S3` you simply do:
 
@@ -851,7 +886,7 @@ FINAL_BAR:
 Here, we have a case where different options need to be used for each environment as it deals with a different source. This is gracefully managed through resource 
 definitions passing these arguments in the `options` key per environment.    
 
-### Step 6: Full Code
+#### Step 6: Full Code
 
 The full code for the loading module in our example would live under:
 
@@ -903,6 +938,55 @@ def main() -> None:
     logger.info("Data staging is complete...")
 
 ```
+### Utilising `asyncio`
+`Dynamic(i/o)` supports use of `asyncio` to speed up `I/O bound` operations through leveraging multithreading. 
+
+An example can be found in the second of the two demo tasks, namely, the `transform.py` task.
+```python
+"""Add module docstring...."""
+import asyncio
+import logging
+
+import demo.src.environment
+from demo.src import processed_config, raw_config
+from demo.src.io import FinalBar, FinalFoo, StagedBar, StagedFoo
+
+logger = logging.getLogger(__name__)
+
+
+async def main() -> None:
+    """The entry point for the Airflow Staging task.
+
+    Returns:
+        Void function.
+    """
+    # LOAD DATA
+    logger.info("Loading data from live sources...")
+
+    [bar_df, foo_df] = await asyncio.gather(
+        StagedBar(source_config=raw_config.get(source_key="STAGED_BAR")).async_read(),
+        StagedFoo(source_config=raw_config.get(source_key="STAGED_FOO")).async_read()
+    )
+
+    logger.info("Data successfully loaded from live sources...")
+
+    # TRANSFORM  DATA
+    logger.info("Apply transformations...")
+
+    # TODO: Apply your transformations
+
+    logger.info("Transformations applied successfully...")
+
+    # SINK DATA
+    logger.info(f"Begin sinking data to staging area: S3:{demo.src.environment.S3_YOUR_OUTPUT_BUCKET}:live/data/raw")
+    await asyncio.gather(
+        FinalFoo(source_config=processed_config.get(source_key="FINAL_FOO"), apply_schema_validations=True, log_schema_metrics=True).async_write(foo_df),
+        FinalBar(source_config=processed_config.get(source_key="FINAL_BAR"), apply_schema_validations=True, log_schema_metrics=True).async_write(bar_df),
+    )
+    logger.info("Data staging is complete...")
+
+```
+In short, you simply need to utilise the `async_read()` or the `async_write()` methods instead, plus await and gather your calls.  
 
 ## Testing Locally
 
@@ -996,7 +1080,7 @@ class TestPipeline:
 
 ```
 
-# Last notes
+##  Last notes
 
 Hope this was helpful. 
 
