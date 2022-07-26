@@ -24,7 +24,7 @@ class TestPipeline:
     ):
         """Showcases how you can leverage dynamicio to read local data for fast feedback when you want to run your pipelines locally."""
         # Given
-        # The pipeline/src/resources/input.yaml
+        # The src/resources/input.yaml
 
         # When
         staging.main()
