@@ -8,8 +8,8 @@ A repository for hosting the `dynamicio` library, used as a wrapper for `pandas`
 
 -- Logo illustrated by [Nick Loucas](https://www.linkedin.com/in/nickloucas/)
 
-- [TOC:](https://github.com/VorTECHsa/dynamicio/tree/master#toc)
-- [Why wrap your i/o](https://github.com/VorTECHsa/dynamicio/tree/master#why-wrap-your-i-o)
+## Table of Contents
+- [Why wrap your i/o?](https://github.com/VorTECHsa/dynamicio/tree/master#why-wrap-your-i-o)
   * [Managing various Resources](https://github.com/VorTECHsa/dynamicio/tree/master#managing-various-resources)
   * [Managing Various Data Types](https://github.com/VorTECHsa/dynamicio/tree/master#managing-various-data-types)
   * [Validations & Metrics Generation](https://github.com/VorTECHsa/dynamicio/tree/master#validations---metrics-generation)
@@ -18,11 +18,11 @@ A repository for hosting the `dynamicio` library, used as a wrapper for `pandas`
   * [The Solution](https://github.com/VorTECHsa/dynamicio/tree/master#the-solution)
   * [Main features](https://github.com/VorTECHsa/dynamicio/tree/master#main-features)
 - [Supported sources and data formats:](https://github.com/VorTECHsa/dynamicio/tree/master#supported-sources-and-data-formats)
-  * [Coming soon:](https://github.com/VorTECHsa/dynamicio/tree/master#coming-soon)
+  * [Coming soon](https://github.com/VorTECHsa/dynamicio/tree/master#coming-soon)
 - [Installation](https://github.com/VorTECHsa/dynamicio/tree/master#installation)
 - [API Documentation](https://github.com/VorTECHsa/dynamicio/tree/master#api-documentation)
 - [How to use](https://github.com/VorTECHsa/dynamicio/tree/master#how-to-use)
-  * [Keywords:](https://github.com/VorTECHsa/dynamicio/tree/master#keywords)
+  * [Keywords](https://github.com/VorTECHsa/dynamicio/tree/master#keywords)
   * [Let's start](https://github.com/VorTECHsa/dynamicio/tree/master#let-s-start)
     + [Step 1: Resource Definitions](https://github.com/VorTECHsa/dynamicio/tree/master#step-1--resource-definitions)
     + [Step 2: Defining your environment variables](https://github.com/VorTECHsa/dynamicio/tree/master#step-2--defining-your-environment-variables)
@@ -40,7 +40,7 @@ A repository for hosting the `dynamicio` library, used as a wrapper for `pandas`
 
 <small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
 
-## Why wrap your i/o
+## Why wrap your i/o?
 
 Working with `pandas` dataframes has opened up a new world of potential in Data Science. However,
 if you are using `pandas` to support production pipelines, whether ML or ETL, you end up having
@@ -115,7 +115,7 @@ decoupling business logic from the I/O layer.
 * honouring your expectations on data through `schema definitions`;
 * metrics auto-generation (logging) for monitoring purposes.
 
-## Supported sources and data formats:
+## Supported sources and data formats
 
 <img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/supported_sources.png?raw=True" width="600">
 
@@ -127,7 +127,7 @@ decoupling business logic from the I/O layer.
 - **Postgres** Input & Output
 - **Kafka** Output
 
-### Coming soon:
+### Coming soon
 - **Athena** (pending)
 - **Delta Tables** (pending)
 - **GCS** (pending)
