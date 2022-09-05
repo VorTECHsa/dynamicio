@@ -2,7 +2,9 @@
 # pylint: disable=no-member
 __all__ = ["DynamicDataIO", "SCHEMA_FROM_FILE"]
 
+import asyncio
 import inspect
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Mapping, MutableMapping, Optional
 
 import pandas as pd  # type: ignore
@@ -22,6 +24,8 @@ from dynamicio.errors import (
 from dynamicio.metrics import get_metric
 
 SCHEMA_FROM_FILE = {"schema": object()}
+
+pool = ThreadPoolExecutor()
 
 
 class DynamicDataIO:
@@ -102,6 +106,15 @@ class DynamicDataIO:
             if cls.schema is None or (cls.schema is not SCHEMA_FROM_FILE and len(cls.schema) == 0):
                 raise ValueError(f"schema for class {cls} cannot be None or empty...")
 
+    async def async_read(self):
+        """Allows the use of asyncio to concurrently read files in memory.
+
+        Returns:
+            A pandas dataframe or an iterable.
+        """
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(pool, self.read)
+
     def read(self) -> pd.DataFrame:
         """Reads data source and returns a schema validated dataframe (by means of _apply_schema).
 
@@ -122,14 +135,20 @@ class DynamicDataIO:
 
         return df
 
+    async def async_write(self, df: pd.DataFrame):
+        """Allows the use of asyncio to concurrently write files out.
+
+        Args:
+            df: The data to be written
+        """
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(pool, self.write, df)
+
     def write(self, df: pd.DataFrame):
         """Sink data to a given source based on the sources_config.
 
         Args:
             df: The data to be written
-
-        Returns:
-            Nothing
         """
         source_name = self.sources_config.get("type")
         if set(list(df.columns)) != set(self.schema.keys()):  # pylint: disable=E1101

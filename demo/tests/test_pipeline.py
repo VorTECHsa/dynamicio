@@ -1,6 +1,7 @@
 """An example pipeline to showcase how dynamicio can bt used for setting up a local e2e testing!"""
 # pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring, unused-argument, too-few-public-methods
 # noqa
+import asyncio
 import os
 
 import pandas as pd
@@ -23,11 +24,11 @@ class TestPipeline:
     ):
         """Showcases how you can leverage dynamicio to read local data for fast feedback when you want to run your pipelines locally."""
         # Given
-        # The pipeline/src/resources/input.yaml
+        # The src/resources/input.yaml
 
         # When
         staging.main()
-        transform.main()
+        asyncio.run(transform.main())
 
         # Then
         try:

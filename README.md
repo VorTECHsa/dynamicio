@@ -1,36 +1,91 @@
-[![Coverage Status](./docs/coverage_report/coverage-badge.svg?dummy=8484744)]()
+[![CircleCI](https://dl.circleci.com/status-badge/img/gh/VorTECHsa/dynamicio/tree/master.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/VorTECHsa/dynamicio/tree/master)
+[![Coverage Status](https://github.com/VorTECHsa/dynamicio/blob/master/docs/coverage_report/coverage-badge.svg?raw=True)]()
+[<img src="https://img.shields.io/badge/slack-@vortexa/dynamicio_public-purple.svg?logo=slack">](https://join.slack.com/share/enQtMzg2Nzk3ODY3MzEzNi0yNTU1ZmIyN2JkMGFhZjhhZWVjNzA2OWUzNWIyMjMyYmYzZmE4MzBjYWQ3YjdhNjU1MGU2NjFkNzMyZDllMzE2?raw=True)
 
-<img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/logo-transparent.png" width="500"> <img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/wrapped-panda.png" width="100">
-
+<img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/logo-transparent.png?raw=True" width="500"> <img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/wrapped-panda.png?raw=True" width="100">
 
 A repository for hosting the `dynamicio` library, used as a wrapper for `pandas` i/o operations.
 
 -- Logo illustrated by [Nick Loucas](https://www.linkedin.com/in/nickloucas/)
 
-## Why wrap your i/o
+## Table of Contents
+- [Why wrap your i/o?](https://github.com/VorTECHsa/dynamicio/tree/master#why-wrap-your-i-o)
+  * [Managing various Resources](https://github.com/VorTECHsa/dynamicio/tree/master#managing-various-resources)
+  * [Managing Various Data Types](https://github.com/VorTECHsa/dynamicio/tree/master#managing-various-data-types)
+  * [Validations & Metrics Generation](https://github.com/VorTECHsa/dynamicio/tree/master#validations---metrics-generation)
+  * [Testing (Running Local Regression Tests)](https://github.com/VorTECHsa/dynamicio/tree/master#testing--running-local-regression-tests)
+  * [So, what do we do about these?](https://github.com/VorTECHsa/dynamicio/tree/master#so--what-do-we-do-about-these)
+  * [The Solution](https://github.com/VorTECHsa/dynamicio/tree/master#the-solution)
+  * [Main features](https://github.com/VorTECHsa/dynamicio/tree/master#main-features)
+- [Supported sources and data formats:](https://github.com/VorTECHsa/dynamicio/tree/master#supported-sources-and-data-formats)
+  * [Coming soon](https://github.com/VorTECHsa/dynamicio/tree/master#coming-soon)
+- [Installation](https://github.com/VorTECHsa/dynamicio/tree/master#installation)
+- [API Documentation](https://github.com/VorTECHsa/dynamicio/tree/master#api-documentation)
+- [How to use](https://github.com/VorTECHsa/dynamicio/tree/master#how-to-use)
+  * [Keywords](https://github.com/VorTECHsa/dynamicio/tree/master#keywords)
+  * [Let's start](https://github.com/VorTECHsa/dynamicio/tree/master#let-s-start)
+    + [Step 1: Resource Definitions](https://github.com/VorTECHsa/dynamicio/tree/master#step-1--resource-definitions)
+    + [Step 2: Defining your environment variables](https://github.com/VorTECHsa/dynamicio/tree/master#step-2--defining-your-environment-variables)
+    + [Step 3: Read in your resource definitions](https://github.com/VorTECHsa/dynamicio/tree/master#step-3--read-in-your-resource-definitions)
+    + [Step 4: Loading the data resources](https://github.com/VorTECHsa/dynamicio/tree/master#step-4--loading-the-data-resources)
+      - [Step 4.1. `SCHEMA_FROM_FILE`](https://github.com/VorTECHsa/dynamicio/tree/master#step-41--schema-from-file)
+      - [Step 4.2. Use the dynamicio cli](https://github.com/VorTECHsa/dynamicio/tree/master#step-42-use-the-dynamicio-cli)
+      - [Step 4.3: Loading from `S3`](https://github.com/VorTECHsa/dynamicio/tree/master#step-43--loading-from--s3)
+      - [Step 4.3: Loading from `Postgres`](https://github.com/VorTECHsa/dynamicio/tree/master#step-43--loading-from--postgres)
+    + [Step 5: Writing out](https://github.com/VorTECHsa/dynamicio/tree/master#step-5--writing-out)
+    + [Step 6: Full Code](https://github.com/VorTECHsa/dynamicio/tree/master#step-6--full-code)
+  * [Utilising `asyncio`](https://github.com/VorTECHsa/dynamicio/tree/master#utilising--asyncio)
+- [Testing Locally](https://github.com/VorTECHsa/dynamicio/tree/master#testing-locally)
+- [Last notes](https://github.com/VorTECHsa/dynamicio/tree/master#last-notes)
 
-With the growing use of microservices&ndash;a norm in today's application deployment patterns&ndash;
-developers were enabled to leverage the isolated nature of a microservice to use whatever language, library or
-framework they saw fit for their requirements. Though this is a convenient outcome, it is also one that
-increases the complexity of a software tech-stack within an organisation's ecosystem.
+<small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
 
-### The Problem
+## Why wrap your i/o?
 
-This trade-off is inevitable, and the "negative" consequences don't stop there. More than the need to
-support multiple languages and processing frameworks, data services teams (DST) often end up being driven by the
-requirements dictated by the various processing frameworks used by different developers, which may have
-limitations in terms of the format of data input they can accept or be less optimised to deal with specific
-data types. Therefore, rather than the focus of a DST to be on **configuring access authorisation**, optimisation
-of read **latency** and **throughput**, increasing **fault tolerance** and **high availability**, they end up dealing
-with what format works with, e.g., either `pandas` either `numpy`, `SciPy` or `tensorflow`.
+Working with `pandas` dataframes has opened up a new world of potential in Data Science. However,
+if you are using `pandas` to support production pipelines, whether ML or ETL, you end up having
+a big part of your code be concerned with I/O operations. 
 
-### As far as ML Systems are concerned...
+### Managing various Resources
+First, it's the various type of resources you need to interact with; object storage (S3 or GCS)
+databases (Athena, Big Query, Postgres), Kafka and many more. For each of these, you have 
+dependencies on various libraries such as `s3fs`, `fsspec`, `gcfs`, `boto3`, `awscli`, `aws-wrangler`,
+`sql-alchemy`, `tables`, `kafka-python` and many more. 
 
-This problem is highlighted as an **ML-System Anti-Pattern** in
-[Hidden Technical Debt in Machine Learning Systems](https://papers.nips.cc/paper/2015/file/86df7dcfd896fcaf2674f757a2463eba-Paper.pdf),
-referred to as **Glue Code**:
+### Managing Various Data Types
+![data-types](https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/data-types.png?raw=True)
 
-> ML researchers tend to develop general purpose solutions as self-contained packages. A wide variety of these are
+Then it's the various data types you need handle, `parquet`, `hdfs`, `csv`, `json` and many
+others, each of which come with their own set of configuration `kwargs`, things like the 
+orientation of the dataset (`json`) or the parquet engine you want 
+to use behind the scenes (`pyarrow` or `fastparquet`).
+
+### Validations & Metrics Generation
+Then, it's the need to validate your expectations on the datasets; things like unique or
+null values being allowed in a column, allowing only a specific set of categorical values, or
+numerical values within a specified range. And what about metrics generation? The ability to
+monitor data distributions and how various metrics change with every run, is a significant
+aspect of monitoring the quality of your solution. 
+
+### Testing (Running Local Regression Tests)
+Finally, what about testing your code in different environments? Take, for instance, a traditional
+setup where you have the following 4 environments to work against:
+
+- Local;
+- Develop;
+- Staging, and;
+- Production.
+
+Configuring your code to work against the last 3 `Develop, Staging and Production` can easily be done through
+environment variables, but what about testing locally? What if you want to run your pipelines locally? 
+Well, you can, but usually that entails a big deal of mocking calls to external services. Instead, wouldn't
+it be great if you could seamlessly direct your I/O operations to local sample data.
+
+### So, what do we do about these? 
+This proliferation of I/O operations leads to the emergence of glue code, which can be very difficult to manage. The problem is highlighted 
+as an **ML-System Anti-Pattern** in [Hidden Technical Debt in Machine Learning Systems](https://papers.nips.cc/paper/2015/file/86df7dcfd896fcaf2674f757a2463eba-Paper.pdf)
+
+> ...ML researchers tend to develop general purpose solutions as self-contained packages. A wide variety of these are
 > available as open-source packages at places like `ml-oss.org`, or from in-house code, proprietary packages, and cloud-based platforms.
 >
 > Using generic packages often results in a **glue code** system design pattern, in which a massive amount of supporting
@@ -49,25 +104,20 @@ Quoting from the same paper:
 > An important strategy for combating glue-code is to wrap black-box packages into common API's. This allows supporting
 > infrastructure to be more reusable and reduces the cost of changing packages.
 
-So, as far as a single language is concerned, in this case `Python`, this can be addressed with the use of a wrapper
-which can increase re-usability and decouple processing from the i/o layer.
+Dynamicio (or dynamic(i/o)) serves exactly that; it serves as a convenient wrapper around `pandas` I/O operations. It's a manifestation of 
+the dependency inversion principle--a layer of indirection if you want--which keeps your code DRY and increases re-usability, effectively 
+decoupling business logic from the I/O layer.
 
-`dynamic(i/o)` serves exactly that. In addition, it also serves as a convenient abstraction for defining the
-**input** and **output** sources of your `ETL` pipelines in an amenable way. Furthermore, it is configured in a way that
-allows it to "choose" the appropriate sources to load depending on the environment it is called from (e.g. `local` or
-`cloud`). The latter allows developers to quickly test their pipelines, by directing it to local mock/sample data,
-lifting the burden of having to mock i/o function returns that would otherwise interact with cloud resources.
-
-### Features:
+### Main features
 `dynamic(i/o)` supports:
 * seamless transition between environments; 
 * abstracting away from resource and data types through `resource definitions`; 
 * honouring your expectations on data through `schema definitions`;
 * metrics auto-generation (logging) for monitoring purposes.
 
-## Supported sources and data formats:
+## Supported sources and data formats
 
-<img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/supported_sources.png" width="600">
+<img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/supported_sources.png?raw=True" width="600">
 
 - **S3** (or local) Input & Output:
   - `parquet`
@@ -77,7 +127,7 @@ lifting the burden of having to mock i/o function returns that would otherwise i
 - **Postgres** Input & Output
 - **Kafka** Output
 
-### Coming soon:
+### Coming soon
 - **Athena** (pending)
 - **Delta Tables** (pending)
 - **GCS** (pending)
@@ -116,7 +166,7 @@ to S3 for further processing.
 
 Assume you want to build a pipeline that looks something like the image below:
 
-<img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/sample-pipeline.png" width="600">
+<img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/sample-pipeline.png?raw=True" width="600">
 
 Assume the below repository structure, which implements this pipeline, for the purpose of this tutorial:
 
@@ -692,6 +742,7 @@ and **metrics**:
 - `UniqueCounts`
 - `CountsPerLabel`
 
+##### Step 4.2. Use the dynamicio cli
 The `dynamicio` cli can be used to automatically generate schema definitions for you, provided either a path to
 a dataset (`json`, `parquet`, `hdf`, `csv`) or to a directory. Here is how you can use it:
 
@@ -711,7 +762,7 @@ optional arguments:
 
 The generated schema definitions will not have any validations or metrics automatically selected for you.
 
-##### Step 4.2: Loading from `S3`
+##### Step 4.3: Loading from `S3`
 
 To then load from `S3` you simply do:
 
@@ -835,7 +886,7 @@ FINAL_BAR:
 Here, we have a case where different options need to be used for each environment as it deals with a different source. This is gracefully managed through resource 
 definitions passing these arguments in the `options` key per environment.    
 
-### Step 6: Full Code
+#### Step 6: Full Code
 
 The full code for the loading module in our example would live under:
 
@@ -887,6 +938,55 @@ def main() -> None:
     logger.info("Data staging is complete...")
 
 ```
+### Utilising `asyncio`
+`Dynamic(i/o)` supports use of `asyncio` to speed up `I/O bound` operations through leveraging multithreading. 
+
+An example can be found in the second of the two demo tasks, namely, the `transform.py` task.
+```python
+"""Add module docstring...."""
+import asyncio
+import logging
+
+import demo.src.environment
+from demo.src import processed_config, raw_config
+from demo.src.io import FinalBar, FinalFoo, StagedBar, StagedFoo
+
+logger = logging.getLogger(__name__)
+
+
+async def main() -> None:
+    """The entry point for the Airflow Staging task.
+
+    Returns:
+        Void function.
+    """
+    # LOAD DATA
+    logger.info("Loading data from live sources...")
+
+    [bar_df, foo_df] = await asyncio.gather(
+        StagedBar(source_config=raw_config.get(source_key="STAGED_BAR")).async_read(),
+        StagedFoo(source_config=raw_config.get(source_key="STAGED_FOO")).async_read()
+    )
+
+    logger.info("Data successfully loaded from live sources...")
+
+    # TRANSFORM  DATA
+    logger.info("Apply transformations...")
+
+    # TODO: Apply your transformations
+
+    logger.info("Transformations applied successfully...")
+
+    # SINK DATA
+    logger.info(f"Begin sinking data to staging area: S3:{demo.src.environment.S3_YOUR_OUTPUT_BUCKET}:live/data/raw")
+    await asyncio.gather(
+        FinalFoo(source_config=processed_config.get(source_key="FINAL_FOO"), apply_schema_validations=True, log_schema_metrics=True).async_write(foo_df),
+        FinalBar(source_config=processed_config.get(source_key="FINAL_BAR"), apply_schema_validations=True, log_schema_metrics=True).async_write(bar_df),
+    )
+    logger.info("Data staging is complete...")
+
+```
+In short, you simply need to utilise the `async_read()` or the `async_write()` methods instead, plus await and gather your calls.  
 
 ## Testing Locally
 
@@ -960,7 +1060,7 @@ class TestPipeline:
     ):
         """Showcases how you can leverage dynamicio to read local data for fast feedback when you want to run your pipelines locally."""
         # Given
-        # The pipeline/src/resources/input.yaml
+        # The src/resources/input.yaml
 
         # When
         staging.main()
@@ -980,7 +1080,7 @@ class TestPipeline:
 
 ```
 
-# Last notes
+##  Last notes
 
 Hope this was helpful. 
 
