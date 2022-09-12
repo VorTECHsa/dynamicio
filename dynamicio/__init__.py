@@ -8,7 +8,7 @@ from magic_logger import logger
 with suppress(Exception):
     __version__ = pkg_resources.get_distribution("dynamicio").version
 
-from dynamicio.core import DynamicDataIO
+from dynamicio.core import SCHEMA_FROM_FILE, DynamicDataIO
 from dynamicio.mixins import WithKafka, WithLocal, WithLocalBatch, WithPostgres, WithS3File, WithS3PathPrefix
 
 os.environ["LC_CTYPE"] = "en_US.UTF"  # Set your locale to a unicode-compatible one
@@ -16,6 +16,8 @@ os.environ["LC_CTYPE"] = "en_US.UTF"  # Set your locale to a unicode-compatible 
 
 class UnifiedIO(WithS3File, WithS3PathPrefix, WithLocalBatch, WithLocal, WithKafka, WithPostgres, DynamicDataIO):
     """A unified io composed of dynamicio.mixins."""
+
+    schema = SCHEMA_FROM_FILE
 
 
 logging_config = {

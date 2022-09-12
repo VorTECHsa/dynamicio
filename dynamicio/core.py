@@ -11,16 +11,7 @@ import pandas as pd  # type: ignore
 from magic_logger import logger
 
 from dynamicio import validations
-from dynamicio.errors import (
-    ADVICE_MSG,
-    CASTING_WARNING_MSG,
-    NOTICE_MSG,
-    ColumnsDataTypeError,
-    CustomValidationError,
-    MissingSchemaDefinition,
-    SchemaNotFoundError,
-    SchemaValidationError,
-)
+from dynamicio.errors import ADVICE_MSG, CASTING_WARNING_MSG, NOTICE_MSG, ColumnsDataTypeError, MissingSchemaDefinition, SchemaNotFoundError, SchemaValidationError
 from dynamicio.metrics import get_metric
 
 SCHEMA_FROM_FILE = {"schema": object()}
@@ -77,6 +68,7 @@ class DynamicDataIO:
             raise TypeError("Abstract class DynamicDataIO cannot be used to instantiate an object...")
 
         self.sources_config = source_config
+        self.schema_name = source_config.get("name")
         self.apply_schema_validations = apply_schema_validations
         self.log_schema_metrics = log_schema_metrics
         self.show_casting_warnings = show_casting_warnings
@@ -124,9 +116,6 @@ class DynamicDataIO:
         source_name = self.sources_config.get("type")
         df = getattr(self, f"_read_from_{source_name}")()
 
-        if not self.validate(df):
-            raise CustomValidationError("User-defined validation has failed!")
-
         df = self._apply_schema(df)
         if self.apply_schema_validations:
             self.validate_from_schema(df)
@@ -154,9 +143,6 @@ class DynamicDataIO:
         if set(list(df.columns)) != set(self.schema.keys()):  # pylint: disable=E1101
             columns = [column for column in df.columns.to_list() if column in self.schema.keys()]
             df = df[columns]
-
-        if not self.validate(df):
-            raise CustomValidationError("User-defined validation has failed!")
 
         if self.apply_schema_validations:
             self.validate_from_schema(df)
@@ -189,7 +175,7 @@ class DynamicDataIO:
             for validation in self.schema_validations[column].keys():
                 if self.schema_validations[column][validation]["apply"] is True:
                     validation_result = getattr(validations, validation)(
-                        self.__class__.__name__,
+                        self.schema_name,
                         df,
                         column,
                         **self.schema_validations[column][validation]["options"],
@@ -216,35 +202,9 @@ class DynamicDataIO:
 
         for column in self.schema_metrics.keys():
             for metric in self.schema_metrics[column]:
-                get_metric(metric)(self.__class__.__name__, df, column)()  # type: ignore
+                get_metric(metric)(self.schema_name, df, column)()  # type: ignore
 
         return self
-
-    @staticmethod
-    def validate(df: pd.DataFrame) -> bool:  # pylint: disable=W0613
-        """Abstract method used as part of the I/O logic.
-
-        This method should be overriden by the a user defined one, when the user wants to intervene to the I/O logic.
-
-        Example:
-           >>> class Foo(UnifiedIO):
-           >>>    schema = SCHEMA_FROM_FILE
-           >>>
-           >>>    @staticmethod
-           >>>    def validate(df: pd.DataFrame):
-           >>>       return df["col_a"].isna().sum() == 0
-           >>>
-           >>>
-           >>>
-           >>>  df = Foo(source_config=input_config.get(source_key="FOO")).read())
-           >>>
-        Args:
-            df: A pandas dataframe.
-
-        Returns:
-            True if validations pass and false otherwise.
-        """
-        return True
 
     def _apply_schema(self, df: pd.DataFrame) -> pd.DataFrame:
         """Called by the `self.read()` and the `self._write_to_local()` methods.
