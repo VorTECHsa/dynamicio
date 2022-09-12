@@ -77,6 +77,7 @@ class DynamicDataIO:
             raise TypeError("Abstract class DynamicDataIO cannot be used to instantiate an object...")
 
         self.sources_config = source_config
+        self.name = str.upper(self.__class__.__name__)
         self.apply_schema_validations = apply_schema_validations
         self.log_schema_metrics = log_schema_metrics
         self.show_casting_warnings = show_casting_warnings
@@ -85,6 +86,7 @@ class DynamicDataIO:
         if self.schema is SCHEMA_FROM_FILE:
             try:
                 self.schema = self.sources_config["schema"]
+                self.name = str.upper(self.sources_config["name"])
                 self.schema_validations = self.sources_config["validations"]
                 self.schema_metrics = self.sources_config["metrics"]
             except KeyError as _error:
@@ -189,7 +191,7 @@ class DynamicDataIO:
             for validation in self.schema_validations[column].keys():
                 if self.schema_validations[column][validation]["apply"] is True:
                     validation_result = getattr(validations, validation)(
-                        self.__class__.__name__,
+                        self.name,
                         df,
                         column,
                         **self.schema_validations[column][validation]["options"],
@@ -216,7 +218,7 @@ class DynamicDataIO:
 
         for column in self.schema_metrics.keys():
             for metric in self.schema_metrics[column]:
-                get_metric(metric)(self.__class__.__name__, df, column)()  # type: ignore
+                get_metric(metric)(self.name, df, column)()  # type: ignore
 
         return self
 
@@ -287,7 +289,7 @@ class DynamicDataIO:
             found_dtype = dtypes[column_name].name
             if found_dtype != expected_dtype:
                 if self.show_casting_warnings:
-                    logger.info(f"Expected: '{expected_dtype}' dtype for {self.__class__.__name__}['{column_name}]', found '{found_dtype}'")
+                    logger.info(f"Expected: '{expected_dtype}' dtype for {self.name}['{column_name}]', found '{found_dtype}'")
                 try:
                     if len(set([type(v) for v in df[column_name].values])) > 1:  # pylint: disable=consider-using-set-comprehension
                         logger.warning(CASTING_WARNING_MSG.format(column_name, expected_dtype, found_dtype))  # pylint: disable=logging-format-interpolation
@@ -295,7 +297,7 @@ class DynamicDataIO:
                         logger.info(ADVICE_MSG)
                     df.loc[:, column_name] = df[column_name].astype(self.schema[column_name])
                 except (ValueError, TypeError):
-                    logger.error(f"ValueError: Tried casting column {self.__class__.__name__}['{column_name}]' to '{expected_dtype}' " f"from '{found_dtype}', but failed")
+                    logger.error(f"ValueError: Tried casting column {self.name}['{column_name}]' to '{expected_dtype}' " f"from '{found_dtype}', but failed")
                     return False
         return True
 

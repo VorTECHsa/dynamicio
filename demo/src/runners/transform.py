@@ -4,7 +4,7 @@ import logging
 
 import demo.src.environment
 from demo.src import processed_config, raw_config
-from demo.src.io import FinalBar, FinalFoo, StagedBar, StagedFoo
+from demo.src.io import InputIO, StagedBar, StagedFoo
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ async def main() -> None:
     # SINK DATA
     logger.info(f"Begin sinking data to staging area: S3:{demo.src.environment.S3_YOUR_OUTPUT_BUCKET}:live/data/raw")
     await asyncio.gather(
-        FinalFoo(source_config=processed_config.get(source_key="FINAL_FOO"), apply_schema_validations=True, log_schema_metrics=True).async_write(foo_df),
-        FinalBar(source_config=processed_config.get(source_key="FINAL_BAR"), apply_schema_validations=True, log_schema_metrics=True).async_write(bar_df),
+        InputIO(source_config=processed_config.get(source_key="FINAL_FOO"), apply_schema_validations=True, log_schema_metrics=True).async_write(foo_df),
+        InputIO(source_config=processed_config.get(source_key="FINAL_BAR"), apply_schema_validations=True, log_schema_metrics=True).async_write(bar_df),
     )
     logger.info("Data staging is complete...")
