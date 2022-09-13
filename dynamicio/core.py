@@ -11,7 +11,7 @@ import pandas as pd  # type: ignore
 from magic_logger import logger
 
 from dynamicio import validations
-from dynamicio.errors import ADVICE_MSG, CASTING_WARNING_MSG, NOTICE_MSG, ColumnsDataTypeError, MissingSchemaDefinition, SchemaNotFoundError, SchemaValidationError
+from dynamicio.errors import CASTING_WARNING_MSG, NOTICE_MSG, ColumnsDataTypeError, MissingSchemaDefinition, SchemaNotFoundError, SchemaValidationError
 from dynamicio.metrics import get_metric
 
 SCHEMA_FROM_FILE = {"schema": object()}
@@ -253,7 +253,6 @@ class DynamicDataIO:
                     if len(set([type(v) for v in df[column_name].values])) > 1:  # pylint: disable=consider-using-set-comprehension
                         logger.warning(CASTING_WARNING_MSG.format(column_name, expected_dtype, found_dtype))  # pylint: disable=logging-format-interpolation
                         logger.info(NOTICE_MSG.format(column_name))  # pylint: disable=logging-format-interpolation
-                        logger.info(ADVICE_MSG)
                     df.loc[:, column_name] = df[column_name].astype(self.schema[column_name])
                 except (ValueError, TypeError):
                     logger.error(f"ValueError: Tried casting column {self.name}['{column_name}]' to '{expected_dtype}' " f"from '{found_dtype}', but failed")

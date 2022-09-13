@@ -10,9 +10,7 @@ __all__ = [
     "MissingSchemaDefinition",
     "SchemaNotFoundError",
     "SchemaValidationError",
-    "CustomValidationError",
     "InvalidDatasetTypeError",
-    "ADVICE_MSG",
     "CASTING_WARNING_MSG",
     "NOTICE_MSG",
 ]
@@ -59,10 +57,6 @@ class SchemaValidationError(DynamicIOError):
     """Error raised when schema validation fails."""
 
 
-class CustomValidationError(DynamicIOError):
-    """Error raised when user-defined validation fails."""
-
-
 class MissingSchemaDefinition(DynamicIOError):
     """Error raised when schema is not specified in the provided source."""
 
@@ -100,4 +94,3 @@ class InvalidDatasetTypeError(DynamicIOError):
 # Warning messages
 CASTING_WARNING_MSG = "Applying casting column: '{0}' to: 'type:{1}' from 'type:{2}' though not advised, as `dtypes`>1 for {0}, which may lead to data corruption!"
 NOTICE_MSG = "Keeping the {0} as is, may anyway cause I/O errors or data corruption issues especially when using `pandas.DataFrame.to_parquet` or `pandas.DataFrame.to_json`."
-ADVICE_MSG = "Use the `dynamicio.core.DynamicDataIO.validate()` through your `dynamicio.UnifiedIO` instance to apply custom validations as part of this I/O operation."
