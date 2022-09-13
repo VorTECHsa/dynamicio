@@ -2,8 +2,7 @@
 import logging
 
 from demo.src import constants, input_config, raw_config
-from demo.src.io import StagedBar, StagedFoo
-from dynamicio import UnifiedIO
+from demo.src.io import InputIO, StagedBar, StagedFoo
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +16,8 @@ def main() -> None:
     # LOAD DATA
     logger.info("Loading data from live sources...")
 
-    bar_df = UnifiedIO(source_config=input_config.get(source_key="BAR"), apply_schema_validations=True, log_schema_metrics=True).read()
-    foo_df = UnifiedIO(source_config=input_config.get(source_key="FOO"), apply_schema_validations=True, log_schema_metrics=True).read()
+    bar_df = InputIO(source_config=input_config.get(source_key="BAR"), apply_schema_validations=True, log_schema_metrics=True).read()
+    foo_df = InputIO(source_config=input_config.get(source_key="FOO"), apply_schema_validations=True, log_schema_metrics=True).read()
 
     logger.info("Data successfully loaded from live sources...")
 

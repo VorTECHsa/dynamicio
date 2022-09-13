@@ -250,16 +250,16 @@ class TestCoreIO:
         assert (
             io_instance is return_value
             and (len(caplog.records) == 10)
-            and (getattr(caplog.records[0], "message") == '{"message": "METRIC", "dataset": "read_from_s3_csv", "column": "id", "metric": "UniqueCounts", "value": 4.0}')
-            and (getattr(caplog.records[1], "message") == '{"message": "METRIC", "dataset": "read_from_s3_csv", "column": "id", "metric": "Counts", "value": 4.0}')
-            and (getattr(caplog.records[2], "message") == '{"message": "METRIC", "dataset": "read_from_s3_csv", "column": "foo_name-class_a", "metric": "CountsPerLabel", "value": 2.0}')
-            and (getattr(caplog.records[3], "message") == '{"message": "METRIC", "dataset": "read_from_s3_csv", "column": "foo_name-class_b", "metric": "CountsPerLabel", "value": 1.0}')
-            and (getattr(caplog.records[4], "message") == '{"message": "METRIC", "dataset": "read_from_s3_csv", "column": "foo_name-class_c", "metric": "CountsPerLabel", "value": 1.0}')
-            and (getattr(caplog.records[5], "message") == '{"message": "METRIC", "dataset": "read_from_s3_csv", "column": "bar", "metric": "Min", "value": 1500.0}')
-            and (getattr(caplog.records[6], "message") == '{"message": "METRIC", "dataset": "read_from_s3_csv", "column": "bar", "metric": "Max", "value": 1500.0}')
-            and (getattr(caplog.records[7], "message") == '{"message": "METRIC", "dataset": "read_from_s3_csv", "column": "bar", "metric": "Mean", "value": 1500.0}')
-            and (getattr(caplog.records[8], "message") == '{"message": "METRIC", "dataset": "read_from_s3_csv", "column": "bar", "metric": "Std", "value": 0.0}')
-            and (getattr(caplog.records[9], "message") == '{"message": "METRIC", "dataset": "read_from_s3_csv", "column": "bar", "metric": "Variance", "value": 0.0}')
+            and (getattr(caplog.records[0], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "id", "metric": "UniqueCounts", "value": 4.0}')
+            and (getattr(caplog.records[1], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "id", "metric": "Counts", "value": 4.0}')
+            and (getattr(caplog.records[2], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "foo_name-class_a", "metric": "CountsPerLabel", "value": 2.0}')
+            and (getattr(caplog.records[3], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "foo_name-class_b", "metric": "CountsPerLabel", "value": 1.0}')
+            and (getattr(caplog.records[4], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "foo_name-class_c", "metric": "CountsPerLabel", "value": 1.0}')
+            and (getattr(caplog.records[5], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "bar", "metric": "Min", "value": 1500.0}')
+            and (getattr(caplog.records[6], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "bar", "metric": "Max", "value": 1500.0}')
+            and (getattr(caplog.records[7], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "bar", "metric": "Mean", "value": 1500.0}')
+            and (getattr(caplog.records[8], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "bar", "metric": "Std", "value": 0.0}')
+            and (getattr(caplog.records[9], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "bar", "metric": "Variance", "value": 0.0}')
         )
 
     @pytest.mark.integration
@@ -802,7 +802,7 @@ class TestCoreIO:
             io_instance.read()
 
         # Then
-        assert getattr(caplog.records[0], "message") == "Expected: 'float64' dtype for ReadS3DataWithFalseTypes['id]', found 'int64'"
+        assert getattr(caplog.records[0], "message") == "Expected: 'float64' dtype for READS3DATAWITHFALSETYPES['id]', found 'int64'"
 
     @pytest.mark.unit
     def test_options_are_read_from_code(self):
