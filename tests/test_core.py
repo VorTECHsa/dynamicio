@@ -13,7 +13,7 @@ import pytest
 import dynamicio
 from dynamicio.config import IOConfig
 from dynamicio.core import CASTING_WARNING_MSG, DynamicDataIO
-from dynamicio.errors import ColumnsDataTypeError, CustomValidationError, MissingSchemaDefinition, SchemaNotFoundError, SchemaValidationError
+from dynamicio.errors import ColumnsDataTypeError, MissingSchemaDefinition, SchemaNotFoundError, SchemaValidationError
 from dynamicio.mixins import WithS3File
 from tests import constants
 from tests.mocking.io import (
@@ -250,16 +250,16 @@ class TestCoreIO:
         assert (
             io_instance is return_value
             and (len(caplog.records) == 10)
-            and (getattr(caplog.records[0], "message") == '{"message": "METRIC", "dataset": "ReadS3CsvIO", "column": "id", "metric": "UniqueCounts", "value": 4.0}')
-            and (getattr(caplog.records[1], "message") == '{"message": "METRIC", "dataset": "ReadS3CsvIO", "column": "id", "metric": "Counts", "value": 4.0}')
-            and (getattr(caplog.records[2], "message") == '{"message": "METRIC", "dataset": "ReadS3CsvIO", "column": "foo_name-class_a", "metric": "CountsPerLabel", "value": 2.0}')
-            and (getattr(caplog.records[3], "message") == '{"message": "METRIC", "dataset": "ReadS3CsvIO", "column": "foo_name-class_b", "metric": "CountsPerLabel", "value": 1.0}')
-            and (getattr(caplog.records[4], "message") == '{"message": "METRIC", "dataset": "ReadS3CsvIO", "column": "foo_name-class_c", "metric": "CountsPerLabel", "value": 1.0}')
-            and (getattr(caplog.records[5], "message") == '{"message": "METRIC", "dataset": "ReadS3CsvIO", "column": "bar", "metric": "Min", "value": 1500.0}')
-            and (getattr(caplog.records[6], "message") == '{"message": "METRIC", "dataset": "ReadS3CsvIO", "column": "bar", "metric": "Max", "value": 1500.0}')
-            and (getattr(caplog.records[7], "message") == '{"message": "METRIC", "dataset": "ReadS3CsvIO", "column": "bar", "metric": "Mean", "value": 1500.0}')
-            and (getattr(caplog.records[8], "message") == '{"message": "METRIC", "dataset": "ReadS3CsvIO", "column": "bar", "metric": "Std", "value": 0.0}')
-            and (getattr(caplog.records[9], "message") == '{"message": "METRIC", "dataset": "ReadS3CsvIO", "column": "bar", "metric": "Variance", "value": 0.0}')
+            and (getattr(caplog.records[0], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "id", "metric": "UniqueCounts", "value": 4.0}')
+            and (getattr(caplog.records[1], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "id", "metric": "Counts", "value": 4.0}')
+            and (getattr(caplog.records[2], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "foo_name-class_a", "metric": "CountsPerLabel", "value": 2.0}')
+            and (getattr(caplog.records[3], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "foo_name-class_b", "metric": "CountsPerLabel", "value": 1.0}')
+            and (getattr(caplog.records[4], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "foo_name-class_c", "metric": "CountsPerLabel", "value": 1.0}')
+            and (getattr(caplog.records[5], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "bar", "metric": "Min", "value": 1500.0}')
+            and (getattr(caplog.records[6], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "bar", "metric": "Max", "value": 1500.0}')
+            and (getattr(caplog.records[7], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "bar", "metric": "Mean", "value": 1500.0}')
+            and (getattr(caplog.records[8], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "bar", "metric": "Std", "value": 0.0}')
+            and (getattr(caplog.records[9], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "bar", "metric": "Variance", "value": 0.0}')
         )
 
     @pytest.mark.integration
@@ -770,21 +770,6 @@ class TestCoreIO:
         finally:
             os.remove(s3_parquet_with_some_bool_col_local_config["local"]["file_path"])
 
-    @pytest.mark.unit
-    def test_if_custom_validate_method_is_used_and_fails_then_custom_validation_error_is_thrown(self):
-
-        # Given
-        df = pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 1, "foo_name": "B", "bar": None, "bool_col": False}])
-        s3_parquet_with_some_bool_col_local_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
-            env_identifier="LOCAL",
-            dynamic_vars=constants,
-        ).get(source_key="S3_PARQUET_WITH_CUSTOM_VALIDATE")
-
-        # When
-        with pytest.raises(CustomValidationError):
-            ParquetWithCustomValidate(source_config=s3_parquet_with_some_bool_col_local_config).write(df)
-
     @pytest.mark.integration
     def test_show_casting_warnings_flag_default_value_prevents_showing_casting_logs(self, caplog):
         # Given
@@ -817,7 +802,7 @@ class TestCoreIO:
             io_instance.read()
 
         # Then
-        assert getattr(caplog.records[0], "message") == "Expected: 'float64' dtype for ReadS3DataWithFalseTypes['id]', found 'int64'"
+        assert getattr(caplog.records[0], "message") == "Expected: 'float64' dtype for READ_S3_DATA_WITH_FALSE_TYPES['id]', found 'int64'"
 
     @pytest.mark.unit
     def test_options_are_read_from_code(self):
