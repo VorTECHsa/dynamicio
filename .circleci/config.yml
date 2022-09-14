@@ -50,8 +50,12 @@ jobs:
       - run:
           name: "Run Python Tests"
           command: |
-            pytest --cache-clear demo/tests/
-            pytest --cache-clear --cov=dynamicio tests/
+            shopt -s globstar
+            mkdir test-results
+            TESTS=$(circleci tests glob "tests/**/test_*.py" | circleci tests split)
+            pytest -vv --junitxml=test-results/junit.xml $TESTS
+      - store_test_results:
+          path: test-results
 
   test_python_3_9:
     working_directory: ~/project
@@ -72,7 +76,12 @@ jobs:
       - run:
           name: "Run Python Tests"
           command: |
-            pytest --cache-clear --cov=dynamicio tests/
+            shopt -s globstar
+            mkdir test-results
+            TESTS=$(circleci tests glob "tests/**/test_*.py" | circleci tests split)
+            pytest -vv --junitxml=test-results/junit.xml $TESTS
+      - store_test_results:
+          path: test-results
 
   test_python_3_10:
     working_directory: ~/project
@@ -93,7 +102,12 @@ jobs:
       - run:
           name: "Run Python Tests"
           command: |
-            pytest --cache-clear --cov=dynamicio tests/
+            shopt -s globstar
+            mkdir test-results
+            TESTS=$(circleci tests glob "tests/**/test_*.py" | circleci tests split)
+            pytest -vv --junitxml=test-results/junit.xml $TESTS
+      - store_test_results:
+          path: test-results
 
   build_and_publish:
     working_directory: ~/project
