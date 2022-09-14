@@ -32,6 +32,7 @@ jobs:
             yamllint -v tests
 
   test_python_3_8:
+    parallelism: 6
     working_directory: ~/project
     docker:
       - image: cimg/python:3.8.13
@@ -58,6 +59,7 @@ jobs:
           path: test-results
 
   test_python_3_9:
+    parallelism: 6
     working_directory: ~/project
     docker:
       - image: cimg/python:3.9.13
@@ -84,6 +86,7 @@ jobs:
           path: test-results
 
   test_python_3_10:
+    parallelism: 6
     working_directory: ~/project
     docker:
       - image: cimg/python:3.10.4
