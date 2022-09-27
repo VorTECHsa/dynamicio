@@ -177,11 +177,11 @@ def expected_input_yaml_dict():
         'REPLACE_SCHEMA_WITH_DYN_VARS': {
             'LOCAL': {
                 'local': {
-                    'file_path': '/Users/Vortexa/Github/dynamicio/tests/resources/data/input/{file_name_to_replace}.parquet',
+                    'file_path': f'{constants.TEST_RESOURCES}/data/input/{{file_name_to_replace}}.parquet',
                     'file_type': 'parquet'},
                 'type': 'local'},
             'schema': {
-                'file_path': '/Users/Vortexa/Github/dynamicio/tests/resources/schemas/bar.yaml'}
+                'file_path': f'{constants.TEST_RESOURCES}/schemas/bar.yaml'}
         },
         "TEMPLATED_FILE_PATH": {
             "CLOUD": {
