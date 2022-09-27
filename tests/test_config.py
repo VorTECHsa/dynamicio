@@ -133,6 +133,21 @@ class TestIOConfig:
         # Then
         assert postgres_cloud_mapping == expected_postgres_cloud_mapping
 
+    @pytest.mark.unit
+    def test__get_schema_definition_dynamically_replaces_numerical_values_in_schemas(self):
+        # Given
+        input_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/test_input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        )
+
+        # When
+        my_config = input_config.get(source_key="REPLACE_SCHEMA_WITH_DYN_VARS")
+
+        # Then
+        assert my_config["validations"]["column_c"]["is_greater_than"]["options"]["threshold"] == 1000
+
 
 class TestSafeDynamicLoader:  # pylint: disable=R0903
     @pytest.mark.unit

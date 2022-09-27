@@ -14,3 +14,4 @@ DB_PORT = "17039"
 DB_NAME = "backend"
 DB_USER = "user"
 DB_PASS = "pass"
+LOWER_THAN_LIMIT = 1000

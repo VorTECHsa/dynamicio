@@ -174,6 +174,15 @@ def expected_input_yaml_dict():
                 "type": "local",
             },
         },
+        'REPLACE_SCHEMA_WITH_DYN_VARS': {
+            'LOCAL': {
+                'local': {
+                    'file_path': '/Users/Vortexa/Github/dynamicio/tests/resources/data/input/{file_name_to_replace}.parquet',
+                    'file_type': 'parquet'},
+                'type': 'local'},
+            'schema': {
+                'file_path': '/Users/Vortexa/Github/dynamicio/tests/resources/schemas/bar.yaml'}
+        },
         "TEMPLATED_FILE_PATH": {
             "CLOUD": {
                 "s3": {
@@ -206,6 +215,7 @@ def expected_input_sources():
         "READ_FROM_KAFKA",
         "TEMPLATED_FILE_PATH",
         "READ_FROM_PARQUET_TEMPLATED",
+        "REPLACE_SCHEMA_WITH_DYN_VARS"
     ]
 
 

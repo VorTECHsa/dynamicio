@@ -56,7 +56,7 @@ __all__ = ["IOConfig", "SafeDynamicLoader"]
 
 import re
 from types import ModuleType
-from typing import List, Mapping
+from typing import Any, List, Mapping
 
 import yaml
 from magic_logger import logger
@@ -83,15 +83,16 @@ class SafeDynamicLoader(yaml.SafeLoader):
         """
         return type(f"{cls.__name__}_{module.__name__}", (cls,), {"module": module})
 
-    def dyn_str_constructor(self, node: yaml.nodes.ScalarNode) -> str:
-        """Responsible for the switching of one or more "[[ DYNAMIC_VAR ]]" strings with the respective attributes value in a give module.
+    def dyn_str_constructor(self, node: yaml.nodes.ScalarNode, is_schema: bool = False) -> Any:
+        """Responsible for the switching of one or more "[[ DYNAMIC_VAR ]]" strings with the respective attributes value in a given module.
 
         Args:
             node: Parsed item whose dynamic values that map to the "[[ DYNAMIC_VAR ]]" convention
                 are replaced with the respective attributes in te provided module.
+            is_schema: We differentiate between schema and non-schema files as schema files may sometimes need numerical values.
 
         Returns:
-            Constructed `str`
+            Constructed `str` or numerical.
         """
         value = node.value
 
@@ -101,6 +102,12 @@ class SafeDynamicLoader(yaml.SafeLoader):
 
             value = self.dynamic_data_matcher.sub(f"\\g<1>{replacement}\\g<4>", value)
 
+        if is_schema:
+            try:
+                value = float(value)
+                return value
+            except ValueError:
+                pass
         return value
 
 
@@ -214,7 +221,7 @@ class IOConfig:
         schema_file_path = self.config[source_key].get("schema")["file_path"]
         with open(schema_file_path, "r") as stream:  # pylint: disable=unspecified-encoding]
             logger.debug(f"Parsing schema: {schema_file_path}...")
-            return yaml.load(stream, Loader=yaml.SafeLoader)
+            return yaml.load(stream, SafeDynamicLoader.with_module(self.dynamic_vars))
 
     @staticmethod
     def _get_schema(schema_definition: Mapping) -> Mapping:
