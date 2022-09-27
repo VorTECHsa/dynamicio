@@ -5,7 +5,7 @@ import os
 import pytest
 import yaml
 
-from dynamicio.config import IOConfig, SafeDynamicLoader
+from dynamicio.config import IOConfig, SafeDynamicResourceLoader, SafeDynamicSchemaLoader
 from tests import constants
 
 
@@ -151,13 +151,24 @@ class TestIOConfig:
 
 class TestSafeDynamicLoader:  # pylint: disable=R0903
     @pytest.mark.unit
-    def test_replaces_all_template_instances(self):
+    def test_replaces_all_resource_template_instances(self):
         file_contents = 'abc: "[[ VALUE_1 ]]/[[ VALUE_2 ]]"'
 
         class MockEnvironmentModule:  # pylint: disable=R0903
             VALUE_1 = "abc"
             VALUE_2 = "def"
 
-        result = yaml.load(io.StringIO(file_contents), SafeDynamicLoader.with_module(MockEnvironmentModule))
+        result = yaml.load(io.StringIO(file_contents), SafeDynamicResourceLoader.with_module(MockEnvironmentModule))
 
         assert result == {"abc": "abc/def"}
+
+    @pytest.mark.unit
+    def test_replaces_all_schema_template_instances(self):
+        file_contents = 'abc: "[[ VALUE_A ]]"'
+
+        class MockEnvironmentModule:  # pylint: disable=R0903
+            VALUE_A = 100
+
+        result = yaml.load(io.StringIO(file_contents), SafeDynamicSchemaLoader.with_module(MockEnvironmentModule))
+
+        assert result == {"abc": 100}

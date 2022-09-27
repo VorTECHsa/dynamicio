@@ -52,7 +52,7 @@ would return:
             }
         }
 """
-__all__ = ["IOConfig", "SafeDynamicLoader"]
+__all__ = ["IOConfig", "SafeDynamicResourceLoader", "SafeDynamicSchemaLoader"]
 
 import re
 from types import ModuleType
@@ -62,7 +62,7 @@ import yaml
 from magic_logger import logger
 
 
-class SafeDynamicLoader(yaml.SafeLoader):
+class SafeDynamicResourceLoader(yaml.SafeLoader):
     """Implements a dynamic yaml loader that parses yaml files and replaces strings that map to [[ DYNAMIC_VAR ]].
 
     Dynamic variables defined in a provided module object.
@@ -83,13 +83,12 @@ class SafeDynamicLoader(yaml.SafeLoader):
         """
         return type(f"{cls.__name__}_{module.__name__}", (cls,), {"module": module})
 
-    def dyn_str_constructor(self, node: yaml.nodes.ScalarNode, is_schema: bool = False) -> Any:
+    def dyn_str_constructor(self, node: yaml.nodes.ScalarNode) -> str:
         """Responsible for the switching of one or more "[[ DYNAMIC_VAR ]]" strings with the respective attributes value in a given module.
 
         Args:
             node: Parsed item whose dynamic values that map to the "[[ DYNAMIC_VAR ]]" convention
                 are replaced with the respective attributes in te provided module.
-            is_schema: We differentiate between schema and non-schema files as schema files may sometimes need numerical values.
 
         Returns:
             Constructed `str` or numerical.
@@ -102,12 +101,53 @@ class SafeDynamicLoader(yaml.SafeLoader):
 
             value = self.dynamic_data_matcher.sub(f"\\g<1>{replacement}\\g<4>", value)
 
-        if is_schema:
-            try:
-                value = float(value)
-                return value
-            except ValueError:
-                pass
+        return value
+
+
+class SafeDynamicSchemaLoader(yaml.SafeLoader):
+    """Implements a dynamic yaml loader that parses yaml files and replaces strings that map to [[ DYNAMIC_VAR ]].
+
+    Dynamic variables defined in a provided module object.
+    """
+
+    module = None
+    dynamic_data_matcher = re.compile(r"(.*)(\[\[\s*(\S+)\s*]])(.*)")
+
+    @classmethod
+    def with_module(cls, module: ModuleType):
+        """Creates a dynamic subclass of SafeDynamicLoader with the `data_module` attribute set to `module`.
+
+        Args:
+            module: A global vars module with all the dynamic values defined in it.
+
+        Returns:
+            type
+        """
+        return type(f"{cls.__name__}_{module.__name__}", (cls,), {"module": module})
+
+    def dyn_value_constructor(self, node: yaml.nodes.ScalarNode) -> Any:
+        """Responsible for the switching of one or more "[[ DYNAMIC_VAR ]]" strings with the respective attributes value in a given module.
+
+        Args:
+            node: Parsed item whose dynamic values that map to the "[[ DYNAMIC_VAR ]]" convention
+                are replaced with the respective attributes in te provided module.
+
+        Returns:
+            Constructed `str` or numerical.
+        """
+        value = node.value
+
+        while result := self.dynamic_data_matcher.match(value):
+            ref = result.group(3)
+            replacement = getattr(self.module, ref)
+
+            value = self.dynamic_data_matcher.sub(f"\\g<1>{replacement}\\g<4>", value)
+
+        try:
+            value = float(value)
+            return value
+        except ValueError:
+            pass
         return value
 
 
@@ -126,7 +166,8 @@ class IOConfig:
     """
 
     YAML_TAG = "tag:yaml.org,2002:str"
-    SafeDynamicLoader.add_constructor(YAML_TAG, SafeDynamicLoader.dyn_str_constructor)
+    SafeDynamicResourceLoader.add_constructor(YAML_TAG, SafeDynamicResourceLoader.dyn_str_constructor)
+    SafeDynamicSchemaLoader.add_constructor(YAML_TAG, SafeDynamicSchemaLoader.dyn_value_constructor)
 
     def __init__(self, path_to_source_yaml: str, env_identifier: str, dynamic_vars: ModuleType):
         """Class constructor.
@@ -151,7 +192,7 @@ class IOConfig:
         """
         with open(self.path_to_source_yaml, "r") as stream:  # pylint: disable=unspecified-encoding]
             logger.debug(f"Parsing {self.path_to_source_yaml}...")
-            return yaml.load(stream, SafeDynamicLoader.with_module(self.dynamic_vars))
+            return yaml.load(stream, SafeDynamicResourceLoader.with_module(self.dynamic_vars))
 
     @property
     def sources(self) -> List[str]:
@@ -221,7 +262,7 @@ class IOConfig:
         schema_file_path = self.config[source_key].get("schema")["file_path"]
         with open(schema_file_path, "r") as stream:  # pylint: disable=unspecified-encoding]
             logger.debug(f"Parsing schema: {schema_file_path}...")
-            return yaml.load(stream, SafeDynamicLoader.with_module(self.dynamic_vars))
+            return yaml.load(stream, SafeDynamicSchemaLoader.with_module(self.dynamic_vars))
 
     @staticmethod
     def _get_schema(schema_definition: Mapping) -> Mapping:
