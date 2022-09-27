@@ -389,7 +389,6 @@ Let's have a look inside.
 
 ```python
 """A module for configuring all environment variables."""
-"""A module for configuring all environment variables."""
 import os
 
 ENVIRONMENT = "sample"
