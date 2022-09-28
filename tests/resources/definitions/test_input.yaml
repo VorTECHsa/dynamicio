@@ -118,3 +118,12 @@ READ_FROM_PARQUET_TEMPLATED:
       bucket: "[[ MOCK_BUCKET ]]"
       file_path: "path/to/{file_name_to_replace}.parquet"
       file_type: "parquet"
+
+REPLACE_SCHEMA_WITH_DYN_VARS:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/input/{file_name_to_replace}.parquet"
+      file_type: "parquet"
+  schema:
+    file_path: "[[ TEST_RESOURCES ]]/schemas/bar.yaml"
