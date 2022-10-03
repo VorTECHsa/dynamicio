@@ -69,7 +69,7 @@ class DynamicDataIO:
             raise TypeError("Abstract class DynamicDataIO cannot be used to instantiate an object...")
 
         self.sources_config = source_config
-        self.name = re.sub(r"(?<!^)(?=[A-Z])", "_", self.__class__.__name__).upper()
+        self.name = self._transform_class_names_to_dataset_names(self.__class__.__name__)
         self.apply_schema_validations = apply_schema_validations
         self.log_schema_metrics = log_schema_metrics
         self.show_casting_warnings = show_casting_warnings
@@ -226,6 +226,16 @@ class DynamicDataIO:
         if not self._has_valid_dtypes(df):
             raise ColumnsDataTypeError()
         return df
+
+    @staticmethod
+    def _transform_class_names_to_dataset_names(string_to_transform: str) -> str:
+        """Called by the __innit__ function to fetch dataset names from class name.
+
+        Used to create dataset names from class names, turns camel case into upper snake case.
+        For example: 'ThisNameABC' -> 'THIS_NAME_ABC'.
+        """
+        words = re.findall(r"\d[A-Z]+|[A-Z]?[a-z\d]+|[A-Z]{2,}(?=[A-Z][a-z]|\d|\W|$)|\d+|[A-Z]{2,}|[A-Z]", string_to_transform)
+        return "_".join(map(str.lower, words)).upper()
 
     def _has_valid_dtypes(self, df: pd.DataFrame) -> bool:
         """Checks if `df` has the expected dtypes defined in `schema`.

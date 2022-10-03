@@ -866,6 +866,16 @@ class TestCoreIO:
         assert config_io.options == {"option_1": False, "option_2": True, "option_3": True, "option_4": True}
 
     @pytest.mark.unit
+    def test_transform_class_names_to_dataset_names(self):
+        # Given
+        camel_case_strings = ["TestStringABC", "TestString", "ThisIsAnotherTest", "AbstractS3Test", "YetAnotherGREATTest"]
+        # When
+        transformed_strings = [DynamicDataIO._transform_class_names_to_dataset_names(s) for s in camel_case_strings]  # pylint: disable=W0212
+        expected_strings = ["TEST_STRING_ABC", "TEST_STRING", "THIS_IS_ANOTHER_TEST", "ABSTRACT_S3_TEST", "YET_ANOTHER_GREAT_TEST"]
+
+        assert transformed_strings == expected_strings
+
+    @pytest.mark.unit
     def test_no_options_at_all_are_provided_with_no_issues(self):
 
         # Given
@@ -895,7 +905,7 @@ class TestCoreIO:
         config_io = ReadS3ParquetIO(source_config=s3_parquet_local_config)
 
         # Then
-        assert config_io.name == "READ_S3_PARQUET_I_O"
+        assert config_io.name == "READ_S3_PARQUET_IO"
 
     @pytest.mark.unit
     def test_dataset_name_is_inferred_from_schema_if_schema_from_file_is_provided(self):
