@@ -172,7 +172,6 @@ Assume the below repository structure, which implements this pipeline, for the p
 
 ```shell
 demo
-.
 ├── __init__.py
 ├── resources
 │   ├── definitions
@@ -556,31 +555,24 @@ The file looks like this:
 ```python
 """Responsible for configuring io operations for input data."""
 # pylint: disable=too-few-public-methods
-__all__ = ["Foo", "Bar", "StagedFoo", "StagedBar", "BarDataModel", "FinalFoo", "FinalBar"]
+__all__ = ["InputIO", "StagedFoo", "StagedBar"]
 
-from sqlalchemy import Column, Float, String
 from sqlalchemy.ext.declarative import declarative_base
 
-from dynamicio import UnifiedIO, WithKafka, WithLocal, WithPostgres, WithS3File
+from dynamicio import UnifiedIO, WithLocal, WithPostgres, WithS3File
 from dynamicio.core import SCHEMA_FROM_FILE, DynamicDataIO
 
 Base = declarative_base()
 
 
-class Foo(UnifiedIO):
+class InputIO(UnifiedIO):
     """UnifiedIO subclass for V6 data."""
 
     schema = SCHEMA_FROM_FILE
 
 
-class Bar(UnifiedIO):
-    """UnifiedIO subclass for cargo movements volumes data."""
-
-    schema = SCHEMA_FROM_FILE
-
-
 class StagedFoo(WithS3File, WithLocal, DynamicDataIO):
-    """UnifiedIO subclass for staged foos6."""
+    """UnifiedIO subclass for staged foos."""
 
     schema = {
         "column_a": "object",
@@ -600,21 +592,16 @@ class StagedBar(WithLocal, WithPostgres, DynamicDataIO):
         "column_d": "int64",
     }
 
-
-class FinalFoo(UnifiedIO):
-    """UnifiedIO subclass for V6 data."""
-
-    schema = SCHEMA_FROM_FILE
-
-
-class FinalBar(WithLocal, WithKafka, DynamicDataIO):
-    """UnifiedIO subclass for cargo movements volumes data."""
-
-    schema = SCHEMA_FROM_FILE
-
 ```
 
-Instances of the `DynamicDataIO` class **must** define a class `schema`. The schema has the form of a dictionary, associating columns (keys) with `dtypes` (values).
+Instances of the `DynamicDataIO` class can either inherit directly from `UnifiedIO` (e.g. `InputIO` inherits from `UnifiedIO`) or user can choose the mixins they want to use 
+(e.g. `StagedFoo` inherits from `WithS3File` and `WithLocal` mixins and needs to inherit from `DynamicDataIO`; note that MOR kicks in to address polymorphic conflicts--i.e. order matters). 
+Also, all instances of the `DynamicDataIO` **must** define a class `schema`. The schema can have the form of a dictionary, associating columns (keys) with `dtypes` (values) or be defined 
+as a yaml file (see `InputIO`) as explained in the next section.
+
+**N.B.** For convenience's sake and to reduce the need of boilerplate code, using a single class definition like `InputIO` is recommended (this way all your datasets can be loaded with instances of the same class). 
+However, if you need to use different mixins for different datasets, you can do so by defining a class for each dataset (e.g. `StagedFoo` and `StagedBar`). You will definitely need to define your own classes if you
+want to avoid using `SCHEMA_FROM_FILE` (as per the below instructions) but in this case, your dataset's name will be inferred from the dataclass name you use, e.g. `StagedFoo` will be inferred as `STAGED_FOO`.
 
 ##### Step 4.1. `SCHEMA_FROM_FILE`
 
@@ -793,7 +780,7 @@ The generated schema definitions will not have any validations or metrics automa
 To then load from `S3` you simply do:
 
 ```python
-    foo_df = Foo(source_config=input_config.get(source_key="FOO"), apply_schema_validations=True, log_schema_metrics=True).read()
+    foo_df = InputIO(source_config=input_config.get(source_key="FOO"), apply_schema_validations=True, log_schema_metrics=True).read()
 ```
 
 which will load the `foo.csv` file as a dataframe.
@@ -808,7 +795,7 @@ This data model defines the table, the columns and their respective SQL types.
 To, then, load from `postgres` you simply do:
 
 ```python
-    bar_df = Bar(source_config=input_config.get(source_key="BAR"), apply_schema_validations=True, log_schema_metrics=True).read()
+    bar_df = InputIOsource_config=input_config.get(source_key="BAR"), apply_schema_validations=True, log_schema_metrics=True).read()
 ```
 
 which will load the cargo the movements table as a dataframe.
@@ -945,8 +932,8 @@ def main() -> None:
     # LOAD DATA
     logger.info("Loading data from live sources...")
 
-    bar_df = Bar(source_config=input_config.get(source_key="BAR"), apply_schema_validations=True, log_schema_metrics=True).read()
-    foo_df = Foo(source_config=input_config.get(source_key="FOO"), apply_schema_validations=True, log_schema_metrics=True).read()
+    bar_df = InputIO(source_config=input_config.get(source_key="BAR"), apply_schema_validations=True, log_schema_metrics=True).read()
+    foo_df = InputIO(source_config=input_config.get(source_key="FOO"), apply_schema_validations=True, log_schema_metrics=True).read()
 
     logger.info("Data successfully loaded from live sources...")
 
@@ -975,7 +962,7 @@ import logging
 
 import demo.src.environment
 from demo.src import processed_config, raw_config
-from demo.src.io import FinalBar, FinalFoo, StagedBar, StagedFoo
+from demo.src.io import InputIO, StagedBar, StagedFoo
 
 logger = logging.getLogger(__name__)
 
@@ -1006,8 +993,8 @@ async def main() -> None:
     # SINK DATA
     logger.info(f"Begin sinking data to staging area: S3:{demo.src.environment.S3_YOUR_OUTPUT_BUCKET}:live/data/raw")
     await asyncio.gather(
-        FinalFoo(source_config=processed_config.get(source_key="FINAL_FOO"), apply_schema_validations=True, log_schema_metrics=True).async_write(foo_df),
-        FinalBar(source_config=processed_config.get(source_key="FINAL_BAR"), apply_schema_validations=True, log_schema_metrics=True).async_write(bar_df),
+        InputIO(source_config=processed_config.get(source_key="FINAL_FOO"), apply_schema_validations=True, log_schema_metrics=True).async_write(foo_df),
+        InputIO(source_config=processed_config.get(source_key="FINAL_BAR"), apply_schema_validations=True, log_schema_metrics=True).async_write(bar_df),
     )
     logger.info("Data staging is complete...")
 

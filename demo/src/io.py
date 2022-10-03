@@ -2,10 +2,9 @@
 # pylint: disable=too-few-public-methods
 __all__ = ["InputIO", "StagedFoo", "StagedBar"]
 
-from sqlalchemy import Column, Float, String
 from sqlalchemy.ext.declarative import declarative_base
 
-from dynamicio import UnifiedIO, WithKafka, WithLocal, WithPostgres, WithS3File
+from dynamicio import UnifiedIO, WithLocal, WithPostgres, WithS3File
 from dynamicio.core import SCHEMA_FROM_FILE, DynamicDataIO
 
 Base = declarative_base()
