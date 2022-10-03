@@ -901,14 +901,14 @@ class TestCoreIO:
     def test_dataset_name_is_inferred_from_schema_if_schema_from_file_is_provided(self):
 
         # Given
-        s3_parquet_local_config = IOConfig(
+        s3_read_from_csv_config = IOConfig(
             path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
             env_identifier="LOCAL",
             dynamic_vars=constants,
         ).get(source_key="READ_FROM_S3_CSV")
 
         # When
-        config_io = ReadS3CsvIO(source_config=s3_parquet_local_config)
+        config_io = ReadS3CsvIO(source_config=s3_read_from_csv_config)
 
         # Then
         assert config_io.name == "READ_FROM_S3_CSV"
