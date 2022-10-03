@@ -881,6 +881,22 @@ class TestCoreIO:
         # Then
         assert config_io.options == {}
 
+    @pytest.mark.unit
+    def test_dataset_name_is_defined_by_io_class_if_schema_from_file_is_not_provided(self):
+
+        # Given
+        s3_parquet_local_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_S3_PARQUET")
+
+        # When
+        config_io = ReadS3ParquetIO(source_config=s3_parquet_local_config)
+
+        # Then
+        assert config_io.name == "READ_S3_PARQUET_I_O"
+
 
 class TestAsyncCoreIO:
     @pytest.mark.unit
@@ -921,7 +937,6 @@ class TestAsyncCoreIO:
 
     @pytest.mark.unit
     def test_async_read_does_indeed_operate_in_parallel(self):
-
         # Given
         s3_csv_local_config = IOConfig(
             path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
@@ -952,7 +967,6 @@ class TestAsyncCoreIO:
 
     @pytest.mark.unit
     def test_async_write_does_indeed_operate_in_parallel(self):
-
         # Given
         df = pd.DataFrame.from_dict({"id": [3, 2, 1, 0], "foo_name": ["a", "b", "c", "d"], "bar": [1, 2, 3, 4]})
 
