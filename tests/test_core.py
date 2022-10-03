@@ -897,6 +897,22 @@ class TestCoreIO:
         # Then
         assert config_io.name == "READ_S3_PARQUET_I_O"
 
+    @pytest.mark.unit
+    def test_dataset_name_is_inferred_from_schema_if_schema_from_file_is_provided(self):
+
+        # Given
+        s3_parquet_local_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_S3_CSV")
+
+        # When
+        config_io = ReadS3CsvIO(source_config=s3_parquet_local_config)
+
+        # Then
+        assert config_io.name == "READ_FROM_S3_CSV"
+
 
 class TestAsyncCoreIO:
     @pytest.mark.unit
