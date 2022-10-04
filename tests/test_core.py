@@ -870,7 +870,7 @@ class TestCoreIO:
         # Given
         camel_case_strings = ["TestStringABC", "TestString", "ThisIsAnotherTest", "AbstractS3Test", "YetAnotherGREATTest"]
         # When
-        transformed_strings = [DynamicDataIO._transform_class_names_to_dataset_names(s) for s in camel_case_strings]  # pylint: disable=W0212
+        transformed_strings = [DynamicDataIO._transform_class_name_to_dataset_name(s) for s in camel_case_strings]  # pylint: disable=W0212
         expected_strings = ["TEST_STRING_ABC", "TEST_STRING", "THIS_IS_ANOTHER_TEST", "ABSTRACT_S3_TEST", "YET_ANOTHER_GREAT_TEST"]
 
         assert transformed_strings == expected_strings
