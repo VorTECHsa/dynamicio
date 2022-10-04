@@ -866,14 +866,21 @@ class TestCoreIO:
         assert config_io.options == {"option_1": False, "option_2": True, "option_3": True, "option_4": True}
 
     @pytest.mark.unit
-    def test_transform_class_names_to_dataset_names(self):
-        # Given
-        camel_case_strings = ["TestStringABC", "TestString", "ThisIsAnotherTest", "AbstractS3Test", "YetAnotherGREATTest"]
-        # When
-        transformed_strings = [DynamicDataIO._transform_class_name_to_dataset_name(s) for s in camel_case_strings]  # pylint: disable=W0212
-        expected_strings = ["TEST_STRING_ABC", "TEST_STRING", "THIS_IS_ANOTHER_TEST", "ABSTRACT_S3_TEST", "YET_ANOTHER_GREAT_TEST"]
+    @pytest.mark.parametrize(
+        "camel_case_string, expected_string",
+        [
+            ("TestStringABC", "TEST_STRING_ABC"),
+            ("TestString", "TEST_STRING"),
+            ("ThisIsAnotherTest", "THIS_IS_ANOTHER_TEST"),
+            ("AbstractS3Test", "ABSTRACT_S3_TEST"),
+            ("YetAnotherGREATTest", "YET_ANOTHER_GREAT_TEST"),
+        ],
+    )
+    def test_transform_class_names_to_dataset_names(self, camel_case_string, expected_string):
+        # Given/When
+        transformed_string = DynamicDataIO._transform_class_name_to_dataset_name(camel_case_string)  # pylint: disable=W0212
 
-        assert transformed_strings == expected_strings
+        assert transformed_string == expected_string
 
     @pytest.mark.unit
     def test_no_options_at_all_are_provided_with_no_issues(self):
