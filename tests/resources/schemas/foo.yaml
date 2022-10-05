@@ -40,7 +40,7 @@ columns:
             - class_a
             - class_b
             - class_c
-          is_subset: true # true by default
+          is_subset: false # true by default, if false, then the column unique categoricals must be equal to the acceptable ones, else they must be a subset
       has_no_null_values:
         apply: true
         options:

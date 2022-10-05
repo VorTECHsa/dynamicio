@@ -689,15 +689,43 @@ They can be automatically applied on loading or on writing out.
 
 Specifically, you can use the following **validations**:
 
-- `has_unique_values`
-- `has_no_null_values`
+- `has_unique_values`  # no options
+- `has_no_null_values`  # no options
 - `has_acceptable_percentage_of_nulls`
-- `has_acceptable_categorical_values`
+- `has_acceptable_categorical_values`:
+  ```yaml
+    validations:
+      has_acceptable_categorical_values:
+        apply: true
+        options:
+          categorical_values:
+            - class_a
+            - class_b
+            - class_c
+          is_subset: false # true by default, if false, then the column unique categoricals must be equal to the acceptable ones, else they must be a subset
+  ```
 - `is_greater_than`
-- `is_greater_than_or_equal`
-- `is_lower_than`
-- `is_lower_than_or_equal`
-- `is_between`
+  ```yaml
+    validations:
+      is_greater_than:
+        apply: true
+        options:
+          threshold: 1000
+  ```
+- `is_greater_than_or_equal`  # same as `is_greater_than`
+- `is_lower_than`  # same as `is_greater_than`
+- `is_lower_than_or_equal`  # same as `is_greater_than`
+- `is_between`  # same as `is_greater_than`
+  ```yaml
+    validations:
+      is_between:
+        apply: true
+        options:
+          lower: 0
+          upper: 1000
+          include_left: false
+          include_right: true # true by default
+  ```
 
 and **metrics**:
 
@@ -709,6 +737,19 @@ and **metrics**:
 - `Counts`
 - `UniqueCounts`
 - `CountsPerLabel`
+
+imposed as per below:
+```shell
+  column_c:
+    type: float64
+    validations: {}
+    metrics:
+      - Min
+      - Max
+      - Mean
+      - Std
+      - ...
+```
 
 Note that you can also use dynamic fields to define validations, e.g. see `LOWER_THAN_LIMIT` in the file below: 
 ```yaml
