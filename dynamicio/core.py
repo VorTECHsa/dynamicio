@@ -176,12 +176,7 @@ class DynamicDataIO:
         for column in self.schema_validations.keys():
             for validation in self.schema_validations[column].keys():
                 if self.schema_validations[column][validation]["apply"] is True:
-                    validation_result = getattr(validations, validation)(
-                        self.name,
-                        df,
-                        column,
-                        **self.schema_validations[column][validation]["options"],
-                    )
+                    validation_result = getattr(validations, validation)(self.name, df, column, **self.schema_validations[column][validation]["options"])
                     if not validation_result.valid:
                         failed_validations[validation] = validation_result.message
 
