@@ -3,7 +3,7 @@ __all__ = [
     "has_unique_values",
     "has_no_null_values",
     "has_acceptable_percentage_of_nulls",
-    "has_acceptable_categorical_values",
+    "is_in",
     "is_greater_than",
     "is_greater_than_or_equal",
     "is_lower_than",
@@ -104,7 +104,7 @@ def has_acceptable_percentage_of_nulls(
     )
 
 
-def has_acceptable_categorical_values(dataset: str, df: pd.DataFrame, column: str, categorical_values: Set[str]) -> ValidationResult:
+def is_in(dataset: str, df: pd.DataFrame, column: str, categorical_values: Set[str], match_all: bool = True) -> ValidationResult:
     """Checks if the column only has allowed categorical values as per the set provided.
 
     Note:
@@ -115,19 +115,45 @@ def has_acceptable_categorical_values(dataset: str, df: pd.DataFrame, column: st
         df: A DataFrame
         column: The DataFrame column to be validated
         categorical_values: The allowed set of categorical values
+        match_all: If True, the categorical values must be a subset of the allowed set, otherwise they must be equal
 
     Returns:
         An instance of ValidationResult where `Validation.Result.valid` is a bool indicate the success of the validation,
         `Validation.Result.message` is a message (usually used in exceptions), and `Validation.Result.value` is no_of_not_acceptable
     """
     unique_values = set(df[column][df[column].notna()].unique())
-    if unique_values.issubset(categorical_values):
-        return ValidationResult(valid=True, message=f"Categorical values for {dataset}[{column}] are acceptable", value=0)
 
-    count_invalid = (~df[column].isin(categorical_values)).sum()
+    if match_all:
+        return _validate_categoricals_are_a_subset_of_the_acceptable(categorical_values, unique_values, column, dataset, df)
+    return _validate_all_acceptable_categoricals_are_present(categorical_values, unique_values, column, dataset, df)
+
+
+def _validate_all_acceptable_categoricals_are_present(acceptable_categoricals: Set[str], unique_values: Set[str], column: str, dataset: str, df: pd.DataFrame) -> ValidationResult:
+    if unique_values == acceptable_categoricals:
+        validation_result = ValidationResult(valid=True, message=f"All acceptable categorical values for {dataset}[{column}] are present", value=0)
+    elif unique_values < acceptable_categoricals:
+        validation_result = ValidationResult(
+            valid=False,
+            message=f"Missing categorical values for {dataset}[{column}]: {acceptable_categoricals - unique_values}",
+            value=len(acceptable_categoricals - unique_values),
+        )
+    else:
+        count_invalid = (~df[column].isin(acceptable_categoricals)).sum()
+        validation_result = ValidationResult(
+            valid=False,
+            message=f"Values {unique_values - set(acceptable_categoricals)} for {dataset}[{column}] are not acceptable for {count_invalid} cells",
+            value=count_invalid,
+        )
+    return validation_result
+
+
+def _validate_categoricals_are_a_subset_of_the_acceptable(acceptable_categoricals: Set[str], unique_values: Set[str], column: str, dataset: str, df: pd.DataFrame) -> ValidationResult:
+    if unique_values.issubset(acceptable_categoricals):
+        return ValidationResult(valid=True, message=f"Categorical values for {dataset}[{column}] are acceptable", value=0)
+    count_invalid = (~df[column].isin(acceptable_categoricals)).sum()
     return ValidationResult(
         valid=False,
-        message=f"Values {unique_values - set(categorical_values)} for {dataset}[{column}] are not acceptable for {count_invalid} cells",
+        message=f"Values {unique_values - set(acceptable_categoricals)} for {dataset}[{column}] are not acceptable for {count_invalid} cells",
         value=count_invalid,
     )
 

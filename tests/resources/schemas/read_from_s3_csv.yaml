@@ -19,7 +19,7 @@ columns:
       has_no_null_values:
         apply: true
         options: {}
-      has_acceptable_categorical_values:
+      is_in:
         apply: true
         options:
           categorical_values:

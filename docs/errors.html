@@ -39,9 +39,7 @@ __all__ = [
     &#34;MissingSchemaDefinition&#34;,
     &#34;SchemaNotFoundError&#34;,
     &#34;SchemaValidationError&#34;,
-    &#34;CustomValidationError&#34;,
     &#34;InvalidDatasetTypeError&#34;,
-    &#34;ADVICE_MSG&#34;,
     &#34;CASTING_WARNING_MSG&#34;,
     &#34;NOTICE_MSG&#34;,
 ]
@@ -88,10 +86,6 @@ class SchemaValidationError(DynamicIOError):
     &#34;&#34;&#34;Error raised when schema validation fails.&#34;&#34;&#34;
 
 
-class CustomValidationError(DynamicIOError):
-    &#34;&#34;&#34;Error raised when user-defined validation fails.&#34;&#34;&#34;
-
-
 class MissingSchemaDefinition(DynamicIOError):
     &#34;&#34;&#34;Error raised when schema is not specified in the provided source.&#34;&#34;&#34;
 
@@ -128,8 +122,7 @@ class InvalidDatasetTypeError(DynamicIOError):
 
 # Warning messages
 CASTING_WARNING_MSG = &#34;Applying casting column: &#39;{0}&#39; to: &#39;type:{1}&#39; from &#39;type:{2}&#39; though not advised, as `dtypes`&gt;1 for {0}, which may lead to data corruption!&#34;
-NOTICE_MSG = &#34;Keeping the {0} as is, may anyway cause I/O errors or data corruption issues especially when using `pandas.DataFrame.to_parquet` or `pandas.DataFrame.to_json`.&#34;
-ADVICE_MSG = &#34;Use the `dynamicio.core.DynamicDataIO.validate()` through your `dynamicio.UnifiedIO` instance to apply custom validations as part of this I/O operation.&#34;</code></pre>
+NOTICE_MSG = &#34;Keeping the {0} as is, may anyway cause I/O errors or data corruption issues especially when using `pandas.DataFrame.to_parquet` or `pandas.DataFrame.to_json`.&#34;</code></pre>
 </details>
 </section>
 <section>
@@ -167,45 +160,6 @@ ADVICE_MSG = &#34;Use the `dynamicio.core.DynamicDataIO.validate()` through your
 <div class="desc"></div>
 </dd>
 <dt id="dynamicio.errors.ColumnsDataTypeError.ERROR_STR_DETAILED"><code class="name">var <span class="ident">ERROR_STR_DETAILED</span> : str</code></dt>
-<dd>
-<div class="desc"></div>
-</dd>
-</dl>
-<h3>Inherited members</h3>
-<ul class="hlist">
-<li><code><b><a title="dynamicio.errors.DynamicIOError" href="#dynamicio.errors.DynamicIOError">DynamicIOError</a></b></code>:
-<ul class="hlist">
-<li><code><a title="dynamicio.errors.DynamicIOError.message" href="#dynamicio.errors.DynamicIOError.message">message</a></code></li>
-</ul>
-</li>
-</ul>
-</dd>
-<dt id="dynamicio.errors.CustomValidationError"><code class="flex name class">
-<span>class <span class="ident">CustomValidationError</span></span>
-<span>(</span><span>*args, **kwargs)</span>
-</code></dt>
-<dd>
-<div class="desc"><p>Error raised when user-defined validation fails.</p></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">class CustomValidationError(DynamicIOError):
-    &#34;&#34;&#34;Error raised when user-defined validation fails.&#34;&#34;&#34;</code></pre>
-</details>
-<h3>Ancestors</h3>
-<ul class="hlist">
-<li><a title="dynamicio.errors.DynamicIOError" href="#dynamicio.errors.DynamicIOError">DynamicIOError</a></li>
-<li>builtins.Exception</li>
-<li>builtins.BaseException</li>
-</ul>
-<h3>Class variables</h3>
-<dl>
-<dt id="dynamicio.errors.CustomValidationError.ERROR_STR"><code class="name">var <span class="ident">ERROR_STR</span> : str</code></dt>
-<dd>
-<div class="desc"></div>
-</dd>
-<dt id="dynamicio.errors.CustomValidationError.ERROR_STR_DETAILED"><code class="name">var <span class="ident">ERROR_STR_DETAILED</span> : str</code></dt>
 <dd>
 <div class="desc"></div>
 </dd>
@@ -303,7 +257,6 @@ ADVICE_MSG = &#34;Use the `dynamicio.core.DynamicDataIO.validate()` through your
 <h3>Subclasses</h3>
 <ul class="hlist">
 <li><a title="dynamicio.errors.ColumnsDataTypeError" href="#dynamicio.errors.ColumnsDataTypeError">ColumnsDataTypeError</a></li>
-<li><a title="dynamicio.errors.CustomValidationError" href="#dynamicio.errors.CustomValidationError">CustomValidationError</a></li>
 <li><a title="dynamicio.errors.DataSourceError" href="#dynamicio.errors.DataSourceError">DataSourceError</a></li>
 <li><a title="dynamicio.errors.InvalidDatasetTypeError" href="#dynamicio.errors.InvalidDatasetTypeError">InvalidDatasetTypeError</a></li>
 <li><a title="dynamicio.errors.MissingSchemaDefinition" href="#dynamicio.errors.MissingSchemaDefinition">MissingSchemaDefinition</a></li>
@@ -653,13 +606,6 @@ def message(self) -&gt; Optional[Any]:
 <ul class="">
 <li><code><a title="dynamicio.errors.ColumnsDataTypeError.ERROR_STR" href="#dynamicio.errors.ColumnsDataTypeError.ERROR_STR">ERROR_STR</a></code></li>
 <li><code><a title="dynamicio.errors.ColumnsDataTypeError.ERROR_STR_DETAILED" href="#dynamicio.errors.ColumnsDataTypeError.ERROR_STR_DETAILED">ERROR_STR_DETAILED</a></code></li>
-</ul>
-</li>
-<li>
-<h4><code><a title="dynamicio.errors.CustomValidationError" href="#dynamicio.errors.CustomValidationError">CustomValidationError</a></code></h4>
-<ul class="">
-<li><code><a title="dynamicio.errors.CustomValidationError.ERROR_STR" href="#dynamicio.errors.CustomValidationError.ERROR_STR">ERROR_STR</a></code></li>
-<li><code><a title="dynamicio.errors.CustomValidationError.ERROR_STR_DETAILED" href="#dynamicio.errors.CustomValidationError.ERROR_STR_DETAILED">ERROR_STR_DETAILED</a></code></li>
 </ul>
 </li>
 <li>

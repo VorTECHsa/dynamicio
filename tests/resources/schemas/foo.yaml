@@ -33,13 +33,14 @@ columns:
   category:
     type: "object"
     validations:
-      has_acceptable_categorical_values:
+      is_in:
         apply: true
         options:
           categorical_values:
             - class_a
             - class_b
             - class_c
+          match_all: false # true by default, if false, then the column unique categoricals must be equal to the acceptable ones, else they must be a subset
       has_no_null_values:
         apply: true
         options:

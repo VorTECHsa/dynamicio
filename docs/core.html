@@ -31,26 +31,22 @@
 # pylint: disable=no-member
 __all__ = [&#34;DynamicDataIO&#34;, &#34;SCHEMA_FROM_FILE&#34;]
 
+import asyncio
 import inspect
+import re
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Mapping, MutableMapping, Optional
 
 import pandas as pd  # type: ignore
 from magic_logger import logger
 
 from dynamicio import validations
-from dynamicio.errors import (
-    ADVICE_MSG,
-    CASTING_WARNING_MSG,
-    NOTICE_MSG,
-    ColumnsDataTypeError,
-    CustomValidationError,
-    MissingSchemaDefinition,
-    SchemaNotFoundError,
-    SchemaValidationError,
-)
+from dynamicio.errors import CASTING_WARNING_MSG, NOTICE_MSG, ColumnsDataTypeError, MissingSchemaDefinition, SchemaNotFoundError, SchemaValidationError
 from dynamicio.metrics import get_metric
 
 SCHEMA_FROM_FILE = {&#34;schema&#34;: object()}
+
+pool = ThreadPoolExecutor()
 
 
 class DynamicDataIO:
@@ -102,6 +98,7 @@ class DynamicDataIO:
             raise TypeError(&#34;Abstract class DynamicDataIO cannot be used to instantiate an object...&#34;)
 
         self.sources_config = source_config
+        self.name = self._transform_class_name_to_dataset_name(self.__class__.__name__)
         self.apply_schema_validations = apply_schema_validations
         self.log_schema_metrics = log_schema_metrics
         self.show_casting_warnings = show_casting_warnings
@@ -110,6 +107,7 @@ class DynamicDataIO:
         if self.schema is SCHEMA_FROM_FILE:
             try:
                 self.schema = self.sources_config[&#34;schema&#34;]
+                self.name = self.sources_config[&#34;name&#34;].upper()
                 self.schema_validations = self.sources_config[&#34;validations&#34;]
                 self.schema_metrics = self.sources_config[&#34;metrics&#34;]
             except KeyError as _error:
@@ -131,6 +129,15 @@ class DynamicDataIO:
             if cls.schema is None or (cls.schema is not SCHEMA_FROM_FILE and len(cls.schema) == 0):
                 raise ValueError(f&#34;schema for class {cls} cannot be None or empty...&#34;)
 
+    async def async_read(self):
+        &#34;&#34;&#34;Allows the use of asyncio to concurrently read files in memory.
+
+        Returns:
+            A pandas dataframe or an iterable.
+        &#34;&#34;&#34;
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(pool, self.read)
+
     def read(self) -&gt; pd.DataFrame:
         &#34;&#34;&#34;Reads data source and returns a schema validated dataframe (by means of _apply_schema).
 
@@ -140,9 +147,6 @@ class DynamicDataIO:
         source_name = self.sources_config.get(&#34;type&#34;)
         df = getattr(self, f&#34;_read_from_{source_name}&#34;)()
 
-        if not self.validate(df):
-            raise CustomValidationError(&#34;User-defined validation has failed!&#34;)
-
         df = self._apply_schema(df)
         if self.apply_schema_validations:
             self.validate_from_schema(df)
@@ -151,22 +155,25 @@ class DynamicDataIO:
 
         return df
 
+    async def async_write(self, df: pd.DataFrame):
+        &#34;&#34;&#34;Allows the use of asyncio to concurrently write files out.
+
+        Args:
+            df: The data to be written
+        &#34;&#34;&#34;
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(pool, self.write, df)
+
     def write(self, df: pd.DataFrame):
         &#34;&#34;&#34;Sink data to a given source based on the sources_config.
 
         Args:
             df: The data to be written
-
-        Returns:
-            Nothing
         &#34;&#34;&#34;
         source_name = self.sources_config.get(&#34;type&#34;)
         if set(list(df.columns)) != set(self.schema.keys()):  # pylint: disable=E1101
             columns = [column for column in df.columns.to_list() if column in self.schema.keys()]
             df = df[columns]
-
-        if not self.validate(df):
-            raise CustomValidationError(&#34;User-defined validation has failed!&#34;)
 
         if self.apply_schema_validations:
             self.validate_from_schema(df)
@@ -198,12 +205,7 @@ class DynamicDataIO:
         for column in self.schema_validations.keys():
             for validation in self.schema_validations[column].keys():
                 if self.schema_validations[column][validation][&#34;apply&#34;] is True:
-                    validation_result = getattr(validations, validation)(
-                        self.__class__.__name__,
-                        df,
-                        column,
-                        **self.schema_validations[column][validation][&#34;options&#34;],
-                    )
+                    validation_result = getattr(validations, validation)(self.name, df, column, **self.schema_validations[column][validation][&#34;options&#34;])
                     if not validation_result.valid:
                         failed_validations[validation] = validation_result.message
 
@@ -226,35 +228,9 @@ class DynamicDataIO:
 
         for column in self.schema_metrics.keys():
             for metric in self.schema_metrics[column]:
-                get_metric(metric)(self.__class__.__name__, df, column)()  # type: ignore
+                get_metric(metric)(self.name, df, column)()  # type: ignore
 
         return self
-
-    @staticmethod
-    def validate(df: pd.DataFrame) -&gt; bool:  # pylint: disable=W0613
-        &#34;&#34;&#34;Abstract method used as part of the I/O logic.
-
-        This method should be overriden by the a user defined one, when the user wants to intervene to the I/O logic.
-
-        Example:
-           &gt;&gt;&gt; class Foo(UnifiedIO):
-           &gt;&gt;&gt;    schema = SCHEMA_FROM_FILE
-           &gt;&gt;&gt;
-           &gt;&gt;&gt;    @staticmethod
-           &gt;&gt;&gt;    def validate(df: pd.DataFrame):
-           &gt;&gt;&gt;       return df[&#34;col_a&#34;].isna().sum() == 0
-           &gt;&gt;&gt;
-           &gt;&gt;&gt;
-           &gt;&gt;&gt;
-           &gt;&gt;&gt;  df = Foo(source_config=input_config.get(source_key=&#34;FOO&#34;)).read())
-           &gt;&gt;&gt;
-        Args:
-            df: A pandas dataframe.
-
-        Returns:
-            True if validations pass and false otherwise.
-        &#34;&#34;&#34;
-        return True
 
     def _apply_schema(self, df: pd.DataFrame) -&gt; pd.DataFrame:
         &#34;&#34;&#34;Called by the `self.read()` and the `self._write_to_local()` methods.
@@ -275,6 +251,16 @@ class DynamicDataIO:
             raise ColumnsDataTypeError()
         return df
 
+    @staticmethod
+    def _transform_class_name_to_dataset_name(string_to_transform: str) -&gt; str:
+        &#34;&#34;&#34;Called by the init function to fetch dataset names from class name.
+
+        Used to create dataset name from class name, turns camel case into upper snake case.
+        For example: &#39;ThisNameABC&#39; -&gt; &#39;THIS_NAME_ABC&#39;.
+        &#34;&#34;&#34;
+        words = re.findall(r&#34;\d[A-Z]+|[A-Z]?[a-z\d]+|[A-Z]{2,}(?=[A-Z][a-z]|\d|\W|$)|\d+|[A-Z]{2,}|[A-Z]&#34;, string_to_transform)
+        return &#34;_&#34;.join(map(str.lower, words)).upper()
+
     def _has_valid_dtypes(self, df: pd.DataFrame) -&gt; bool:
         &#34;&#34;&#34;Checks if `df` has the expected dtypes defined in `schema`.
 
@@ -292,23 +278,19 @@ class DynamicDataIO:
             bool - `True` if `df` has the given dtypes, `False` otherwise
         &#34;&#34;&#34;
         dtypes = df.dtypes
-        print(&#34;dtypes: &#34;, dtypes)
-        print(&#34;\ndf:&#34;, df)
 
         for column_name, expected_dtype in self.schema.items():
-            print(f&#34;\n{column_name} ---- {expected_dtype}&#34;)
             found_dtype = dtypes[column_name].name
             if found_dtype != expected_dtype:
                 if self.show_casting_warnings:
-                    logger.info(f&#34;Expected: &#39;{expected_dtype}&#39; dtype for {self.__class__.__name__}[&#39;{column_name}]&#39;, found &#39;{found_dtype}&#39;&#34;)
+                    logger.info(f&#34;Expected: &#39;{expected_dtype}&#39; dtype for {self.name}[&#39;{column_name}]&#39;, found &#39;{found_dtype}&#39;&#34;)
                 try:
                     if len(set([type(v) for v in df[column_name].values])) &gt; 1:  # pylint: disable=consider-using-set-comprehension
                         logger.warning(CASTING_WARNING_MSG.format(column_name, expected_dtype, found_dtype))  # pylint: disable=logging-format-interpolation
                         logger.info(NOTICE_MSG.format(column_name))  # pylint: disable=logging-format-interpolation
-                        logger.info(ADVICE_MSG)
                     df.loc[:, column_name] = df[column_name].astype(self.schema[column_name])
                 except (ValueError, TypeError):
-                    logger.error(f&#34;ValueError: Tried casting column {self.__class__.__name__}[&#39;{column_name}]&#39; to &#39;{expected_dtype}&#39; &#34; f&#34;from &#39;{found_dtype}&#39;, but failed&#34;)
+                    logger.error(f&#34;ValueError: Tried casting column {self.name}[&#39;{column_name}]&#39; to &#39;{expected_dtype}&#39; &#34; f&#34;from &#39;{found_dtype}&#39;, but failed&#34;)
                     return False
         return True
 
@@ -435,6 +417,7 @@ class DynamicDataIO:
             raise TypeError(&#34;Abstract class DynamicDataIO cannot be used to instantiate an object...&#34;)
 
         self.sources_config = source_config
+        self.name = self._transform_class_name_to_dataset_name(self.__class__.__name__)
         self.apply_schema_validations = apply_schema_validations
         self.log_schema_metrics = log_schema_metrics
         self.show_casting_warnings = show_casting_warnings
@@ -443,6 +426,7 @@ class DynamicDataIO:
         if self.schema is SCHEMA_FROM_FILE:
             try:
                 self.schema = self.sources_config[&#34;schema&#34;]
+                self.name = self.sources_config[&#34;name&#34;].upper()
                 self.schema_validations = self.sources_config[&#34;validations&#34;]
                 self.schema_metrics = self.sources_config[&#34;metrics&#34;]
             except KeyError as _error:
@@ -464,6 +448,15 @@ class DynamicDataIO:
             if cls.schema is None or (cls.schema is not SCHEMA_FROM_FILE and len(cls.schema) == 0):
                 raise ValueError(f&#34;schema for class {cls} cannot be None or empty...&#34;)
 
+    async def async_read(self):
+        &#34;&#34;&#34;Allows the use of asyncio to concurrently read files in memory.
+
+        Returns:
+            A pandas dataframe or an iterable.
+        &#34;&#34;&#34;
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(pool, self.read)
+
     def read(self) -&gt; pd.DataFrame:
         &#34;&#34;&#34;Reads data source and returns a schema validated dataframe (by means of _apply_schema).
 
@@ -473,9 +466,6 @@ class DynamicDataIO:
         source_name = self.sources_config.get(&#34;type&#34;)
         df = getattr(self, f&#34;_read_from_{source_name}&#34;)()
 
-        if not self.validate(df):
-            raise CustomValidationError(&#34;User-defined validation has failed!&#34;)
-
         df = self._apply_schema(df)
         if self.apply_schema_validations:
             self.validate_from_schema(df)
@@ -484,22 +474,25 @@ class DynamicDataIO:
 
         return df
 
+    async def async_write(self, df: pd.DataFrame):
+        &#34;&#34;&#34;Allows the use of asyncio to concurrently write files out.
+
+        Args:
+            df: The data to be written
+        &#34;&#34;&#34;
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(pool, self.write, df)
+
     def write(self, df: pd.DataFrame):
         &#34;&#34;&#34;Sink data to a given source based on the sources_config.
 
         Args:
             df: The data to be written
-
-        Returns:
-            Nothing
         &#34;&#34;&#34;
         source_name = self.sources_config.get(&#34;type&#34;)
         if set(list(df.columns)) != set(self.schema.keys()):  # pylint: disable=E1101
             columns = [column for column in df.columns.to_list() if column in self.schema.keys()]
             df = df[columns]
-
-        if not self.validate(df):
-            raise CustomValidationError(&#34;User-defined validation has failed!&#34;)
 
         if self.apply_schema_validations:
             self.validate_from_schema(df)
@@ -531,12 +524,7 @@ class DynamicDataIO:
         for column in self.schema_validations.keys():
             for validation in self.schema_validations[column].keys():
                 if self.schema_validations[column][validation][&#34;apply&#34;] is True:
-                    validation_result = getattr(validations, validation)(
-                        self.__class__.__name__,
-                        df,
-                        column,
-                        **self.schema_validations[column][validation][&#34;options&#34;],
-                    )
+                    validation_result = getattr(validations, validation)(self.name, df, column, **self.schema_validations[column][validation][&#34;options&#34;])
                     if not validation_result.valid:
                         failed_validations[validation] = validation_result.message
 
@@ -559,35 +547,9 @@ class DynamicDataIO:
 
         for column in self.schema_metrics.keys():
             for metric in self.schema_metrics[column]:
-                get_metric(metric)(self.__class__.__name__, df, column)()  # type: ignore
+                get_metric(metric)(self.name, df, column)()  # type: ignore
 
         return self
-
-    @staticmethod
-    def validate(df: pd.DataFrame) -&gt; bool:  # pylint: disable=W0613
-        &#34;&#34;&#34;Abstract method used as part of the I/O logic.
-
-        This method should be overriden by the a user defined one, when the user wants to intervene to the I/O logic.
-
-        Example:
-           &gt;&gt;&gt; class Foo(UnifiedIO):
-           &gt;&gt;&gt;    schema = SCHEMA_FROM_FILE
-           &gt;&gt;&gt;
-           &gt;&gt;&gt;    @staticmethod
-           &gt;&gt;&gt;    def validate(df: pd.DataFrame):
-           &gt;&gt;&gt;       return df[&#34;col_a&#34;].isna().sum() == 0
-           &gt;&gt;&gt;
-           &gt;&gt;&gt;
-           &gt;&gt;&gt;
-           &gt;&gt;&gt;  df = Foo(source_config=input_config.get(source_key=&#34;FOO&#34;)).read())
-           &gt;&gt;&gt;
-        Args:
-            df: A pandas dataframe.
-
-        Returns:
-            True if validations pass and false otherwise.
-        &#34;&#34;&#34;
-        return True
 
     def _apply_schema(self, df: pd.DataFrame) -&gt; pd.DataFrame:
         &#34;&#34;&#34;Called by the `self.read()` and the `self._write_to_local()` methods.
@@ -608,6 +570,16 @@ class DynamicDataIO:
             raise ColumnsDataTypeError()
         return df
 
+    @staticmethod
+    def _transform_class_name_to_dataset_name(string_to_transform: str) -&gt; str:
+        &#34;&#34;&#34;Called by the init function to fetch dataset names from class name.
+
+        Used to create dataset name from class name, turns camel case into upper snake case.
+        For example: &#39;ThisNameABC&#39; -&gt; &#39;THIS_NAME_ABC&#39;.
+        &#34;&#34;&#34;
+        words = re.findall(r&#34;\d[A-Z]+|[A-Z]?[a-z\d]+|[A-Z]{2,}(?=[A-Z][a-z]|\d|\W|$)|\d+|[A-Z]{2,}|[A-Z]&#34;, string_to_transform)
+        return &#34;_&#34;.join(map(str.lower, words)).upper()
+
     def _has_valid_dtypes(self, df: pd.DataFrame) -&gt; bool:
         &#34;&#34;&#34;Checks if `df` has the expected dtypes defined in `schema`.
 
@@ -625,23 +597,19 @@ class DynamicDataIO:
             bool - `True` if `df` has the given dtypes, `False` otherwise
         &#34;&#34;&#34;
         dtypes = df.dtypes
-        print(&#34;dtypes: &#34;, dtypes)
-        print(&#34;\ndf:&#34;, df)
 
         for column_name, expected_dtype in self.schema.items():
-            print(f&#34;\n{column_name} ---- {expected_dtype}&#34;)
             found_dtype = dtypes[column_name].name
             if found_dtype != expected_dtype:
                 if self.show_casting_warnings:
-                    logger.info(f&#34;Expected: &#39;{expected_dtype}&#39; dtype for {self.__class__.__name__}[&#39;{column_name}]&#39;, found &#39;{found_dtype}&#39;&#34;)
+                    logger.info(f&#34;Expected: &#39;{expected_dtype}&#39; dtype for {self.name}[&#39;{column_name}]&#39;, found &#39;{found_dtype}&#39;&#34;)
                 try:
                     if len(set([type(v) for v in df[column_name].values])) &gt; 1:  # pylint: disable=consider-using-set-comprehension
                         logger.warning(CASTING_WARNING_MSG.format(column_name, expected_dtype, found_dtype))  # pylint: disable=logging-format-interpolation
                         logger.info(NOTICE_MSG.format(column_name))  # pylint: disable=logging-format-interpolation
-                        logger.info(ADVICE_MSG)
                     df.loc[:, column_name] = df[column_name].astype(self.schema[column_name])
                 except (ValueError, TypeError):
-                    logger.error(f&#34;ValueError: Tried casting column {self.__class__.__name__}[&#39;{column_name}]&#39; to &#39;{expected_dtype}&#39; &#34; f&#34;from &#39;{found_dtype}&#39;, but failed&#34;)
+                    logger.error(f&#34;ValueError: Tried casting column {self.name}[&#39;{column_name}]&#39; to &#39;{expected_dtype}&#39; &#34; f&#34;from &#39;{found_dtype}&#39;, but failed&#34;)
                     return False
         return True
 
@@ -674,68 +642,53 @@ class DynamicDataIO:
 <div class="desc"></div>
 </dd>
 </dl>
-<h3>Static methods</h3>
+<h3>Methods</h3>
 <dl>
-<dt id="dynamicio.core.DynamicDataIO.validate"><code class="name flex">
-<span>def <span class="ident">validate</span></span>(<span>df: pandas.core.frame.DataFrame) ‑> bool</span>
+<dt id="dynamicio.core.DynamicDataIO.async_read"><code class="name flex">
+<span>async def <span class="ident">async_read</span></span>(<span>self)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Abstract method used as part of the I/O logic.</p>
-<p>This method should be overriden by the a user defined one, when the user wants to intervene to the I/O logic.</p>
-<h2 id="example">Example</h2>
-<pre><code class="language-python-repl">&gt;&gt;&gt; class Foo(UnifiedIO):
-&gt;&gt;&gt;    schema = SCHEMA_FROM_FILE
-&gt;&gt;&gt;
-&gt;&gt;&gt;    @staticmethod
-&gt;&gt;&gt;    def validate(df: pd.DataFrame):
-&gt;&gt;&gt;       return df[&quot;col_a&quot;].isna().sum() == 0
-&gt;&gt;&gt;
-&gt;&gt;&gt;
-&gt;&gt;&gt;
-&gt;&gt;&gt;  df = Foo(source_config=input_config.get(source_key=&quot;FOO&quot;)).read())
-&gt;&gt;&gt;
-</code></pre>
-<h2 id="args">Args</h2>
-<dl>
-<dt><strong><code>df</code></strong></dt>
-<dd>A pandas dataframe.</dd>
-</dl>
+<div class="desc"><p>Allows the use of asyncio to concurrently read files in memory.</p>
 <h2 id="returns">Returns</h2>
-<p>True if validations pass and false otherwise.</p></div>
+<p>A pandas dataframe or an iterable.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">@staticmethod
-def validate(df: pd.DataFrame) -&gt; bool:  # pylint: disable=W0613
-    &#34;&#34;&#34;Abstract method used as part of the I/O logic.
-
-    This method should be overriden by the a user defined one, when the user wants to intervene to the I/O logic.
-
-    Example:
-       &gt;&gt;&gt; class Foo(UnifiedIO):
-       &gt;&gt;&gt;    schema = SCHEMA_FROM_FILE
-       &gt;&gt;&gt;
-       &gt;&gt;&gt;    @staticmethod
-       &gt;&gt;&gt;    def validate(df: pd.DataFrame):
-       &gt;&gt;&gt;       return df[&#34;col_a&#34;].isna().sum() == 0
-       &gt;&gt;&gt;
-       &gt;&gt;&gt;
-       &gt;&gt;&gt;
-       &gt;&gt;&gt;  df = Foo(source_config=input_config.get(source_key=&#34;FOO&#34;)).read())
-       &gt;&gt;&gt;
-    Args:
-        df: A pandas dataframe.
+<pre><code class="python">async def async_read(self):
+    &#34;&#34;&#34;Allows the use of asyncio to concurrently read files in memory.
 
     Returns:
-        True if validations pass and false otherwise.
+        A pandas dataframe or an iterable.
     &#34;&#34;&#34;
-    return True</code></pre>
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(pool, self.read)</code></pre>
 </details>
 </dd>
-</dl>
-<h3>Methods</h3>
+<dt id="dynamicio.core.DynamicDataIO.async_write"><code class="name flex">
+<span>async def <span class="ident">async_write</span></span>(<span>self, df: pandas.core.frame.DataFrame)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Allows the use of asyncio to concurrently write files out.</p>
+<h2 id="args">Args</h2>
 <dl>
+<dt><strong><code>df</code></strong></dt>
+<dd>The data to be written</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">async def async_write(self, df: pd.DataFrame):
+    &#34;&#34;&#34;Allows the use of asyncio to concurrently write files out.
+
+    Args:
+        df: The data to be written
+    &#34;&#34;&#34;
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(pool, self.write, df)</code></pre>
+</details>
+</dd>
 <dt id="dynamicio.core.DynamicDataIO.log_metrics_from_schema"><code class="name flex">
 <span>def <span class="ident">log_metrics_from_schema</span></span>(<span>self, df: pandas.core.frame.DataFrame) ‑> <a title="dynamicio.core.DynamicDataIO" href="#dynamicio.core.DynamicDataIO">DynamicDataIO</a></span>
 </code></dt>
@@ -766,7 +719,7 @@ def validate(df: pd.DataFrame) -&gt; bool:  # pylint: disable=W0613
 
     for column in self.schema_metrics.keys():
         for metric in self.schema_metrics[column]:
-            get_metric(metric)(self.__class__.__name__, df, column)()  # type: ignore
+            get_metric(metric)(self.name, df, column)()  # type: ignore
 
     return self</code></pre>
 </details>
@@ -790,9 +743,6 @@ def validate(df: pd.DataFrame) -&gt; bool:  # pylint: disable=W0613
     &#34;&#34;&#34;
     source_name = self.sources_config.get(&#34;type&#34;)
     df = getattr(self, f&#34;_read_from_{source_name}&#34;)()
-
-    if not self.validate(df):
-        raise CustomValidationError(&#34;User-defined validation has failed!&#34;)
 
     df = self._apply_schema(df)
     if self.apply_schema_validations:
@@ -847,12 +797,7 @@ validation that failed.</dd>
     for column in self.schema_validations.keys():
         for validation in self.schema_validations[column].keys():
             if self.schema_validations[column][validation][&#34;apply&#34;] is True:
-                validation_result = getattr(validations, validation)(
-                    self.__class__.__name__,
-                    df,
-                    column,
-                    **self.schema_validations[column][validation][&#34;options&#34;],
-                )
+                validation_result = getattr(validations, validation)(self.name, df, column, **self.schema_validations[column][validation][&#34;options&#34;])
                 if not validation_result.valid:
                     failed_validations[validation] = validation_result.message
 
@@ -871,9 +816,7 @@ validation that failed.</dd>
 <dl>
 <dt><strong><code>df</code></strong></dt>
 <dd>The data to be written</dd>
-</dl>
-<h2 id="returns">Returns</h2>
-<p>Nothing</p></div>
+</dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
@@ -883,17 +826,11 @@ validation that failed.</dd>
 
     Args:
         df: The data to be written
-
-    Returns:
-        Nothing
     &#34;&#34;&#34;
     source_name = self.sources_config.get(&#34;type&#34;)
     if set(list(df.columns)) != set(self.schema.keys()):  # pylint: disable=E1101
         columns = [column for column in df.columns.to_list() if column in self.schema.keys()]
         df = df[columns]
-
-    if not self.validate(df):
-        raise CustomValidationError(&#34;User-defined validation has failed!&#34;)
 
     if self.apply_schema_validations:
         self.validate_from_schema(df)
@@ -924,10 +861,11 @@ validation that failed.</dd>
 <li>
 <h4><code><a title="dynamicio.core.DynamicDataIO" href="#dynamicio.core.DynamicDataIO">DynamicDataIO</a></code></h4>
 <ul class="">
+<li><code><a title="dynamicio.core.DynamicDataIO.async_read" href="#dynamicio.core.DynamicDataIO.async_read">async_read</a></code></li>
+<li><code><a title="dynamicio.core.DynamicDataIO.async_write" href="#dynamicio.core.DynamicDataIO.async_write">async_write</a></code></li>
 <li><code><a title="dynamicio.core.DynamicDataIO.log_metrics_from_schema" href="#dynamicio.core.DynamicDataIO.log_metrics_from_schema">log_metrics_from_schema</a></code></li>
 <li><code><a title="dynamicio.core.DynamicDataIO.read" href="#dynamicio.core.DynamicDataIO.read">read</a></code></li>
 <li><code><a title="dynamicio.core.DynamicDataIO.schema" href="#dynamicio.core.DynamicDataIO.schema">schema</a></code></li>
-<li><code><a title="dynamicio.core.DynamicDataIO.validate" href="#dynamicio.core.DynamicDataIO.validate">validate</a></code></li>
 <li><code><a title="dynamicio.core.DynamicDataIO.validate_from_schema" href="#dynamicio.core.DynamicDataIO.validate_from_schema">validate_from_schema</a></code></li>
 <li><code><a title="dynamicio.core.DynamicDataIO.write" href="#dynamicio.core.DynamicDataIO.write">write</a></code></li>
 </ul>
