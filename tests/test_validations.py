@@ -2,13 +2,13 @@
 import pytest
 
 from dynamicio.validations import (
-    has_acceptable_categorical_values,
     has_acceptable_percentage_of_nulls,
     has_no_null_values,
     has_unique_values,
     is_between,
     is_greater_than,
     is_greater_than_or_equal,
+    is_in,
     is_lower_than,
     is_lower_than_or_equal,
 )
@@ -144,7 +144,7 @@ class TestHasAcceptableCategoricalValues:
         df = input_df
 
         # When
-        validation = has_acceptable_categorical_values(
+        validation = is_in(
             "TEST",
             df,
             column="activity",
@@ -155,34 +155,34 @@ class TestHasAcceptableCategoricalValues:
         assert validation.valid is True and validation.value == 0 and validation.message == "Categorical values for TEST[activity] are acceptable"
 
     @pytest.mark.unit
-    def test_returns_true_only_if_columns_unique_vals_are_an_exact_match_of_the_input_set_when_is_subset_is_set_to_false(self, input_df):
+    def test_returns_true_only_if_columns_unique_vals_are_an_exact_match_of_the_input_set_when_match_all_is_set_to_false(self, input_df):
         # Given
         df = input_df
 
         # When
-        validation = has_acceptable_categorical_values("TEST", df, column="activity", categorical_values={"load", "discharge", "pass_through"}, is_subset=False)
+        validation = is_in("TEST", df, column="activity", categorical_values={"load", "discharge", "pass_through"}, match_all=False)
 
         # Then
         assert validation.valid is True and validation.value == 0 and validation.message == "All acceptable categorical values for TEST[activity] are present"
 
     @pytest.mark.unit
-    def test_returns_false_if_columns_unique_vals_are_less_than_the_acceptable_categoricals_when_is_subset_is_set_to_false(self, input_df):
+    def test_returns_false_if_columns_unique_vals_are_less_than_the_acceptable_categoricals_when_match_all_is_set_to_false(self, input_df):
         # Given
         df = input_df
 
         # When
-        validation = has_acceptable_categorical_values("TEST", df, column="activity", categorical_values={"load", "discharge", "pass_through", "one_more"}, is_subset=False)
+        validation = is_in("TEST", df, column="activity", categorical_values={"load", "discharge", "pass_through", "one_more"}, match_all=False)
 
         # Then
         assert validation.valid is False and validation.value == 1 and validation.message == "Missing categorical values for TEST[activity]: {'one_more'}"
 
     @pytest.mark.unit
-    def test_returns_false_if_columns_unique_vals_are_more_than_the_acceptable_categoricals_when_is_subset_is_set_to_false(self, input_df):
+    def test_returns_false_if_columns_unique_vals_are_more_than_the_acceptable_categoricals_when_match_all_is_set_to_false(self, input_df):
         # Given
         df = input_df
 
         # When
-        validation = has_acceptable_categorical_values("TEST", df, column="activity", categorical_values={"load", "discharge"}, is_subset=False)
+        validation = is_in("TEST", df, column="activity", categorical_values={"load", "discharge"}, match_all=False)
 
         # Then
         assert validation.valid is False and validation.value == 3 and validation.message == "Values {'pass_through'} for TEST[activity] are not acceptable for 3 cells"
@@ -193,7 +193,7 @@ class TestHasAcceptableCategoricalValues:
         df = input_df
 
         # When/Then
-        validation = has_acceptable_categorical_values("TEST", df, column="activity", categorical_values={"load", "discharge", "pass_through"})
+        validation = is_in("TEST", df, column="activity", categorical_values={"load", "discharge", "pass_through"})
 
         # Then
         assert validation.valid is True and validation.value == 0 and validation.message == "Categorical values for TEST[activity] are acceptable"
@@ -204,7 +204,7 @@ class TestHasAcceptableCategoricalValues:
         df = input_df
 
         # When/Then
-        validation = has_acceptable_categorical_values("TEST", df, column="activity", categorical_values={"load", "pass_through"})
+        validation = is_in("TEST", df, column="activity", categorical_values={"load", "pass_through"})
 
         # Then
         assert not validation.valid and validation.value == 5 and validation.message == "Values {'discharge'} for TEST[activity] are not acceptable for 5 cells"
@@ -215,7 +215,7 @@ class TestHasAcceptableCategoricalValues:
         df = input_df
 
         # When
-        validation = has_acceptable_categorical_values("TEST", df, column="category_a", categorical_values={"A", "B", "C", None})
+        validation = is_in("TEST", df, column="category_a", categorical_values={"A", "B", "C", None})
 
         # Then
         assert validation.valid is True and validation.value == 0 and validation.message == "Categorical values for TEST[category_a] are acceptable"
@@ -226,7 +226,7 @@ class TestHasAcceptableCategoricalValues:
         df = input_df
 
         # When
-        validation = has_acceptable_categorical_values("TEST", df, column="category_a", categorical_values={"A", "B", "C"})
+        validation = is_in("TEST", df, column="category_a", categorical_values={"A", "B", "C"})
 
         # Then
         assert validation.valid is True and validation.value == 0 and validation.message == "Categorical values for TEST[category_a] are acceptable"
@@ -237,7 +237,7 @@ class TestHasAcceptableCategoricalValues:
         df = input_df  # where category_b has None, pd.NA and np.nan values
 
         # When
-        validation = has_acceptable_categorical_values("TEST", df, column="category_b", categorical_values={"A", "B", "C", None})
+        validation = is_in("TEST", df, column="category_b", categorical_values={"A", "B", "C", None})
 
         # Then
         assert validation.valid is True and validation.value == 0 and validation.message == "Categorical values for TEST[category_b] are acceptable"
@@ -248,7 +248,7 @@ class TestHasAcceptableCategoricalValues:
         df = input_df  # where category_b has None, pd.NA and np.nan values
 
         # When
-        validation = has_acceptable_categorical_values("TEST", df, column="category_b", categorical_values={"A", "B", "C"})
+        validation = is_in("TEST", df, column="category_b", categorical_values={"A", "B", "C"})
 
         # Then
         assert validation.valid is True and validation.value == 0 and validation.message == "Categorical values for TEST[category_b] are acceptable"

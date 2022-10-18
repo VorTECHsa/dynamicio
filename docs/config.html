@@ -128,17 +128,17 @@ would return:
             }
         }
 &#34;&#34;&#34;
-__all__ = [&#34;IOConfig&#34;, &#34;SafeDynamicLoader&#34;]
+__all__ = [&#34;IOConfig&#34;, &#34;SafeDynamicResourceLoader&#34;, &#34;SafeDynamicSchemaLoader&#34;]
 
 import re
 from types import ModuleType
-from typing import List, Mapping
+from typing import Any, List, Mapping
 
 import yaml
 from magic_logger import logger
 
 
-class SafeDynamicLoader(yaml.SafeLoader):
+class SafeDynamicResourceLoader(yaml.SafeLoader):
     &#34;&#34;&#34;Implements a dynamic yaml loader that parses yaml files and replaces strings that map to [[ DYNAMIC_VAR ]].
 
     Dynamic variables defined in a provided module object.
@@ -160,14 +160,14 @@ class SafeDynamicLoader(yaml.SafeLoader):
         return type(f&#34;{cls.__name__}_{module.__name__}&#34;, (cls,), {&#34;module&#34;: module})
 
     def dyn_str_constructor(self, node: yaml.nodes.ScalarNode) -&gt; str:
-        &#34;&#34;&#34;Responsible for the switching of one or more &#34;[[ DYNAMIC_VAR ]]&#34; strings with the respective attributes value in a give module.
+        &#34;&#34;&#34;Responsible for the switching of one or more &#34;[[ DYNAMIC_VAR ]]&#34; strings with the respective attributes value in a given module.
 
         Args:
             node: Parsed item whose dynamic values that map to the &#34;[[ DYNAMIC_VAR ]]&#34; convention
                 are replaced with the respective attributes in te provided module.
 
         Returns:
-            Constructed `str`
+            Constructed `str` or numerical.
         &#34;&#34;&#34;
         value = node.value
 
@@ -177,6 +177,53 @@ class SafeDynamicLoader(yaml.SafeLoader):
 
             value = self.dynamic_data_matcher.sub(f&#34;\\g&lt;1&gt;{replacement}\\g&lt;4&gt;&#34;, value)
 
+        return value
+
+
+class SafeDynamicSchemaLoader(yaml.SafeLoader):
+    &#34;&#34;&#34;Implements a dynamic yaml loader that parses yaml files and replaces strings that map to [[ DYNAMIC_VAR ]].
+
+    Dynamic variables defined in a provided module object.
+    &#34;&#34;&#34;
+
+    module = None
+    dynamic_data_matcher = re.compile(r&#34;(.*)(\[\[\s*(\S+)\s*]])(.*)&#34;)
+
+    @classmethod
+    def with_module(cls, module: ModuleType):
+        &#34;&#34;&#34;Creates a dynamic subclass of SafeDynamicLoader with the `data_module` attribute set to `module`.
+
+        Args:
+            module: A global vars module with all the dynamic values defined in it.
+
+        Returns:
+            type
+        &#34;&#34;&#34;
+        return type(f&#34;{cls.__name__}_{module.__name__}&#34;, (cls,), {&#34;module&#34;: module})
+
+    def dyn_value_constructor(self, node: yaml.nodes.ScalarNode) -&gt; Any:
+        &#34;&#34;&#34;Responsible for the switching of one or more &#34;[[ DYNAMIC_VAR ]]&#34; strings with the respective attributes value in a given module.
+
+        Args:
+            node: Parsed item whose dynamic values that map to the &#34;[[ DYNAMIC_VAR ]]&#34; convention
+                are replaced with the respective attributes in te provided module.
+
+        Returns:
+            Constructed `str` or numerical.
+        &#34;&#34;&#34;
+        value = node.value
+
+        while result := self.dynamic_data_matcher.match(value):
+            ref = result.group(3)
+            replacement = getattr(self.module, ref)
+
+            value = self.dynamic_data_matcher.sub(f&#34;\\g&lt;1&gt;{replacement}\\g&lt;4&gt;&#34;, value)
+
+        try:
+            value = float(value)
+            return value
+        except ValueError:
+            pass
         return value
 
 
@@ -195,7 +242,8 @@ class IOConfig:
     &#34;&#34;&#34;
 
     YAML_TAG = &#34;tag:yaml.org,2002:str&#34;
-    SafeDynamicLoader.add_constructor(YAML_TAG, SafeDynamicLoader.dyn_str_constructor)
+    SafeDynamicResourceLoader.add_constructor(YAML_TAG, SafeDynamicResourceLoader.dyn_str_constructor)
+    SafeDynamicSchemaLoader.add_constructor(YAML_TAG, SafeDynamicSchemaLoader.dyn_value_constructor)
 
     def __init__(self, path_to_source_yaml: str, env_identifier: str, dynamic_vars: ModuleType):
         &#34;&#34;&#34;Class constructor.
@@ -220,7 +268,7 @@ class IOConfig:
         &#34;&#34;&#34;
         with open(self.path_to_source_yaml, &#34;r&#34;) as stream:  # pylint: disable=unspecified-encoding]
             logger.debug(f&#34;Parsing {self.path_to_source_yaml}...&#34;)
-            return yaml.load(stream, SafeDynamicLoader.with_module(self.dynamic_vars))
+            return yaml.load(stream, SafeDynamicResourceLoader.with_module(self.dynamic_vars))
 
     @property
     def sources(self) -&gt; List[str]:
@@ -290,7 +338,7 @@ class IOConfig:
         schema_file_path = self.config[source_key].get(&#34;schema&#34;)[&#34;file_path&#34;]
         with open(schema_file_path, &#34;r&#34;) as stream:  # pylint: disable=unspecified-encoding]
             logger.debug(f&#34;Parsing schema: {schema_file_path}...&#34;)
-            return yaml.load(stream, Loader=yaml.SafeLoader)
+            return yaml.load(stream, SafeDynamicSchemaLoader.with_module(self.dynamic_vars))
 
     @staticmethod
     def _get_schema(schema_definition: Mapping) -&gt; Mapping:
@@ -391,7 +439,8 @@ may reference.</dd>
     &#34;&#34;&#34;
 
     YAML_TAG = &#34;tag:yaml.org,2002:str&#34;
-    SafeDynamicLoader.add_constructor(YAML_TAG, SafeDynamicLoader.dyn_str_constructor)
+    SafeDynamicResourceLoader.add_constructor(YAML_TAG, SafeDynamicResourceLoader.dyn_str_constructor)
+    SafeDynamicSchemaLoader.add_constructor(YAML_TAG, SafeDynamicSchemaLoader.dyn_value_constructor)
 
     def __init__(self, path_to_source_yaml: str, env_identifier: str, dynamic_vars: ModuleType):
         &#34;&#34;&#34;Class constructor.
@@ -416,7 +465,7 @@ may reference.</dd>
         &#34;&#34;&#34;
         with open(self.path_to_source_yaml, &#34;r&#34;) as stream:  # pylint: disable=unspecified-encoding]
             logger.debug(f&#34;Parsing {self.path_to_source_yaml}...&#34;)
-            return yaml.load(stream, SafeDynamicLoader.with_module(self.dynamic_vars))
+            return yaml.load(stream, SafeDynamicResourceLoader.with_module(self.dynamic_vars))
 
     @property
     def sources(self) -&gt; List[str]:
@@ -486,7 +535,7 @@ may reference.</dd>
         schema_file_path = self.config[source_key].get(&#34;schema&#34;)[&#34;file_path&#34;]
         with open(schema_file_path, &#34;r&#34;) as stream:  # pylint: disable=unspecified-encoding]
             logger.debug(f&#34;Parsing schema: {schema_file_path}...&#34;)
-            return yaml.load(stream, Loader=yaml.SafeLoader)
+            return yaml.load(stream, SafeDynamicSchemaLoader.with_module(self.dynamic_vars))
 
     @staticmethod
     def _get_schema(schema_definition: Mapping) -&gt; Mapping:
@@ -661,8 +710,8 @@ voyage_data_cloud_mapping = input_config.get(source_key="VOYAGE_DATA")
 </dd>
 </dl>
 </dd>
-<dt id="dynamicio.config.SafeDynamicLoader"><code class="flex name class">
-<span>class <span class="ident">SafeDynamicLoader</span></span>
+<dt id="dynamicio.config.SafeDynamicResourceLoader"><code class="flex name class">
+<span>class <span class="ident">SafeDynamicResourceLoader</span></span>
 <span>(</span><span>stream)</span>
 </code></dt>
 <dd>
@@ -673,7 +722,7 @@ voyage_data_cloud_mapping = input_config.get(source_key="VOYAGE_DATA")
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">class SafeDynamicLoader(yaml.SafeLoader):
+<pre><code class="python">class SafeDynamicResourceLoader(yaml.SafeLoader):
     &#34;&#34;&#34;Implements a dynamic yaml loader that parses yaml files and replaces strings that map to [[ DYNAMIC_VAR ]].
 
     Dynamic variables defined in a provided module object.
@@ -695,14 +744,14 @@ voyage_data_cloud_mapping = input_config.get(source_key="VOYAGE_DATA")
         return type(f&#34;{cls.__name__}_{module.__name__}&#34;, (cls,), {&#34;module&#34;: module})
 
     def dyn_str_constructor(self, node: yaml.nodes.ScalarNode) -&gt; str:
-        &#34;&#34;&#34;Responsible for the switching of one or more &#34;[[ DYNAMIC_VAR ]]&#34; strings with the respective attributes value in a give module.
+        &#34;&#34;&#34;Responsible for the switching of one or more &#34;[[ DYNAMIC_VAR ]]&#34; strings with the respective attributes value in a given module.
 
         Args:
             node: Parsed item whose dynamic values that map to the &#34;[[ DYNAMIC_VAR ]]&#34; convention
                 are replaced with the respective attributes in te provided module.
 
         Returns:
-            Constructed `str`
+            Constructed `str` or numerical.
         &#34;&#34;&#34;
         value = node.value
 
@@ -728,22 +777,22 @@ voyage_data_cloud_mapping = input_config.get(source_key="VOYAGE_DATA")
 </ul>
 <h3>Class variables</h3>
 <dl>
-<dt id="dynamicio.config.SafeDynamicLoader.dynamic_data_matcher"><code class="name">var <span class="ident">dynamic_data_matcher</span></code></dt>
+<dt id="dynamicio.config.SafeDynamicResourceLoader.dynamic_data_matcher"><code class="name">var <span class="ident">dynamic_data_matcher</span></code></dt>
 <dd>
 <div class="desc"></div>
 </dd>
-<dt id="dynamicio.config.SafeDynamicLoader.module"><code class="name">var <span class="ident">module</span></code></dt>
+<dt id="dynamicio.config.SafeDynamicResourceLoader.module"><code class="name">var <span class="ident">module</span></code></dt>
 <dd>
 <div class="desc"></div>
 </dd>
-<dt id="dynamicio.config.SafeDynamicLoader.yaml_constructors"><code class="name">var <span class="ident">yaml_constructors</span></code></dt>
+<dt id="dynamicio.config.SafeDynamicResourceLoader.yaml_constructors"><code class="name">var <span class="ident">yaml_constructors</span></code></dt>
 <dd>
 <div class="desc"></div>
 </dd>
 </dl>
 <h3>Static methods</h3>
 <dl>
-<dt id="dynamicio.config.SafeDynamicLoader.with_module"><code class="name flex">
+<dt id="dynamicio.config.SafeDynamicResourceLoader.with_module"><code class="name flex">
 <span>def <span class="ident">with_module</span></span>(<span>module: module)</span>
 </code></dt>
 <dd>
@@ -775,11 +824,11 @@ def with_module(cls, module: ModuleType):
 </dl>
 <h3>Methods</h3>
 <dl>
-<dt id="dynamicio.config.SafeDynamicLoader.dyn_str_constructor"><code class="name flex">
+<dt id="dynamicio.config.SafeDynamicResourceLoader.dyn_str_constructor"><code class="name flex">
 <span>def <span class="ident">dyn_str_constructor</span></span>(<span>self, node: yaml.nodes.ScalarNode) ‑> str</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Responsible for the switching of one or more "[[ DYNAMIC_VAR ]]" strings with the respective attributes value in a give module.</p>
+<div class="desc"><p>Responsible for the switching of one or more "[[ DYNAMIC_VAR ]]" strings with the respective attributes value in a given module.</p>
 <h2 id="args">Args</h2>
 <dl>
 <dt><strong><code>node</code></strong></dt>
@@ -787,20 +836,20 @@ def with_module(cls, module: ModuleType):
 are replaced with the respective attributes in te provided module.</dd>
 </dl>
 <h2 id="returns">Returns</h2>
-<p>Constructed <code>str</code></p></div>
+<p>Constructed <code>str</code> or numerical.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def dyn_str_constructor(self, node: yaml.nodes.ScalarNode) -&gt; str:
-    &#34;&#34;&#34;Responsible for the switching of one or more &#34;[[ DYNAMIC_VAR ]]&#34; strings with the respective attributes value in a give module.
+    &#34;&#34;&#34;Responsible for the switching of one or more &#34;[[ DYNAMIC_VAR ]]&#34; strings with the respective attributes value in a given module.
 
     Args:
         node: Parsed item whose dynamic values that map to the &#34;[[ DYNAMIC_VAR ]]&#34; convention
             are replaced with the respective attributes in te provided module.
 
     Returns:
-        Constructed `str`
+        Constructed `str` or numerical.
     &#34;&#34;&#34;
     value = node.value
 
@@ -810,6 +859,170 @@ are replaced with the respective attributes in te provided module.</dd>
 
         value = self.dynamic_data_matcher.sub(f&#34;\\g&lt;1&gt;{replacement}\\g&lt;4&gt;&#34;, value)
 
+    return value</code></pre>
+</details>
+</dd>
+</dl>
+</dd>
+<dt id="dynamicio.config.SafeDynamicSchemaLoader"><code class="flex name class">
+<span>class <span class="ident">SafeDynamicSchemaLoader</span></span>
+<span>(</span><span>stream)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Implements a dynamic yaml loader that parses yaml files and replaces strings that map to [[ DYNAMIC_VAR ]].</p>
+<p>Dynamic variables defined in a provided module object.</p>
+<p>Initialize the scanner.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class SafeDynamicSchemaLoader(yaml.SafeLoader):
+    &#34;&#34;&#34;Implements a dynamic yaml loader that parses yaml files and replaces strings that map to [[ DYNAMIC_VAR ]].
+
+    Dynamic variables defined in a provided module object.
+    &#34;&#34;&#34;
+
+    module = None
+    dynamic_data_matcher = re.compile(r&#34;(.*)(\[\[\s*(\S+)\s*]])(.*)&#34;)
+
+    @classmethod
+    def with_module(cls, module: ModuleType):
+        &#34;&#34;&#34;Creates a dynamic subclass of SafeDynamicLoader with the `data_module` attribute set to `module`.
+
+        Args:
+            module: A global vars module with all the dynamic values defined in it.
+
+        Returns:
+            type
+        &#34;&#34;&#34;
+        return type(f&#34;{cls.__name__}_{module.__name__}&#34;, (cls,), {&#34;module&#34;: module})
+
+    def dyn_value_constructor(self, node: yaml.nodes.ScalarNode) -&gt; Any:
+        &#34;&#34;&#34;Responsible for the switching of one or more &#34;[[ DYNAMIC_VAR ]]&#34; strings with the respective attributes value in a given module.
+
+        Args:
+            node: Parsed item whose dynamic values that map to the &#34;[[ DYNAMIC_VAR ]]&#34; convention
+                are replaced with the respective attributes in te provided module.
+
+        Returns:
+            Constructed `str` or numerical.
+        &#34;&#34;&#34;
+        value = node.value
+
+        while result := self.dynamic_data_matcher.match(value):
+            ref = result.group(3)
+            replacement = getattr(self.module, ref)
+
+            value = self.dynamic_data_matcher.sub(f&#34;\\g&lt;1&gt;{replacement}\\g&lt;4&gt;&#34;, value)
+
+        try:
+            value = float(value)
+            return value
+        except ValueError:
+            pass
+        return value</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>yaml.loader.SafeLoader</li>
+<li>yaml.reader.Reader</li>
+<li>yaml.scanner.Scanner</li>
+<li>yaml.parser.Parser</li>
+<li>yaml.composer.Composer</li>
+<li>yaml.constructor.SafeConstructor</li>
+<li>yaml.constructor.BaseConstructor</li>
+<li>yaml.resolver.Resolver</li>
+<li>yaml.resolver.BaseResolver</li>
+</ul>
+<h3>Class variables</h3>
+<dl>
+<dt id="dynamicio.config.SafeDynamicSchemaLoader.dynamic_data_matcher"><code class="name">var <span class="ident">dynamic_data_matcher</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.SafeDynamicSchemaLoader.module"><code class="name">var <span class="ident">module</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.SafeDynamicSchemaLoader.yaml_constructors"><code class="name">var <span class="ident">yaml_constructors</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+<h3>Static methods</h3>
+<dl>
+<dt id="dynamicio.config.SafeDynamicSchemaLoader.with_module"><code class="name flex">
+<span>def <span class="ident">with_module</span></span>(<span>module: module)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Creates a dynamic subclass of SafeDynamicLoader with the <code>data_module</code> attribute set to <code>module</code>.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>module</code></strong></dt>
+<dd>A global vars module with all the dynamic values defined in it.</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>type</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@classmethod
+def with_module(cls, module: ModuleType):
+    &#34;&#34;&#34;Creates a dynamic subclass of SafeDynamicLoader with the `data_module` attribute set to `module`.
+
+    Args:
+        module: A global vars module with all the dynamic values defined in it.
+
+    Returns:
+        type
+    &#34;&#34;&#34;
+    return type(f&#34;{cls.__name__}_{module.__name__}&#34;, (cls,), {&#34;module&#34;: module})</code></pre>
+</details>
+</dd>
+</dl>
+<h3>Methods</h3>
+<dl>
+<dt id="dynamicio.config.SafeDynamicSchemaLoader.dyn_value_constructor"><code class="name flex">
+<span>def <span class="ident">dyn_value_constructor</span></span>(<span>self, node: yaml.nodes.ScalarNode) ‑> Any</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Responsible for the switching of one or more "[[ DYNAMIC_VAR ]]" strings with the respective attributes value in a given module.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>node</code></strong></dt>
+<dd>Parsed item whose dynamic values that map to the "[[ DYNAMIC_VAR ]]" convention
+are replaced with the respective attributes in te provided module.</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>Constructed <code>str</code> or numerical.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def dyn_value_constructor(self, node: yaml.nodes.ScalarNode) -&gt; Any:
+    &#34;&#34;&#34;Responsible for the switching of one or more &#34;[[ DYNAMIC_VAR ]]&#34; strings with the respective attributes value in a given module.
+
+    Args:
+        node: Parsed item whose dynamic values that map to the &#34;[[ DYNAMIC_VAR ]]&#34; convention
+            are replaced with the respective attributes in te provided module.
+
+    Returns:
+        Constructed `str` or numerical.
+    &#34;&#34;&#34;
+    value = node.value
+
+    while result := self.dynamic_data_matcher.match(value):
+        ref = result.group(3)
+        replacement = getattr(self.module, ref)
+
+        value = self.dynamic_data_matcher.sub(f&#34;\\g&lt;1&gt;{replacement}\\g&lt;4&gt;&#34;, value)
+
+    try:
+        value = float(value)
+        return value
+    except ValueError:
+        pass
     return value</code></pre>
 </details>
 </dd>
@@ -840,13 +1053,23 @@ are replaced with the respective attributes in te provided module.</dd>
 </ul>
 </li>
 <li>
-<h4><code><a title="dynamicio.config.SafeDynamicLoader" href="#dynamicio.config.SafeDynamicLoader">SafeDynamicLoader</a></code></h4>
+<h4><code><a title="dynamicio.config.SafeDynamicResourceLoader" href="#dynamicio.config.SafeDynamicResourceLoader">SafeDynamicResourceLoader</a></code></h4>
 <ul class="">
-<li><code><a title="dynamicio.config.SafeDynamicLoader.dyn_str_constructor" href="#dynamicio.config.SafeDynamicLoader.dyn_str_constructor">dyn_str_constructor</a></code></li>
-<li><code><a title="dynamicio.config.SafeDynamicLoader.dynamic_data_matcher" href="#dynamicio.config.SafeDynamicLoader.dynamic_data_matcher">dynamic_data_matcher</a></code></li>
-<li><code><a title="dynamicio.config.SafeDynamicLoader.module" href="#dynamicio.config.SafeDynamicLoader.module">module</a></code></li>
-<li><code><a title="dynamicio.config.SafeDynamicLoader.with_module" href="#dynamicio.config.SafeDynamicLoader.with_module">with_module</a></code></li>
-<li><code><a title="dynamicio.config.SafeDynamicLoader.yaml_constructors" href="#dynamicio.config.SafeDynamicLoader.yaml_constructors">yaml_constructors</a></code></li>
+<li><code><a title="dynamicio.config.SafeDynamicResourceLoader.dyn_str_constructor" href="#dynamicio.config.SafeDynamicResourceLoader.dyn_str_constructor">dyn_str_constructor</a></code></li>
+<li><code><a title="dynamicio.config.SafeDynamicResourceLoader.dynamic_data_matcher" href="#dynamicio.config.SafeDynamicResourceLoader.dynamic_data_matcher">dynamic_data_matcher</a></code></li>
+<li><code><a title="dynamicio.config.SafeDynamicResourceLoader.module" href="#dynamicio.config.SafeDynamicResourceLoader.module">module</a></code></li>
+<li><code><a title="dynamicio.config.SafeDynamicResourceLoader.with_module" href="#dynamicio.config.SafeDynamicResourceLoader.with_module">with_module</a></code></li>
+<li><code><a title="dynamicio.config.SafeDynamicResourceLoader.yaml_constructors" href="#dynamicio.config.SafeDynamicResourceLoader.yaml_constructors">yaml_constructors</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="dynamicio.config.SafeDynamicSchemaLoader" href="#dynamicio.config.SafeDynamicSchemaLoader">SafeDynamicSchemaLoader</a></code></h4>
+<ul class="">
+<li><code><a title="dynamicio.config.SafeDynamicSchemaLoader.dyn_value_constructor" href="#dynamicio.config.SafeDynamicSchemaLoader.dyn_value_constructor">dyn_value_constructor</a></code></li>
+<li><code><a title="dynamicio.config.SafeDynamicSchemaLoader.dynamic_data_matcher" href="#dynamicio.config.SafeDynamicSchemaLoader.dynamic_data_matcher">dynamic_data_matcher</a></code></li>
+<li><code><a title="dynamicio.config.SafeDynamicSchemaLoader.module" href="#dynamicio.config.SafeDynamicSchemaLoader.module">module</a></code></li>
+<li><code><a title="dynamicio.config.SafeDynamicSchemaLoader.with_module" href="#dynamicio.config.SafeDynamicSchemaLoader.with_module">with_module</a></code></li>
+<li><code><a title="dynamicio.config.SafeDynamicSchemaLoader.yaml_constructors" href="#dynamicio.config.SafeDynamicSchemaLoader.yaml_constructors">yaml_constructors</a></code></li>
 </ul>
 </li>
 </ul>

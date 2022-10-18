@@ -692,17 +692,17 @@ Specifically, you can use the following **validations**:
 - `has_unique_values`  # no options
 - `has_no_null_values`  # no options
 - `has_acceptable_percentage_of_nulls`
-- `has_acceptable_categorical_values`:
+- `is_in`:
   ```yaml
     validations:
-      has_acceptable_categorical_values:
+      is_in:
         apply: true
         options:
           categorical_values:
             - class_a
             - class_b
             - class_c
-          is_subset: false # true by default, if false, then the column unique categoricals must be equal to the acceptable ones, else they must be a subset
+          match_all: false # true by default, if false, then the column unique categoricals must be equal to the acceptable ones, else they must be a subset
   ```
 - `is_greater_than`
   ```yaml
@@ -959,7 +959,7 @@ and looks like:
 import logging
 
 from demo.src import constants, input_config, raw_config
-from demo.src.io import Bar, BarDataModel, Foo, StagedBar, StagedFoo
+from demo.src.io import InputIO, StagedBar, StagedFoo
 
 logger = logging.getLogger(__name__)
 

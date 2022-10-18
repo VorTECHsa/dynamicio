@@ -244,7 +244,7 @@ def expected_s3_csv_local_mapping():
                 "is_lower_than": {"apply": True, "options": {"threshold": 2000}},
             },
             "foo_name": {
-                "has_acceptable_categorical_values": {
+                "is_in": {
                     "apply": True,
                     "options": {"categorical_values": ["class_a", "class_b", "class_c"]},
                 },
@@ -277,7 +277,7 @@ def expected_s3_csv_cloud_mapping():
                 "is_lower_than": {"apply": True, "options": {"threshold": 2000}},
             },
             "foo_name": {
-                "has_acceptable_categorical_values": {
+                "is_in": {
                     "apply": True,
                     "options": {"categorical_values": ["class_a", "class_b", "class_c"]},
                 },
@@ -435,7 +435,7 @@ def input_schema_definition():
                 "metrics": None,
                 "type": "object",
                 "validations": {
-                    "has_acceptable_categorical_values": {
+                    "is_in": {
                         "apply": True,
                         "options": {"categorical_values": ["class_a", "class_b", "class_c"]},
                     },
@@ -477,7 +477,7 @@ def expected_schema_definition():
                 "metrics": ["CountsPerLabel"],
                 "type": "object",
                 "validations": {
-                    "has_acceptable_categorical_values": {
+                    "is_in": {
                         "apply": True,
                         "options": {"categorical_values": ["class_a", "class_b", "class_c"]},
                     },
@@ -502,7 +502,7 @@ def expected_validations():
             "is_lower_than": {"apply": True, "options": {"threshold": 2000}},
         },
         "foo_name": {
-            "has_acceptable_categorical_values": {
+            "is_in": {
                 "apply": True,
                 "options": {"categorical_values": ["class_a", "class_b", "class_c"]},
             },
@@ -546,7 +546,7 @@ def invalid_dataframe():
 def expected_messages():
     return {
         "has_unique_values",
-        "has_acceptable_categorical_values",
+        "is_in",
         "is_greater_than",
         "is_lower_than",
     }
