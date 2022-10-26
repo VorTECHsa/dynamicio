@@ -143,11 +143,12 @@ class SafeDynamicSchemaLoader(yaml.SafeLoader):
 
             value = self.dynamic_data_matcher.sub(f"\\g<1>{replacement}\\g<4>", value)
 
-        try:
-            value = float(value)
-            return value
-        except ValueError:
-            pass
+            try:
+                value = float(value)
+                return value
+            except ValueError:
+                pass
+
         return value
 
 
