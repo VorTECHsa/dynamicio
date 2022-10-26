@@ -1687,6 +1687,17 @@ Kafka topic.</p>
 <span>class <span class="ident">WithPostgres</span></span>
 </code></dt>
 <dd>
+<div class="desc">
+    <p>Handles I/O operations for Kafka.</p>
+</div>
+<h2 id="args">Args</h2>
+<ul>
+    <li>options:</li>
+    <ul>
+        <li><code>truncate_and_append: bool</code>: If set to <code>True</code>, truncates the table and then appends the new rows. Otherwise, it drops the table and recreates it with the new rows.</li>
+    </ul>
+</ul>
+
 <div class="desc"><p>Handles I/O operations for Postgres.</p></div>
 <details class="source">
 <summary>
