@@ -772,10 +772,6 @@ class WithPostgres:
         Args:
             df: The dataframe to be written
         """
-        # engine = sqlalchemy.create_engine(f"postgresql://{USER}:{PASSWORD}@{HOST}:{PORT}/{DB_NAME}")
-        # conn = engine.connect()
-        # cm_volumes.to_sql("cm_volumes", engine, if_exists="append", index=False)
-
         postgres_config = self.sources_config["postgres"]
         db_user = postgres_config["db_user"]
         db_password = postgres_config["db_password"]
