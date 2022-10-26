@@ -795,16 +795,13 @@ class WithPostgres:
             query = query.with_session(session).statement
         return pd.read_sql(sql=query, con=session.get_bind(), **options)
 
-    def _write_to_postgres(self, df: pd.DataFrame):
+    @allow_options([&#34;truncate_and_append&#34;])
+    def _write_to_postgres(self, df: pd.DataFrame, **options: Any):
         &#34;&#34;&#34;Write a dataframe to postgres based on the {file_type} of the config_io configuration.
 
         Args:
             df: The dataframe to be written
         &#34;&#34;&#34;
-        # engine = sqlalchemy.create_engine(f&#34;postgresql://{USER}:{PASSWORD}@{HOST}:{PORT}/{DB_NAME}&#34;)
-        # conn = engine.connect()
-        # cm_volumes.to_sql(&#34;cm_volumes&#34;, engine, if_exists=&#34;append&#34;, index=False)
-
         postgres_config = self.sources_config[&#34;postgres&#34;]
         db_user = postgres_config[&#34;db_user&#34;]
         db_password = postgres_config[&#34;db_password&#34;]
@@ -818,19 +815,28 @@ class WithPostgres:
         schema_name = self.sources_config[&#34;name&#34;]
         model = self._generate_model_from_schema(schema_dict, schema_name)
 
+        if is_truncate_and_append := options.get(&#34;truncate_and_append&#34;, False):
+            options.pop(&#34;truncate_and_append&#34;)
+
         with session_for(connection_string) as session:
-            self._write_to_database(session, model.__tablename__, df)  # type: ignore
+            self._write_to_database(session, model.__tablename__, df, is_truncate_and_append)  # type: ignore
 
     @staticmethod
-    def _write_to_database(session: SqlAlchemySession, table_name: str, df: pd.DataFrame):
+    def _write_to_database(session: SqlAlchemySession, table_name: str, df: pd.DataFrame, is_truncate_and_append: bool):
         &#34;&#34;&#34;Write a dataframe to any database provided a session with a data model and a table name.
 
         Args:
             session: Generated from a data model and a table name
             table_name: The name of the table to read from a DB
             df: The dataframe to be written out
+            is_truncate_and_append: Supply to truncate the table and append new rows to it; otherwise, delete and replace
         &#34;&#34;&#34;
-        df.to_sql(name=table_name, con=session.get_bind(), if_exists=&#34;replace&#34;, index=False)
+        if is_truncate_and_append:
+            session.execute(f&#34;TRUNCATE TABLE {table_name};&#34;)
+            df.to_sql(name=table_name, con=session.get_bind(), if_exists=&#34;append&#34;, index=False)
+        else:
+            df.to_sql(name=table_name, con=session.get_bind(), if_exists=&#34;replace&#34;, index=False)
+
         session.commit()
 
 
@@ -1781,16 +1787,13 @@ Kafka topic.</p>
             query = query.with_session(session).statement
         return pd.read_sql(sql=query, con=session.get_bind(), **options)
 
-    def _write_to_postgres(self, df: pd.DataFrame):
+    @allow_options([&#34;truncate_and_append&#34;])
+    def _write_to_postgres(self, df: pd.DataFrame, **options: Any):
         &#34;&#34;&#34;Write a dataframe to postgres based on the {file_type} of the config_io configuration.
 
         Args:
             df: The dataframe to be written
         &#34;&#34;&#34;
-        # engine = sqlalchemy.create_engine(f&#34;postgresql://{USER}:{PASSWORD}@{HOST}:{PORT}/{DB_NAME}&#34;)
-        # conn = engine.connect()
-        # cm_volumes.to_sql(&#34;cm_volumes&#34;, engine, if_exists=&#34;append&#34;, index=False)
-
         postgres_config = self.sources_config[&#34;postgres&#34;]
         db_user = postgres_config[&#34;db_user&#34;]
         db_password = postgres_config[&#34;db_password&#34;]
@@ -1804,19 +1807,28 @@ Kafka topic.</p>
         schema_name = self.sources_config[&#34;name&#34;]
         model = self._generate_model_from_schema(schema_dict, schema_name)
 
+        if is_truncate_and_append := options.get(&#34;truncate_and_append&#34;, False):
+            options.pop(&#34;truncate_and_append&#34;)
+
         with session_for(connection_string) as session:
-            self._write_to_database(session, model.__tablename__, df)  # type: ignore
+            self._write_to_database(session, model.__tablename__, df, is_truncate_and_append)  # type: ignore
 
     @staticmethod
-    def _write_to_database(session: SqlAlchemySession, table_name: str, df: pd.DataFrame):
+    def _write_to_database(session: SqlAlchemySession, table_name: str, df: pd.DataFrame, is_truncate_and_append: bool):
         &#34;&#34;&#34;Write a dataframe to any database provided a session with a data model and a table name.
 
         Args:
             session: Generated from a data model and a table name
             table_name: The name of the table to read from a DB
             df: The dataframe to be written out
+            is_truncate_and_append: Supply to truncate the table and append new rows to it; otherwise, delete and replace
         &#34;&#34;&#34;
-        df.to_sql(name=table_name, con=session.get_bind(), if_exists=&#34;replace&#34;, index=False)
+        if is_truncate_and_append:
+            session.execute(f&#34;TRUNCATE TABLE {table_name};&#34;)
+            df.to_sql(name=table_name, con=session.get_bind(), if_exists=&#34;append&#34;, index=False)
+        else:
+            df.to_sql(name=table_name, con=session.get_bind(), if_exists=&#34;replace&#34;, index=False)
+
         session.commit()</code></pre>
 </details>
 <h3>Subclasses</h3>
