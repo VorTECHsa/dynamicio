@@ -672,7 +672,12 @@ class WithS3File(WithLocal):
 
 
 class WithPostgres:
-    """Handles I/O operations for Postgres."""
+    """Handles I/O operations for Postgres.
+
+    Args:
+       - options:
+           - `truncate_and_append: bool`: If set to `True`, truncates the table and then appends the new rows. Otherwise, it drops the table and recreates it with the new rows.
+    """
 
     sources_config: Mapping
     schema: Mapping

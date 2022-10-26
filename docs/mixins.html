@@ -701,7 +701,12 @@ class WithS3File(WithLocal):
 
 
 class WithPostgres:
-    &#34;&#34;&#34;Handles I/O operations for Postgres.&#34;&#34;&#34;
+    &#34;&#34;&#34;Handles I/O operations for Postgres.
+
+     Args:
+        - options:
+            - `truncate_and_append: bool`: If set to `True`, truncates the table and then appends the new rows. Otherwise, it drops the table and recreates it with the new rows.
+    &#34;&#34;&#34;
 
     sources_config: Mapping
     schema: Mapping
@@ -796,7 +801,7 @@ class WithPostgres:
         return pd.read_sql(sql=query, con=session.get_bind(), **options)
 
     @allow_options([&#34;truncate_and_append&#34;])
-    def _write_to_postgres(self, df: pd.DataFrame, **options: Any):
+    def _write_to_postgres(self, df: pd.DataFrame, **options: MutableMapping[str, Any]):
         &#34;&#34;&#34;Write a dataframe to postgres based on the {file_type} of the config_io configuration.
 
         Args:
@@ -1687,24 +1692,25 @@ Kafka topic.</p>
 <span>class <span class="ident">WithPostgres</span></span>
 </code></dt>
 <dd>
-<div class="desc">
-    <p>Handles I/O operations for Kafka.</p>
-</div>
+<div class="desc"><p>Handles I/O operations for Postgres.</p>
 <h2 id="args">Args</h2>
 <ul>
-    <li>options:</li>
-    <ul>
-        <li><code>truncate_and_append: bool</code>: If set to <code>True</code>, truncates the table and then appends the new rows. Otherwise, it drops the table and recreates it with the new rows.</li>
-    </ul>
+<li>options:<ul>
+<li><code>truncate_and_append: bool</code>: If set to <code>True</code>, truncates the table and then appends the new rows. Otherwise, it drops the table and recreates it with the new rows.</li>
 </ul>
-
-<div class="desc"><p>Handles I/O operations for Postgres.</p></div>
+</li>
+</ul></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">class WithPostgres:
-    &#34;&#34;&#34;Handles I/O operations for Postgres.&#34;&#34;&#34;
+    &#34;&#34;&#34;Handles I/O operations for Postgres.
+
+     Args:
+        - options:
+            - `truncate_and_append: bool`: If set to `True`, truncates the table and then appends the new rows. Otherwise, it drops the table and recreates it with the new rows.
+    &#34;&#34;&#34;
 
     sources_config: Mapping
     schema: Mapping
@@ -1799,7 +1805,7 @@ Kafka topic.</p>
         return pd.read_sql(sql=query, con=session.get_bind(), **options)
 
     @allow_options([&#34;truncate_and_append&#34;])
-    def _write_to_postgres(self, df: pd.DataFrame, **options: Any):
+    def _write_to_postgres(self, df: pd.DataFrame, **options: MutableMapping[str, Any]):
         &#34;&#34;&#34;Write a dataframe to postgres based on the {file_type} of the config_io configuration.
 
         Args:
