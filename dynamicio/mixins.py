@@ -766,7 +766,8 @@ class WithPostgres:
             query = query.with_session(session).statement
         return pd.read_sql(sql=query, con=session.get_bind(), **options)
 
-    def _write_to_postgres(self, df: pd.DataFrame):
+    @allow_options(["truncate_and_append"])
+    def _write_to_postgres(self, df: pd.DataFrame, **options: Any):
         """Write a dataframe to postgres based on the {file_type} of the config_io configuration.
 
         Args:
@@ -785,19 +786,28 @@ class WithPostgres:
         schema_name = self.sources_config["name"]
         model = self._generate_model_from_schema(schema_dict, schema_name)
 
+        if is_truncate_and_append := options.get("truncate_and_append"):
+            options.pop("truncate_and_append")
+
         with session_for(connection_string) as session:
-            self._write_to_database(session, model.__tablename__, df)  # type: ignore
+            self._write_to_database(session, model.__tablename__, df, is_truncate_and_append)  # type: ignore
 
     @staticmethod
-    def _write_to_database(session: SqlAlchemySession, table_name: str, df: pd.DataFrame):
+    def _write_to_database(session: SqlAlchemySession, table_name: str, df: pd.DataFrame, is_truncate_and_append: bool):
         """Write a dataframe to any database provided a session with a data model and a table name.
 
         Args:
             session: Generated from a data model and a table name
             table_name: The name of the table to read from a DB
             df: The dataframe to be written out
+            is_truncate_and_append: Supply to truncate the table and append new rows to it; otherwise, delete and replace
         """
-        df.to_sql(name=table_name, con=session.get_bind(), if_exists="replace", index=False)
+        if is_truncate_and_append:
+            session.execute(f"TRUNCATE TABLE {table_name};")
+            df.to_sql(name=table_name, con=session.get_bind(), if_exists="append", index=False)
+        else:
+            df.to_sql(name=table_name, con=session.get_bind(), if_exists="replace", index=False)
+
         session.commit()
 
 
