@@ -767,7 +767,7 @@ class WithPostgres:
         return pd.read_sql(sql=query, con=session.get_bind(), **options)
 
     @allow_options(["truncate_and_append"])
-    def _write_to_postgres(self, df: pd.DataFrame, **options: Any):
+    def _write_to_postgres(self, df: pd.DataFrame, **options: MutableMapping[str, Any]):
         """Write a dataframe to postgres based on the {file_type} of the config_io configuration.
 
         Args:
