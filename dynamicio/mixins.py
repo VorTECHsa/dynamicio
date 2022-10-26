@@ -786,7 +786,7 @@ class WithPostgres:
         schema_name = self.sources_config["name"]
         model = self._generate_model_from_schema(schema_dict, schema_name)
 
-        if is_truncate_and_append := options.get("truncate_and_append"):
+        if is_truncate_and_append := options.get("truncate_and_append", False):
             options.pop("truncate_and_append")
 
         with session_for(connection_string) as session:
