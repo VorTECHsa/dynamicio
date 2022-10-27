@@ -38,3 +38,11 @@ columns:
       - Mean
       - Std
       - Variance
+  "0":
+    type: "object"
+    validations: {}
+    metrics: []
+  1:
+    type: "object"
+    validations: {}
+    metrics: []

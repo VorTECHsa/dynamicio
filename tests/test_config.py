@@ -148,6 +148,32 @@ class TestIOConfig:
         # Then
         assert my_config["validations"]["column_c"]["is_greater_than"]["options"]["threshold"] == 1000
 
+    @pytest.mark.unit
+    def test__get_schema_definition_returns_float_only_in_case_of_replacements(self):
+        # Given
+        input_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/test_input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        )
+
+        # When
+        my_config = input_config.get(source_key="REPLACE_SCHEMA_WITH_DYN_VARS")
+
+        # Then
+        key_types_dict = {}
+        for key in my_config["schema"]:
+            key_types_dict[key] = str(type(key))
+
+        assert key_types_dict == {
+            "column_a": "<class 'str'>",
+            "column_b": "<class 'str'>",
+            "column_c": "<class 'str'>",
+            "column_d": "<class 'str'>",
+            "0": "<class 'str'>",  # This is a string (as per the schema definition))
+            1: "<class 'int'>",  # This is not a float!
+        }
+
 
 class TestSafeDynamicLoader:  # pylint: disable=R0903
     @pytest.mark.unit
