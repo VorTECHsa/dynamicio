@@ -41,6 +41,7 @@ __all__ = [
     &#34;resolve_template&#34;,
 ]
 
+import csv
 import glob
 import inspect
 import os
@@ -703,9 +704,9 @@ class WithS3File(WithLocal):
 class WithPostgres:
     &#34;&#34;&#34;Handles I/O operations for Postgres.
 
-     Args:
-        - options:
-            - `truncate_and_append: bool`: If set to `True`, truncates the table and then appends the new rows. Otherwise, it drops the table and recreates it with the new rows.
+    Args:
+       - options:
+           - `truncate_and_append: bool`: If set to `True`, truncates the table and then appends the new rows. Otherwise, it drops the table and recreates it with the new rows.
     &#34;&#34;&#34;
 
     sources_config: Mapping
@@ -800,8 +801,7 @@ class WithPostgres:
             query = query.with_session(session).statement
         return pd.read_sql(sql=query, con=session.get_bind(), **options)
 
-    @allow_options([&#34;truncate_and_append&#34;])
-    def _write_to_postgres(self, df: pd.DataFrame, **options: MutableMapping[str, Any]):
+    def _write_to_postgres(self, df: pd.DataFrame):
         &#34;&#34;&#34;Write a dataframe to postgres based on the {file_type} of the config_io configuration.
 
         Args:
@@ -820,8 +820,7 @@ class WithPostgres:
         schema_name = self.sources_config[&#34;name&#34;]
         model = self._generate_model_from_schema(schema_dict, schema_name)
 
-        if is_truncate_and_append := options.get(&#34;truncate_and_append&#34;, False):
-            options.pop(&#34;truncate_and_append&#34;)
+        is_truncate_and_append = self.options.get(&#34;truncate_and_append&#34;, False)
 
         with session_for(connection_string) as session:
             self._write_to_database(session, model.__tablename__, df, is_truncate_and_append)  # type: ignore
@@ -838,7 +837,18 @@ class WithPostgres:
         &#34;&#34;&#34;
         if is_truncate_and_append:
             session.execute(f&#34;TRUNCATE TABLE {table_name};&#34;)
-            df.to_sql(name=table_name, con=session.get_bind(), if_exists=&#34;append&#34;, index=False)
+
+            # Below is a speedup hack in place of `df.to_csv` with the multipart option. As of today, even with
+            # `method=&#34;multi&#34;`, uploading to Postgres is painfully slow. Hence, we&#39;re resorting to dumping the file as
+            # csv and using Postgres&#39;s CSV import function.
+            # https://stackoverflow.com/questions/2987433/how-to-import-csv-file-data-into-a-postgresql-table
+            with tempfile.NamedTemporaryFile(mode=&#34;r+&#34;) as temp_file:
+                df.to_csv(temp_file, index=False, header=False, sep=&#34;\t&#34;, doublequote=False, escapechar=&#34;\\&#34;, quoting=csv.QUOTE_NONE)
+                temp_file.flush()
+                temp_file.seek(0)
+
+                cur = session.connection().connection.cursor()
+                cur.copy_from(temp_file, table_name, columns=df.columns, null=&#34;&#34;)
         else:
             df.to_sql(name=table_name, con=session.get_bind(), if_exists=&#34;replace&#34;, index=False)
 
@@ -1707,9 +1717,9 @@ Kafka topic.</p>
 <pre><code class="python">class WithPostgres:
     &#34;&#34;&#34;Handles I/O operations for Postgres.
 
-     Args:
-        - options:
-            - `truncate_and_append: bool`: If set to `True`, truncates the table and then appends the new rows. Otherwise, it drops the table and recreates it with the new rows.
+    Args:
+       - options:
+           - `truncate_and_append: bool`: If set to `True`, truncates the table and then appends the new rows. Otherwise, it drops the table and recreates it with the new rows.
     &#34;&#34;&#34;
 
     sources_config: Mapping
@@ -1804,8 +1814,7 @@ Kafka topic.</p>
             query = query.with_session(session).statement
         return pd.read_sql(sql=query, con=session.get_bind(), **options)
 
-    @allow_options([&#34;truncate_and_append&#34;])
-    def _write_to_postgres(self, df: pd.DataFrame, **options: MutableMapping[str, Any]):
+    def _write_to_postgres(self, df: pd.DataFrame):
         &#34;&#34;&#34;Write a dataframe to postgres based on the {file_type} of the config_io configuration.
 
         Args:
@@ -1824,8 +1833,7 @@ Kafka topic.</p>
         schema_name = self.sources_config[&#34;name&#34;]
         model = self._generate_model_from_schema(schema_dict, schema_name)
 
-        if is_truncate_and_append := options.get(&#34;truncate_and_append&#34;, False):
-            options.pop(&#34;truncate_and_append&#34;)
+        is_truncate_and_append = self.options.get(&#34;truncate_and_append&#34;, False)
 
         with session_for(connection_string) as session:
             self._write_to_database(session, model.__tablename__, df, is_truncate_and_append)  # type: ignore
@@ -1842,7 +1850,18 @@ Kafka topic.</p>
         &#34;&#34;&#34;
         if is_truncate_and_append:
             session.execute(f&#34;TRUNCATE TABLE {table_name};&#34;)
-            df.to_sql(name=table_name, con=session.get_bind(), if_exists=&#34;append&#34;, index=False)
+
+            # Below is a speedup hack in place of `df.to_csv` with the multipart option. As of today, even with
+            # `method=&#34;multi&#34;`, uploading to Postgres is painfully slow. Hence, we&#39;re resorting to dumping the file as
+            # csv and using Postgres&#39;s CSV import function.
+            # https://stackoverflow.com/questions/2987433/how-to-import-csv-file-data-into-a-postgresql-table
+            with tempfile.NamedTemporaryFile(mode=&#34;r+&#34;) as temp_file:
+                df.to_csv(temp_file, index=False, header=False, sep=&#34;\t&#34;, doublequote=False, escapechar=&#34;\\&#34;, quoting=csv.QUOTE_NONE)
+                temp_file.flush()
+                temp_file.seek(0)
+
+                cur = session.connection().connection.cursor()
+                cur.copy_from(temp_file, table_name, columns=df.columns, null=&#34;&#34;)
         else:
             df.to_sql(name=table_name, con=session.get_bind(), if_exists=&#34;replace&#34;, index=False)
 
