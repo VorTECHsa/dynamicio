@@ -771,8 +771,7 @@ class WithPostgres:
             query = query.with_session(session).statement
         return pd.read_sql(sql=query, con=session.get_bind(), **options)
 
-    @allow_options(["truncate_and_append"])
-    def _write_to_postgres(self, df: pd.DataFrame, **options: MutableMapping[str, Any]):
+    def _write_to_postgres(self, df: pd.DataFrame):
         """Write a dataframe to postgres based on the {file_type} of the config_io configuration.
 
         Args:
@@ -791,8 +790,7 @@ class WithPostgres:
         schema_name = self.sources_config["name"]
         model = self._generate_model_from_schema(schema_dict, schema_name)
 
-        if is_truncate_and_append := options.get("truncate_and_append", False):
-            options.pop("truncate_and_append")
+        is_truncate_and_append = self.options.get("truncate_and_append", False)
 
         with session_for(connection_string) as session:
             self._write_to_database(session, model.__tablename__, df, is_truncate_and_append)  # type: ignore

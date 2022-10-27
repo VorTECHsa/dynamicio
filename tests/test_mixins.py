@@ -1557,10 +1557,7 @@ class TestPostgresIO:
         )
 
         # When
-        write_config = WritePostgresIO(
-            source_config=postgres_cloud_config,
-            **{"truncate_and_append": True},
-        )
+        write_config = WritePostgresIO(source_config=postgres_cloud_config, truncate_and_append=True)
 
         write_config.write(df)
 
