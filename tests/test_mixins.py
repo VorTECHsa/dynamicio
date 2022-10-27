@@ -1544,6 +1544,28 @@ class TestPostgresIO:
         mock__write_to_postgres.assert_called()
 
     @pytest.mark.unit
+    @patch.object(WithPostgres, "_write_to_postgres")
+    def test_write_to_postgres_is_called_with_truncate_and_append_option(self, mock__write_to_postgres, test_df):
+        # Given
+        df = test_df
+        postgres_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(
+            source_key="WRITE_TO_PG_PARQUET",
+        )
+
+        # When
+        write_config = WritePostgresIO(source_config=postgres_cloud_config, truncate_and_append=True)
+
+        write_config.write(df)
+
+        # Then
+        mock__write_to_postgres.assert_called_with(test_df)
+        assert "truncate_and_append" in write_config.options
+
+    @pytest.mark.unit
     @patch.object(WithPostgres, "_read_from_postgres")
     def test_read_from_postgres_by_implicitly_generating_datamodel_from_schema(self, mock__read_from_postgres, test_df):
         # Given

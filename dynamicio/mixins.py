@@ -12,6 +12,7 @@ __all__ = [
     "resolve_template",
 ]
 
+import csv
 import glob
 import inspect
 import os
@@ -672,7 +673,12 @@ class WithS3File(WithLocal):
 
 
 class WithPostgres:
-    """Handles I/O operations for Postgres."""
+    """Handles I/O operations for Postgres.
+
+    Args:
+       - options:
+           - `truncate_and_append: bool`: If set to `True`, truncates the table and then appends the new rows. Otherwise, it drops the table and recreates it with the new rows.
+    """
 
     sources_config: Mapping
     schema: Mapping
@@ -772,10 +778,6 @@ class WithPostgres:
         Args:
             df: The dataframe to be written
         """
-        # engine = sqlalchemy.create_engine(f"postgresql://{USER}:{PASSWORD}@{HOST}:{PORT}/{DB_NAME}")
-        # conn = engine.connect()
-        # cm_volumes.to_sql("cm_volumes", engine, if_exists="append", index=False)
-
         postgres_config = self.sources_config["postgres"]
         db_user = postgres_config["db_user"]
         db_password = postgres_config["db_password"]
@@ -789,19 +791,38 @@ class WithPostgres:
         schema_name = self.sources_config["name"]
         model = self._generate_model_from_schema(schema_dict, schema_name)
 
+        is_truncate_and_append = self.options.get("truncate_and_append", False)
+
         with session_for(connection_string) as session:
-            self._write_to_database(session, model.__tablename__, df)  # type: ignore
+            self._write_to_database(session, model.__tablename__, df, is_truncate_and_append)  # type: ignore
 
     @staticmethod
-    def _write_to_database(session: SqlAlchemySession, table_name: str, df: pd.DataFrame):
+    def _write_to_database(session: SqlAlchemySession, table_name: str, df: pd.DataFrame, is_truncate_and_append: bool):
         """Write a dataframe to any database provided a session with a data model and a table name.
 
         Args:
             session: Generated from a data model and a table name
             table_name: The name of the table to read from a DB
             df: The dataframe to be written out
+            is_truncate_and_append: Supply to truncate the table and append new rows to it; otherwise, delete and replace
         """
-        df.to_sql(name=table_name, con=session.get_bind(), if_exists="replace", index=False)
+        if is_truncate_and_append:
+            session.execute(f"TRUNCATE TABLE {table_name};")
+
+            # Below is a speedup hack in place of `df.to_csv` with the multipart option. As of today, even with
+            # `method="multi"`, uploading to Postgres is painfully slow. Hence, we're resorting to dumping the file as
+            # csv and using Postgres's CSV import function.
+            # https://stackoverflow.com/questions/2987433/how-to-import-csv-file-data-into-a-postgresql-table
+            with tempfile.NamedTemporaryFile(mode="r+") as temp_file:
+                df.to_csv(temp_file, index=False, header=False, sep="\t", doublequote=False, escapechar="\\", quoting=csv.QUOTE_NONE)
+                temp_file.flush()
+                temp_file.seek(0)
+
+                cur = session.connection().connection.cursor()
+                cur.copy_from(temp_file, table_name, columns=df.columns, null="")
+        else:
+            df.to_sql(name=table_name, con=session.get_bind(), if_exists="replace", index=False)
+
         session.commit()
 
 
