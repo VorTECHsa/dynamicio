@@ -807,7 +807,14 @@ class WithPostgres:
         """
         if is_truncate_and_append:
             session.execute(f"TRUNCATE TABLE {table_name};")
-            df.to_sql(name=table_name, con=session.get_bind(), if_exists="append", index=False)
+            df.to_sql(
+                name=table_name,
+                con=session.get_bind(),
+                if_exists="append",
+                index=False,
+                method="multi",
+                chunksize=250000,
+            )
         else:
             df.to_sql(name=table_name, con=session.get_bind(), if_exists="replace", index=False)
 
