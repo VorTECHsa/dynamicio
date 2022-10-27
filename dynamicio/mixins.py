@@ -12,6 +12,7 @@ __all__ = [
     "resolve_template",
 ]
 
+import csv
 import glob
 import inspect
 import os
@@ -807,14 +808,18 @@ class WithPostgres:
         """
         if is_truncate_and_append:
             session.execute(f"TRUNCATE TABLE {table_name};")
-            df.to_sql(
-                name=table_name,
-                con=session.get_bind(),
-                if_exists="append",
-                index=False,
-                method="multi",
-                chunksize=250000,
-            )
+
+            # Below is a speedup hack in place of `df.to_csv` with the multipart option. As of today, even with
+            # `method="multi"`, uploading to Postgres is painfully slow. Hence, we're resorting to dumping the file as
+            # csv and using Postgres's CSV import function.
+            # https://stackoverflow.com/questions/2987433/how-to-import-csv-file-data-into-a-postgresql-table
+            with tempfile.NamedTemporaryFile(mode="r+") as temp_file:
+                df.to_csv(temp_file, index=False, header=False, sep="\t", doublequote=False, escapechar="\\", quoting=csv.QUOTE_NONE)
+                temp_file.flush()
+                temp_file.seek(0)
+
+                cur = session.connection().connection.cursor()
+                cur.copy_from(temp_file, table_name, columns=df.columns, null="")
         else:
             df.to_sql(name=table_name, con=session.get_bind(), if_exists="replace", index=False)
 
