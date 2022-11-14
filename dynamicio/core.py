@@ -259,7 +259,7 @@ class DynamicDataIO:
                     if len(set([type(v) for v in df[column_name].values])) > 1:  # pylint: disable=consider-using-set-comprehension
                         logger.warning(CASTING_WARNING_MSG.format(column_name, expected_dtype, found_dtype))  # pylint: disable=logging-format-interpolation
                         logger.info(NOTICE_MSG.format(column_name))  # pylint: disable=logging-format-interpolation
-                    df.loc[:, column_name] = df[column_name].astype(self.schema[column_name])
+                    df[column_name] = df[column_name].astype(self.schema[column_name])
                 except (ValueError, TypeError):
                     logger.error(f"ValueError: Tried casting column {self.name}['{column_name}]' to '{expected_dtype}' " f"from '{found_dtype}', but failed")
                     return False

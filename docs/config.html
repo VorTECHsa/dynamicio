@@ -219,11 +219,12 @@ class SafeDynamicSchemaLoader(yaml.SafeLoader):
 
             value = self.dynamic_data_matcher.sub(f&#34;\\g&lt;1&gt;{replacement}\\g&lt;4&gt;&#34;, value)
 
-        try:
-            value = float(value)
-            return value
-        except ValueError:
-            pass
+            try:
+                value = float(value)
+                return value
+            except ValueError:
+                pass
+
         return value
 
 
@@ -915,11 +916,12 @@ are replaced with the respective attributes in te provided module.</dd>
 
             value = self.dynamic_data_matcher.sub(f&#34;\\g&lt;1&gt;{replacement}\\g&lt;4&gt;&#34;, value)
 
-        try:
-            value = float(value)
-            return value
-        except ValueError:
-            pass
+            try:
+                value = float(value)
+                return value
+            except ValueError:
+                pass
+
         return value</code></pre>
 </details>
 <h3>Ancestors</h3>
@@ -1018,11 +1020,12 @@ are replaced with the respective attributes in te provided module.</dd>
 
         value = self.dynamic_data_matcher.sub(f&#34;\\g&lt;1&gt;{replacement}\\g&lt;4&gt;&#34;, value)
 
-    try:
-        value = float(value)
-        return value
-    except ValueError:
-        pass
+        try:
+            value = float(value)
+            return value
+        except ValueError:
+            pass
+
     return value</code></pre>
 </details>
 </dd>

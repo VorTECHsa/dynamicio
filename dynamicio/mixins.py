@@ -964,7 +964,7 @@ class WithKafka:
     def _default_value_serializer(value: Mapping) -> bytes:
         return simplejson.dumps(value, ignore_nan=True).encode("utf-8")
 
-    def _read_from_kafka(self) -> Iterable[Mapping]:
+    def _read_from_kafka(self) -> Iterable[Mapping]:  # type: ignore
         """Read messages from a Kafka Topic and convert them to separate dataframes.
 
         Returns:
