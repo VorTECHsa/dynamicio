@@ -1,6 +1,6 @@
 awscli>=1.22.24
 boto3>=1.20.24
-fastparquet==0.8.0
+fastparquet>=0.8.0
 fsspec==2022.3.0
 kafka-python~=2.0.2
 logzero>=1.7.0
