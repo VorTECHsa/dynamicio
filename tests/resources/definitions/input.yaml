@@ -173,6 +173,20 @@ READ_FROM_POSTGRES:
   schema:
     file_path: "[[ TEST_RESOURCES ]]/schemas/pg.yaml"
 
+READ_FROM_POSTGRES_WITH_QUERY_IN_OPTIONS:
+  CLOUD:
+    type: "postgres"
+    postgres:
+      db_host: "[[ DB_HOST ]]"
+      db_port: "[[ DB_PORT ]]"
+      db_name: "[[ DB_NAME ]]"
+      db_user: "[[ DB_USER ]]"
+      db_password: "[[ DB_PASS ]]"
+    options:
+      sql_query: "SELECT * FROM table_name_from_yaml_options"
+  schema:
+    file_path: "[[ TEST_RESOURCES ]]/schemas/pg.yaml"
+
 READ_FROM_KAFKA:
   LOCAL:
     type: "local"

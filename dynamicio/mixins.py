@@ -706,9 +706,7 @@ class WithPostgres:
 
         connection_string = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
 
-        sql_query = self.options.get("sql_query")
-
-        query = None
+        sql_query = self.options.pop("sql_query", None)
 
         if "schema" not in self.sources_config:
             schema_dict = self.schema
@@ -722,6 +720,7 @@ class WithPostgres:
         if sql_query:
             query = sql_query
 
+        logger.info(f"[postgres] Started downloading table: {schema_name} from: {db_host}:{db_name}")
         with session_for(connection_string) as session:
             return self._read_database(session, query, **self.options)
 
@@ -765,9 +764,6 @@ class WithPostgres:
         Returns:
             DataFrame
         """
-        if options.get("model"):
-            options.pop("model")
-
         if isinstance(query, Query):
             query = query.with_session(session).statement
         return pd.read_sql(sql=query, con=session.get_bind(), **options)
@@ -793,6 +789,7 @@ class WithPostgres:
 
         is_truncate_and_append = self.options.get("truncate_and_append", False)
 
+        logger.info(f"[postgres] Started downloading table: {schema_name} from: {db_host}:{db_name}")
         with session_for(connection_string) as session:
             self._write_to_database(session, model.__tablename__, df, is_truncate_and_append)  # type: ignore
 
