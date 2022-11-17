@@ -706,9 +706,7 @@ class WithPostgres:
 
         connection_string = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
 
-        sql_query = self.options.get("sql_query")
-
-        query = None
+        sql_query = self.options.pop("sql_query", None)
 
         if "schema" not in self.sources_config:
             schema_dict = self.schema
@@ -765,9 +763,6 @@ class WithPostgres:
         Returns:
             DataFrame
         """
-        if options.get("model"):
-            options.pop("model")
-
         if isinstance(query, Query):
             query = query.with_session(session).statement
         return pd.read_sql(sql=query, con=session.get_bind(), **options)

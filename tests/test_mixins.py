@@ -1594,7 +1594,23 @@ class TestPostgresIO:
         ReadPostgresIO(source_config=postgres_cloud_config, sql_query="SELECT * FROM example").read()
 
         # Then
-        mock__read_database.assert_called_with(ANY, "SELECT * FROM example", sql_query="SELECT * FROM example")
+        mock__read_database.assert_called_with(ANY, "SELECT * FROM example")
+
+    @pytest.mark.unit
+    @patch.object(WithPostgres, "_read_database")
+    def test_read_from_postgres_with_query_in_options(self, mock__read_database):
+        # Given
+        postgres_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_POSTGRES_WITH_QUERY_IN_OPTIONS")
+
+        # When
+        ReadPostgresIO(source_config=postgres_cloud_config).read()
+
+        # Then
+        mock__read_database.assert_called_with(ANY, "SELECT * FROM table_name_from_yaml_options")
 
     @pytest.mark.unit
     @patch.object(pd, "read_sql")
