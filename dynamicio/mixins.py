@@ -720,6 +720,7 @@ class WithPostgres:
         if sql_query:
             query = sql_query
 
+        logger.info(f"[postgres] Started downloading table: {schema_name} from: {db_host}:{db_name}")
         with session_for(connection_string) as session:
             return self._read_database(session, query, **self.options)
 
@@ -788,6 +789,7 @@ class WithPostgres:
 
         is_truncate_and_append = self.options.get("truncate_and_append", False)
 
+        logger.info(f"[postgres] Started downloading table: {schema_name} from: {db_host}:{db_name}")
         with session_for(connection_string) as session:
             self._write_to_database(session, model.__tablename__, df, is_truncate_and_append)  # type: ignore
 
