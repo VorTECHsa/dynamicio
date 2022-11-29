@@ -29,21 +29,12 @@ class DynamicDataIO:
        >>>     os.getenv("ENVIRONMENT",default="LOCAL")
        >>> )
        >>>
-       >>> class CmVolumesIO(DynamicDataIO):
-       >>>     schema = {
-       >>>         "id": "object",
-       >>>         "product_id": "object",
-       >>>         "tonnes": "float64",
-       >>>         "cubic_metres": "float64",
-       >>>     }
+       >>> class IO(WithS3File, WithLocal, DynamicDataIO):
+       >>>     schema = S
        >>>
-       >>>     @staticmethod
-       >>>     def validate(df: pd.DataFrame):
-       >>>         pass
-       >>>
-       >>> cm_volumes_local_mapping = input_config.get(source_key="CM_VOLUMES")
-       >>> cm_volumes_io = CmVolumesIO(cm_volumes_local_mapping, model=CmVolume)
-       >>> cm_volumes_df = cm_volumes_io.read()
+       >>> my_dataset_local_mapping = input_config.get(source_key="MY_DATASET")
+       >>> my_dataset_io = IO(my_dataset_local_mapping)
+       >>> my_dataset_df = my_dataset_io.read()
     """
 
     schema: Mapping
