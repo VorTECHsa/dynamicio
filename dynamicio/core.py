@@ -247,7 +247,7 @@ class DynamicDataIO:
                 if self.show_casting_warnings:
                     logger.info(f"Expected: '{expected_dtype}' dtype for {self.name}['{column_name}]', found '{found_dtype}'")
                 try:
-                    if len({type(v) for v in df[column_name].values}) > 1:  # pylint: disable=consider-using-set-comprehension
+                    if len(set(type(v) for v in df[column_name].values)) > 1:  # pylint: disable=consider-using-set-comprehension
                         logger.warning(CASTING_WARNING_MSG.format(column_name, expected_dtype, found_dtype))  # pylint: disable=logging-format-interpolation
                         logger.info(NOTICE_MSG.format(column_name))  # pylint: disable=logging-format-interpolation
                     df[column_name] = df[column_name].astype(self.schema[column_name])
