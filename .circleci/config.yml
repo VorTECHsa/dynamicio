@@ -46,8 +46,9 @@ jobs:
           name: "Install requirements"
           command: |
             pip install --upgrade pip
-            pip install -r requirements.txt
-            pip install -r requirements-dev.txt
+            pip install \
+              -r requirements.txt \
+              -r requirements-dev.txt
       - run:
           name: "Run Python Tests"
           command: |
@@ -73,8 +74,9 @@ jobs:
           name: "Install requirements"
           command: |
             pip install --upgrade pip
-            pip install -r requirements.txt
-            pip install -r requirements-dev.txt
+            pip install \
+              -r requirements.txt \
+              -r requirements-dev.txt
       - run:
           name: "Run Python Tests"
           command: |
@@ -100,8 +102,9 @@ jobs:
           name: "Install requirements"
           command: |
             pip install --upgrade pip
-            pip install -r requirements.txt
-            pip install -r requirements-dev.txt
+            pip install \
+              -r requirements.txt \
+              -r requirements-dev.txt
       - run:
           name: "Run Python Tests"
           command: |
