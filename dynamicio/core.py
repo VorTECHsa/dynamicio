@@ -12,7 +12,7 @@ import pandas as pd  # type: ignore
 from magic_logger import logger
 
 from dynamicio import validations
-from dynamicio.errors import CASTING_WARNING_MSG, NOTICE_MSG, ColumnsDataTypeError, MissingSchemaDefinition, SchemaNotFoundError, SchemaValidationError
+from dynamicio.errors import CASTING_WARNING_MSG, ColumnsDataTypeError, MissingSchemaDefinition, NOTICE_MSG, SchemaNotFoundError, SchemaValidationError
 from dynamicio.metrics import get_metric
 
 SCHEMA_FROM_FILE = {"schema": object()}
@@ -133,7 +133,7 @@ class DynamicDataIO:
             df: The data to be written
         """
         source_name = self.sources_config.get("type")
-        if set(list(df.columns)) != set(self.schema.keys()):  # pylint: disable=E1101
+        if set(df.columns) != set(self.schema.keys()):  # pylint: disable=E1101
             columns = [column for column in df.columns.to_list() if column in self.schema.keys()]
             df = df[columns]
 
@@ -247,7 +247,7 @@ class DynamicDataIO:
                 if self.show_casting_warnings:
                     logger.info(f"Expected: '{expected_dtype}' dtype for {self.name}['{column_name}]', found '{found_dtype}'")
                 try:
-                    if len(set([type(v) for v in df[column_name].values])) > 1:  # pylint: disable=consider-using-set-comprehension
+                    if len({type(v) for v in df[column_name].values}) > 1:  # pylint: disable=consider-using-set-comprehension
                         logger.warning(CASTING_WARNING_MSG.format(column_name, expected_dtype, found_dtype))  # pylint: disable=logging-format-interpolation
                         logger.info(NOTICE_MSG.format(column_name))  # pylint: disable=logging-format-interpolation
                     df[column_name] = df[column_name].astype(self.schema[column_name])

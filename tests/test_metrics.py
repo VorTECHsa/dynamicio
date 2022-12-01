@@ -3,7 +3,7 @@ import logging
 
 import pytest
 
-from dynamicio.metrics import Counts, CountsPerLabel, Max, Mean, Min, Std, UniqueCounts, Variance, log_metric
+from dynamicio.metrics import Counts, CountsPerLabel, log_metric, Max, Mean, Min, Std, UniqueCounts, Variance
 
 
 @pytest.fixture(autouse=True, scope="module")

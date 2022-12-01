@@ -1,5 +1,11 @@
 [flake8]
-ignore = E203, E266, E501, W503, F403, F401
+ignore = E203, E266, E501, W503, F403
+per-file-ignores = 
+    # F401: imported but unused
+    __init__.py: F401
+    # Allow print() in cli.py and tests
+    cli.py: T
+    tests/*: T
 exclude =
     .git,
     .circleci
@@ -7,4 +13,7 @@ exclude =
     docs,
 max-line-length = 185
 max-complexity = 18
-select = B,C,E,F,W,T4,B9
+select = B,C,E,F,W,T,I,B
+
+import-order-style = edited
+application-import-names = dynamicio, tests
