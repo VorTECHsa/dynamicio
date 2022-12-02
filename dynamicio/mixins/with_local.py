@@ -4,15 +4,36 @@
 
 import glob
 import os
-
-
-from typing import Any, Mapping, MutableMapping
+from contextlib import contextmanager
+from threading import Lock
+from typing import Any, Mapping, MutableMapping, Optional
 
 import pandas as pd  # type: ignore
 from fastparquet import ParquetFile, write  # type: ignore
 from pyarrow.parquet import read_table, write_table  # type: ignore # pylint: disable=no-name-in-module
 
-from . import utils, file_formats
+from . import utils
+
+hdf_lock = Lock()
+
+
+@contextmanager
+def pickle_protocol(protocol: Optional[int]):
+    """Downgrade to the provided pickle protocol within the context manager.
+
+    Args:
+        protocol: The number of the protocol HIGHEST_PROTOCOL to downgrade to. Defaults to 4, which covers python 3.4 and higher.
+    """
+    import pickle  # pylint: disable=import-outside-toplevel
+
+    previous = pickle.HIGHEST_PROTOCOL
+    try:
+        pickle.HIGHEST_PROTOCOL = 4
+        if protocol:
+            pickle.HIGHEST_PROTOCOL = protocol
+        yield
+    finally:
+        pickle.HIGHEST_PROTOCOL = previous
 
 
 class WithLocal:
@@ -79,7 +100,9 @@ class WithLocal:
         Returns:
             DataFrame: The dataframe read from the hdf file.
         """
-        df = file_formats.HDF().read_local_file(file_path, options)
+        with hdf_lock:
+            df = pd.read_hdf(file_path, **options)
+
         columns = [column for column in df.columns.to_list() if column in schema.keys()]
         df = df[columns]
         return df
@@ -99,7 +122,7 @@ class WithLocal:
             DataFrame: The dataframe read from the csv file.
         """
         options["usecols"] = list(schema.keys())
-        return file_formats.CSV().read_local_file(file_path, options)
+        return pd.read_csv(file_path, **options)
 
     @staticmethod
     @utils.allow_options(pd.read_json)
@@ -115,7 +138,7 @@ class WithLocal:
         Returns:
             DataFrame
         """
-        df = file_formats.JSON().read_local_file(file_path, options)
+        df = pd.read_json(file_path, **options)
         columns = [column for column in df.columns.to_list() if column in schema.keys()]
         df = df[columns]
         return df
@@ -142,12 +165,12 @@ class WithLocal:
     @classmethod
     @utils.allow_options([*utils.args_of(pd.read_parquet), *utils.args_of(read_table)])
     def __read_with_pyarrow(cls, file_path: str, **options: Any) -> pd.DataFrame:
-        return file_formats.Parquet().read_local_file(file_path, options)
+        return pd.read_parquet(file_path, **options)
 
     @classmethod
     @utils.allow_options([*utils.args_of(pd.read_parquet), *utils.args_of(ParquetFile)])
     def __read_with_fastparquet(cls, file_path: str, **options: Any) -> pd.DataFrame:
-        return file_formats.Parquet().read_local_file(file_path, options)
+        return pd.read_parquet(file_path, **options)
 
     @staticmethod
     @utils.allow_options([*utils.args_of(pd.DataFrame.to_hdf), *["protocol"]])
@@ -168,10 +191,8 @@ class WithLocal:
                 - The pandas `to_hdf` options, &;
                 - protocol: The pickle protocol to use for writing the hdf file out; a value <=5.
         """
-        merged_options = {"key": "df", "mode": "w"}
-        pickle_protocol = options.pop("protocol", None)
-        merged_options.update(options)
-        return file_formats.HDF(pickle_protocol=pickle_protocol).write_local_file(df, file_path, merged_options)
+        with pickle_protocol(protocol=options.pop("protocol", None)), hdf_lock:
+            df.to_hdf(file_path, key="df", mode="w", **options)
 
     @staticmethod
     @utils.allow_options(pd.DataFrame.to_csv)
@@ -185,7 +206,7 @@ class WithLocal:
             file_path: The location where the file needs to be written.
             options: Options relative to writing a csv file.
         """
-        return file_formats.CSV().write_local_file(df, file_path, options)
+        df.to_csv(file_path, **options)
 
     @staticmethod
     @utils.allow_options(pd.DataFrame.to_json)
@@ -199,7 +220,7 @@ class WithLocal:
             file_path: The location where the file needs to be written.
             options: Options relative to writing a json file.
         """
-        return file_formats.JSON().write_local_file(df, file_path, options)
+        df.to_json(file_path, **options)
 
     @staticmethod
     def _write_parquet_file(df: pd.DataFrame, file_path: str, **options: Any):
@@ -218,13 +239,13 @@ class WithLocal:
 
     @classmethod
     @utils.allow_options([*utils.args_of(pd.DataFrame.to_parquet), *utils.args_of(write_table)])
-    def __write_with_pyarrow(cls, df: pd.DataFrame, file_path: str, **options: Any):
-        return file_formats.Parquet().write_local_file(df, file_path, options)
+    def __write_with_pyarrow(cls, df: pd.DataFrame, filepath: str, **options: Any) -> pd.DataFrame:
+        return df.to_parquet(filepath, **options)
 
     @classmethod
     @utils.allow_options([*utils.args_of(pd.DataFrame.to_parquet), *utils.args_of(write)])
-    def __write_with_fastparquet(cls, df: pd.DataFrame, file_path: str, **options: Any):
-        return file_formats.Parquet().write_local_file(df, file_path, options)
+    def __write_with_fastparquet(cls, df: pd.DataFrame, filepath: str, **options: Any) -> pd.DataFrame:
+        return df.to_parquet(filepath, **options)
 
 
 class WithLocalBatch(WithLocal):
