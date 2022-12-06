@@ -2,13 +2,17 @@
 
 """This module provides mixins that are providing S3 I/O support."""
 
+import io
 import os
 import tempfile
+import uuid
 from contextlib import contextmanager
-from typing import Generator
+from typing import Generator, IO, Optional
 
 import boto3  # type: ignore
 import pandas as pd  # type: ignore
+import s3fs  # type: ignore
+import tables  # type: ignore
 from awscli.clidriver import create_clidriver  # type: ignore
 from magic_logger import logger
 
@@ -17,6 +21,57 @@ from . import (
     utils,
     with_local,
 )
+
+
+class InMemStore(pd.io.pytables.HDFStore):
+    """A subclass of pandas HDFStore that does not manage the pytables File object"""
+
+    _in_mem_table = None
+
+    def __init__(self, path: str, table: tables.File, mode: str = "r"):
+        self._in_mem_table = table
+        super().__init__(path=path, mode=mode)
+
+    def open(self, *_args, **_kwargs):
+        pd.io.pytables._tables()
+        self._handle = self._in_mem_table
+
+    def close(self, *_args, **_kwargs):
+        pass
+
+    @property
+    def is_open(self):
+        return self._handle is not None
+
+
+class HDFIo:
+    """Class providing stream support for HDF tables"""
+
+    @contextmanager
+    def create_file(self, label: str, mode: str, data: bytes = None) -> Generator[tables.File, None, None]:
+        """Create an in-memory pytables table"""
+        extra_kw = {}
+        if data:
+            extra_kw["driver_core_image"] = data
+        file_handle = tables.File(f"{label}_{uuid.uuid4()}.h5", mode, title=label, root_uep="/", filters=None, driver="H5FD_CORE", driver_core_backing_store=0, **extra_kw)
+        try:
+            yield file_handle
+        finally:
+            file_handle.close()
+
+    def load(self, fobj: IO[bytes], label: str = "unknown_file.h5") -> pd.DataFrame:
+        """Load the dataframe from an file-like object"""
+        with self.create_file(label, mode="r", data=fobj.read()) as file_handle:
+            return pd.read_hdf(InMemStore(label, file_handle))
+
+    def save(self, df: pd.DataFrame, fobj: IO[bytes], label: str = "unknown_file.h5", options: Optional[dict] = None):
+        """Load the dataframe to a file-like object"""
+        if not options:
+            options = {}
+        with self.create_file(label, mode="w", data=fobj.read()) as file_handle:
+            store = InMemStore(path=label, table=file_handle, mode="w")
+            store.put(key="df", value=df, **options)
+            fobj.write(file_handle.get_file_image())
 
 
 def awscli_runner(*cmd: str):
@@ -114,8 +169,19 @@ class WithS3PathPrefix(with_local.WithLocal):
         full_path_prefix = utils.resolve_template(f"s3://{bucket}/{path_prefix}", self.options)
 
         # The `no_disk_space` option should be used only when reading a subset of columns from S3
-        if self.options.pop("no_disk_space", False) and file_type == "parquet":
-            return self._read_parquet_file(full_path_prefix, self.schema, **self.options)
+        if self.options.pop("no_disk_space", False):
+            no_disk_space_rv = None
+            if file_type == "parquet":
+                no_disk_space_rv = self._read_parquet_file(full_path_prefix, self.schema, **self.options)
+            elif file_type == "hdf":
+                dfs = []
+                for fobj in self._iter_s3_files(full_path_prefix, file_ext=".h5"):
+                    dfs.append(HDFIo().load(fobj))
+                df = pd.concat(dfs, ignore_index=True)
+                columns = [column for column in df.columns.to_list() if column in self.schema.keys()]
+                no_disk_space_rv = df[columns]
+            if no_disk_space_rv is not None:
+                return no_disk_space_rv
 
         with tempfile.TemporaryDirectory() as temp_dir:
             # aws-cli is shown to be up to 6 times faster when downloading the complete dataset from S3 than using the boto3
@@ -140,6 +206,14 @@ class WithS3PathPrefix(with_local.WithLocal):
 
             return pd.concat(dfs, ignore_index=True)
 
+    def _iter_s3_files(self, s3_prefix: str, file_ext: Optional[str] = None) -> Generator[IO[bytes], None, None]:
+        s3_fs = s3fs.S3FileSystem()
+        for file in s3_fs.ls(s3_prefix):
+            good_file = (not file_ext) or (file.endswith(file_ext))
+            if good_file:
+                with s3_fs.open(file, "rb") as fin:
+                    yield fin
+
 
 class WithS3File(with_local.WithLocal):
     """Handles I/O operations for AWS S3.
@@ -155,8 +229,10 @@ class WithS3File(with_local.WithLocal):
     boto3_client = boto3.client("s3")
 
     @contextmanager
-    def _s3_reader(self, s3_bucket: str, s3_key: str) -> Generator:
+    def _s3_named_file_reader(self, s3_bucket: str, s3_key: str) -> Generator:
         """Contextmanager to abstract reading different file types in S3.
+
+        This implementation saves the downloaded data to a temporary file.
 
         Args:
             s3_bucket: The S3 bucket from where to read the file.
@@ -174,7 +250,28 @@ class WithS3File(with_local.WithLocal):
             yield target_file
 
     @contextmanager
-    def _s3_writer(self, s3_bucket: str, s3_key: str) -> Generator:
+    def _s3_reader(self, s3_bucket: str, s3_key: str) -> Generator[io.BytesIO, None, None]:
+        """Contextmanager to abstract reading different file types in S3.
+
+         This implementation only retains data in-memory, avoiding creating any temp files.
+
+        Args:
+            s3_bucket: The S3 bucket from where to read the file.
+            s3_key: The file-path to the target file to be read.
+
+        Returns:
+            The local file path from where the file can be read, once it has been downloaded there by the boto3.client.
+
+        """
+        fobj = io.BytesIO()
+        # Download the file from S3
+        self.boto3_client.download_fileobj(s3_bucket, s3_key, fobj)
+        # Yield the buffer
+        fobj.seek(0)
+        yield fobj
+
+    @contextmanager
+    def _s3_writer(self, s3_bucket: str, s3_key: str) -> Generator[IO[bytes], None, None]:
         """Contextmanager to abstract loading different file types to S3.
 
         Args:
@@ -184,13 +281,10 @@ class WithS3File(with_local.WithLocal):
         Returns:
             The local file path where to actually write the file, to be read and uploaded by boto3.client.
         """
-        with tempfile.NamedTemporaryFile("wb") as target_file:
-            # Yield local file path to body of `with` statement
-            yield target_file
-            target_file.flush()
-
-            # Upload the file to S3
-            self.boto3_client.upload_file(target_file.name, s3_bucket, s3_key, ExtraArgs={"ACL": "bucket-owner-full-control"})
+        fobj = io.BytesIO()
+        yield fobj
+        fobj.seek(0)
+        self.boto3_client.upload_fileobj(fobj, s3_bucket, s3_key, ExtraArgs={"ACL": "bucket-owner-full-control"})
 
     def _read_from_s3_file(self) -> pd.DataFrame:
         """Read a file from an S3 bucket as a `DataFrame`.
@@ -214,9 +308,18 @@ class WithS3File(with_local.WithLocal):
         bucket = s3_config["bucket"]
 
         logger.info(f"[s3] Started downloading: s3://{s3_config['bucket']}/{file_path}")
-        if file_type in ["csv", "json", "parquet"] and self.options.pop("no_disk_space", None):
-            return getattr(self, f"_read_{file_type}_file")(f"s3://{s3_config['bucket']}/{file_path}", self.schema, **self.options)  # type: ignore
-        with self._s3_reader(s3_bucket=bucket, s3_key=file_path) as target_file:  # type: ignore
+        if self.options.pop("no_disk_space", None):
+            no_disk_space_rv = None
+            if file_type in ["csv", "json", "parquet"]:
+                no_disk_space_rv = getattr(self, f"_read_{file_type}_file")(f"s3://{s3_config['bucket']}/{file_path}", self.schema, **self.options)  # type: ignore
+            elif file_type == "hdf":
+                with self._s3_reader(s3_bucket=bucket, s3_key=file_path) as fobj:  # type: ignore
+                    no_disk_space_rv = HDFIo().load(fobj)  # type: ignore
+            else:
+                raise NotImplementedError(f"Unsupported file type {file_type!r}.")
+            if no_disk_space_rv is not None:
+                return no_disk_space_rv
+        with self._s3_named_file_reader(s3_bucket=bucket, s3_key=file_path) as target_file:  # type: ignore
             return getattr(self, f"_read_{file_type}_file")(target_file.name, self.schema, **self.options)  # type: ignore
 
     def _write_to_s3_file(self, df: pd.DataFrame):
@@ -240,8 +343,10 @@ class WithS3File(with_local.WithLocal):
         if file_type in ["csv", "json", "parquet"]:
             getattr(self, f"_write_{file_type}_file")(df, f"s3://{s3_config['bucket']}/{file_path}", **self.options)  # type: ignore
         elif file_type == "hdf":
-            with self._s3_writer(s3_bucket=s3_config["bucket"], s3_key=file_path) as target_file:  # type: ignore
-                self._write_hdf_file(df, target_file.name, **self.options)  # type: ignore
+            hdf_options = dict(self.options)
+            pickle_protocol = hdf_options.pop("pickle_protocol", None)
+            with self._s3_writer(s3_bucket=s3_config["bucket"], s3_key=file_path) as target_file, utils.pickle_protocol(protocol=pickle_protocol):
+                HDFIo().save(df, target_file, hdf_options)  # type: ignore
         else:
             raise ValueError(f"File type: {file_type} not supported!")
         logger.info(f"[s3] Finished uploading: s3://{s3_config['bucket']}/{file_path}")

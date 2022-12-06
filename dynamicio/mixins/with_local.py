@@ -4,9 +4,8 @@
 
 import glob
 import os
-from contextlib import contextmanager
 from threading import Lock
-from typing import Any, Mapping, MutableMapping, Optional
+from typing import Any, Mapping, MutableMapping
 
 import pandas as pd  # type: ignore
 from fastparquet import ParquetFile, write  # type: ignore
@@ -15,25 +14,6 @@ from pyarrow.parquet import read_table, write_table  # type: ignore # pylint: di
 from . import utils
 
 hdf_lock = Lock()
-
-
-@contextmanager
-def pickle_protocol(protocol: Optional[int]):
-    """Downgrade to the provided pickle protocol within the context manager.
-
-    Args:
-        protocol: The number of the protocol HIGHEST_PROTOCOL to downgrade to. Defaults to 4, which covers python 3.4 and higher.
-    """
-    import pickle  # pylint: disable=import-outside-toplevel
-
-    previous = pickle.HIGHEST_PROTOCOL
-    try:
-        pickle.HIGHEST_PROTOCOL = 4
-        if protocol:
-            pickle.HIGHEST_PROTOCOL = protocol
-        yield
-    finally:
-        pickle.HIGHEST_PROTOCOL = previous
 
 
 class WithLocal:
@@ -191,7 +171,7 @@ class WithLocal:
                 - The pandas `to_hdf` options, &;
                 - protocol: The pickle protocol to use for writing the hdf file out; a value <=5.
         """
-        with pickle_protocol(protocol=options.pop("protocol", None)), hdf_lock:
+        with utils.pickle_protocol(protocol=options.pop("protocol", None)), hdf_lock:
             df.to_hdf(file_path, key="df", mode="w", **options)
 
     @staticmethod

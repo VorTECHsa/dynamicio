@@ -306,10 +306,13 @@ def expected_postgres_cloud_mapping():
 def expected_s3_parquet_df():
     return pd.read_parquet(f"{constants.TEST_RESOURCES}/data/input/some_parquet_to_read.parquet")
 
+@pytest.fixture(scope="class")
+def expected_s3_hdf_file_path():
+    return f"{constants.TEST_RESOURCES}/data/input/some_hdf_to_read.h5"
 
 @pytest.fixture(scope="class")
-def expected_s3_hdf_df():
-    return pd.read_hdf(f"{constants.TEST_RESOURCES}/data/input/some_hdf_to_read.h5")
+def expected_s3_hdf_df(expected_s3_hdf_file_path):
+    return pd.read_hdf(expected_s3_hdf_file_path)
 
 
 @pytest.fixture(scope="class")
