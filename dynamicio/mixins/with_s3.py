@@ -6,12 +6,14 @@ import io
 import os
 import tempfile
 import uuid
+import dataclasses
+import urllib.parse
 from contextlib import contextmanager
 from typing import Generator, IO, Optional
 
+import s3transfer.futures  # type: ignore
 import boto3  # type: ignore
 import pandas as pd  # type: ignore
-import s3fs  # type: ignore
 import tables  # type: ignore
 from awscli.clidriver import create_clidriver  # type: ignore
 from magic_logger import logger
@@ -94,11 +96,23 @@ def awscli_runner(*cmd: str):
         raise RuntimeError(f"AWS CLI exited with code {exit_code}")
 
 
+@dataclasses.dataclass
+class S3TransferHandle:
+    """A dataclass used to track an ongoing data download from the s3"""
+
+    s3_object: object  # boto3.resource('s3').ObjectSummary
+    fobj: IO[bytes]  # file-like object the data is being downloaded to
+    done_future: s3transfer.futures.BaseTransferFuture
+
+
 class WithS3PathPrefix(with_local.WithLocal):
     """Handles I/O operations for AWS S3; implements read operations only.
 
     This mixin assumes that the directories it reads from will only contain a single file-type.
     """
+
+    boto3_resource = boto3.resource("s3")
+    boto3_client = boto3.client("s3")
 
     def _write_to_s3_path_prefix(self, df: pd.DataFrame):
         """Write a DataFrame to an S3 path prefix.
@@ -175,7 +189,11 @@ class WithS3PathPrefix(with_local.WithLocal):
                 no_disk_space_rv = self._read_parquet_file(full_path_prefix, self.schema, **self.options)
             elif file_type == "hdf":
                 dfs = []
-                for fobj in self._iter_s3_files(full_path_prefix, file_ext=".h5"):
+                for fobj in self._iter_s3_files(
+                    full_path_prefix,
+                    file_ext=".h5",
+                    max_memory_use=1024**3,  # 1 gib
+                ):
                     dfs.append(HDFIo().load(fobj))
                 df = pd.concat(dfs, ignore_index=True)
                 columns = [column for column in df.columns.to_list() if column in self.schema.keys()]
@@ -206,13 +224,44 @@ class WithS3PathPrefix(with_local.WithLocal):
 
             return pd.concat(dfs, ignore_index=True)
 
-    def _iter_s3_files(self, s3_prefix: str, file_ext: Optional[str] = None) -> Generator[IO[bytes], None, None]:
-        s3_fs = s3fs.S3FileSystem()
-        for file in s3_fs.ls(s3_prefix):
-            good_file = (not file_ext) or (file.endswith(file_ext))
-            if good_file:
-                with s3_fs.open(file, "rb") as fin:
-                    yield fin
+    def _iter_s3_files(self, s3_prefix: str, file_ext: Optional[str] = None, max_memory_use: int = -1) -> Generator[IO[bytes], None, None]:  #  pylint: disable=too-many-locals
+        """Download sways of S3 objects.
+
+        Parameters:
+            s3_prefix: s3 url to fetch objects with
+            file_ext: extension of s3 objects to allow through
+            max_memory_use: The approximate number of bytes to allocate on each yield of Generator
+        """
+        parsed_url = urllib.parse.urlparse(s3_prefix)
+        assert parsed_url.scheme == "s3", f"{s3_prefix!r} should be an s3 url"
+        bucket_name = parsed_url.netloc
+        file_prefix = f"{parsed_url.path.strip('/')}/"
+        s3_objects_to_fetch = []
+        # Collect objects to be loaded
+        for s3_object in self.boto3_resource.Bucket(bucket_name).objects.filter(Prefix=file_prefix):
+            good_object = (not file_ext) or (s3_object.key.endswith(file_ext))
+            if good_object:
+                s3_objects_to_fetch.append(s3_object)
+
+        if max_memory_use < 0:
+            # Unlimited memory use - fetch ALL
+            max_memory_use = sum(s3_obj.size for s3_obj in s3_objects_to_fetch) * 2
+        transfer_config = boto3.s3.transfer.TransferConfig(max_concurrency=20)
+        while s3_objects_to_fetch:
+            mem_use_left = max_memory_use
+            handles = []
+            with boto3.s3.transfer.create_transfer_manager(self.boto3_client, transfer_config) as transfer_manager:
+                while mem_use_left > 0 and s3_objects_to_fetch:
+                    s3_object = s3_objects_to_fetch.pop()
+                    fobj = io.BytesIO()
+                    future = transfer_manager.download(bucket_name, s3_object.key, fobj)
+                    handles.append(S3TransferHandle(s3_object, fobj, future))
+                    mem_use_left -= s3_object.size
+                # Leaving the `transfer_manager` context implicitly waits for all downloads to complete
+            # Rewind and yield all fobjs
+            for handle in handles:
+                handle.fobj.seek(0)
+                yield handle.fobj
 
 
 class WithS3File(with_local.WithLocal):
