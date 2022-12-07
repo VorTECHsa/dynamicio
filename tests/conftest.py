@@ -308,7 +308,7 @@ def expected_s3_hdf_file_path():
 
 
 @pytest.fixture(scope="class")
-def expected_s3_hdf_df(expected_s3_hdf_file_path): # pylint: disable=redefined-outer-name
+def expected_s3_hdf_df(expected_s3_hdf_file_path):  # pylint: disable=redefined-outer-name
     return pd.read_hdf(expected_s3_hdf_file_path)
 
 
