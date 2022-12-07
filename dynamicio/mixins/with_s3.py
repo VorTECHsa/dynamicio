@@ -2,18 +2,18 @@
 
 """This module provides mixins that are providing S3 I/O support."""
 
+import dataclasses
 import io
 import os
 import tempfile
-import uuid
-import dataclasses
 import urllib.parse
+import uuid
 from contextlib import contextmanager
 from typing import Generator, IO, Optional
 
-import s3transfer.futures  # type: ignore
 import boto3  # type: ignore
 import pandas as pd  # type: ignore
+import s3transfer.futures  # type: ignore
 import tables  # type: ignore
 from awscli.clidriver import create_clidriver  # type: ignore
 from magic_logger import logger
@@ -224,7 +224,7 @@ class WithS3PathPrefix(with_local.WithLocal):
 
             return pd.concat(dfs, ignore_index=True)
 
-    def _iter_s3_files(self, s3_prefix: str, file_ext: Optional[str] = None, max_memory_use: int = -1) -> Generator[IO[bytes], None, None]:  #  pylint: disable=too-many-locals
+    def _iter_s3_files(self, s3_prefix: str, file_ext: Optional[str] = None, max_memory_use: int = -1) -> Generator[IO[bytes], None, None]:  # pylint: disable=too-many-locals
         """Download sways of S3 objects.
 
         Parameters:
