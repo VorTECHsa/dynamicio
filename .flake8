@@ -2,7 +2,8 @@
 ignore = E203, E266, E501, W503, F403
 per-file-ignores = 
     # F401: imported but unused
-    __init__.py: F401
+    # I252: Relative imports are banned
+    __init__.py: F401, I252
     # Allow print() in cli.py and tests
     cli.py: T
     tests/*: T
@@ -19,3 +20,4 @@ ban-relative-imports = true
 
 import-order-style = edited
 application-import-names = dynamicio, tests
+ban-relative-imports=true
