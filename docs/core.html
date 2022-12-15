@@ -41,7 +41,7 @@ import pandas as pd  # type: ignore
 from magic_logger import logger
 
 from dynamicio import validations
-from dynamicio.errors import CASTING_WARNING_MSG, NOTICE_MSG, ColumnsDataTypeError, MissingSchemaDefinition, SchemaNotFoundError, SchemaValidationError
+from dynamicio.errors import CASTING_WARNING_MSG, ColumnsDataTypeError, MissingSchemaDefinition, NOTICE_MSG, SchemaNotFoundError, SchemaValidationError
 from dynamicio.metrics import get_metric
 
 SCHEMA_FROM_FILE = {&#34;schema&#34;: object()}
@@ -58,21 +58,12 @@ class DynamicDataIO:
        &gt;&gt;&gt;     os.getenv(&#34;ENVIRONMENT&#34;,default=&#34;LOCAL&#34;)
        &gt;&gt;&gt; )
        &gt;&gt;&gt;
-       &gt;&gt;&gt; class CmVolumesIO(DynamicDataIO):
-       &gt;&gt;&gt;     schema = {
-       &gt;&gt;&gt;         &#34;id&#34;: &#34;object&#34;,
-       &gt;&gt;&gt;         &#34;product_id&#34;: &#34;object&#34;,
-       &gt;&gt;&gt;         &#34;tonnes&#34;: &#34;float64&#34;,
-       &gt;&gt;&gt;         &#34;cubic_metres&#34;: &#34;float64&#34;,
-       &gt;&gt;&gt;     }
+       &gt;&gt;&gt; class IO(WithS3File, WithLocal, DynamicDataIO):
+       &gt;&gt;&gt;     schema = S
        &gt;&gt;&gt;
-       &gt;&gt;&gt;     @staticmethod
-       &gt;&gt;&gt;     def validate(df: pd.DataFrame):
-       &gt;&gt;&gt;         pass
-       &gt;&gt;&gt;
-       &gt;&gt;&gt; cm_volumes_local_mapping = input_config.get(source_key=&#34;CM_VOLUMES&#34;)
-       &gt;&gt;&gt; cm_volumes_io = CmVolumesIO(cm_volumes_local_mapping, model=CmVolume)
-       &gt;&gt;&gt; cm_volumes_df = cm_volumes_io.read()
+       &gt;&gt;&gt; my_dataset_local_mapping = input_config.get(source_key=&#34;MY_DATASET&#34;)
+       &gt;&gt;&gt; my_dataset_io = IO(my_dataset_local_mapping)
+       &gt;&gt;&gt; my_dataset_df = my_dataset_io.read()
     &#34;&#34;&#34;
 
     schema: Mapping
@@ -171,7 +162,7 @@ class DynamicDataIO:
             df: The data to be written
         &#34;&#34;&#34;
         source_name = self.sources_config.get(&#34;type&#34;)
-        if set(list(df.columns)) != set(self.schema.keys()):  # pylint: disable=E1101
+        if set(df.columns) != set(self.schema.keys()):  # pylint: disable=E1101
             columns = [column for column in df.columns.to_list() if column in self.schema.keys()]
             df = df[columns]
 
@@ -285,7 +276,7 @@ class DynamicDataIO:
                 if self.show_casting_warnings:
                     logger.info(f&#34;Expected: &#39;{expected_dtype}&#39; dtype for {self.name}[&#39;{column_name}]&#39;, found &#39;{found_dtype}&#39;&#34;)
                 try:
-                    if len(set([type(v) for v in df[column_name].values])) &gt; 1:  # pylint: disable=consider-using-set-comprehension
+                    if len(set(type(v) for v in df[column_name].values)) &gt; 1:  # pylint: disable=consider-using-set-comprehension
                         logger.warning(CASTING_WARNING_MSG.format(column_name, expected_dtype, found_dtype))  # pylint: disable=logging-format-interpolation
                         logger.info(NOTICE_MSG.format(column_name))  # pylint: disable=logging-format-interpolation
                     df[column_name] = df[column_name].astype(self.schema[column_name])
@@ -334,21 +325,12 @@ class DynamicDataIO:
 &gt;&gt;&gt;     os.getenv(&quot;ENVIRONMENT&quot;,default=&quot;LOCAL&quot;)
 &gt;&gt;&gt; )
 &gt;&gt;&gt;
-&gt;&gt;&gt; class CmVolumesIO(DynamicDataIO):
-&gt;&gt;&gt;     schema = {
-&gt;&gt;&gt;         &quot;id&quot;: &quot;object&quot;,
-&gt;&gt;&gt;         &quot;product_id&quot;: &quot;object&quot;,
-&gt;&gt;&gt;         &quot;tonnes&quot;: &quot;float64&quot;,
-&gt;&gt;&gt;         &quot;cubic_metres&quot;: &quot;float64&quot;,
-&gt;&gt;&gt;     }
+&gt;&gt;&gt; class IO(WithS3File, WithLocal, DynamicDataIO):
+&gt;&gt;&gt;     schema = S
 &gt;&gt;&gt;
-&gt;&gt;&gt;     @staticmethod
-&gt;&gt;&gt;     def validate(df: pd.DataFrame):
-&gt;&gt;&gt;         pass
-&gt;&gt;&gt;
-&gt;&gt;&gt; cm_volumes_local_mapping = input_config.get(source_key=&quot;CM_VOLUMES&quot;)
-&gt;&gt;&gt; cm_volumes_io = CmVolumesIO(cm_volumes_local_mapping, model=CmVolume)
-&gt;&gt;&gt; cm_volumes_df = cm_volumes_io.read()
+&gt;&gt;&gt; my_dataset_local_mapping = input_config.get(source_key=&quot;MY_DATASET&quot;)
+&gt;&gt;&gt; my_dataset_io = IO(my_dataset_local_mapping)
+&gt;&gt;&gt; my_dataset_df = my_dataset_io.read()
 </code></pre>
 <p>Class constructor.</p>
 <h2 id="args">Args</h2>
@@ -377,21 +359,12 @@ class DynamicDataIO:
        &gt;&gt;&gt;     os.getenv(&#34;ENVIRONMENT&#34;,default=&#34;LOCAL&#34;)
        &gt;&gt;&gt; )
        &gt;&gt;&gt;
-       &gt;&gt;&gt; class CmVolumesIO(DynamicDataIO):
-       &gt;&gt;&gt;     schema = {
-       &gt;&gt;&gt;         &#34;id&#34;: &#34;object&#34;,
-       &gt;&gt;&gt;         &#34;product_id&#34;: &#34;object&#34;,
-       &gt;&gt;&gt;         &#34;tonnes&#34;: &#34;float64&#34;,
-       &gt;&gt;&gt;         &#34;cubic_metres&#34;: &#34;float64&#34;,
-       &gt;&gt;&gt;     }
+       &gt;&gt;&gt; class IO(WithS3File, WithLocal, DynamicDataIO):
+       &gt;&gt;&gt;     schema = S
        &gt;&gt;&gt;
-       &gt;&gt;&gt;     @staticmethod
-       &gt;&gt;&gt;     def validate(df: pd.DataFrame):
-       &gt;&gt;&gt;         pass
-       &gt;&gt;&gt;
-       &gt;&gt;&gt; cm_volumes_local_mapping = input_config.get(source_key=&#34;CM_VOLUMES&#34;)
-       &gt;&gt;&gt; cm_volumes_io = CmVolumesIO(cm_volumes_local_mapping, model=CmVolume)
-       &gt;&gt;&gt; cm_volumes_df = cm_volumes_io.read()
+       &gt;&gt;&gt; my_dataset_local_mapping = input_config.get(source_key=&#34;MY_DATASET&#34;)
+       &gt;&gt;&gt; my_dataset_io = IO(my_dataset_local_mapping)
+       &gt;&gt;&gt; my_dataset_df = my_dataset_io.read()
     &#34;&#34;&#34;
 
     schema: Mapping
@@ -490,7 +463,7 @@ class DynamicDataIO:
             df: The data to be written
         &#34;&#34;&#34;
         source_name = self.sources_config.get(&#34;type&#34;)
-        if set(list(df.columns)) != set(self.schema.keys()):  # pylint: disable=E1101
+        if set(df.columns) != set(self.schema.keys()):  # pylint: disable=E1101
             columns = [column for column in df.columns.to_list() if column in self.schema.keys()]
             df = df[columns]
 
@@ -604,7 +577,7 @@ class DynamicDataIO:
                 if self.show_casting_warnings:
                     logger.info(f&#34;Expected: &#39;{expected_dtype}&#39; dtype for {self.name}[&#39;{column_name}]&#39;, found &#39;{found_dtype}&#39;&#34;)
                 try:
-                    if len(set([type(v) for v in df[column_name].values])) &gt; 1:  # pylint: disable=consider-using-set-comprehension
+                    if len(set(type(v) for v in df[column_name].values)) &gt; 1:  # pylint: disable=consider-using-set-comprehension
                         logger.warning(CASTING_WARNING_MSG.format(column_name, expected_dtype, found_dtype))  # pylint: disable=logging-format-interpolation
                         logger.info(NOTICE_MSG.format(column_name))  # pylint: disable=logging-format-interpolation
                     df[column_name] = df[column_name].astype(self.schema[column_name])
@@ -828,7 +801,7 @@ validation that failed.</dd>
         df: The data to be written
     &#34;&#34;&#34;
     source_name = self.sources_config.get(&#34;type&#34;)
-    if set(list(df.columns)) != set(self.schema.keys()):  # pylint: disable=E1101
+    if set(df.columns) != set(self.schema.keys()):  # pylint: disable=E1101
         columns = [column for column in df.columns.to_list() if column in self.schema.keys()]
         df = df[columns]
 
