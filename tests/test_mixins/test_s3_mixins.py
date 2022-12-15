@@ -1,9 +1,6 @@
 # pylint: disable=no-member, missing-module-docstring, missing-class-docstring, missing-function-docstring, too-many-public-methods, too-few-public-methods, protected-access, C0103, C0302, R0801
 import os
-<<<<<<< HEAD
 import shutil
-=======
->>>>>>> master
 from tempfile import NamedTemporaryFile
 from unittest import mock
 from unittest.mock import patch
@@ -50,11 +47,7 @@ class TestS3FileIO:
 
         # When
         with patch.object(dynamicio.mixins.with_local.WithLocal, "_read_csv_file") as mock__read_csv_file, patch.object(
-<<<<<<< HEAD
             dynamicio.mixins.with_s3.WithS3File, "_s3_named_file_reader"
-=======
-            dynamicio.mixins.with_s3.WithS3File, "_s3_reader"
->>>>>>> master
         ) as mock_s3_reader:
             with open(file_path, "r") as file:  # pylint: disable=unspecified-encoding
                 mock_s3_reader.return_value = file
@@ -122,11 +115,7 @@ class TestS3FileIO:
         mock_read_parquet_file.assert_called()
 
     @pytest.mark.unit
-<<<<<<< HEAD
     def test_s3_reader_is_called_for_loading_a_hdf_with_env_as_cloud_s3_and_type_as_hdf(self, expected_s3_hdf_file_path, expected_s3_hdf_df):
-=======
-    def test_s3_reader_is_called_for_loading_a_hdf_with_env_as_cloud_s3_and_type_as_hdf(self):
->>>>>>> master
         # Given
         s3_hdf_cloud_config = IOConfig(
             path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
@@ -135,7 +124,6 @@ class TestS3FileIO:
         ).get(source_key="READ_FROM_S3_HDF")
 
         # When
-<<<<<<< HEAD
         with patch.object(dynamicio.mixins.with_s3.WithS3File, "boto3_client") as mock__boto3_client:
 
             def mock_download_fobj(s3_bucket, s3_key, target_file):
@@ -147,13 +135,6 @@ class TestS3FileIO:
 
         # Then
         pd.testing.assert_frame_equal(loaded_hdf_pd, expected_s3_hdf_df)
-=======
-        with patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_reader") as mock__s3_reader, patch.object(dynamicio.mixins.with_s3.WithS3File, "_read_hdf_file"):
-            ReadS3HdfIO(source_config=s3_hdf_cloud_config, no_disk_space=True).read()
-
-        # Then
-        mock__s3_reader.assert_called()
->>>>>>> master
 
     @pytest.mark.unit
     def test_s3_reader_is_not_called_for_loading_a_json_with_env_as_cloud_s3_and_type_as_json_and_no_disk_space_flag(self):
@@ -245,24 +226,16 @@ class TestS3FileIO:
         ).get(source_key="READ_FROM_S3_PARQUET")
 
         # When
-<<<<<<< HEAD
         with patch.object(dynamicio.mixins.with_s3.WithS3File, "_read_parquet_file") as mock__read_parquet_file, patch.object(
             dynamicio.mixins.with_s3.WithS3File, "_s3_named_file_reader"
         ):
-=======
-        with patch.object(dynamicio.mixins.with_s3.WithS3File, "_read_parquet_file") as mock__read_parquet_file, patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_reader"):
->>>>>>> master
             mock__read_parquet_file.return_value = expected_s3_parquet_df
             ReadS3ParquetWithDifferentCastableDTypeIO(source_config=s3_parquet_cloud_config).read()
 
         assert True, "No exception was raised"
 
     @pytest.mark.unit
-<<<<<<< HEAD
     @patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_named_file_reader")
-=======
-    @patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_reader")
->>>>>>> master
     @patch.object(dynamicio.mixins.with_s3.WithS3File, "_read_parquet_file")
     def test_columns_data_type_error_exception_is_generated_if_column_dtypes_dont_map_to_the_expected_dtypes(self, mock__s3_reader, moc__read_parquet_file, expected_s3_parquet_df):
         """
@@ -410,23 +383,13 @@ class TestS3FileIO:
         ).get(source_key="WRITE_TO_S3_HDF")
 
         # When
-<<<<<<< HEAD
         with patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_writer") as mock__s3_writer:
-=======
-        with patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_writer") as mock__s3_writer, patch.object(
-            dynamicio.mixins.with_local.WithLocal, "_write_hdf_file"
-        ) as mock__write_hdf_file:
->>>>>>> master
             with NamedTemporaryFile(delete=False) as temp_file:
                 mock__s3_writer.return_value = temp_file
                 WriteS3HdfIO(source_config=s3_hdf_local_config).write(df)
 
         # Then
-<<<<<<< HEAD
         assert os.stat(temp_file.name).st_size == 1064192, "Confirm that the output file size did not change"
-=======
-        mock__write_hdf_file.assert_called()
->>>>>>> master
 
 
 class TestS3PathPrefixIO:
