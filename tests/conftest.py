@@ -3,7 +3,7 @@ import os
 import pickle
 import pickletools
 import tempfile
-from unittest.mock import patch, Mock
+from unittest.mock import Mock, patch
 
 import numpy as np
 import pandas as pd

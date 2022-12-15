@@ -11,10 +11,11 @@ dev-env-setup:
 	@python -m venv ${VENV_DIR}
 	@echo "Installing requirements..."
 	@${VENV_BIN_PATH}/pip install --upgrade pip
-	@${VENV_BIN_PATH}/pip install -r requirements.txt
-	@${VENV_BIN_PATH}/pip install -r requirements-dev.txt
-	@${VENV_BIN_PATH}/pip install -r requirements-docs.txt
-	@${VENV_BIN_PATH}/pip install -r requirements-build.txt
+	@${VENV_BIN_PATH}/pip install \
+		-r requirements.txt \
+		-r requirements-dev.txt \
+		-r requirements-docs.txt \
+		-r requirements-build.txt
 	@echo "Installing pre-commit hook..."
 	@${VENV_BIN_PATH}/pre-commit install
 	@${VENV_BIN_PATH}/pre-commit install --hook-type commit-msg
