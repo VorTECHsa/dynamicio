@@ -162,7 +162,7 @@ class DynamicDataIO:
             df: The data to be written
         """
         source_name = self.sources_config.data_backend_type
-        if set(df.columns) != set(self.schema.keys()):  # pylint: disable=E1101
+        if set(df.columns) != self.schema.column_names:  # pylint: disable=E1101
             columns = [column for column in df.columns.to_list() if column in self.schema.keys()]
             df = df[columns]
 
