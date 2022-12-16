@@ -174,9 +174,14 @@ def expected_input_yaml_dict():
                 "type": "local",
             },
         },
-        "REPLACE_SCHEMA_WITH_DYN_VARS": {
-            "LOCAL": {"local": {"file_path": f"{constants.TEST_RESOURCES}/data/input/{{file_name_to_replace}}.parquet", "file_type": "parquet"}, "type": "local"},
-            "schema": {"file_path": f"{constants.TEST_RESOURCES}/schemas/bar.yaml"},
+        'REPLACE_SCHEMA_WITH_DYN_VARS': {
+            'LOCAL': {
+                'local': {
+                    'file_path': f'{constants.TEST_RESOURCES}/data/input/{{file_name_to_replace}}.parquet',
+                    'file_type': 'parquet'},
+                'type': 'local'},
+            'schema': {
+                'file_path': f'{constants.TEST_RESOURCES}/schemas/bar.yaml'}
         },
         "TEMPLATED_FILE_PATH": {
             "CLOUD": {
@@ -210,7 +215,7 @@ def expected_input_sources():
         "READ_FROM_KAFKA",
         "TEMPLATED_FILE_PATH",
         "READ_FROM_PARQUET_TEMPLATED",
-        "REPLACE_SCHEMA_WITH_DYN_VARS",
+        "REPLACE_SCHEMA_WITH_DYN_VARS"
     ]
 
 
@@ -246,7 +251,7 @@ def expected_s3_csv_local_mapping():
                 "has_no_null_values": {"apply": True, "options": {}},
             },
         },
-        "name": "read_from_s3_csv",
+        "name": "read_from_s3_csv"
     }
 
 
@@ -279,7 +284,7 @@ def expected_s3_csv_cloud_mapping():
                 "has_no_null_values": {"apply": True, "options": {}},
             },
         },
-        "name": "read_from_s3_csv",
+        "name": "read_from_s3_csv"
     }
 
 
@@ -303,13 +308,8 @@ def expected_s3_parquet_df():
 
 
 @pytest.fixture(scope="class")
-def expected_s3_hdf_file_path():
-    return f"{constants.TEST_RESOURCES}/data/input/some_hdf_to_read.h5"
-
-
-@pytest.fixture(scope="class")
-def expected_s3_hdf_df(expected_s3_hdf_file_path):  # pylint: disable=redefined-outer-name
-    return pd.read_hdf(expected_s3_hdf_file_path)
+def expected_s3_hdf_df():
+    return pd.read_hdf(f"{constants.TEST_RESOURCES}/data/input/some_hdf_to_read.h5")
 
 
 @pytest.fixture(scope="class")
@@ -397,7 +397,7 @@ def expected_kwargs_for_read_parquet():
 
 @pytest.fixture(scope="class")
 def expected_value_serializer():
-    return {"value_serializer": "WithKafka._default_value_serializer"}
+    return {'value_serializer': 'WithKafka._default_value_serializer'}
 
 
 @pytest.fixture(scope="class")
@@ -556,128 +556,18 @@ def expected_messages():
 def input_df():
     return pd.DataFrame.from_records(
         [
-            [
-                "event_0",
-                "A",
-                "A",
-                "discharge",
-                10.01234,
-                pd.NA,
-                pd.Timestamp("2021-03-30"),
-                100.01234,
-                5,
-                5,
-            ],
-            [
-                "event_1",
-                "B",
-                "B",
-                "pass_through",
-                10.01234,
-                None,
-                pd.Timestamp("2021-03-30"),
-                100.01234,
-                6,
-                6,
-            ],
+            ["event_0", "A", "A", "discharge", 10.01234, pd.NA, pd.Timestamp("2021-03-30"), 100.01234, 5, 5, ],
+            ["event_1", "B", "B", "pass_through", 10.01234, None, pd.Timestamp("2021-03-30"), 100.01234, 6, 6, ],
             ["event_2", "A", "A", "load", None, None, pd.NaT, pd.NA, 7, 7],
-            [
-                "event_3",
-                "B",
-                "B",
-                "pass_through",
-                10.01234,
-                10.01234,
-                pd.Timestamp("2021-03-30"),
-                100.01234,
-                8,
-                8,
-            ],
-            [
-                "event_4",
-                "C",
-                pd.NA,
-                "load",
-                10.01234,
-                10.01234,
-                pd.Timestamp("2021-03-30"),
-                100.01234,
-                9,
-                9,
-            ],
-            [
-                "event_5",
-                "A",
-                "A",
-                "pass_through",
-                10.01234,
-                10.01234,
-                pd.Timestamp("2021-03-30"),
-                100.01234,
-                8,
-                8,
-            ],
-            [
-                "event_6",
-                "C",
-                "C",
-                "discharge",
-                10.01234,
-                10.01234,
-                pd.Timestamp("2021-03-30"),
-                100.01234,
-                7,
-                7,
-            ],
-            [
-                "event_7",
-                "A",
-                None,
-                "discharge",
-                10.01234,
-                10.01234,
-                pd.Timestamp("2021-03-30"),
-                100.01234,
-                6,
-                6,
-            ],
-            [
-                "event_8",
-                None,
-                np.nan,
-                "discharge",
-                10.01234,
-                10.01234,
-                pd.Timestamp("2021-03-30"),
-                100.01234,
-                5,
-                5,
-            ],
-            [
-                "event_9",
-                "A",
-                "A",
-                "discharge",
-                10.01234,
-                10.01234,
-                pd.Timestamp("2021-03-30"),
-                100.01234,
-                5,
-                None,
-            ],
+            ["event_3", "B", "B", "pass_through", 10.01234, 10.01234, pd.Timestamp("2021-03-30"), 100.01234, 8, 8, ],
+            ["event_4", "C", pd.NA, "load", 10.01234, 10.01234, pd.Timestamp("2021-03-30"), 100.01234, 9, 9, ],
+            ["event_5", "A", "A", "pass_through", 10.01234, 10.01234, pd.Timestamp("2021-03-30"), 100.01234, 8, 8, ],
+            ["event_6", "C", "C", "discharge", 10.01234, 10.01234, pd.Timestamp("2021-03-30"), 100.01234, 7, 7, ],
+            ["event_7", "A", None, "discharge", 10.01234, 10.01234, pd.Timestamp("2021-03-30"), 100.01234, 6, 6, ],
+            ["event_8", None, np.nan, "discharge", 10.01234, 10.01234, pd.Timestamp("2021-03-30"), 100.01234, 5, 5, ],
+            ["event_9", "A", "A", "discharge", 10.01234, 10.01234, pd.Timestamp("2021-03-30"), 100.01234, 5, None, ],
         ],
-        columns=[
-            "id",
-            "category_a",
-            "category_b",
-            "activity",
-            "duration_a",
-            "duration_b",
-            "start_time",
-            "load",
-            "weight_a",
-            "weight_b",
-        ],
+        columns=["id", "category_a", "category_b", "activity", "duration_a", "duration_b", "start_time", "load", "weight_a", "weight_b", ],
     )
 
 
@@ -685,18 +575,7 @@ def input_df():
 def empty_df():
     return pd.DataFrame.from_records(
         [],
-        columns=[
-            "id",
-            "category_a",
-            "category_b",
-            "activity",
-            "duration_a",
-            "duration_b",
-            "start_time",
-            "load",
-            "weight_a",
-            "weight_b",
-        ],
+        columns=["id", "category_a", "category_b", "activity", "duration_a", "duration_b", "start_time", "load", "weight_a", "weight_b", ],
     )
 
 
