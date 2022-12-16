@@ -5,7 +5,7 @@ import os
 import pytest
 import yaml
 
-from dynamicio.config import IOConfig, SafeDynamicResourceLoader, SafeDynamicSchemaLoader
+from dynamicio.config.io_config import IOConfig, SafeDynamicResourceLoader, SafeDynamicSchemaLoader
 from tests import constants
 
 
