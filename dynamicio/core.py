@@ -70,7 +70,7 @@ class DynamicDataIO:
         self.options = self._get_options(options, source_config.options)
         source_name = self.sources_config.data_backend_type
         if self.schema is SCHEMA_FROM_FILE:
-            active_schema = self.sources_config.schema
+            active_schema = self.sources_config.dynamicio_schema
         else:
             active_schema = self._schema_from_obj(self)
 

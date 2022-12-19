@@ -91,13 +91,13 @@ class WithPostgres:
 
         sql_query = self.options.pop("sql_query", None)
 
-        model = self._generate_model_from_schema(self.sources_config.schema)
+        model = self._generate_model_from_schema(self.sources_config.dynamicio_schema)
 
         query = Query(self._get_table_columns(model))
         if sql_query:
             query = sql_query
 
-        logger.info(f"[postgres] Started downloading table: {self.sources_config.schema.name} from: {db_host}:{db_name}")
+        logger.info(f"[postgres] Started downloading table: {self.sources_config.dynamicio_schema.name} from: {db_host}:{db_name}")
         with session_for(connection_string) as session:
             return self._read_database(session, query, **self.options)
 

@@ -41,7 +41,7 @@ class IOEnvironment(pydantic.BaseModel):
         underscore_attrs_are_private = True
 
     @property
-    def schema(self) -> typing.Union[table_spec.DataframeSchema, table_spec.DataframeSchemaRef, None]:
+    def dynamicio_schema(self) -> typing.Union[table_spec.DataframeSchema, table_spec.DataframeSchemaRef, None]:
         return self._parent.dynamicio_schema
 
     def set_parent(self, parent: "dynamicio.config.pydantic.config.IOBinding"):  # noqa: F821

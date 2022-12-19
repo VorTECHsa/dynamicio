@@ -163,8 +163,8 @@ class TestPostgresIO:
         ).get(source_key="READ_FROM_POSTGRES")
 
         # When
-        schema = postgres_cloud_config.schema
-        schema_name = postgres_cloud_config.schema.name
+        schema = postgres_cloud_config.dynamicio_schema
+        schema_name = postgres_cloud_config.dynamicio_schema.name
         model = ReadPostgresIO(source_config=postgres_cloud_config)._generate_model_from_schema(schema)
 
         # Then
@@ -180,7 +180,7 @@ class TestPostgresIO:
         ).get(source_key="READ_FROM_POSTGRES")
 
         # When
-        schema = pg_cloud_config.schema
+        schema = pg_cloud_config.dynamicio_schema
         model = ReadPostgresIO(source_config=pg_cloud_config)._generate_model_from_schema(schema)  # pylint: disable=protected-access
         columns = ReadPostgresIO(source_config=pg_cloud_config)._get_table_columns(model)  # pylint: disable=protected-access
 

@@ -136,7 +136,7 @@ class TestIOConfig:
         )
 
         # When
-        s3_csv_cloud_mapping = input_config.get(source_key="READ_FROM_S3_CSV").schema.dict()
+        s3_csv_cloud_mapping = input_config.get(source_key="READ_FROM_S3_CSV").dynamicio_schema.dict()
 
         # Then
         assert s3_csv_cloud_mapping == expected_s3_csv_cloud_mapping
