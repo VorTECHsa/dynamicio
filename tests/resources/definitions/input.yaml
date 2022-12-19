@@ -128,34 +128,6 @@ READ_FROM_S3_PATH_PREFIX_TXT:
       path_prefix: "[[ MOCK_KEY ]]"
       file_type: "txt"
 
-READ_FROM_S3_MISSING_PATH_PREFIX:
-  LOCAL:
-    type: "local"
-    local:
-      file_path: "[[ TEST_RESOURCES ]]/data/input/some_csv_to_read.csv"
-      file_type: "csv"
-  CLOUD:
-    type: "s3_path_prefix"
-    s3:
-      bucket: "[[ MOCK_BUCKET ]]"
-      file_type: "csv"
-  schema:
-    file_path: "[[ TEST_RESOURCES ]]/schemas/read_from_s3_csv.yaml"
-
-READ_FROM_S3_MISSING_FILE_PATH:
-  LOCAL:
-    type: "local"
-    local:
-      file_path: "[[ TEST_RESOURCES ]]/data/input/some_csv_to_read.csv"
-      file_type: "csv"
-  CLOUD:
-    type: "s3_file"
-    s3:
-      bucket: "[[ MOCK_BUCKET ]]"
-      file_type: "csv"
-  schema:
-    file_path: "[[ TEST_RESOURCES ]]/schemas/read_from_s3_csv.yaml"
-
 READ_FROM_POSTGRES:
   LOCAL:
     type: "local"
@@ -321,10 +293,3 @@ WRITE_TO_S3_PATH_PREFIX_PARQUET:
       path_prefix: "[[ MOCK_KEY ]]"
       file_type: "parquet"
 
-WRITE_TO_S3_PATH_PREFIX_NOT_PARQUET:
-  CLOUD:
-    type: "s3_path_prefix"
-    s3:
-      bucket: "[[ MOCK_BUCKET ]]"
-      path_prefix: "[[ MOCK_KEY ]]"
-      file_type: "not_parquet"

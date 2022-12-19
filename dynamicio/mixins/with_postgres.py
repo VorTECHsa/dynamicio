@@ -5,7 +5,7 @@
 import csv
 import tempfile
 from contextlib import contextmanager
-from typing import Any, Dict, Generator, Mapping, MutableMapping, Union
+from typing import Any, Dict, Generator, MutableMapping, Union
 
 import pandas as pd  # type: ignore
 from magic_logger import logger
@@ -15,6 +15,8 @@ from sqlalchemy.orm import Query  # type: ignore
 from sqlalchemy.orm.decl_api import DeclarativeMeta  # type: ignore
 from sqlalchemy.orm.session import Session as SqlAlchemySession  # type: ignore
 from sqlalchemy.orm.session import sessionmaker  # type: ignore
+
+from dynamicio.config.pydantic import DataframeSchema, PostgresDataEnvironment
 
 from . import utils
 
@@ -61,8 +63,8 @@ class WithPostgres:
            - `truncate_and_append: bool`: If set to `True`, truncates the table and then appends the new rows. Otherwise, it drops the table and recreates it with the new rows.
     """
 
-    sources_config: Mapping
-    schema: Mapping
+    sources_config: PostgresDataEnvironment
+    schema: DataframeSchema
     options: MutableMapping[str, Any]
 
     def _read_from_postgres(self) -> pd.DataFrame:
@@ -78,47 +80,39 @@ class WithPostgres:
         Returns:
             DataFrame
         """
-        postgres_config = self.sources_config["postgres"]
-        db_user = postgres_config["db_user"]
-        db_password = postgres_config["db_password"]
-        db_host = postgres_config["db_host"]
-        db_port = postgres_config["db_port"]
-        db_name = postgres_config["db_name"]
+        postgres_config = self.sources_config.postgres
+        db_user = postgres_config.db_user
+        db_password = postgres_config.db_password
+        db_host = postgres_config.db_host
+        db_port = postgres_config.db_port
+        db_name = postgres_config.db_name
 
         connection_string = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
 
         sql_query = self.options.pop("sql_query", None)
 
-        if "schema" not in self.sources_config:
-            schema_dict = self.schema
-        else:
-            schema_dict = self.sources_config["schema"]
-        schema_name = self.sources_config["name"]
-
-        model = self._generate_model_from_schema(schema_dict, schema_name)
+        model = self._generate_model_from_schema(self.sources_config.schema)
 
         query = Query(self._get_table_columns(model))
         if sql_query:
             query = sql_query
 
-        logger.info(f"[postgres] Started downloading table: {schema_name} from: {db_host}:{db_name}")
+        logger.info(f"[postgres] Started downloading table: {self.sources_config.schema.name} from: {db_host}:{db_name}")
         with session_for(connection_string) as session:
             return self._read_database(session, query, **self.options)
 
     @staticmethod
-    def _generate_model_from_schema(schema_dict: Mapping, schema_name: str) -> DeclarativeMeta:
-        json_cls_schema: Dict[str, Any] = {"tablename": schema_name, "columns": []}
+    def _generate_model_from_schema(schema: DataframeSchema) -> DeclarativeMeta:
+        json_cls_schema: Dict[str, Any] = {"tablename": schema.name, "columns": []}
 
-        for col, dtype in schema_dict.items():
-            new_col = {"name": col}
+        for col in schema.columns.values():
+            sql_type = _type_lookup.get(col.data_type)
+            if sql_type:
+                json_cls_schema["columns"].append({"name": col.name, "type": sql_type})
 
-            if dtype in _type_lookup:
-                new_col.update({"name": col, "type": _type_lookup[dtype]})
-                json_cls_schema["columns"].append(new_col)
+        class_name = "".join(word.capitalize() or "_" for word in schema.name.split("_")) + "Model"
 
-        class_name = "".join(word.capitalize() or "_" for word in schema_name.split("_")) + "Model"
-
-        class_dict = {"clsname": class_name, "__tablename__": schema_name, "__table_args__": {"extend_existing": True}}
+        class_dict = {"clsname": class_name, "__tablename__": schema.name, "__table_args__": {"extend_existing": True}}
         class_dict.update({column["name"]: Column(column["type"], primary_key=True) if idx == 0 else Column(column["type"]) for idx, column in enumerate(json_cls_schema["columns"])})
 
         generated_model = type(class_name, (Base,), class_dict)

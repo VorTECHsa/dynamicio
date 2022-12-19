@@ -6,13 +6,14 @@ import glob
 import os
 from contextlib import contextmanager
 from threading import Lock
-from typing import Any, Mapping, MutableMapping, Optional
+from typing import Any, MutableMapping, Optional
 
 import pandas as pd  # type: ignore
 from fastparquet import ParquetFile, write  # type: ignore
 from pyarrow.parquet import read_table, write_table  # type: ignore # pylint: disable=no-name-in-module
 
-from dynamicio.config.pydantic import LocalDataEnvironment, DataframeSchema
+from dynamicio.config.pydantic import DataframeSchema, LocalBatchDataEnvironment, LocalDataEnvironment
+
 from . import utils
 
 hdf_lock = Lock()
@@ -252,24 +253,26 @@ class WithLocal:
 class WithLocalBatch(WithLocal):
     """Responsible for batch reading local files."""
 
+    sources_config: LocalBatchDataEnvironment
+
     def _read_from_local_batch(self) -> pd.DataFrame:
         """Reads a set of files for a specified file type, concatenates them and returns a dataframe.
 
         Returns:
             A concatenated dataframe composed of all files read through local_batch.
         """
-        local_batch_config = self.sources_config["local"]
+        local_batch_config = self.sources_config.local
 
-        file_type = local_batch_config["file_type"]
+        file_type = local_batch_config.file_type
         filtering_file_type = file_type
         if filtering_file_type == "hdf":
             filtering_file_type = "h5"
 
-        files = glob.glob(f"{local_batch_config['path_prefix']}/*.{filtering_file_type}")
+        files = glob.glob(f"{local_batch_config.path_prefix}/*.{filtering_file_type}")
 
         dfs_to_concatenate = []
         for file in files:
-            file_to_load = os.path.join(local_batch_config["path_prefix"], file)
+            file_to_load = os.path.join(local_batch_config.path_prefix, file)
             dfs_to_concatenate.append(getattr(self, f"_read_{file_type}_file")(file_to_load, self.schema, **self.options))  # type: ignore
 
         return pd.concat(dfs_to_concatenate).reset_index(drop=True)

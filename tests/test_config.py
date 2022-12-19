@@ -9,6 +9,18 @@ from dynamicio.config.io_config import IOConfig, SafeDynamicResourceLoader, Safe
 from tests import constants
 
 
+def do_dump(data):
+    import json
+    import subprocess
+    raw = json.loads(json.dumps(data))
+    fname = '/Users/ilo/Devel/_scratch/test.py'
+    with open(fname, 'w') as fout:
+        fout.write(repr(raw))
+    subprocess.check_call(['black', fname])
+    with open(fname, 'r') as fin:
+        subprocess.check_call(['pbcopy'], stdin=fin)
+
+
 class TestIOConfig:
     @pytest.mark.unit
     def test_config_io_parser_returns_a_transformed_dict_version_of_the_yaml_input_with_dynamic_values_replaced(self, expected_input_yaml_dict):
@@ -20,8 +32,7 @@ class TestIOConfig:
         )
 
         # When
-        yaml_dict = input_config._parse_sources_config()  # pylint: disable=protected-access
-
+        yaml_dict = input_config.config.dict()
         # Then
         assert yaml_dict == expected_input_yaml_dict
 
@@ -35,7 +46,8 @@ class TestIOConfig:
         )
 
         # When
-        schema_definition = input_config._get_schema_definition("READ_FROM_S3_CSV")  # pylint: disable=protected-access
+        schema_definition = input_config.config.bindings["READ_FROM_S3_CSV"]
+        print("\n\nSSSS\n", schema_definition.dynamicio_schema)
 
         # Then
         assert schema_definition == expected_schema_definition
@@ -74,7 +86,7 @@ class TestIOConfig:
         assert metrics == expected_metrics
 
     @pytest.mark.unit
-    def test_config_io_sources_returns_all_available_sources(self, expected_input_sources):
+    def test_config_io_sources_returns_all_available_sources(self):
         # Given
         input_config = IOConfig(
             path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/test_input.yaml")),
@@ -83,10 +95,21 @@ class TestIOConfig:
         )
 
         # When
-        sources = input_config.sources
+        sources = list(input_config.config.bindings.keys())
 
         # Then
-        assert sources == expected_input_sources
+        assert sources == [
+            "READ_FROM_S3_CSV_ALT",
+            "READ_FROM_S3_CSV",
+            "READ_FROM_S3_JSON",
+            "READ_FROM_S3_HDF",
+            "READ_FROM_S3_PARQUET",
+            "READ_FROM_POSTGRES",
+            "READ_FROM_KAFKA",
+            "TEMPLATED_FILE_PATH",
+            "READ_FROM_PARQUET_TEMPLATED",
+            "REPLACE_SCHEMA_WITH_DYN_VARS"
+        ]
 
     @pytest.mark.unit
     def test_get_for_config_io_set_for_a_local_env_returns_a_local_mapping_for_a_given_key(self, expected_s3_csv_local_mapping):
@@ -98,7 +121,7 @@ class TestIOConfig:
         )
 
         # When
-        s3_csv_local_mapping = input_config.get(source_key="READ_FROM_S3_CSV")
+        s3_csv_local_mapping = input_config.config.bindings["READ_FROM_S3_CSV"].dict()
 
         # Then
         assert s3_csv_local_mapping == expected_s3_csv_local_mapping
@@ -113,7 +136,7 @@ class TestIOConfig:
         )
 
         # When
-        s3_csv_cloud_mapping = input_config.get(source_key="READ_FROM_S3_CSV")
+        s3_csv_cloud_mapping = input_config.get(source_key="READ_FROM_S3_CSV").schema.dict()
 
         # Then
         assert s3_csv_cloud_mapping == expected_s3_csv_cloud_mapping
@@ -128,7 +151,7 @@ class TestIOConfig:
         )
 
         # When
-        postgres_cloud_mapping = input_config.get(source_key="READ_FROM_POSTGRES")
+        postgres_cloud_mapping = input_config.get(source_key="READ_FROM_POSTGRES").dict()
 
         # Then
         assert postgres_cloud_mapping == expected_postgres_cloud_mapping
@@ -146,7 +169,11 @@ class TestIOConfig:
         my_config = input_config.get(source_key="REPLACE_SCHEMA_WITH_DYN_VARS")
 
         # Then
-        assert my_config["validations"]["column_c"]["is_greater_than"]["options"]["threshold"] == 1000
+        assert my_config._parent.dynamicio_schema.columns['column_c'].validations[0].dict() == {
+            "apply": True,
+            "name": "is_greater_than",
+            "options": {"threshold": 1000}
+        }
 
     @pytest.mark.unit
     def test__get_schema_definition_returns_float_only_in_case_of_replacements(self):
@@ -159,19 +186,19 @@ class TestIOConfig:
 
         # When
         my_config = input_config.get(source_key="REPLACE_SCHEMA_WITH_DYN_VARS")
+        schema_dict = {}
+        for col in my_config._parent.dynamicio_schema.columns.values():
+            schema_dict[col.name] = str(col.data_type)
 
         # Then
-        key_types_dict = {}
-        for key in my_config["schema"]:
-            key_types_dict[key] = str(type(key))
 
-        assert key_types_dict == {
-            "column_a": "<class 'str'>",
-            "column_b": "<class 'str'>",
-            "column_c": "<class 'str'>",
-            "column_d": "<class 'str'>",
-            "0": "<class 'str'>",  # This is a string (as per the schema definition))
-            1: "<class 'int'>",  # This is not a float!
+        assert schema_dict == {
+            "column_a": "ColumnType.object",
+            "column_b": "ColumnType.object",
+            "column_c": "ColumnType.float64",
+            "column_d": "ColumnType.float64",
+            "0": "ColumnType.object",
+            "1": "ColumnType.object",
         }
 
 

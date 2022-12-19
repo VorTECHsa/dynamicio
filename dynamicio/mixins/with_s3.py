@@ -12,6 +12,7 @@ import pandas as pd  # type: ignore
 from awscli.clidriver import create_clidriver  # type: ignore
 from magic_logger import logger
 
+from dynamicio.config.pydantic import DataframeSchema, S3DataEnvironment, S3PathPrefixEnvironment
 
 from . import (
     utils,
@@ -45,6 +46,9 @@ class WithS3PathPrefix(with_local.WithLocal):
     This mixin assumes that the directories it reads from will only contain a single file-type.
     """
 
+    sources_config: S3PathPrefixEnvironment
+    schema: DataframeSchema
+
     def _write_to_s3_path_prefix(self, df: pd.DataFrame):
         """Write a DataFrame to an S3 path prefix.
 
@@ -60,18 +64,16 @@ class WithS3PathPrefix(with_local.WithLocal):
             ValueError: In case `path_prefix` is missing from config
             ValueError: In case the `partition_cols` arg is missing while trying to write a parquet file
         """
-        s3_config = self.sources_config["s3"]
-        if "path_prefix" not in s3_config:
-            raise ValueError("`path_prefix` is required to write multiple files to an S3 key")
+        s3_config = self.sources_config.s3
 
-        file_type = s3_config["file_type"]
+        file_type = s3_config.file_type
         if file_type != "parquet":
             raise ValueError(f"File type not supported: {file_type}, only parquet files can be written to an S3 key")
         if "partition_cols" not in self.options:
             raise ValueError("`partition_cols` is required as an option to write partitioned parquet files to S3")
 
-        bucket = s3_config["bucket"]
-        path_prefix = s3_config["path_prefix"]
+        bucket = s3_config.bucket
+        path_prefix = s3_config.path_prefix
         full_path_prefix = utils.resolve_template(f"s3://{bucket}/{path_prefix}", self.options)
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -101,16 +103,13 @@ class WithS3PathPrefix(with_local.WithLocal):
         Returns:
             DataFrame
         """
-        s3_config = self.sources_config["s3"]
-        if "path_prefix" not in s3_config:
-            raise ValueError("`path_prefix` is required to read multiple files from an S3 source")
-
-        file_type = s3_config["file_type"]
+        s3_config = self.sources_config.s3
+        file_type = s3_config.file_type
         if file_type not in {"parquet", "csv", "hdf", "json"}:
             raise ValueError(f"File type not supported: {file_type}")
 
-        bucket = s3_config["bucket"]
-        path_prefix = s3_config["path_prefix"]
+        bucket = s3_config.bucket
+        path_prefix = s3_config.path_prefix
         full_path_prefix = utils.resolve_template(f"s3://{bucket}/{path_prefix}", self.options)
 
         # The `no_disk_space` option should be used only when reading a subset of columns from S3
@@ -151,6 +150,9 @@ class WithS3File(with_local.WithLocal):
     Options:
         no_disk_space: If `True`, then s3fs + fsspec will be used to read data directly into memory.
     """
+
+    sources_config: S3DataEnvironment
+    schema: DataframeSchema
 
     boto3_client = boto3.client("s3")
 
@@ -205,17 +207,14 @@ class WithS3File(with_local.WithLocal):
         Returns:
             DataFrame
         """
-        s3_config = self.sources_config["s3"]
-        if "file_path" not in s3_config:
-            raise ValueError("`file_path` is required for reading a file from an S3 source")
+        s3_config = self.sources_config.s3
+        file_type = s3_config.file_type
+        file_path = utils.resolve_template(s3_config.file_path, self.options)
+        bucket = s3_config.bucket
 
-        file_type = s3_config["file_type"]
-        file_path = utils.resolve_template(s3_config["file_path"], self.options)
-        bucket = s3_config["bucket"]
-
-        logger.info(f"[s3] Started downloading: s3://{s3_config['bucket']}/{file_path}")
+        logger.info(f"[s3] Started downloading: s3://{bucket}/{file_path}")
         if file_type in ["csv", "json", "parquet"] and self.options.pop("no_disk_space", None):
-            return getattr(self, f"_read_{file_type}_file")(f"s3://{s3_config['bucket']}/{file_path}", self.schema, **self.options)  # type: ignore
+            return getattr(self, f"_read_{file_type}_file")(f"s3://{bucket}/{file_path}", self.schema, **self.options)  # type: ignore
         with self._s3_reader(s3_bucket=bucket, s3_key=file_path) as target_file:  # type: ignore
             return getattr(self, f"_read_{file_type}_file")(target_file.name, self.schema, **self.options)  # type: ignore
 
@@ -232,16 +231,17 @@ class WithS3File(with_local.WithLocal):
         Args:
             df: The dataframe to be written out
         """
-        s3_config = self.sources_config["s3"]
-        file_path = utils.resolve_template(s3_config["file_path"], self.options)
-        file_type = s3_config["file_type"]
+        s3_config = self.sources_config.s3
+        bucket = s3_config.bucket
+        file_path = utils.resolve_template(s3_config.file_path, self.options)
+        file_type = s3_config.file_type
 
-        logger.info(f"[s3] Started uploading: s3://{s3_config['bucket']}/{file_path}")
+        logger.info(f"[s3] Started uploading: s3://{bucket}/{file_path}")
         if file_type in ["csv", "json", "parquet"]:
-            getattr(self, f"_write_{file_type}_file")(df, f"s3://{s3_config['bucket']}/{file_path}", **self.options)  # type: ignore
+            getattr(self, f"_write_{file_type}_file")(df, f"s3://{bucket}/{file_path}", **self.options)  # type: ignore
         elif file_type == "hdf":
-            with self._s3_writer(s3_bucket=s3_config["bucket"], s3_key=file_path) as target_file:  # type: ignore
+            with self._s3_writer(s3_bucket=bucket, s3_key=file_path) as target_file:  # type: ignore
                 self._write_hdf_file(df, target_file.name, **self.options)  # type: ignore
         else:
             raise ValueError(f"File type: {file_type} not supported!")
-        logger.info(f"[s3] Finished uploading: s3://{s3_config['bucket']}/{file_path}")
+        logger.info(f"[s3] Finished uploading: s3://{bucket}/{file_path}")

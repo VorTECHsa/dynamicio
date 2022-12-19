@@ -5,7 +5,9 @@ from unittest import mock
 from unittest.mock import patch
 
 import pandas as pd
+import pydantic
 import pytest
+import yaml
 
 
 import dynamicio.mixins.with_local
@@ -50,9 +52,11 @@ class TestS3FileIO:
         ) as mock_s3_reader:
             with open(file_path, "r") as file:  # pylint: disable=unspecified-encoding
                 mock_s3_reader.return_value = file
-                TemplatedFile(source_config=config, file_name_to_replace="some_csv_to_read").read()
+                io_obj = TemplatedFile(source_config=config, file_name_to_replace="some_csv_to_read")
+                final_schema = io_obj.schema
+                io_obj.read()
 
-        mock__read_csv_file.assert_called_once_with(file_path, {"id": "int64", "foo_name": "object", "bar": "int64"})
+        mock__read_csv_file.assert_called_once_with(file_path, final_schema)
 
     @pytest.mark.unit
     def test_write_resolves_file_path_if_templated(self):
@@ -168,17 +172,35 @@ class TestS3FileIO:
         mock__read_csv_file.assert_called()
 
     @pytest.mark.unit
-    def test_ValueError_is_raised_if_file_path_missing_from_config(self):
-        # Given
-        s3_csv_cloud_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
-            env_identifier="CLOUD",
-            dynamic_vars=constants,
-        ).get(source_key="READ_FROM_S3_MISSING_FILE_PATH")
+    def test_ValueError_is_raised_if_file_path_missing_from_config(self, tmp_path):
+        tmp_yaml = tmp_path / "test.yaml"
+        with open(tmp_yaml, "w") as fout:
+            yaml.safe_dump(
+                {
+                    "READ_FROM_S3_MISSING_FILE_PATH": {
+                        "LOCAL": {
+                            "type": "local",
+                            "local": {
+                                "file_path": "[[ TEST_RESOURCES ]]/data/input/some_csv_to_read.csv",
+                                "file_type": "csv",
+                            },
+                        },
+                        "CLOUD": {
+                            "type": "s3_file",
+                            "s3": {"bucket": "[[ MOCK_BUCKET ]]", "file_type": "csv"},
+                        },
+                        "schema": {"file_path": "[[ TEST_RESOURCES ]]/schemas/read_from_s3_csv.yaml"},
+                    }
+                },
+                fout,
+            )
 
-        # When / Then
-        with pytest.raises(ValueError):
-            ReadS3CsvIO(source_config=s3_csv_cloud_config).read()
+        with pytest.raises(pydantic.ValidationError):
+            IOConfig(
+                path_to_source_yaml=str(tmp_yaml),
+                env_identifier="CLOUD",
+                dynamic_vars=constants,
+            )
 
     @pytest.mark.unit
     def test_s3_writers_only_validate_schema_prior_writing_out_the_dataframe(self):
@@ -387,31 +409,36 @@ class TestS3FileIO:
 
 class TestS3PathPrefixIO:
     @pytest.mark.unit
-    def test_ValueError_is_raised_if_path_prefix_missing_from_config(self):
-        # Given
-        s3_csv_cloud_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
-            env_identifier="CLOUD",
-            dynamic_vars=constants,
-        ).get(source_key="READ_FROM_S3_MISSING_PATH_PREFIX")
+    def test_error_is_raised_if_path_prefix_missing_from_config(self, tmp_path):
 
-        # When / Then
-        with pytest.raises(ValueError):
-            ReadS3CsvIO(source_config=s3_csv_cloud_config).read()
+        tmp_yaml = tmp_path / "test.yaml"
+        with open(tmp_yaml, "w") as fout:
+            yaml.safe_dump(
+                {
+                    "READ_FROM_S3_MISSING_PATH_PREFIX": {
+                        "LOCAL": {
+                            "type": "local",
+                            "local": {
+                                "file_path": "[[ TEST_RESOURCES ]]/data/input/some_csv_to_read.csv",
+                                "file_type": "csv",
+                            },
+                        },
+                        "CLOUD": {
+                            "type": "s3_path_prefix",
+                            "s3": {"bucket": "[[ MOCK_BUCKET ]]", "file_type": "csv"},
+                        },
+                        "schema": {"file_path": "[[ TEST_RESOURCES ]]/schemas/read_from_s3_csv.yaml"},
+                    }
+                },
+                fout,
+            )
 
-    @pytest.mark.unit
-    def test_ValueError_is_raised_if_path_prefix_missing_from_config_when_uploading(self):
-        # Given
-        input_df = pd.DataFrame.from_dict({"col_1": [3, 2, 1], "col_2": ["a", "b", "c"], "col_3": ["a", "b", "c"]})
-        s3_parquet_cloud_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
-            env_identifier="CLOUD",
-            dynamic_vars=constants,
-        ).get(source_key="READ_FROM_S3_MISSING_PATH_PREFIX")
-
-        # When / Then
-        with pytest.raises(ValueError):
-            WriteS3ParquetIO(source_config=s3_parquet_cloud_config).write(input_df)
+        with pytest.raises(pydantic.ValidationError):
+            IOConfig(
+                path_to_source_yaml=str(tmp_yaml),
+                env_identifier="CLOUD",
+                dynamic_vars=constants,
+            )
 
     @pytest.mark.unit
     def test_ValueError_is_raised_if_partition_cols_missing_from_options_when_uploading(self):
@@ -428,18 +455,32 @@ class TestS3PathPrefixIO:
             WriteS3ParquetIO(source_config=s3_parquet_cloud_config).write(input_df)
 
     @pytest.mark.unit
-    def test_ValueError_is_raised_if_file_type_not_parquet_when_uploading(self):
-        # Given
-        input_df = pd.DataFrame.from_dict({"col_1": [3, 2, 1], "col_2": ["a", "b", "c"], "col_3": ["a", "b", "c"]})
-        s3_parquet_cloud_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
-            env_identifier="CLOUD",
-            dynamic_vars=constants,
-        ).get(source_key="WRITE_TO_S3_PATH_PREFIX_NOT_PARQUET")
+    def test_error_is_raised_if_file_type_not_parquet_when_uploading(self, tmp_path):
 
-        # When / Then
-        with pytest.raises(ValueError):
-            WriteS3ParquetIO(source_config=s3_parquet_cloud_config).write(input_df)
+        tmp_yaml = tmp_path / "test.yaml"
+        with open(tmp_yaml, "w") as fout:
+            yaml.safe_dump(
+                {
+                    "WRITE_TO_S3_PATH_PREFIX_NOT_PARQUET": {
+                        "CLOUD": {
+                            "type": "s3_path_prefix",
+                            "s3": {
+                                "bucket": "[[ MOCK_BUCKET ]]",
+                                "path_prefix": "[[ MOCK_KEY ]]",
+                                "file_type": "not_parquet",
+                            },
+                        }
+                    }
+                },
+                fout,
+            )
+
+        with pytest.raises(pydantic.ValidationError):
+            IOConfig(
+                path_to_source_yaml=str(tmp_yaml),
+                env_identifier="CLOUD",
+                dynamic_vars=constants,
+            )
 
     @pytest.mark.unit
     @patch.object(dynamicio.mixins.with_s3.WithS3PathPrefix, "_read_from_s3_path_prefix")
@@ -529,15 +570,17 @@ class TestS3PathPrefixIO:
         # When
         with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mocked__awscli_runner:
             mocked__awscli_runner.return_value = True
-            ReadS3HdfIO(source_config=s3_hdf_cloud_config).read()
+            read_obj = ReadS3HdfIO(source_config=s3_hdf_cloud_config)
+            actual_schema = read_obj.schema
+            read_obj.read()
 
         # Then
         assert len(mock__read_hdf_file.mock_calls) == 3
         mock__read_hdf_file.assert_has_calls(
             [
-                mock.call("temp/obj_1.h5", {"id": "int64", "foo_name": "object", "bar": "int64"}),
-                mock.call("temp/obj_2.h5", {"id": "int64", "foo_name": "object", "bar": "int64"}),
-                mock.call("temp/obj_3.h5", {"id": "int64", "foo_name": "object", "bar": "int64"}),
+                mock.call("temp/obj_1.h5", actual_schema),
+                mock.call("temp/obj_2.h5", actual_schema),
+                mock.call("temp/obj_3.h5", actual_schema),
             ]
         )
 
@@ -556,15 +599,17 @@ class TestS3PathPrefixIO:
         # When
         with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mocked__awscli_runner:
             mocked__awscli_runner.return_value = True
-            ReadS3ParquetIO(source_config=s3_parquet_cloud_config).read()
+            read_obj = ReadS3ParquetIO(source_config=s3_parquet_cloud_config)
+            actual_schema = read_obj.schema
+            read_obj.read()
 
         # Then
         assert len(mock__read_parquet_file.mock_calls) == 3
         mock__read_parquet_file.assert_has_calls(
             [
-                mock.call("temp/obj_1.h5", {"id": "int64", "foo_name": "object", "bar": "int64"}),
-                mock.call("temp/obj_2.h5", {"id": "int64", "foo_name": "object", "bar": "int64"}),
-                mock.call("temp/obj_3.h5", {"id": "int64", "foo_name": "object", "bar": "int64"}),
+                mock.call("temp/obj_1.h5", actual_schema),
+                mock.call("temp/obj_2.h5", actual_schema),
+                mock.call("temp/obj_3.h5", actual_schema),
             ]
         )
 
@@ -643,15 +688,17 @@ class TestS3PathPrefixIO:
         # When
         with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mocked__awscli_runner:
             mocked__awscli_runner.return_value = True
-            ReadS3ParquetIO(source_config=s3_csv_cloud_config).read()
+            read_obj = ReadS3ParquetIO(source_config=s3_csv_cloud_config)
+            actual_schema = read_obj.schema
+            read_obj.read()
 
         # Then
         assert len(mock__read_csv_file.mock_calls) == 3
         mock__read_csv_file.assert_has_calls(
             [
-                mock.call("temp/obj_1.h5", {"id": "int64", "foo_name": "object", "bar": "int64"}),
-                mock.call("temp/obj_2.h5", {"id": "int64", "foo_name": "object", "bar": "int64"}),
-                mock.call("temp/obj_3.h5", {"id": "int64", "foo_name": "object", "bar": "int64"}),
+                mock.call("temp/obj_1.h5", actual_schema),
+                mock.call("temp/obj_2.h5", actual_schema),
+                mock.call("temp/obj_3.h5", actual_schema),
             ]
         )
 
@@ -673,15 +720,17 @@ class TestS3PathPrefixIO:
         # When
         with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mocked__awscli_runner:
             mocked__awscli_runner.return_value = True
-            ReadS3ParquetIO(source_config=s3_csv_cloud_config).read()
+            read_obj = ReadS3ParquetIO(source_config=s3_csv_cloud_config)
+            actual_schema = read_obj.schema
+            read_obj.read()
 
         # Then
         assert len(mock__read_json_file.mock_calls) == 3
         mock__read_json_file.assert_has_calls(
             [
-                mock.call("temp/obj_1.h5", {"id": "int64", "foo_name": "object", "bar": "int64"}),
-                mock.call("temp/obj_2.h5", {"id": "int64", "foo_name": "object", "bar": "int64"}),
-                mock.call("temp/obj_3.h5", {"id": "int64", "foo_name": "object", "bar": "int64"}),
+                mock.call("temp/obj_1.h5", actual_schema),
+                mock.call("temp/obj_2.h5", actual_schema),
+                mock.call("temp/obj_3.h5", actual_schema),
             ]
         )
 

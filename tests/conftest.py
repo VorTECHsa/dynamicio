@@ -52,277 +52,514 @@ class DummyYaml:
         return None
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture
 def expected_input_yaml_dict():
     return {
-        "READ_FROM_KAFKA": {
-            "CLOUD": {
-                "kafka": {"kafka_server": "mock-kafka-server", "kafka_topic": "mock-kafka-topic"},
-                "type": "kafka",
-            },
-            "LOCAL": {
-                "local": {
-                    "file_path": f"{constants.TEST_RESOURCES}/data/input/some_parquet_to_read.parquet",
-                    "file_type": "parquet",
+        "bindings": {
+            "READ_FROM_S3_CSV_ALT": {
+                "name": "READ_FROM_S3_CSV_ALT",
+                "environments": {
+                    "LOCAL": {
+                        "options": {},
+                        "data_backend_type": "local",
+                        "local": {
+                            "file_path": "/Users/ilo/Devel/dynamicio/tests/resources/data/input/some_csv_to_read.csv",
+                            "file_type": "csv",
+                        },
+                    },
+                    "CLOUD": {
+                        "options": {},
+                        "data_backend_type": "s3",
+                        "s3": {
+                            "file_path": "mock-key",
+                            "file_type": "csv",
+                            "bucket": "mock-bucket",
+                        },
+                    },
                 },
-                "type": "local",
+                "dynamicio_schema": None,
             },
-        },
-        "READ_FROM_PARQUET_TEMPLATED": {
-            "CLOUD": {
-                "s3": {
-                    "bucket": "mock-bucket",
-                    "file_path": "path/to/{file_name_to_replace}.parquet",
-                    "file_type": "parquet",
+            "READ_FROM_S3_CSV": {
+                "name": "READ_FROM_S3_CSV",
+                "environments": {
+                    "LOCAL": {
+                        "options": {},
+                        "data_backend_type": "local",
+                        "local": {
+                            "file_path": "/Users/ilo/Devel/dynamicio/tests/resources/data/input/some_csv_to_read.csv",
+                            "file_type": "csv",
+                        },
+                    },
+                    "CLOUD": {
+                        "options": {},
+                        "data_backend_type": "s3",
+                        "s3": {
+                            "file_path": "mock-key",
+                            "file_type": "csv",
+                            "bucket": "mock-bucket",
+                        },
+                    },
                 },
-                "type": "s3",
-            },
-            "LOCAL": {
-                "local": {
-                    "file_path": f"{constants.TEST_RESOURCES}/data/input/{{file_name_to_replace}}.parquet",
-                    "file_type": "parquet",
+                "dynamicio_schema": {
+                    "name": "read_from_s3_csv",
+                    "columns": {
+                        "id": {
+                            "name": "id",
+                            "data_type": "int64",
+                            "validations": [
+                                {"name": "has_unique_values", "apply": True, "options": {}},
+                                {
+                                    "name": "has_no_null_values",
+                                    "apply": True,
+                                    "options": {},
+                                },
+                            ],
+                            "metrics": ["UniqueCounts", "Counts"],
+                        },
+                        "foo_name": {
+                            "name": "foo_name",
+                            "data_type": "object",
+                            "validations": [
+                                {
+                                    "name": "has_no_null_values",
+                                    "apply": True,
+                                    "options": {},
+                                },
+                                {
+                                    "name": "is_in",
+                                    "apply": True,
+                                    "options": {
+                                        "categorical_values": [
+                                            "class_a",
+                                            "class_b",
+                                            "class_c",
+                                        ]
+                                    },
+                                },
+                            ],
+                            "metrics": ["CountsPerLabel"],
+                        },
+                        "bar": {
+                            "name": "bar",
+                            "data_type": "int64",
+                            "validations": [
+                                {
+                                    "name": "has_no_null_values",
+                                    "apply": True,
+                                    "options": {},
+                                },
+                                {
+                                    "name": "is_greater_than",
+                                    "apply": True,
+                                    "options": {"threshold": 1000},
+                                },
+                                {
+                                    "name": "is_lower_than",
+                                    "apply": True,
+                                    "options": {"threshold": 2000},
+                                },
+                            ],
+                            "metrics": ["Min", "Max", "Mean", "Std", "Variance"],
+                        },
+                    },
                 },
-                "type": "local",
             },
-        },
-        "READ_FROM_POSTGRES": {
-            "CLOUD": {
-                "postgres": {
-                    "db_host": "127.0.0.1",
-                    "db_name": "backend",
-                    "db_password": "pass",
-                    "db_port": "17039",
-                    "db_user": "user",
+            "READ_FROM_S3_JSON": {
+                "name": "READ_FROM_S3_JSON",
+                "environments": {
+                    "LOCAL": {
+                        "options": {},
+                        "data_backend_type": "local",
+                        "local": {
+                            "file_path": "/Users/ilo/Devel/dynamicio/tests/resources/data/input/some_json_to_read.json",
+                            "file_type": "json",
+                        },
+                    },
+                    "CLOUD": {
+                        "options": {},
+                        "data_backend_type": "s3",
+                        "s3": {
+                            "file_path": "mock-key",
+                            "file_type": "json",
+                            "bucket": "mock-bucket",
+                        },
+                    },
                 },
-                "type": "postgres",
+                "dynamicio_schema": None,
             },
-            "LOCAL": {
-                "local": {
-                    "file_path": f"{constants.TEST_RESOURCES}/data/input/some_pg_parquet_to_read.parquet",
-                    "file_type": "parquet",
+            "READ_FROM_S3_HDF": {
+                "name": "READ_FROM_S3_HDF",
+                "environments": {
+                    "LOCAL": {
+                        "options": {},
+                        "data_backend_type": "local",
+                        "local": {
+                            "file_path": "/Users/ilo/Devel/dynamicio/tests/resources/data/input/some_hdf_to_read.h5",
+                            "file_type": "hdf",
+                        },
+                    },
+                    "CLOUD": {
+                        "options": {},
+                        "data_backend_type": "s3",
+                        "s3": {
+                            "file_path": "mock-key",
+                            "file_type": "hdf",
+                            "bucket": "mock-bucket",
+                        },
+                    },
                 },
-                "type": "local",
+                "dynamicio_schema": None,
             },
-        },
-        "READ_FROM_S3_CSV": {
-            "CLOUD": {
-                "s3": {"bucket": "mock-bucket", "file_path": "mock-key", "file_type": "csv"},
-                "type": "s3",
-            },
-            "LOCAL": {
-                "local": {
-                    "file_path": f"{constants.TEST_RESOURCES}/data/input/some_csv_to_read.csv",
-                    "file_type": "csv",
+            "READ_FROM_S3_PARQUET": {
+                "name": "READ_FROM_S3_PARQUET",
+                "environments": {
+                    "LOCAL": {
+                        "options": {},
+                        "data_backend_type": "local",
+                        "local": {
+                            "file_path": "/Users/ilo/Devel/dynamicio/tests/resources/data/input/some_parquet_to_read.parquet",
+                            "file_type": "parquet",
+                        },
+                    },
+                    "CLOUD": {
+                        "options": {},
+                        "data_backend_type": "s3",
+                        "s3": {
+                            "file_path": "s3:sample-prefix/mock-key",
+                            "file_type": "parquet",
+                            "bucket": "mock-bucket",
+                        },
+                    },
                 },
-                "type": "local",
+                "dynamicio_schema": None,
             },
-            "schema": {"file_path": f"{constants.TEST_RESOURCES}/schemas/read_from_s3_csv.yaml"},
-        },
-        "READ_FROM_S3_CSV_ALT": {
-            "CLOUD": {
-                "s3": {"bucket": "mock-bucket", "file_path": "mock-key", "file_type": "csv"},
-                "type": "s3",
-            },
-            "LOCAL": {
-                "local": {
-                    "file_path": f"{constants.TEST_RESOURCES}/data/input/some_csv_to_read.csv",
-                    "file_type": "csv",
+            "READ_FROM_POSTGRES": {
+                "name": "READ_FROM_POSTGRES",
+                "environments": {
+                    "LOCAL": {
+                        "options": {},
+                        "data_backend_type": "local",
+                        "local": {
+                            "file_path": "/Users/ilo/Devel/dynamicio/tests/resources/data/input/some_pg_parquet_to_read.parquet",
+                            "file_type": "parquet",
+                        },
+                    },
+                    "CLOUD": {
+                        "options": {},
+                        "data_backend_type": "postgres",
+                        "postgres": {
+                            "db_host": "127.0.0.1",
+                            "db_port": "17039",
+                            "db_name": "backend",
+                            "db_user": "user",
+                            "db_password": "pass",
+                        },
+                    },
                 },
-                "type": "local",
+                "dynamicio_schema": None,
             },
-        },
-        "READ_FROM_S3_HDF": {
-            "CLOUD": {
-                "s3": {"bucket": "mock-bucket", "file_path": "mock-key", "file_type": "hdf"},
-                "type": "s3",
-            },
-            "LOCAL": {
-                "local": {
-                    "file_path": f"{constants.TEST_RESOURCES}/data/input/some_hdf_to_read.h5",
-                    "file_type": "hdf",
+            "READ_FROM_KAFKA": {
+                "name": "READ_FROM_KAFKA",
+                "environments": {
+                    "LOCAL": {
+                        "options": {},
+                        "data_backend_type": "local",
+                        "local": {
+                            "file_path": "/Users/ilo/Devel/dynamicio/tests/resources/data/input/some_parquet_to_read.parquet",
+                            "file_type": "parquet",
+                        },
+                    },
+                    "CLOUD": {
+                        "options": {},
+                        "data_backend_type": "kafka",
+                        "kafka": {
+                            "kafka_server": "mock-kafka-server",
+                            "kafka_topic": "mock-kafka-topic",
+                        },
+                    },
                 },
-                "type": "local",
+                "dynamicio_schema": None,
             },
-        },
-        "READ_FROM_S3_JSON": {
-            "CLOUD": {
-                "s3": {"bucket": "mock-bucket", "file_path": "mock-key", "file_type": "json"},
-                "type": "s3",
-            },
-            "LOCAL": {
-                "local": {
-                    "file_path": f"{constants.TEST_RESOURCES}/data/input/some_json_to_read.json",
-                    "file_type": "json",
+            "TEMPLATED_FILE_PATH": {
+                "name": "TEMPLATED_FILE_PATH",
+                "environments": {
+                    "LOCAL": {
+                        "options": {},
+                        "data_backend_type": "local",
+                        "local": {
+                            "file_path": "/Users/ilo/Devel/dynamicio/tests/resources/data/input/{file_name_to_replace}.csv",
+                            "file_type": "csv",
+                        },
+                    },
+                    "CLOUD": {
+                        "options": {},
+                        "data_backend_type": "s3",
+                        "s3": {
+                            "file_path": "path/to/{file_name_to_replace}.csv",
+                            "file_type": "csv",
+                            "bucket": "mock-bucket",
+                        },
+                    },
                 },
-                "type": "local",
+                "dynamicio_schema": None,
             },
-        },
-        "READ_FROM_S3_PARQUET": {
-            "CLOUD": {
-                "s3": {
-                    "bucket": "mock-bucket",
-                    "file_path": "s3:sample-prefix/mock-key",
-                    "file_type": "parquet",
+            "READ_FROM_PARQUET_TEMPLATED": {
+                "name": "READ_FROM_PARQUET_TEMPLATED",
+                "environments": {
+                    "LOCAL": {
+                        "options": {},
+                        "data_backend_type": "local",
+                        "local": {
+                            "file_path": "/Users/ilo/Devel/dynamicio/tests/resources/data/input/{file_name_to_replace}.parquet",
+                            "file_type": "parquet",
+                        },
+                    },
+                    "CLOUD": {
+                        "options": {},
+                        "data_backend_type": "s3",
+                        "s3": {
+                            "file_path": "path/to/{file_name_to_replace}.parquet",
+                            "file_type": "parquet",
+                            "bucket": "mock-bucket",
+                        },
+                    },
                 },
-                "type": "s3",
+                "dynamicio_schema": None,
             },
-            "LOCAL": {
-                "local": {
-                    "file_path": f"{constants.TEST_RESOURCES}/data/input/some_parquet_to_read.parquet",
-                    "file_type": "parquet",
+            "REPLACE_SCHEMA_WITH_DYN_VARS": {
+                "name": "REPLACE_SCHEMA_WITH_DYN_VARS",
+                "environments": {
+                    "LOCAL": {
+                        "options": {},
+                        "data_backend_type": "local",
+                        "local": {
+                            "file_path": "/Users/ilo/Devel/dynamicio/tests/resources/data/input/{file_name_to_replace}.parquet",
+                            "file_type": "parquet",
+                        },
+                    }
                 },
-                "type": "local",
-            },
-        },
-        'REPLACE_SCHEMA_WITH_DYN_VARS': {
-            'LOCAL': {
-                'local': {
-                    'file_path': f'{constants.TEST_RESOURCES}/data/input/{{file_name_to_replace}}.parquet',
-                    'file_type': 'parquet'},
-                'type': 'local'},
-            'schema': {
-                'file_path': f'{constants.TEST_RESOURCES}/schemas/bar.yaml'}
-        },
-        "TEMPLATED_FILE_PATH": {
-            "CLOUD": {
-                "s3": {
-                    "bucket": "mock-bucket",
-                    "file_path": "path/to/{file_name_to_replace}.csv",
-                    "file_type": "csv",
+                "dynamicio_schema": {
+                    "name": "bar",
+                    "columns": {
+                        "column_a": {
+                            "name": "column_a",
+                            "data_type": "object",
+                            "validations": [
+                                {"name": "has_unique_values", "apply": True, "options": {}}
+                            ],
+                            "metrics": ["Counts"],
+                        },
+                        "column_b": {
+                            "name": "column_b",
+                            "data_type": "object",
+                            "validations": [
+                                {"name": "has_no_null_values", "apply": True, "options": {}}
+                            ],
+                            "metrics": ["CountsPerLabel"],
+                        },
+                        "column_c": {
+                            "name": "column_c",
+                            "data_type": "float64",
+                            "validations": [
+                                {
+                                    "name": "is_greater_than",
+                                    "apply": True,
+                                    "options": {"threshold": 1000},
+                                }
+                            ],
+                            "metrics": [],
+                        },
+                        "column_d": {
+                            "name": "column_d",
+                            "data_type": "float64",
+                            "validations": [
+                                {
+                                    "name": "is_lower_than",
+                                    "apply": True,
+                                    "options": {"threshold": 1000.0},
+                                }
+                            ],
+                            "metrics": ["Min", "Max", "Mean", "Std", "Variance"],
+                        },
+                        "0": {
+                            "name": "0",
+                            "data_type": "object",
+                            "validations": [],
+                            "metrics": [],
+                        },
+                        "1": {
+                            "name": "1",
+                            "data_type": "object",
+                            "validations": [],
+                            "metrics": [],
+                        },
+                    },
                 },
-                "type": "s3",
             },
-            "LOCAL": {
-                "local": {
-                    "file_path": f"{constants.TEST_RESOURCES}/data/input/{{file_name_to_replace}}.csv",
-                    "file_type": "csv",
-                },
-                "type": "local",
-            },
-        },
+        }
     }
 
 
-@pytest.fixture(scope="class")
-def expected_input_sources():
-    return [
-        "READ_FROM_S3_CSV_ALT",
-        "READ_FROM_S3_CSV",
-        "READ_FROM_S3_JSON",
-        "READ_FROM_S3_HDF",
-        "READ_FROM_S3_PARQUET",
-        "READ_FROM_POSTGRES",
-        "READ_FROM_KAFKA",
-        "TEMPLATED_FILE_PATH",
-        "READ_FROM_PARQUET_TEMPLATED",
-        "REPLACE_SCHEMA_WITH_DYN_VARS"
-    ]
-
-
-@pytest.fixture(scope="class")
+@pytest.fixture
 def expected_s3_csv_local_mapping():
     return {
-        "local": {
-            "file_path": f"{constants.TEST_RESOURCES}/data/input/some_csv_to_read.csv",
-            "file_type": "csv",
-        },
-        "metrics": {
-            "id": ["UniqueCounts", "Counts"],
-            "bar": ["Min", "Max", "Mean", "Std", "Variance"],
-            "foo_name": ["CountsPerLabel"],
-        },
-        "schema": {"id": "int64", "bar": "int64", "foo_name": "object"},
-        "type": "local",
-        "validations": {
-            "id": {
-                "has_no_null_values": {"apply": True, "options": {}},
-                "has_unique_values": {"apply": True, "options": {}},
-            },
-            "bar": {
-                "has_no_null_values": {"apply": True, "options": {}},
-                "is_greater_than": {"apply": True, "options": {"threshold": 1000}},
-                "is_lower_than": {"apply": True, "options": {"threshold": 2000}},
-            },
-            "foo_name": {
-                "is_in": {
-                    "apply": True,
-                    "options": {"categorical_values": ["class_a", "class_b", "class_c"]},
+        "name": "READ_FROM_S3_CSV",
+        "environments": {
+            "LOCAL": {
+                "options": {},
+                "data_backend_type": "local",
+                "local": {
+                    "file_path": "/Users/ilo/Devel/dynamicio/tests/resources/data/input/some_csv_to_read.csv",
+                    "file_type": "csv",
                 },
-                "has_no_null_values": {"apply": True, "options": {}},
+            },
+            "CLOUD": {
+                "options": {},
+                "data_backend_type": "s3",
+                "s3": {
+                    "file_path": "mock-key",
+                    "file_type": "csv",
+                    "bucket": "mock-bucket",
+                },
             },
         },
-        "name": "read_from_s3_csv"
+        "dynamicio_schema": {
+            "name": "read_from_s3_csv",
+            "columns": {
+                "id": {
+                    "name": "id",
+                    "data_type": "int64",
+                    "validations": [
+                        {"name": "has_unique_values", "apply": True, "options": {}},
+                        {"name": "has_no_null_values", "apply": True, "options": {}},
+                    ],
+                    "metrics": ["UniqueCounts", "Counts"],
+                },
+                "foo_name": {
+                    "name": "foo_name",
+                    "data_type": "object",
+                    "validations": [
+                        {"name": "has_no_null_values", "apply": True, "options": {}},
+                        {
+                            "name": "is_in",
+                            "apply": True,
+                            "options": {
+                                "categorical_values": ["class_a", "class_b", "class_c"]
+                            },
+                        },
+                    ],
+                    "metrics": ["CountsPerLabel"],
+                },
+                "bar": {
+                    "name": "bar",
+                    "data_type": "int64",
+                    "validations": [
+                        {"name": "has_no_null_values", "apply": True, "options": {}},
+                        {
+                            "name": "is_greater_than",
+                            "apply": True,
+                            "options": {"threshold": 1000},
+                        },
+                        {
+                            "name": "is_lower_than",
+                            "apply": True,
+                            "options": {"threshold": 2000},
+                        },
+                    ],
+                    "metrics": ["Min", "Max", "Mean", "Std", "Variance"],
+                },
+            },
+        },
     }
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture
 def expected_s3_csv_cloud_mapping():
     return {
-        "metrics": {
-            "id": ["UniqueCounts", "Counts"],
-            "bar": ["Min", "Max", "Mean", "Std", "Variance"],
-            "foo_name": ["CountsPerLabel"],
-        },
-        "s3": {"bucket": "mock-bucket", "file_path": "mock-key", "file_type": "csv"},
-        "schema": {"id": "int64", "bar": "int64", "foo_name": "object"},
-        "type": "s3",
-        "validations": {
+        "name": "read_from_s3_csv",
+        "columns": {
             "id": {
-                "has_no_null_values": {"apply": True, "options": {}},
-                "has_unique_values": {"apply": True, "options": {}},
-            },
-            "bar": {
-                "has_no_null_values": {"apply": True, "options": {}},
-                "is_greater_than": {"apply": True, "options": {"threshold": 1000}},
-                "is_lower_than": {"apply": True, "options": {"threshold": 2000}},
+                "name": "id",
+                "data_type": "int64",
+                "validations": [
+                    {"name": "has_unique_values", "apply": True, "options": {}},
+                    {"name": "has_no_null_values", "apply": True, "options": {}},
+                ],
+                "metrics": ["UniqueCounts", "Counts"],
             },
             "foo_name": {
-                "is_in": {
-                    "apply": True,
-                    "options": {"categorical_values": ["class_a", "class_b", "class_c"]},
-                },
-                "has_no_null_values": {"apply": True, "options": {}},
+                "name": "foo_name",
+                "data_type": "object",
+                "validations": [
+                    {"name": "has_no_null_values", "apply": True, "options": {}},
+                    {
+                        "name": "is_in",
+                        "apply": True,
+                        "options": {
+                            "categorical_values": ["class_a", "class_b", "class_c"]
+                        },
+                    },
+                ],
+                "metrics": ["CountsPerLabel"],
+            },
+            "bar": {
+                "name": "bar",
+                "data_type": "int64",
+                "validations": [
+                    {"name": "has_no_null_values", "apply": True, "options": {}},
+                    {
+                        "name": "is_greater_than",
+                        "apply": True,
+                        "options": {"threshold": 1000},
+                    },
+                    {
+                        "name": "is_lower_than",
+                        "apply": True,
+                        "options": {"threshold": 2000},
+                    },
+                ],
+                "metrics": ["Min", "Max", "Mean", "Std", "Variance"],
             },
         },
-        "name": "read_from_s3_csv"
     }
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture
 def expected_postgres_cloud_mapping():
     return {
+        "options": {},
+        "data_backend_type": "postgres",
         "postgres": {
             "db_host": "127.0.0.1",
-            "db_name": "backend",
-            "db_password": "pass",
             "db_port": "17039",
+            "db_name": "backend",
             "db_user": "user",
+            "db_password": "pass",
         },
-        "type": "postgres",
     }
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture
 def expected_s3_parquet_df():
     return pd.read_parquet(f"{constants.TEST_RESOURCES}/data/input/some_parquet_to_read.parquet")
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture
 def expected_s3_hdf_df():
     return pd.read_hdf(f"{constants.TEST_RESOURCES}/data/input/some_hdf_to_read.h5")
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture
 def expected_s3_json_df():
     return pd.read_json(f"{constants.TEST_RESOURCES}/data/input/some_json_to_read.json", orient="columns")
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture
 def expected_s3_csv_df():
     return pd.read_csv(f"{constants.TEST_RESOURCES}/data/input/some_csv_to_read.csv")
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture
 def expected_df_with_less_columns():
     df = pd.DataFrame.from_records(
         [
@@ -347,7 +584,7 @@ def expected_df_with_less_columns():
     return df
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture
 def dataset_with_more_columns_than_dictated_in_schema():
     df = pd.DataFrame.from_records(
         [
@@ -372,7 +609,7 @@ def dataset_with_more_columns_than_dictated_in_schema():
     return df
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture
 def test_df():
     df = pd.DataFrame.from_records(
         [
@@ -385,22 +622,22 @@ def test_df():
     return df
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture
 def expected_columns():
     return [ERModel.id, ERModel.foo, ERModel.bar, ERModel.baz]
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture
 def expected_kwargs_for_read_parquet():
     return {"engine", "columns", "kwargs", "path", "use_nullable_dtypes"}
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture
 def expected_value_serializer():
     return {'value_serializer': 'WithKafka._default_value_serializer'}
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture
 def input_messages_df():
     return pd.DataFrame.from_dict(
         [
@@ -410,7 +647,7 @@ def input_messages_df():
     )
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture
 def input_schema_definition():
     return {
         "columns": {
@@ -447,49 +684,85 @@ def input_schema_definition():
     }
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture
 def expected_schema():
     return {"id": "int64", "foo_name": "object", "bar": "int64"}
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture
 def expected_schema_definition():
     return {
-        "columns": {
-            "id": {
-                "metrics": ["UniqueCounts", "Counts"],
-                "type": "int64",
-                "validations": {
-                    "has_no_null_values": {"apply": True, "options": {}},
-                    "has_unique_values": {"apply": True, "options": {}},
+        "name": "READ_FROM_S3_CSV",
+        "environments": {
+            "LOCAL": {
+                "options": {},
+                "data_backend_type": "local",
+                "local": {
+                    "file_path": "/Users/ilo/Devel/dynamicio/tests/resources/data/input/some_csv_to_read.csv",
+                    "file_type": "csv",
                 },
             },
-            "bar": {
-                "metrics": ["Min", "Max", "Mean", "Std", "Variance"],
-                "type": "int64",
-                "validations": {
-                    "has_no_null_values": {"apply": True, "options": {}},
-                    "is_greater_than": {"apply": True, "options": {"threshold": 1000}},
-                    "is_lower_than": {"apply": True, "options": {"threshold": 2000}},
-                },
-            },
-            "foo_name": {
-                "metrics": ["CountsPerLabel"],
-                "type": "object",
-                "validations": {
-                    "is_in": {
-                        "apply": True,
-                        "options": {"categorical_values": ["class_a", "class_b", "class_c"]},
-                    },
-                    "has_no_null_values": {"apply": True, "options": {}},
+            "CLOUD": {
+                "options": {},
+                "data_backend_type": "s3",
+                "s3": {
+                    "file_path": "mock-key",
+                    "file_type": "csv",
+                    "bucket": "mock-bucket",
                 },
             },
         },
-        "name": "read_from_s3_csv",
+        "dynamicio_schema": {
+            "name": "read_from_s3_csv",
+            "columns": {
+                "id": {
+                    "name": "id",
+                    "data_type": "int64",
+                    "validations": [
+                        {"name": "has_unique_values", "apply": True, "options": {}},
+                        {"name": "has_no_null_values", "apply": True, "options": {}},
+                    ],
+                    "metrics": ["UniqueCounts", "Counts"],
+                },
+                "foo_name": {
+                    "name": "foo_name",
+                    "data_type": "object",
+                    "validations": [
+                        {"name": "has_no_null_values", "apply": True, "options": {}},
+                        {
+                            "name": "is_in",
+                            "apply": True,
+                            "options": {
+                                "categorical_values": ["class_a", "class_b", "class_c"]
+                            },
+                        },
+                    ],
+                    "metrics": ["CountsPerLabel"],
+                },
+                "bar": {
+                    "name": "bar",
+                    "data_type": "int64",
+                    "validations": [
+                        {"name": "has_no_null_values", "apply": True, "options": {}},
+                        {
+                            "name": "is_greater_than",
+                            "apply": True,
+                            "options": {"threshold": 1000},
+                        },
+                        {
+                            "name": "is_lower_than",
+                            "apply": True,
+                            "options": {"threshold": 2000},
+                        },
+                    ],
+                    "metrics": ["Min", "Max", "Mean", "Std", "Variance"],
+                },
+            },
+        },
     }
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture
 def expected_validations():
     return {
         "id": {
@@ -511,7 +784,7 @@ def expected_validations():
     }
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture
 def expected_metrics():
     return {
         "id": ["UniqueCounts", "Counts"],
@@ -520,7 +793,7 @@ def expected_metrics():
     }
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture
 def valid_dataframe():
     return pd.DataFrame.from_dict(
         {
@@ -531,7 +804,7 @@ def valid_dataframe():
     )
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture
 def invalid_dataframe():
     return pd.DataFrame.from_dict(
         {
@@ -542,7 +815,7 @@ def invalid_dataframe():
     )
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture
 def expected_messages():
     return {
         "has_unique_values",
@@ -552,7 +825,7 @@ def expected_messages():
     }
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture
 def input_df():
     return pd.DataFrame.from_records(
         [
@@ -571,7 +844,7 @@ def input_df():
     )
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture
 def empty_df():
     return pd.DataFrame.from_records(
         [],

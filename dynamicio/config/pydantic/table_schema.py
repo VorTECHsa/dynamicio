@@ -15,6 +15,7 @@ class MetricsName(str, enum.Enum):
     variance = "Variance"
     counts = "Counts"
     counts_per_label = "CountsPerLabel"
+    unique_counts = "UniqueCounts"
 
 
 @enum.unique
@@ -22,6 +23,8 @@ class ColumnType(str, enum.Enum):
     object = "object"
     float64 = "float64"
     int64 = "int64"
+    bool = "bool"
+    datetime64_ns = "datetime64[ns]"
 
 
 class ColumnValidationBase(pydantic.BaseModel):
@@ -35,7 +38,7 @@ ColumnValidationType = typing.Union[ColumnValidationBase, ColumnValidationBase]
 
 class SchemaColumn(pydantic.BaseModel):
     name: str
-    type: ColumnType
+    data_type: ColumnType = pydantic.Field(alias="type")
     validations: typing.Sequence[ColumnValidationType] = pydantic.Field(default_factory=list)
     metrics: typing.Sequence[MetricsName] = ()
 
@@ -49,6 +52,15 @@ class SchemaColumn(pydantic.BaseModel):
             new_el = params.copy()
             new_el.update({"name": key})
             out.append(new_el)
+        return out
+
+    @pydantic.validator("metrics", pre=True, always=True)
+    def validate_metrics(cls, field):
+        if field:
+            out = field
+        else:
+            # Remap None as empty sequence
+            out = []
         return out
 
 
@@ -72,8 +84,8 @@ class DataframeSchema(pydantic.BaseModel):
         return {col_name: col.metrics for (col_name, col) in self.columns.items()}
 
     @property
-    def column_names(self) -> typing.AbstractSet[str]:
-        return frozenset(self.columns.keys())
+    def column_names(self) -> typing.Sequence[str]:
+        return tuple(self.columns.keys())
 
 
 class DataframeSchemaRef(pydantic.BaseModel):

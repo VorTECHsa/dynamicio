@@ -11,6 +11,8 @@ from kafka import KafkaProducer  # type: ignore
 from magic_logger import logger
 
 
+from dynamicio.config.pydantic import DataframeSchema, KafkaDataEnvironment
+
 from . import utils
 
 
@@ -71,8 +73,8 @@ class WithKafka:
         >>> ]
     """
 
-    sources_config: Mapping
-    schema: Mapping
+    sources_config: KafkaDataEnvironment
+    schema: DataframeSchema
     options: MutableMapping[str, Any]
     __kafka_config: Optional[Mapping] = None
     __producer: Optional[KafkaProducer] = None
@@ -99,9 +101,9 @@ class WithKafka:
                 self.__document_transformer = self.options.pop("document_transformer")
 
         if self.__producer is None:
-            self.__producer = self._get_producer(self.sources_config["kafka"]["kafka_server"], **self.options)
+            self.__producer = self._get_producer(self.sources_config.kafka.kafka_server, **self.options)
 
-        self._send_messages(df=df, topic=self.sources_config["kafka"]["kafka_topic"])
+        self._send_messages(df=df, topic=self.sources_config.kafka.kafka_topic)
 
     @utils.allow_options(KafkaProducer.DEFAULT_CONFIG.keys())
     def _get_producer(self, server: str, **options: MutableMapping[str, Any]) -> KafkaProducer:

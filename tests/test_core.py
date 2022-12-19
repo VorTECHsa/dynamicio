@@ -151,7 +151,7 @@ class TestCoreIO:
         with pytest.raises(AssertionError):
 
             class CMVolumesIONoValidationFunction(DynamicDataIO):
-                schema = {"foo": "bar"}
+                schema = {"foo": "int64"}
 
             CMVolumesIONoValidationFunction(source_config=s3_csv_local_config)
 
@@ -320,7 +320,7 @@ class TestCoreIO:
 
         # # Then
         try:
-            output_df = pd.read_parquet(s3_parquet_local_config["local"]["file_path"])
+            output_df = pd.read_parquet(s3_parquet_local_config.local.file_path)
             assert output_df.columns.to_list() == [
                 "id",
                 "foo_name",
@@ -329,7 +329,7 @@ class TestCoreIO:
                 "event_type",
             ]
         finally:
-            os.remove(s3_parquet_local_config["local"]["file_path"])
+            os.remove(s3_parquet_local_config.local.file_path)
 
     @pytest.mark.unit
     @patch.object(dynamicio.core.DynamicDataIO, "validate_from_schema")
@@ -382,7 +382,7 @@ class TestCoreIO:
         try:
             mock_validate_from_schema.assert_called()
         finally:
-            os.remove(s3_csv_local_config["local"]["file_path"])
+            os.remove(s3_csv_local_config.local.file_path)
 
     @pytest.mark.unit
     @patch.object(dynamicio.core.DynamicDataIO, "validate_from_schema")
@@ -403,7 +403,7 @@ class TestCoreIO:
         try:
             mock_validate_from_schema.assert_not_called()
         finally:
-            os.remove(s3_csv_local_config["local"]["file_path"])
+            os.remove(s3_csv_local_config.local.file_path)
 
     @pytest.mark.unit
     @patch.object(dynamicio.core.DynamicDataIO, "log_metrics_from_schema")
@@ -456,7 +456,7 @@ class TestCoreIO:
         try:
             mock_log_metrics_from_schema.assert_called()
         finally:
-            os.remove(s3_csv_local_config["local"]["file_path"])
+            os.remove(s3_csv_local_config.local.file_path)
 
     @pytest.mark.unit
     @patch.object(dynamicio.core.DynamicDataIO, "log_metrics_from_schema")
@@ -477,7 +477,7 @@ class TestCoreIO:
         try:
             mock_log_metrics_from_schema.assert_not_called()
         finally:
-            os.remove(s3_csv_local_config["local"]["file_path"])
+            os.remove(s3_csv_local_config.local.file_path)
 
     @pytest.mark.unit
     @pytest.mark.parametrize(
@@ -526,9 +526,9 @@ class TestCoreIO:
         try:
             if caplog.messages:
                 assert caplog.messages[0] == expected_warning
-            assert pd.read_parquet(s3_parquet_with_some_bool_col_local_config["local"]["file_path"])["bool_col"].dtype.name == expected_dtype
+            assert pd.read_parquet(s3_parquet_with_some_bool_col_local_config.local.file_path)["bool_col"].dtype.name == expected_dtype
         finally:
-            os.remove(s3_parquet_with_some_bool_col_local_config["local"]["file_path"])
+            os.remove(s3_parquet_with_some_bool_col_local_config.local.file_path)
 
     @pytest.mark.unit
     @pytest.mark.parametrize(
@@ -588,9 +588,9 @@ class TestCoreIO:
         try:
             if caplog.messages:
                 assert caplog.messages[0] == expected_warning
-            assert pd.read_csv(s3_csv_with_some_bool_col_local_config["local"]["file_path"])["bool_col"].dtype.name == expected_dtype
+            assert pd.read_csv(s3_csv_with_some_bool_col_local_config.local.file_path)["bool_col"].dtype.name == expected_dtype
         finally:
-            os.remove(s3_csv_with_some_bool_col_local_config["local"]["file_path"])
+            os.remove(s3_csv_with_some_bool_col_local_config.local.file_path)
 
     @pytest.mark.unit
     @pytest.mark.parametrize(
@@ -650,9 +650,9 @@ class TestCoreIO:
         try:
             if caplog.messages:
                 assert caplog.messages[0] == expected_warning
-            assert pd.read_hdf(s3_hdf_with_some_bool_col_local_config["local"]["file_path"])["bool_col"].dtype.name == expected_dtype
+            assert pd.read_hdf(s3_hdf_with_some_bool_col_local_config.local.file_path)["bool_col"].dtype.name == expected_dtype
         finally:
-            os.remove(s3_hdf_with_some_bool_col_local_config["local"]["file_path"])
+            os.remove(s3_hdf_with_some_bool_col_local_config.local.file_path)
 
     @pytest.mark.unit
     @pytest.mark.parametrize(
@@ -715,9 +715,9 @@ class TestCoreIO:
         try:
             if caplog.messages:
                 assert caplog.messages[0] == expected_warning
-            assert pd.read_json(s3_json_with_some_bool_col_local_config["local"]["file_path"])["bool_col"].dtype.name == expected_dtype
+            assert pd.read_json(s3_json_with_some_bool_col_local_config.local.file_path)["bool_col"].dtype.name == expected_dtype
         finally:
-            os.remove(s3_json_with_some_bool_col_local_config["local"]["file_path"])
+            os.remove(s3_json_with_some_bool_col_local_config.local.file_path)
 
     @pytest.mark.unit
     @pytest.mark.parametrize(
@@ -766,9 +766,9 @@ class TestCoreIO:
 
         # Then
         try:
-            pd.testing.assert_frame_equal(pd.read_parquet(s3_parquet_with_some_bool_col_local_config["local"]["file_path"]), df)
+            pd.testing.assert_frame_equal(pd.read_parquet(s3_parquet_with_some_bool_col_local_config.local.file_path), df)
         finally:
-            os.remove(s3_parquet_with_some_bool_col_local_config["local"]["file_path"])
+            os.remove(s3_parquet_with_some_bool_col_local_config.local.file_path)
 
     @pytest.mark.integration
     def test_show_casting_warnings_flag_default_value_prevents_showing_casting_logs(self, caplog):

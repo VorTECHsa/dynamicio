@@ -58,10 +58,11 @@ import re
 from types import ModuleType
 from typing import Any, List, Mapping
 
+import pydantic
 import yaml
 from magic_logger import logger
 
-from dynamicio.config.pydantic import BindingsYaml, DataframeSchema, DataframeSchemaRef
+from dynamicio.config.pydantic import BindingsYaml, DataframeSchema, DataframeSchemaRef, IOEnvironment
 
 
 class SafeDynamicResourceLoader(yaml.SafeLoader):
@@ -200,8 +201,12 @@ class IOConfig:
         with open(self.path_to_source_yaml, "r") as stream:  # pylint: disable=unspecified-encoding]
             logger.debug(f"Parsing {self.path_to_source_yaml}...")
             data = yaml.load(stream, SafeDynamicResourceLoader.with_module(self.dynamic_vars))
-        config = BindingsYaml(bindings=data)
-        config.update_config_refs(self._get_schema_definition)
+        try:
+            config = BindingsYaml(bindings=data)
+            config.update_config_refs(self._get_schema_definition)
+        except pydantic.ValidationError:
+            logger.exception(f"Error loading {data=!r}")
+            raise
         return config
 
     @property
@@ -213,7 +218,7 @@ class IOConfig:
         """
         return list(self.config.keys())
 
-    def get(self, source_key: str) -> Mapping:
+    def get(self, source_key: str) -> IOEnvironment:
         """A getter.
 
         Args:
