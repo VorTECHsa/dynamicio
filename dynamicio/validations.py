@@ -1,6 +1,6 @@
 """Implements the Validator class responsible for various generic data validations and metrics generation."""
 import operator
-from typing import NamedTuple, Set, Callable
+from typing import Callable, NamedTuple, Set
 
 import pandas as pd  # type: ignore
 
