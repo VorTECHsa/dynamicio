@@ -9,18 +9,6 @@ from dynamicio.config.io_config import IOConfig, SafeDynamicResourceLoader, Safe
 from tests import constants
 
 
-def do_dump(data):
-    import json
-    import subprocess
-    raw = json.loads(json.dumps(data))
-    fname = '/Users/ilo/Devel/_scratch/test.py'
-    with open(fname, 'w') as fout:
-        fout.write(repr(raw))
-    subprocess.check_call(['black', fname])
-    with open(fname, 'r') as fin:
-        subprocess.check_call(['pbcopy'], stdin=fin)
-
-
 class TestIOConfig:
     @pytest.mark.unit
     def test_config_io_parser_returns_a_transformed_dict_version_of_the_yaml_input_with_dynamic_values_replaced(self, expected_input_yaml_dict):
@@ -108,7 +96,7 @@ class TestIOConfig:
             "READ_FROM_KAFKA",
             "TEMPLATED_FILE_PATH",
             "READ_FROM_PARQUET_TEMPLATED",
-            "REPLACE_SCHEMA_WITH_DYN_VARS"
+            "REPLACE_SCHEMA_WITH_DYN_VARS",
         ]
 
     @pytest.mark.unit
@@ -169,10 +157,10 @@ class TestIOConfig:
         my_config = input_config.get(source_key="REPLACE_SCHEMA_WITH_DYN_VARS")
 
         # Then
-        assert my_config._parent.dynamicio_schema.columns['column_c'].validations[0].dict() == {
+        assert my_config._parent.dynamicio_schema.columns["column_c"].validations[0].dict() == {  # pylint: disable=protected-access
             "apply": True,
             "name": "is_greater_than",
-            "options": {"threshold": 1000}
+            "options": {"threshold": 1000},
         }
 
     @pytest.mark.unit
@@ -187,7 +175,7 @@ class TestIOConfig:
         # When
         my_config = input_config.get(source_key="REPLACE_SCHEMA_WITH_DYN_VARS")
         schema_dict = {}
-        for col in my_config._parent.dynamicio_schema.columns.values():
+        for col in my_config._parent.dynamicio_schema.columns.values():  # pylint: disable=protected-access
             schema_dict[col.name] = str(col.data_type)
 
         # Then

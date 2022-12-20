@@ -1,18 +1,18 @@
 """Implements the Validator class responsible for various generic data validations and metrics generation."""
 import operator
-from typing import NamedTuple, Set
+from typing import NamedTuple, Set, Callable
 
 import pandas as pd  # type: ignore
 
 ALL_VALIDATORS = {}  # name -> function
 
 
-def validator(fn):
+def validator(func: Callable):
     """A decorator to add the function to the ALL_VALIDATORS dict"""
-    name = fn.__name__
+    name = func.__name__
     assert name not in ALL_VALIDATORS
-    ALL_VALIDATORS[name] = fn
-    return fn
+    ALL_VALIDATORS[name] = func
+    return func
 
 
 class ValidationResult(NamedTuple):

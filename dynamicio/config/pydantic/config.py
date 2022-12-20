@@ -1,4 +1,6 @@
+# pylint: disable=no-member, no-self-argument, unused-argument
 """Pydantic schema for YAML files"""
+
 import typing
 
 import pydantic
@@ -15,10 +17,12 @@ class IOBinding(pydantic.BaseModel):
     dynamicio_schema: typing.Union[table_spec.DataframeSchema, table_spec.DataframeSchemaRef, None] = pydantic.Field(default=None, alias="schema")
 
     def get_binding_for_environment(self, environment: str) -> env_spec.IOEnvironment:
+        """Fetch the IOEnvironment spec for the name provided."""
         return self.environments[environment]
 
     @pydantic.validator("environments", pre=True, always=True)
     def pick_correct_env_cls(cls, value, values, config, field):
+        """This pre-validator picks an appropriate IOEnvironment subclass for the `data_backend_type`"""
         if not isinstance(value, typing.Mapping):
             raise ValueError(f"Environments input should be a dict. Got {value!r} instead.")
         config_cls_overrides = {

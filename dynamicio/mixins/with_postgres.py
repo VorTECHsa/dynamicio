@@ -149,22 +149,20 @@ class WithPostgres:
         Args:
             df: The dataframe to be written
         """
-        postgres_config = self.sources_config["postgres"]
-        db_user = postgres_config["db_user"]
-        db_password = postgres_config["db_password"]
-        db_host = postgres_config["db_host"]
-        db_port = postgres_config["db_port"]
-        db_name = postgres_config["db_name"]
+        postgres_config = self.sources_config.postgres
+        db_user = postgres_config.db_user
+        db_password = postgres_config.db_password
+        db_host = postgres_config.db_host
+        db_port = postgres_config.db_port
+        db_name = postgres_config.db_name
 
         connection_string = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
 
-        schema_dict = self.sources_config["schema"]
-        schema_name = self.sources_config["name"]
-        model = self._generate_model_from_schema(schema_dict, schema_name)
+        model = self._generate_model_from_schema(self.sources_config.dynamicio_schema)
 
         is_truncate_and_append = self.options.get("truncate_and_append", False)
 
-        logger.info(f"[postgres] Started downloading table: {schema_name} from: {db_host}:{db_name}")
+        logger.info(f"[postgres] Started downloading table: {self.sources_config.dynamicio_schema.name} from: {db_host}:{db_name}")
         with session_for(connection_string) as session:
             self._write_to_database(session, model.__tablename__, df, is_truncate_and_append)  # type: ignore
 

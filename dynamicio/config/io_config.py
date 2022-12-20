@@ -277,7 +277,7 @@ class IOConfig:
             The schema definition provided for a resource definition.
         """
         logger.debug(f"Parsing schema: {ref.file_path}...")
-        with open(ref.file_path, "r") as stream:
+        with open(ref.file_path, "r", encoding="utf8") as stream:
             data = yaml.load(stream, SafeDynamicSchemaLoader.with_module(self.dynamic_vars))
         return DataframeSchema(**data)
 
