@@ -34,8 +34,7 @@ class TestIOConfig:
         )
 
         # When
-        schema_definition = input_config.config.bindings["READ_FROM_S3_CSV"]
-        print("\n\nSSSS\n", schema_definition.dynamicio_schema)
+        schema_definition = input_config.config.bindings["READ_FROM_S3_CSV"].dict()
 
         # Then
         assert schema_definition == expected_schema_definition

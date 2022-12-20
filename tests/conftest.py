@@ -63,7 +63,7 @@ def expected_input_yaml_dict():
                         "options": {},
                         "data_backend_type": "local",
                         "local": {
-                            "file_path": "/Users/ilo/Devel/dynamicio/tests/resources/data/input/some_csv_to_read.csv",
+                            "file_path": f"{constants.TEST_RESOURCES}/data/input/some_csv_to_read.csv",
                             "file_type": "csv",
                         },
                     },
@@ -86,7 +86,7 @@ def expected_input_yaml_dict():
                         "options": {},
                         "data_backend_type": "local",
                         "local": {
-                            "file_path": "/Users/ilo/Devel/dynamicio/tests/resources/data/input/some_csv_to_read.csv",
+                            "file_path": f"{constants.TEST_RESOURCES}/data/input/some_csv_to_read.csv",
                             "file_type": "csv",
                         },
                     },
@@ -171,7 +171,7 @@ def expected_input_yaml_dict():
                         "options": {},
                         "data_backend_type": "local",
                         "local": {
-                            "file_path": "/Users/ilo/Devel/dynamicio/tests/resources/data/input/some_json_to_read.json",
+                            "file_path": f"{constants.TEST_RESOURCES}/data/input/some_json_to_read.json",
                             "file_type": "json",
                         },
                     },
@@ -194,7 +194,7 @@ def expected_input_yaml_dict():
                         "options": {},
                         "data_backend_type": "local",
                         "local": {
-                            "file_path": "/Users/ilo/Devel/dynamicio/tests/resources/data/input/some_hdf_to_read.h5",
+                            "file_path": f"{constants.TEST_RESOURCES}/data/input/some_hdf_to_read.h5",
                             "file_type": "hdf",
                         },
                     },
@@ -217,7 +217,7 @@ def expected_input_yaml_dict():
                         "options": {},
                         "data_backend_type": "local",
                         "local": {
-                            "file_path": "/Users/ilo/Devel/dynamicio/tests/resources/data/input/some_parquet_to_read.parquet",
+                            "file_path": f"{constants.TEST_RESOURCES}/data/input/some_parquet_to_read.parquet",
                             "file_type": "parquet",
                         },
                     },
@@ -240,7 +240,7 @@ def expected_input_yaml_dict():
                         "options": {},
                         "data_backend_type": "local",
                         "local": {
-                            "file_path": "/Users/ilo/Devel/dynamicio/tests/resources/data/input/some_pg_parquet_to_read.parquet",
+                            "file_path": f"{constants.TEST_RESOURCES}/data/input/some_pg_parquet_to_read.parquet",
                             "file_type": "parquet",
                         },
                     },
@@ -265,7 +265,7 @@ def expected_input_yaml_dict():
                         "options": {},
                         "data_backend_type": "local",
                         "local": {
-                            "file_path": "/Users/ilo/Devel/dynamicio/tests/resources/data/input/some_parquet_to_read.parquet",
+                            "file_path": f"{constants.TEST_RESOURCES}/data/input/some_parquet_to_read.parquet",
                             "file_type": "parquet",
                         },
                     },
@@ -287,7 +287,7 @@ def expected_input_yaml_dict():
                         "options": {},
                         "data_backend_type": "local",
                         "local": {
-                            "file_path": "/Users/ilo/Devel/dynamicio/tests/resources/data/input/{file_name_to_replace}.csv",
+                            "file_path": f"{constants.TEST_RESOURCES}/data/input/{{file_name_to_replace}}.csv",
                             "file_type": "csv",
                         },
                     },
@@ -310,7 +310,7 @@ def expected_input_yaml_dict():
                         "options": {},
                         "data_backend_type": "local",
                         "local": {
-                            "file_path": "/Users/ilo/Devel/dynamicio/tests/resources/data/input/{file_name_to_replace}.parquet",
+                            "file_path": f"{constants.TEST_RESOURCES}/data/input/{{file_name_to_replace}}.parquet",
                             "file_type": "parquet",
                         },
                     },
@@ -333,7 +333,7 @@ def expected_input_yaml_dict():
                         "options": {},
                         "data_backend_type": "local",
                         "local": {
-                            "file_path": "/Users/ilo/Devel/dynamicio/tests/resources/data/input/{file_name_to_replace}.parquet",
+                            "file_path": f"{constants.TEST_RESOURCES}/data/input/{{file_name_to_replace}}.parquet",
                             "file_type": "parquet",
                         },
                     }
@@ -409,7 +409,7 @@ def expected_s3_csv_local_mapping():
                 "options": {},
                 "data_backend_type": "local",
                 "local": {
-                    "file_path": "/Users/ilo/Devel/dynamicio/tests/resources/data/input/some_csv_to_read.csv",
+                    "file_path": f"{constants.TEST_RESOURCES}/data/input/some_csv_to_read.csv",
                     "file_type": "csv",
                 },
             },
@@ -698,7 +698,7 @@ def expected_schema_definition():
                 "options": {},
                 "data_backend_type": "local",
                 "local": {
-                    "file_path": "/Users/ilo/Devel/dynamicio/tests/resources/data/input/some_csv_to_read.csv",
+                    "file_path": f"{constants.TEST_RESOURCES}/data/input/some_csv_to_read.csv",
                     "file_type": "csv",
                 },
             },
