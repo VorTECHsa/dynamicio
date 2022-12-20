@@ -1,4 +1,4 @@
 """Dynamicio config file handling routines."""
 
-from . import pydantic
-from .io_config import IOConfig
+from dynamicio.config import pydantic
+from dynamicio.config.io_config import IOConfig

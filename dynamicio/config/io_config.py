@@ -56,7 +56,7 @@ __all__ = ["IOConfig", "SafeDynamicResourceLoader", "SafeDynamicSchemaLoader"]
 
 import re
 from types import ModuleType
-from typing import Any, List, Mapping
+from typing import Any, List
 
 import pydantic
 import yaml
