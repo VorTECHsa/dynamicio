@@ -684,9 +684,9 @@ def input_schema_definition():
     }
 
 
-@pytest.fixture
-def expected_schema():
-    return {"id": "int64", "foo_name": "object", "bar": "int64"}
+# @pytest.fixture
+# def expected_schema():
+#     return {"id": "int64", "foo_name": "object", "bar": "int64"}
 
 
 @pytest.fixture
@@ -760,38 +760,6 @@ def expected_schema_definition():
             },
         },
     }
-
-
-@pytest.fixture
-def expected_validations():
-    return {
-        "id": {
-            "has_no_null_values": {"apply": True, "options": {}},
-            "has_unique_values": {"apply": True, "options": {}},
-        },
-        "bar": {
-            "has_no_null_values": {"apply": True, "options": {}},
-            "is_greater_than": {"apply": True, "options": {"threshold": 1000}},
-            "is_lower_than": {"apply": True, "options": {"threshold": 2000}},
-        },
-        "foo_name": {
-            "is_in": {
-                "apply": True,
-                "options": {"categorical_values": ["class_a", "class_b", "class_c"]},
-            },
-            "has_no_null_values": {"apply": True, "options": {}},
-        },
-    }
-
-
-@pytest.fixture
-def expected_metrics():
-    return {
-        "id": ["UniqueCounts", "Counts"],
-        "bar": ["Min", "Max", "Mean", "Std", "Var"],
-        "foo_name": None,
-    }
-
 
 @pytest.fixture
 def valid_dataframe():

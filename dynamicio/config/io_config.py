@@ -259,15 +259,6 @@ class IOConfig:
                     "KAFKA_TOPIC": "mock-kafka-topic"
                 }
         """
-        # print(repr(self.config.bindings[source_key]))
-        # source_config = self.config.bindings[source_key]
-
-        # if self.config.bindings[source_key].my_schema:
-        #     schema_definition = self._get_schema_definition(source_key)
-        #     source_config["name"] = schema_definition["name"]
-        #     source_config["schema"] = self._get_schema(schema_definition)
-        #     source_config["validations"] = self._get_validations(schema_definition)
-        #     source_config["metrics"] = self._get_metrics(schema_definition)
         return self.config.bindings[source_key].get_binding_for_environment(self.env_identifier)
 
     def _get_schema_definition(self, ref: DataframeSchemaRef) -> DataframeSchema:
@@ -280,48 +271,3 @@ class IOConfig:
         with open(ref.file_path, "r", encoding="utf8") as stream:
             data = yaml.load(stream, SafeDynamicSchemaLoader.with_module(self.dynamic_vars))
         return DataframeSchema(**data)
-
-    @staticmethod
-    def _get_schema(schema_definition: Mapping) -> Mapping:
-        """Retrieve the schema from a schema definition.
-
-        Args:
-            schema_definition:
-
-        Returns:
-            The column types in the schema definition.
-        """
-        _schema = {}
-        for column in schema_definition["columns"].keys():
-            _schema[column] = schema_definition["columns"][column]["type"]
-        return _schema
-
-    @staticmethod
-    def _get_validations(schema_definition: Mapping) -> Mapping:
-        """Returns all validations for each column in a schema definition.
-
-        Args:
-            schema_definition: A dictionary with all columns in a dataset characterised by validations and metrics
-
-        Returns:
-            The validations applied to each column in the schema definition.
-        """
-        _validations = {}
-        for column in schema_definition["columns"].keys():
-            _validations[column] = schema_definition["columns"][column]["validations"]
-        return _validations
-
-    @staticmethod
-    def _get_metrics(schema_definition):
-        """Returns all metrics for each column in a schema definition.
-
-        Args:
-            schema_definition: A dictionary with all columns in a dataset characterised by validations and metrics
-
-        Returns:
-            The metrics applied to each column in the schema definition.
-        """
-        _metrics = {}
-        for column in schema_definition["columns"].keys():
-            _metrics[column] = schema_definition["columns"][column]["metrics"]
-        return _metrics

@@ -40,39 +40,6 @@ class TestIOConfig:
         assert schema_definition == expected_schema_definition
 
     @pytest.mark.unit
-    def test_config_io_get_schema_returns_a_schema_from_a_schema_definition(self, input_schema_definition, expected_schema):
-        # Given
-        schema_definition = input_schema_definition
-
-        # When
-        schema = IOConfig._get_schema(schema_definition)  # pylint: disable=protected-access
-
-        # Then
-        assert schema == expected_schema
-
-    @pytest.mark.unit
-    def test_config_io_get_schema_returns_all_validations_from_a_schema_definition(self, input_schema_definition, expected_validations):
-        # Given
-        schema_definition = input_schema_definition
-
-        # When
-        validations = IOConfig._get_validations(schema_definition)  # pylint: disable=protected-access
-
-        # Then
-        assert validations == expected_validations
-
-    @pytest.mark.unit
-    def test_config_io_get_schema_returns_all_metrics_from_a_schema_definition(self, input_schema_definition, expected_metrics):
-        # Given
-        schema_definition = input_schema_definition
-
-        # When
-        metrics = IOConfig._get_metrics(schema_definition)  # pylint: disable=protected-access
-
-        # Then
-        assert metrics == expected_metrics
-
-    @pytest.mark.unit
     def test_config_io_sources_returns_all_available_sources(self):
         # Given
         input_config = IOConfig(
