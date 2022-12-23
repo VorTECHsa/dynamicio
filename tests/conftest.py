@@ -761,6 +761,7 @@ def expected_schema_definition():
         },
     }
 
+
 @pytest.fixture
 def valid_dataframe():
     return pd.DataFrame.from_dict(
