@@ -13,8 +13,7 @@ from awscli.clidriver import create_clidriver  # type: ignore
 from magic_logger import logger
 
 from dynamicio.config.pydantic import DataframeSchema, S3DataEnvironment, S3PathPrefixEnvironment
-
-from . import (
+from dynamicio.mixins import (
     utils,
     with_local,
 )

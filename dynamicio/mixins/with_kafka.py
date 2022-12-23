@@ -12,8 +12,7 @@ from magic_logger import logger
 
 
 from dynamicio.config.pydantic import DataframeSchema, KafkaDataEnvironment
-
-from . import utils
+from dynamicio.mixins import utils
 
 
 class WithKafka:

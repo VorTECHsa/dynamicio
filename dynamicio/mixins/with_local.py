@@ -13,8 +13,7 @@ from fastparquet import ParquetFile, write  # type: ignore
 from pyarrow.parquet import read_table, write_table  # type: ignore # pylint: disable=no-name-in-module
 
 from dynamicio.config.pydantic import DataframeSchema, LocalBatchDataEnvironment, LocalDataEnvironment
-
-from . import utils
+from dynamicio.mixins import utils
 
 hdf_lock = Lock()
 

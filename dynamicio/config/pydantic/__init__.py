@@ -1,7 +1,7 @@
 """Pydantic config models."""
 
 from dynamicio.config.pydantic.config import BindingsYaml
-from dynamicio.config.pydantic.environment import (
+from dynamicio.config.pydantic.io_resources import (
     IOEnvironment,
     KafkaDataEnvironment,
     LocalBatchDataEnvironment,

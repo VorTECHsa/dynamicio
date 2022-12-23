@@ -5,7 +5,7 @@ import typing
 
 import pydantic
 
-import dynamicio.config.pydantic.environment as env_spec
+import dynamicio.config.pydantic.io_resources as env_spec
 import dynamicio.config.pydantic.table_schema as table_spec
 
 

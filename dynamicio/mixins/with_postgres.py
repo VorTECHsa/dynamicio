@@ -17,8 +17,7 @@ from sqlalchemy.orm.session import Session as SqlAlchemySession  # type: ignore
 from sqlalchemy.orm.session import sessionmaker  # type: ignore
 
 from dynamicio.config.pydantic import DataframeSchema, PostgresDataEnvironment
-
-from . import utils
+from dynamicio.mixins import utils
 
 Session = sessionmaker(autoflush=True)
 
