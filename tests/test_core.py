@@ -1041,12 +1041,11 @@ class TestAsyncCoreIO:
         ).get(source_key="READ_FROM_S3_CSV")
 
         # Dataframe should be cached once and read function should not be called again
-        io = ReadS3CsvIO(source_config=s3_csv_local_config)
-        _ = io.df
-        _ = io.df
-        _ = io.df
+        s3_csv_io = ReadS3CsvIO(source_config=s3_csv_local_config)
+        _ = s3_csv_io.df
+        _ = s3_csv_io.df
+        _ = s3_csv_io.df
         assert mock_read.call_count == 1
-
 
     @pytest.mark.unit
     @patch.object(dynamicio.core.DynamicDataIO, "read")
@@ -1059,15 +1058,15 @@ class TestAsyncCoreIO:
         ).get(source_key="READ_FROM_S3_CSV")
 
         # Dataframe should be read once initially and twice after clearing cache
-        io = ReadS3CsvIO(source_config=s3_csv_local_config)
-        _ = io.df
-        _ = io.df
-        io.clear_cache()
-        _ = io.df
-        _ = io.df
-        io.clear_cache()
-        _ = io.df
-        _ = io.df
+        s3_csv_io = ReadS3CsvIO(source_config=s3_csv_local_config)
+        _ = s3_csv_io.df
+        _ = s3_csv_io.df
+        s3_csv_io.clear_cache()
+        _ = s3_csv_io.df
+        _ = s3_csv_io.df
+        s3_csv_io.clear_cache()
+        _ = s3_csv_io.df
+        _ = s3_csv_io.df
         assert mock_read.call_count == 3
 
     @pytest.mark.unit
@@ -1080,9 +1079,9 @@ class TestAsyncCoreIO:
         ).get(source_key="READ_FROM_S3_CSV")
 
         # Dataframe should be read once initially and twice after clearing cache
-        io = ReadS3CsvIO(source_config=s3_csv_local_config)
-        df = io.df
+        s3_csv_io = ReadS3CsvIO(source_config=s3_csv_local_config)
+        df = s3_csv_io.df
 
         df["new_column"] = True
 
-        assert sum(io.df["new_column"] == True) == df.shape[0]
+        assert sum(s3_csv_io.df["new_column"]) == df.shape[0]

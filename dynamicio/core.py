@@ -13,7 +13,7 @@ import pandas as pd  # type: ignore
 from magic_logger import logger
 
 from dynamicio import validations
-from dynamicio.errors import CASTING_WARNING_MSG, ColumnsDataTypeError, MissingSchemaDefinition, NOTICE_MSG, SchemaNotFoundError, SchemaValidationError
+from dynamicio.errors import CASTING_WARNING_MSG, NOTICE_MSG, ColumnsDataTypeError, MissingSchemaDefinition, SchemaNotFoundError, SchemaValidationError
 from dynamicio.metrics import get_metric
 
 SCHEMA_FROM_FILE = {"schema": object()}
@@ -111,7 +111,7 @@ class DynamicDataIO:
         return self.read()
 
     def clear_cache(self) -> None:
-        """ Resets self.df cached_property by deleting it. """
+        """Resets self.df cached_property by deleting it."""
         if "df" in self.__dict__:
             del self.df
 
