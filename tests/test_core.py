@@ -1029,3 +1029,60 @@ class TestAsyncCoreIO:
 
         # Then
         assert duration < 0.125
+
+    @pytest.mark.unit
+    @patch.object(dynamicio.core.DynamicDataIO, "read")
+    def test_df_cached_property_can_read(self, mock_read):
+        # Given
+        s3_csv_local_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_S3_CSV")
+
+        # Dataframe should be cached once and read function should not be called again
+        io = ReadS3CsvIO(source_config=s3_csv_local_config)
+        _ = io.df
+        _ = io.df
+        _ = io.df
+        assert mock_read.call_count == 1
+
+
+    @pytest.mark.unit
+    @patch.object(dynamicio.core.DynamicDataIO, "read")
+    def test_df_cached_property_can_be_cleared(self, mock_read):
+        # Given
+        s3_csv_local_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_S3_CSV")
+
+        # Dataframe should be read once initially and twice after clearing cache
+        io = ReadS3CsvIO(source_config=s3_csv_local_config)
+        _ = io.df
+        _ = io.df
+        io.clear_cache()
+        _ = io.df
+        _ = io.df
+        io.clear_cache()
+        _ = io.df
+        _ = io.df
+        assert mock_read.call_count == 3
+
+    @pytest.mark.unit
+    def test_cached_df_can_be_modified(self):
+        # Given
+        s3_csv_local_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_S3_CSV")
+
+        # Dataframe should be read once initially and twice after clearing cache
+        io = ReadS3CsvIO(source_config=s3_csv_local_config)
+        df = io.df
+
+        df["new_column"] = True
+
+        assert sum(io.df["new_column"] == True) == df.shape[0]

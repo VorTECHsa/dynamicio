@@ -6,6 +6,7 @@ import asyncio
 import inspect
 import re
 from concurrent.futures import ThreadPoolExecutor
+from functools import cached_property
 from typing import Any, Mapping, MutableMapping, Optional
 
 import pandas as pd  # type: ignore
@@ -99,6 +100,20 @@ class DynamicDataIO:
         """
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(pool, self.read)
+
+    @cached_property
+    def df(self) -> pd.DataFrame:
+        """Uses read() and caches it. Useful for lazy-loading.
+
+        Returns:
+            A pandas dataframe or an iterable.
+        """
+        return self.read()
+
+    def clear_cache(self) -> None:
+        """ Resets self.df cached_property by deleting it. """
+        if "df" in self.__dict__:
+            del self.df
 
     def read(self) -> pd.DataFrame:
         """Reads data source and returns a schema validated dataframe (by means of _apply_schema).
