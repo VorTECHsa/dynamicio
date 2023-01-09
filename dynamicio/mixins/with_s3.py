@@ -46,7 +46,7 @@ class InMemStore(pd.io.pytables.HDFStore):
         return self._handle is not None
 
 
-class HDFIo:
+class HdfIO:
     """Class providing stream support for HDF tables"""
 
     @contextmanager
@@ -184,9 +184,8 @@ class WithS3PathPrefix(with_local.WithLocal):
 
         # The `no_disk_space` option should be used only when reading a subset of columns from S3
         if self.options.pop("no_disk_space", False):
-            no_disk_space_rv = None
             if file_type == "parquet":
-                no_disk_space_rv = self._read_parquet_file(full_path_prefix, self.schema, **self.options)
+                return self._read_parquet_file(full_path_prefix, self.schema, **self.options)
             elif file_type == "hdf":
                 dfs = []
                 for fobj in self._iter_s3_files(
@@ -194,12 +193,10 @@ class WithS3PathPrefix(with_local.WithLocal):
                     file_ext=".h5",
                     max_memory_use=1024**3,  # 1 gib
                 ):
-                    dfs.append(HDFIo().load(fobj))
+                    dfs.append(HdfIO().load(fobj))
                 df = pd.concat(dfs, ignore_index=True)
                 columns = [column for column in df.columns.to_list() if column in self.schema.keys()]
-                no_disk_space_rv = df[columns]
-            if no_disk_space_rv is not None:
-                return no_disk_space_rv
+                return df[columns]
 
         with tempfile.TemporaryDirectory() as temp_dir:
             # aws-cli is shown to be up to 6 times faster when downloading the complete dataset from S3 than using the boto3
@@ -363,7 +360,7 @@ class WithS3File(with_local.WithLocal):
                 no_disk_space_rv = getattr(self, f"_read_{file_type}_file")(f"s3://{s3_config['bucket']}/{file_path}", self.schema, **self.options)  # type: ignore
             elif file_type == "hdf":
                 with self._s3_reader(s3_bucket=bucket, s3_key=file_path) as fobj:  # type: ignore
-                    no_disk_space_rv = HDFIo().load(fobj)  # type: ignore
+                    no_disk_space_rv = HdfIO().load(fobj)  # type: ignore
             else:
                 raise NotImplementedError(f"Unsupported file type {file_type!r}.")
             if no_disk_space_rv is not None:
@@ -395,7 +392,7 @@ class WithS3File(with_local.WithLocal):
             hdf_options = dict(self.options)
             pickle_protocol = hdf_options.pop("pickle_protocol", None)
             with self._s3_writer(s3_bucket=s3_config["bucket"], s3_key=file_path) as target_file, utils.pickle_protocol(protocol=pickle_protocol):
-                HDFIo().save(df, target_file, hdf_options)  # type: ignore
+                HdfIO().save(df, target_file, hdf_options)  # type: ignore
         else:
             raise ValueError(f"File type: {file_type} not supported!")
         logger.info(f"[s3] Finished uploading: s3://{s3_config['bucket']}/{file_path}")
