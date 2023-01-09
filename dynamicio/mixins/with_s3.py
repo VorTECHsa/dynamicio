@@ -186,7 +186,7 @@ class WithS3PathPrefix(with_local.WithLocal):
         if self.options.pop("no_disk_space", False):
             if file_type == "parquet":
                 return self._read_parquet_file(full_path_prefix, self.schema, **self.options)
-            elif file_type == "hdf":
+            if file_type == "hdf":
                 dfs = []
                 for fobj in self._iter_s3_files(
                     full_path_prefix,
