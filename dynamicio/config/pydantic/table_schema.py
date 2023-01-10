@@ -3,7 +3,7 @@
 """This module defines Config schema for data source (pandas dataframe)"""
 
 import enum
-import typing
+from typing import Mapping, Sequence, Union
 
 import pydantic
 
@@ -40,10 +40,10 @@ class ColumnValidationBase(pydantic.BaseModel):
 
     name: str
     apply: bool
-    options: typing.Mapping[str, object]
+    options: Mapping[str, object]
 
 
-ColumnValidationType = typing.Union[ColumnValidationBase, ColumnValidationBase]
+ColumnValidationType = Union[ColumnValidationBase, ColumnValidationBase]
 
 
 class SchemaColumn(pydantic.BaseModel):
@@ -51,8 +51,8 @@ class SchemaColumn(pydantic.BaseModel):
 
     name: str
     data_type: ColumnType = pydantic.Field(alias="type")
-    validations: typing.Sequence[ColumnValidationType] = pydantic.Field(default_factory=list)
-    metrics: typing.Sequence[MetricsName] = ()
+    validations: Sequence[ColumnValidationType] = pydantic.Field(default_factory=list)
+    metrics: Sequence[MetricsName] = ()
 
     @pydantic.validator("validations", pre=True)
     def remap_validations(cls, field):
@@ -80,27 +80,27 @@ class DataframeSchema(pydantic.BaseModel):
     """Pydantic model describing the tabular data provided by the data source."""
 
     name: str
-    columns: typing.Mapping[str, SchemaColumn]
+    columns: Mapping[str, SchemaColumn]
 
     @pydantic.validator("columns", pre=True)
     def supply_column_names(cls, field):
         """Tell each column its name (the key it is listed under)"""
-        if not isinstance(field, typing.Mapping):
+        if not isinstance(field, Mapping):
             raise ValueError(f"{field!r} shoudl be a dict.")
 
         return {col_name: {**{"name": col_name}, **col_data} for (col_name, col_data) in field.items()}
 
     @property
-    def validations(self) -> typing.Mapping[str, typing.Sequence[ColumnValidationType]]:
+    def validations(self) -> Mapping[str, Sequence[ColumnValidationType]]:
         """A short-hand property to access the validators for each column."""
         return {col_name: col.validations for (col_name, col) in self.columns.items()}
 
     @property
-    def metrics(self) -> typing.Mapping[str, typing.Sequence[MetricsName]]:
+    def metrics(self) -> Mapping[str, Sequence[MetricsName]]:
         """A short-hand property to access the metrics for each column."""
         return {col_name: col.metrics for (col_name, col) in self.columns.items()}
 
     @property
-    def column_names(self) -> typing.Sequence[str]:
+    def column_names(self) -> Sequence[str]:
         """Property providing the list of all column names."""
         return tuple(self.columns.keys())

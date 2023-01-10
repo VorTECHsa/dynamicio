@@ -4,7 +4,7 @@
 
 import enum
 import posixpath
-import typing
+from typing import Mapping, Optional, Union
 
 import pydantic
 
@@ -42,8 +42,8 @@ class IOBinding(pydantic.BaseModel):
     """A binding for a single i/o object"""
 
     name: str = pydantic.Field(alias="__binding_name__")
-    environments: typing.Mapping[str, "IOEnvironment"]
-    dynamicio_schema: typing.Union[table_spec.DataframeSchema, None] = pydantic.Field(default=None, alias="schema")
+    environments: Mapping[str, "IOEnvironment"]
+    dynamicio_schema: Union[table_spec.DataframeSchema, None] = pydantic.Field(default=None, alias="schema")
 
     def get_binding_for_environment(self, environment: str) -> "IOEnvironment":
         """Fetch the IOEnvironment spec for the name provided."""
@@ -52,7 +52,7 @@ class IOBinding(pydantic.BaseModel):
     @pydantic.validator("environments", pre=True, always=True)
     def pick_correct_env_cls(cls, value, values, config, field):
         """This pre-validator picks an appropriate IOEnvironment subclass for the `data_backend_type`"""
-        if not isinstance(value, typing.Mapping):
+        if not isinstance(value, Mapping):
             raise ValueError(f"Environments input should be a dict. Got {value!r} instead.")
         config_cls_overrides = {
             DataBackendType.local: LocalDataEnvironment,
@@ -76,7 +76,7 @@ class IOBinding(pydantic.BaseModel):
 
     @pydantic.root_validator(pre=True)
     def _preprocess_raw_config(cls, values):
-        if not isinstance(values, typing.Mapping):
+        if not isinstance(values, Mapping):
             raise ValueError(f"IOBinding must be a dict at the top level. (got {values!r} instead)")
         remapped_value = {"environments": {}}
         for (key, value) in values.items():
@@ -92,8 +92,8 @@ class IOBinding(pydantic.BaseModel):
 class IOEnvironment(pydantic.BaseModel):
     """A section specifiing an data source backed by a particular data backend"""
 
-    _parent: typing.Optional[IOBinding] = None  # noqa: F821
-    options: typing.Mapping = pydantic.Field(default_factory=dict)
+    _parent: Optional[IOBinding] = None  # noqa: F821
+    options: Mapping = pydantic.Field(default_factory=dict)
     data_backend_type: DataBackendType = pydantic.Field(alias="type", const=None)
 
     class Config:
@@ -102,7 +102,7 @@ class IOEnvironment(pydantic.BaseModel):
         underscore_attrs_are_private = True
 
     @property
-    def dynamicio_schema(self) -> typing.Union[table_spec.DataframeSchema, None]:
+    def dynamicio_schema(self) -> Union[table_spec.DataframeSchema, None]:
         """Returns tabular data structure definition for the data source (if available)"""
         if not self._parent:
             raise Exception("Parent field is not set.")
