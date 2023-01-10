@@ -91,7 +91,7 @@ class DataframeSchema(pydantic.BaseModel):
         return {col_name: {**{"name": col_name}, **col_data} for (col_name, col_data) in field.items()}
 
     @property
-    def validations(self) -> typing.Mapping[str, ColumnValidationType]:
+    def validations(self) -> typing.Mapping[str, typing.Sequence[ColumnValidationType]]:
         """A short-hand property to access the validators for each column."""
         return {col_name: col.validations for (col_name, col) in self.columns.items()}
 
@@ -104,9 +104,3 @@ class DataframeSchema(pydantic.BaseModel):
     def column_names(self) -> typing.Sequence[str]:
         """Property providing the list of all column names."""
         return tuple(self.columns.keys())
-
-
-class DataframeSchemaRef(pydantic.BaseModel):
-    """A reference to a schema file stored somewhere else on the system"""
-
-    file_path: pydantic.FilePath

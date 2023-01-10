@@ -14,7 +14,7 @@ class IOBinding(pydantic.BaseModel):
 
     name: str = pydantic.Field(alias="__binding_name__")
     environments: typing.Mapping[str, env_spec.IOEnvironment]
-    dynamicio_schema: typing.Union[table_spec.DataframeSchema, table_spec.DataframeSchemaRef, None] = pydantic.Field(default=None, alias="schema")
+    dynamicio_schema: typing.Union[table_spec.DataframeSchema, None] = pydantic.Field(default=None, alias="schema")
 
     def get_binding_for_environment(self, environment: str) -> env_spec.IOEnvironment:
         """Fetch the IOEnvironment spec for the name provided."""
@@ -74,19 +74,17 @@ class BindingsYaml(pydantic.BaseModel):
             raise ValueError(f"Bindings must be a mapping. (got {value!r} instead).")
         # Tell each binding its name
         for (name, sub_config) in value.items():
-            if not isinstance(sub_config, typing.Mapping):
+            if not isinstance(sub_config, typing.MutableMapping):
                 raise ValueError(f"Each element for the name binding must be a dict. (got {sub_config!r} instead)")
             sub_config["__binding_name__"] = name
         return value
 
-    def update_config_refs(self, schema_loader) -> "BindingsYaml":
+    def update_config_refs(self) -> "BindingsYaml":
         """Updates dynamic parts of the config:
         - Configure _parent for all `IOEnvironment`s
         - Replace all IOSchemaRef with actual schema objects
         """
         for binding in self.bindings.values():
-            if isinstance(binding.dynamicio_schema, table_spec.DataframeSchemaRef):
-                binding.dynamicio_schema = schema_loader(binding.dynamicio_schema)
             for io_env in binding.environments.values():
                 io_env.set_parent(binding)
         return self

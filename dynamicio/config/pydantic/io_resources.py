@@ -10,6 +10,8 @@ import pydantic
 
 import dynamicio.config.pydantic.table_schema as table_spec
 
+# import dynamicio.config.pydantic.config
+
 
 @enum.unique
 class DataBackendType(str, enum.Enum):
@@ -51,8 +53,10 @@ class IOEnvironment(pydantic.BaseModel):
         underscore_attrs_are_private = True
 
     @property
-    def dynamicio_schema(self) -> typing.Union[table_spec.DataframeSchema, table_spec.DataframeSchemaRef, None]:
+    def dynamicio_schema(self) -> typing.Union[table_spec.DataframeSchema, None]:
         """Returns tabular data structure definition for the data source (if available)"""
+        if not self._parent:
+            return None
         return self._parent.dynamicio_schema
 
     def set_parent(self, parent: "dynamicio.config.pydantic.config.IOBinding"):  # noqa: F821

@@ -56,13 +56,13 @@ __all__ = ["IOConfig", "SafeDynamicResourceLoader", "SafeDynamicSchemaLoader"]
 
 import re
 from types import ModuleType
-from typing import Any, List
+from typing import Any, List, Mapping
 
 import pydantic
 import yaml
 from magic_logger import logger
 
-from dynamicio.config.pydantic import BindingsYaml, DataframeSchema, DataframeSchemaRef, IOEnvironment
+from dynamicio.config.pydantic import BindingsYaml, DataframeSchema, IOEnvironment
 
 
 class SafeDynamicResourceLoader(yaml.SafeLoader):
@@ -201,9 +201,17 @@ class IOConfig:
         with open(self.path_to_source_yaml, "r") as stream:  # pylint: disable=unspecified-encoding]
             logger.debug(f"Parsing {self.path_to_source_yaml}...")
             data = yaml.load(stream, SafeDynamicResourceLoader.with_module(self.dynamic_vars))
+
+        # Load any file_path's found in schema definitions
+        for io_binding in data.values():
+            if isinstance(io_binding, Mapping) and io_binding.get("schema", {}).get("file_path"):
+                # schema has `file_path`` in it
+                with open(io_binding["schema"]["file_path"], "r", encoding="utf8") as stream:
+                    io_binding["schema"] = yaml.load(stream, SafeDynamicSchemaLoader.with_module(self.dynamic_vars))
+
         try:
             config = BindingsYaml(bindings=data)
-            config.update_config_refs(self._get_schema_definition)
+            config.update_config_refs()
         except pydantic.ValidationError:
             logger.exception(f"Error loading {data=!r}")
             raise
@@ -261,13 +269,13 @@ class IOConfig:
         """
         return self.config.bindings[source_key].get_binding_for_environment(self.env_identifier)
 
-    def _get_schema_definition(self, ref: DataframeSchemaRef) -> DataframeSchema:
-        """Retrieves the schema definition from a resource definition.
+    # def _get_schema_definition(self, file_path: str) -> DataframeSchema:
+    #     """Retrieves the schema definition from a resource definition.
 
-        Returns:
-            The schema definition provided for a resource definition.
-        """
-        logger.debug(f"Parsing schema: {ref.file_path}...")
-        with open(ref.file_path, "r", encoding="utf8") as stream:
-            data = yaml.load(stream, SafeDynamicSchemaLoader.with_module(self.dynamic_vars))
-        return DataframeSchema(**data)
+    #     Returns:
+    #         The schema definition provided for a resource definition.
+    #     """
+    #     logger.debug(f"Parsing schema: {file_path}...")
+    #     with open(file_path, "r", encoding="utf8") as stream:
+    #         data = yaml.load(stream, SafeDynamicSchemaLoader.with_module(self.dynamic_vars))
+    #     return DataframeSchema(**data)

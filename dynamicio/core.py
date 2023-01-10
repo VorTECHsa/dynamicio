@@ -77,6 +77,7 @@ class DynamicDataIO:
         if not active_schema:
             raise SchemaNotFoundError()
 
+        assert isinstance(active_schema, DataframeSchema)
         self.schema = active_schema
         self.name = self.schema.name.upper()
         self.schema_validations = self.schema.validations

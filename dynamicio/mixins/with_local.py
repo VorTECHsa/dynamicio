@@ -243,14 +243,15 @@ class WithLocalBatch(WithLocal):
         local_batch_config = self.sources_config.local
 
         file_type = local_batch_config.file_type
-        filtering_file_type = file_type
+        filtering_file_type = file_type.value
         if filtering_file_type == "hdf":
             filtering_file_type = "h5"
 
-        files = glob.glob(f"{local_batch_config.path_prefix}/*.{filtering_file_type}")
+        files = glob.glob(os.path.join(local_batch_config.path_prefix, f"*.{filtering_file_type}"))
 
         dfs_to_concatenate = []
         for file in files:
+            print(repr(file))
             file_to_load = os.path.join(local_batch_config.path_prefix, file)
             dfs_to_concatenate.append(getattr(self, f"_read_{file_type}_file")(file_to_load, self.schema, **self.options))  # type: ignore
 
