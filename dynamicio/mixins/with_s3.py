@@ -111,7 +111,7 @@ class WithS3PathPrefix(with_local.WithLocal):
     This mixin assumes that the directories it reads from will only contain a single file-type.
     """
 
-    sources_config: S3PathPrefixEnvironment
+    sources_config: S3PathPrefixEnvironment  # type: ignore
     schema: DataframeSchema
 
     boto3_resource = boto3.resource("s3")
@@ -193,7 +193,7 @@ class WithS3PathPrefix(with_local.WithLocal):
                 ):
                     dfs.append(HdfIO().load(fobj))
                 df = pd.concat(dfs, ignore_index=True)
-                columns = [column for column in df.columns.to_list() if column in self.schema.keys()]
+                columns = [column for column in df.columns.to_list() if column in self.schema.columns.keys()]
                 return df[columns]
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -270,7 +270,7 @@ class WithS3File(with_local.WithLocal):
         no_disk_space: If `True`, then s3fs + fsspec will be used to read data directly into memory.
     """
 
-    sources_config: S3DataEnvironment
+    sources_config: S3DataEnvironment  # type: ignore
     schema: DataframeSchema
 
     boto3_client = boto3.client("s3")

@@ -14,7 +14,7 @@ from dynamicio.mixins import WithKafka, WithLocal, WithLocalBatch, WithPostgres,
 os.environ["LC_CTYPE"] = "en_US.UTF"  # Set your locale to a unicode-compatible one
 
 
-class UnifiedIO(WithS3File, WithS3PathPrefix, WithLocalBatch, WithLocal, WithKafka, WithPostgres, DynamicDataIO):
+class UnifiedIO(WithS3File, WithS3PathPrefix, WithLocalBatch, WithLocal, WithKafka, WithPostgres, DynamicDataIO):  # type: ignore
     """A unified io composed of dynamicio.mixins."""
 
 

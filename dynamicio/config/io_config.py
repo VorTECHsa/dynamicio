@@ -56,13 +56,13 @@ __all__ = ["IOConfig", "SafeDynamicResourceLoader", "SafeDynamicSchemaLoader"]
 
 import re
 from types import ModuleType
-from typing import Any, List, Mapping
+from typing import Any, List, MutableMapping
 
 import pydantic
 import yaml
 from magic_logger import logger
 
-from dynamicio.config.pydantic import BindingsYaml, DataframeSchema, IOEnvironment
+from dynamicio.config.pydantic import BindingsYaml, IOEnvironment
 
 
 class SafeDynamicResourceLoader(yaml.SafeLoader):
@@ -204,7 +204,7 @@ class IOConfig:
 
         # Load any file_path's found in schema definitions
         for io_binding in data.values():
-            if isinstance(io_binding, Mapping) and io_binding.get("schema", {}).get("file_path"):
+            if isinstance(io_binding, MutableMapping) and io_binding.get("schema", {}).get("file_path"):
                 # schema has `file_path`` in it
                 with open(io_binding["schema"]["file_path"], "r", encoding="utf8") as stream:
                     io_binding["schema"] = yaml.load(stream, SafeDynamicSchemaLoader.with_module(self.dynamic_vars))
@@ -224,7 +224,7 @@ class IOConfig:
         Returns:
             All top level names of the available resources for the used resources yaml config.
         """
-        return list(self.config.keys())
+        return list(self.config.bindings.keys())
 
     def get(self, source_key: str) -> IOEnvironment:
         """A getter.
@@ -268,14 +268,3 @@ class IOConfig:
                 }
         """
         return self.config.bindings[source_key].get_binding_for_environment(self.env_identifier)
-
-    # def _get_schema_definition(self, file_path: str) -> DataframeSchema:
-    #     """Retrieves the schema definition from a resource definition.
-
-    #     Returns:
-    #         The schema definition provided for a resource definition.
-    #     """
-    #     logger.debug(f"Parsing schema: {file_path}...")
-    #     with open(file_path, "r", encoding="utf8") as stream:
-    #         data = yaml.load(stream, SafeDynamicSchemaLoader.with_module(self.dynamic_vars))
-    #     return DataframeSchema(**data)

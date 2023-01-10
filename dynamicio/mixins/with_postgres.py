@@ -90,6 +90,7 @@ class WithPostgres:
 
         sql_query = self.options.pop("sql_query", None)
 
+        assert self.sources_config.dynamicio_schema is not None, "The schema must be specified for SQL tables"
         model = self._generate_model_from_schema(self.sources_config.dynamicio_schema)
 
         query = Query(self._get_table_columns(model))
@@ -157,6 +158,7 @@ class WithPostgres:
 
         connection_string = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
 
+        assert self.sources_config.dynamicio_schema is not None, "The schema must be specified for SQL tables"
         model = self._generate_model_from_schema(self.sources_config.dynamicio_schema)
 
         is_truncate_and_append = self.options.get("truncate_and_append", False)

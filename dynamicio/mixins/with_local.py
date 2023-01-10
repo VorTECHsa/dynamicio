@@ -232,7 +232,7 @@ class WithLocal:
 class WithLocalBatch(WithLocal):
     """Responsible for batch reading local files."""
 
-    sources_config: LocalBatchDataEnvironment
+    sources_config: LocalBatchDataEnvironment  # type: ignore
 
     def _read_from_local_batch(self) -> pd.DataFrame:
         """Reads a set of files for a specified file type, concatenates them and returns a dataframe.
@@ -251,7 +251,6 @@ class WithLocalBatch(WithLocal):
 
         dfs_to_concatenate = []
         for file in files:
-            print(repr(file))
             file_to_load = os.path.join(local_batch_config.path_prefix, file)
             dfs_to_concatenate.append(getattr(self, f"_read_{file_type}_file")(file_to_load, self.schema, **self.options))  # type: ignore
 
