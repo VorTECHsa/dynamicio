@@ -87,7 +87,8 @@ class DynamicDataIO:
             self, f"_write_to_{source_name}"
         ), f"No method '_read_from_{source_name}' or '_write_to_{source_name}'. Have you registered a mixin for {source_name}?"
 
-    def _schema_from_obj(self, target) -> DataframeSchema:
+    @staticmethod
+    def _schema_from_obj(target) -> DataframeSchema:
         """Construct `DataframeSchema` from an object.
 
         The object:
