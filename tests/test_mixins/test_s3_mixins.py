@@ -777,20 +777,37 @@ class TestS3PathPrefixIO:
     # pylint: disable=unused-argument
     def test_a_ValueError_is_raised_if_file_type_is_not_supported_when_loading_a_path_prefix_with_env_as_cloud_s3(
         self,
+        tmp_path,
         mock_listdir,
         mock_temporary_directory,
         mock__read_hdf_file,
     ):
         # Given
-        s3_txt_cloud_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
-            env_identifier="CLOUD",
-            dynamic_vars=constants,
-        ).get(source_key="READ_FROM_S3_PATH_PREFIX_TXT")
+        test_yaml_file = tmp_path / "mytest.yml"
+        with open(test_yaml_file, "w") as fout:
+            yaml.dump(
+                {
+                    "READ_FROM_S3_PATH_PREFIX_TXT": {
+                        "CLOUD": {
+                            "type": "s3_path_prefix",
+                            "s3": {
+                                "bucket": "test-bucket",
+                                "path_prefix": "[[ MOCK_KEY ]]",
+                                "file_type": "txt",
+                            },
+                        }
+                    }
+                },
+                fout,
+            )
 
-        # When
-        with pytest.raises(ValueError):
-            ReadS3JsonIO(source_config=s3_txt_cloud_config).read()
+        # When & Then
+        with pytest.raises(pydantic.ValidationError):
+            IOConfig(
+                path_to_source_yaml=test_yaml_file,
+                env_identifier="CLOUD",
+                dynamic_vars=constants,
+            )
 
     @pytest.mark.unit
     # pylint: disable=unused-argument

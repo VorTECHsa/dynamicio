@@ -198,6 +198,9 @@ class IOConfig:
             A dictionary with the list of all file paths pointing to various input sources as those
             are defined in their respective data/*.yaml files.
         """
+        used_file_inputs = [
+            self.path_to_source_yaml
+        ]
         with open(self.path_to_source_yaml, "r") as stream:  # pylint: disable=unspecified-encoding]
             logger.debug(f"Parsing {self.path_to_source_yaml}...")
             data = yaml.load(stream, SafeDynamicResourceLoader.with_module(self.dynamic_vars))
@@ -205,15 +208,17 @@ class IOConfig:
         # Load any file_path's found in schema definitions
         for io_binding in data.values():
             if isinstance(io_binding, MutableMapping) and io_binding.get("schema", {}).get("file_path"):
+                file_path = io_binding["schema"]["file_path"]
+                used_file_inputs.append(file_path)
                 # schema has `file_path`` in it
-                with open(io_binding["schema"]["file_path"], "r", encoding="utf8") as stream:
+                with open(file_path, "r", encoding="utf8") as stream:
                     io_binding["schema"] = yaml.load(stream, SafeDynamicSchemaLoader.with_module(self.dynamic_vars))
 
         try:
             config = BindingsYaml(bindings=data)
             config.update_config_refs()
         except pydantic.ValidationError:
-            logger.exception(f"Error loading {data=!r}")
+            logger.exception(f"Error loading {data=!r}, {used_file_inputs=!r}")
             raise
         return config
 

@@ -35,7 +35,6 @@ class FileType(str, enum.Enum):
     csv = "csv"
     json = "json"
     hdf = "hdf"
-    txt = "txt"
 
 
 class IOBinding(pydantic.BaseModel):

@@ -120,14 +120,6 @@ READ_FROM_S3_PATH_PREFIX_JSON:
       path_prefix: "[[ MOCK_KEY ]]"
       file_type: "json"
 
-READ_FROM_S3_PATH_PREFIX_TXT:
-  CLOUD:
-    type: "s3_path_prefix"
-    s3:
-      bucket: "[[ MOCK_BUCKET ]]"
-      path_prefix: "[[ MOCK_KEY ]]"
-      file_type: "txt"
-
 READ_FROM_POSTGRES:
   LOCAL:
     type: "local"
