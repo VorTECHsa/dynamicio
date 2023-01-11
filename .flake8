@@ -15,5 +15,7 @@ max-line-length = 185
 max-complexity = 18
 select = B,C,E,F,W,T,I,B
 
+ban-relative-imports = true
+
 import-order-style = edited
 application-import-names = dynamicio, tests
