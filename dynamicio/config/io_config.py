@@ -198,9 +198,7 @@ class IOConfig:
             A dictionary with the list of all file paths pointing to various input sources as those
             are defined in their respective data/*.yaml files.
         """
-        used_file_inputs = [
-            self.path_to_source_yaml
-        ]
+        used_file_inputs = [self.path_to_source_yaml]
         with open(self.path_to_source_yaml, "r") as stream:  # pylint: disable=unspecified-encoding]
             logger.debug(f"Parsing {self.path_to_source_yaml}...")
             data = yaml.load(stream, SafeDynamicResourceLoader.with_module(self.dynamic_vars))

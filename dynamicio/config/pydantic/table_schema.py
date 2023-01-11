@@ -29,10 +29,38 @@ class ColumnType(str, enum.Enum):
 
     # pylint: disable=invalid-name
     object = "object"
+    string = "string"
+    array = "array"
+    number = "number"
+
+    float = "float"
+    float32 = "float32"
     float64 = "float64"
+    double = "double"
+
+    int = "int"
+    integer = "integer"
+
+    int8 = "int8"
+    int32 = "int32"
     int64 = "int64"
+
+    Int8 = "Int8"
+    Int32 = "Int32"
+    Int64 = "Int64"
+
+    uint8 = "uint8"
+    uint32 = "uint32"
+    uint64 = "uint64"
+
     bool = "bool"
+    boolean = "boolean"
+
     datetime64_ns = "datetime64[ns]"
+    datetime64_ns_utc = "datetime64[ns,UTC]"
+    datetime64_ms = "datetime64[ms]"
+
+    timedelta64_ns = "timedelta64[ns]"
 
 
 class ColumnValidationBase(pydantic.BaseModel):
