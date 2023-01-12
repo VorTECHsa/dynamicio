@@ -71,15 +71,12 @@ class ColumnValidationBase(pydantic.BaseModel):
     options: Mapping[str, object]
 
 
-ColumnValidationType = Union[ColumnValidationBase, ColumnValidationBase]
-
-
 class SchemaColumn(pydantic.BaseModel):
     """Definition os a single data source column."""
 
     name: str
     data_type: ColumnType = pydantic.Field(alias="type")
-    validations: Sequence[ColumnValidationType] = pydantic.Field(default_factory=list)
+    validations: Sequence[ColumnValidationBase] = pydantic.Field(default_factory=list)
     metrics: Sequence[MetricsName] = ()
 
     @pydantic.validator("validations", pre=True)
