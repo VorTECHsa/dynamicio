@@ -56,10 +56,13 @@ __all__ = ["IOConfig", "SafeDynamicResourceLoader", "SafeDynamicSchemaLoader"]
 
 import re
 from types import ModuleType
-from typing import Any, List, Mapping
+from typing import Any, List, MutableMapping
 
+import pydantic
 import yaml
 from magic_logger import logger
+
+from dynamicio.config.pydantic import BindingsYaml, IOEnvironment
 
 
 class SafeDynamicResourceLoader(yaml.SafeLoader):
@@ -170,6 +173,10 @@ class IOConfig:
     SafeDynamicResourceLoader.add_constructor(YAML_TAG, SafeDynamicResourceLoader.dyn_str_constructor)
     SafeDynamicSchemaLoader.add_constructor(YAML_TAG, SafeDynamicSchemaLoader.dyn_value_constructor)
 
+    path_to_source_yaml: str
+    env_identifier: str
+    config: BindingsYaml
+
     def __init__(self, path_to_source_yaml: str, env_identifier: str, dynamic_vars: ModuleType):
         """Class constructor.
 
@@ -184,16 +191,34 @@ class IOConfig:
         self.dynamic_vars = dynamic_vars
         self.config = self._parse_sources_config()
 
-    def _parse_sources_config(self) -> Mapping:
+    def _parse_sources_config(self) -> BindingsYaml:
         """Parses the yaml input and return a dictionary.
 
         Returns:
             A dictionary with the list of all file paths pointing to various input sources as those
             are defined in their respective data/*.yaml files.
         """
+        used_file_inputs = [self.path_to_source_yaml]
         with open(self.path_to_source_yaml, "r") as stream:  # pylint: disable=unspecified-encoding]
             logger.debug(f"Parsing {self.path_to_source_yaml}...")
-            return yaml.load(stream, SafeDynamicResourceLoader.with_module(self.dynamic_vars))
+            data = yaml.load(stream, SafeDynamicResourceLoader.with_module(self.dynamic_vars))
+
+        # Load any file_path's found in schema definitions
+        for io_binding in data.values():
+            if isinstance(io_binding, MutableMapping) and io_binding.get("schema", {}).get("file_path"):
+                file_path = io_binding["schema"]["file_path"]
+                used_file_inputs.append(file_path)
+                # schema has `file_path`` in it
+                with open(file_path, "r", encoding="utf8") as stream:
+                    io_binding["schema"] = yaml.load(stream, SafeDynamicSchemaLoader.with_module(self.dynamic_vars))
+
+        try:
+            config = BindingsYaml(bindings=data)
+            config.update_config_refs()
+        except pydantic.ValidationError:
+            logger.exception(f"Error loading {data=!r}, {used_file_inputs=!r}")
+            raise
+        return config
 
     @property
     def sources(self) -> List[str]:
@@ -202,9 +227,9 @@ class IOConfig:
         Returns:
             All top level names of the available resources for the used resources yaml config.
         """
-        return list(self.config.keys())
+        return list(self.config.bindings.keys())
 
-    def get(self, source_key: str) -> Mapping:
+    def get(self, source_key: str) -> IOEnvironment:
         """A getter.
 
         Args:
@@ -245,67 +270,4 @@ class IOConfig:
                     "KAFKA_TOPIC": "mock-kafka-topic"
                 }
         """
-        source_config = self.config[source_key][self.env_identifier]
-        if self.config[source_key].get("schema"):
-            schema_definition = self._get_schema_definition(source_key)
-            source_config["name"] = schema_definition["name"]
-            source_config["schema"] = self._get_schema(schema_definition)
-            source_config["validations"] = self._get_validations(schema_definition)
-            source_config["metrics"] = self._get_metrics(schema_definition)
-        return source_config
-
-    def _get_schema_definition(self, source_key: str) -> Mapping:
-        """Retrieves the schema definition from a resource definition.
-
-        Returns:
-            The schema definition provided for a resource definition.
-        """
-        schema_file_path = self.config[source_key].get("schema")["file_path"]
-        with open(schema_file_path, "r") as stream:  # pylint: disable=unspecified-encoding]
-            logger.debug(f"Parsing schema: {schema_file_path}...")
-            return yaml.load(stream, SafeDynamicSchemaLoader.with_module(self.dynamic_vars))
-
-    @staticmethod
-    def _get_schema(schema_definition: Mapping) -> Mapping:
-        """Retrieve the schema from a schema definition.
-
-        Args:
-            schema_definition:
-
-        Returns:
-            The column types in the schema definition.
-        """
-        _schema = {}
-        for column in schema_definition["columns"].keys():
-            _schema[column] = schema_definition["columns"][column]["type"]
-        return _schema
-
-    @staticmethod
-    def _get_validations(schema_definition: Mapping) -> Mapping:
-        """Returns all validations for each column in a schema definition.
-
-        Args:
-            schema_definition: A dictionary with all columns in a dataset characterised by validations and metrics
-
-        Returns:
-            The validations applied to each column in the schema definition.
-        """
-        _validations = {}
-        for column in schema_definition["columns"].keys():
-            _validations[column] = schema_definition["columns"][column]["validations"]
-        return _validations
-
-    @staticmethod
-    def _get_metrics(schema_definition):
-        """Returns all metrics for each column in a schema definition.
-
-        Args:
-            schema_definition: A dictionary with all columns in a dataset characterised by validations and metrics
-
-        Returns:
-            The metrics applied to each column in the schema definition.
-        """
-        _metrics = {}
-        for column in schema_definition["columns"].keys():
-            _metrics[column] = schema_definition["columns"][column]["metrics"]
-        return _metrics
+        return self.config.bindings[source_key].get_binding_for_environment(self.env_identifier)

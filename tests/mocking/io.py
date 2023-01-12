@@ -12,10 +12,6 @@ class ReadMockS3CsvIO(UnifiedIO):
     schema = SCHEMA_FROM_FILE
 
 
-class ReadS3CsvAltIO(UnifiedIO):
-    schema = {"id": "int64", "foo_name": "object", "bar": "int64"}
-
-
 class TemplatedFile(UnifiedIO):
     schema = {"id": "int64", "foo_name": "object", "bar": "int64"}
 

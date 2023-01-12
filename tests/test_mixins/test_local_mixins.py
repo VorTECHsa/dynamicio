@@ -298,9 +298,9 @@ class TestLocalIO:
 
         # Then
         try:
-            assert os.path.isfile(pg_parquet_local_config["local"]["file_path"])
+            assert os.path.isfile(pg_parquet_local_config.local.file_path)
         finally:
-            os.remove(pg_parquet_local_config["local"]["file_path"])
+            os.remove(pg_parquet_local_config.local.file_path)
 
     @pytest.mark.unit
     def test_a_df_is_written_locally_as_csv_when_io_config_is_initialised_with_local_env_value_and_csv_file_type(
@@ -320,9 +320,9 @@ class TestLocalIO:
 
         # Then
         try:
-            assert os.path.isfile(s3_csv_local_config["local"]["file_path"])
+            assert os.path.isfile(s3_csv_local_config.local.file_path)
         finally:
-            os.remove(s3_csv_local_config["local"]["file_path"])
+            os.remove(s3_csv_local_config.local.file_path)
 
     @pytest.mark.unit
     def test_a_df_is_written_locally_as_json_when_io_config_is_initialised_with_local_env_value_and_json_file_type(self, input_messages_df):
@@ -340,9 +340,9 @@ class TestLocalIO:
 
         # Then
         try:
-            assert os.path.isfile(kafka_json_local_config["local"]["file_path"])
+            assert os.path.isfile(kafka_json_local_config.local.file_path)
         finally:
-            os.remove(kafka_json_local_config["local"]["file_path"])
+            os.remove(kafka_json_local_config.local.file_path)
 
     @pytest.mark.unit
     def test_a_df_is_written_locally_as_h5_when_io_config_is_initialised_with_local_env_value_and_hdf_file_type(
@@ -362,9 +362,9 @@ class TestLocalIO:
 
         # Then
         try:
-            assert os.path.isfile(s3_hdf_local_config["local"]["file_path"])
+            assert os.path.isfile(s3_hdf_local_config.local.file_path)
         finally:
-            os.remove(s3_hdf_local_config["local"]["file_path"])
+            os.remove(s3_hdf_local_config.local.file_path)
 
     @pytest.mark.unit
     def test_dynamicio_default_pickle_protocol_is_4(
@@ -384,9 +384,9 @@ class TestLocalIO:
 
         # Then
         try:
-            assert max_pklproto_hdf(s3_hdf_local_config["local"]["file_path"]) == 4
+            assert max_pklproto_hdf(s3_hdf_local_config.local.file_path) == 4
         finally:
-            os.remove(s3_hdf_local_config["local"]["file_path"])
+            os.remove(s3_hdf_local_config.local.file_path)
 
     @pytest.mark.unit
     def test_dynamicio_default_pickle_protocol_is_bypassed_by_user_input(
@@ -406,9 +406,9 @@ class TestLocalIO:
 
         # Then
         try:
-            assert max_pklproto_hdf(s3_hdf_local_config["local"]["file_path"]) == 5
+            assert max_pklproto_hdf(s3_hdf_local_config.local.file_path) == 5
         finally:
-            os.remove(s3_hdf_local_config["local"]["file_path"])
+            os.remove(s3_hdf_local_config.local.file_path)
 
     @pytest.mark.unit
     def test_read_resolves_file_path_if_templated_for_some_input_data(self):
@@ -426,7 +426,7 @@ class TestLocalIO:
             io_object.read()
 
         mocked__read_csv_file.assert_called_once_with(
-            config["local"]["file_path"].format(file_name_to_replace="some_csv_to_read"),
+            config.local.file_path.format(file_name_to_replace="some_csv_to_read"),
             io_object.schema,
         )
 
@@ -445,10 +445,10 @@ class TestLocalIO:
         with patch.object(io_object, "_write_csv_file") as mocked__write_csv_file:
             io_object.write(df)
 
-        mocked__write_csv_file.assert_called_once_with(
-            df,
-            config["local"]["file_path"].format(file_name_to_replace="some_csv_to_read"),
-        )
+        mocked__write_csv_file.assert_called_once()
+        (called_with_df, called_with_file_path) = mocked__write_csv_file.call_args[0]
+        pd.testing.assert_frame_equal(df, called_with_df)
+        assert called_with_file_path == config.local.file_path.format(file_name_to_replace="some_csv_to_read")
 
     @pytest.mark.integration
     def test_local_writers_only_write_out_castable_columns_according_to_the_io_schema_case_float64_to_int64_id(
@@ -477,13 +477,13 @@ class TestLocalIO:
 
         # # Then
         try:
-            output_df = pd.read_parquet(s3_parquet_local_config["local"]["file_path"])
+            output_df = pd.read_parquet(s3_parquet_local_config.local.file_path)
             assert list(output_df.dtypes) == [
                 np.dtype("int64"),
                 np.dtype("O"),
             ]  # order of the list matters
         finally:
-            os.remove(s3_parquet_local_config["local"]["file_path"])
+            os.remove(s3_parquet_local_config.local.file_path)
 
     @pytest.mark.integration
     def test_local_writers_only_write_out_columns_in_a_provided_io_schema(self):
@@ -509,13 +509,12 @@ class TestLocalIO:
 
         # Then
         try:
-            output_df = pd.read_parquet(s3_parquet_local_config["local"]["file_path"])
+            output_df = pd.read_parquet(s3_parquet_local_config.local.file_path)
             no_of_columns_of_output_df = len(list(output_df.columns))
             no_of_columns_of_input_df = len(list(input_df.columns))
-
-            assert (no_of_columns_of_input_df - no_of_columns_of_output_df == 1) and (set(output_df.columns) == {*write_s3_io.schema})  # pylint: disable=no-member
+            assert (no_of_columns_of_input_df - no_of_columns_of_output_df == 1) and (set(output_df.columns) == {*write_s3_io.schema.columns.keys()})  # pylint: disable=no-member
         finally:
-            os.remove(s3_parquet_local_config["local"]["file_path"])
+            os.remove(s3_parquet_local_config.local.file_path)
 
     @pytest.mark.unit
     def test_pyarrow_is_used_as_backend_parquet(self):
@@ -569,7 +568,7 @@ class TestLocalIO:
         # When
         ReadFromBatchLocalParquet(config, **read_parquet_kwargs).read()
         # Then
-        mock__read_parquet.assert_called_once_with(config["local"]["file_path"], columns=["id", "foo_name", "bar"], **read_parquet_kwargs)
+        mock__read_parquet.assert_called_once_with(config.local.file_path, columns=["id", "foo_name", "bar"], **read_parquet_kwargs)
 
     @pytest.mark.unit
     def test_read_with_pyarrow_is_called_as_default_when_no_engine_option_is_provided(self):
@@ -585,7 +584,7 @@ class TestLocalIO:
             ReadS3ParquetIO(config).read()
 
         # Then
-        mocked__read_with_pyarrow.assert_called_once_with(config["local"]["file_path"], columns=["id", "foo_name", "bar"])
+        mocked__read_with_pyarrow.assert_called_once_with(config.local.file_path, columns=["id", "foo_name", "bar"])
 
     @pytest.mark.unit
     def test_read_with_pyarrow_is_called_when_engine_option_is_set_to_pyarrow(self):
@@ -601,7 +600,7 @@ class TestLocalIO:
             ReadS3ParquetIO(config, engine="pyarrow").read()
 
         # Then
-        mocked__read_with_pyarrow.assert_called_once_with(config["local"]["file_path"], engine="pyarrow", columns=["id", "foo_name", "bar"])
+        mocked__read_with_pyarrow.assert_called_once_with(config.local.file_path, engine="pyarrow", columns=["id", "foo_name", "bar"])
 
     @pytest.mark.unit
     def test_read_with_fastparquet_is_called_when_engine_option_is_set_to_fastparquet(self):
@@ -617,7 +616,7 @@ class TestLocalIO:
             ReadS3ParquetIO(config, engine="fastparquet").read()
 
         # Then
-        mocked__read_with_fastparquet.assert_called_once_with(config["local"]["file_path"], engine="fastparquet", columns=["id", "foo_name", "bar"])
+        mocked__read_with_fastparquet.assert_called_once_with(config.local.file_path, engine="fastparquet", columns=["id", "foo_name", "bar"])
 
     @pytest.mark.unit
     def test_write_with_pyarrow_is_called_as_default_when_no_engine_option_is_provided(self):

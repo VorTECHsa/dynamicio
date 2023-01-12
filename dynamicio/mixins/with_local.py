@@ -5,13 +5,14 @@
 import glob
 import os
 from threading import Lock
-from typing import Any, Mapping, MutableMapping
+from typing import Any, MutableMapping
 
 import pandas as pd  # type: ignore
 from fastparquet import ParquetFile, write  # type: ignore
 from pyarrow.parquet import read_table, write_table  # type: ignore # pylint: disable=no-name-in-module
 
-from . import utils
+from dynamicio.config.pydantic import DataframeSchema, LocalBatchDataEnvironment, LocalDataEnvironment
+from dynamicio.mixins import utils
 
 hdf_lock = Lock()
 
@@ -19,8 +20,8 @@ hdf_lock = Lock()
 class WithLocal:
     """Handles local I/O operations."""
 
-    sources_config: Mapping
-    schema: Mapping
+    schema: DataframeSchema
+    sources_config: LocalDataEnvironment
     options: MutableMapping[str, Any]
 
     def _read_from_local(self) -> pd.DataFrame:
@@ -36,9 +37,9 @@ class WithLocal:
         Returns:
             DataFrame
         """
-        local_config = self.sources_config["local"]
-        file_path = utils.resolve_template(local_config["file_path"], self.options)
-        file_type = local_config["file_type"]
+        local_config = self.sources_config.local
+        file_path = utils.resolve_template(local_config.file_path, self.options)
+        file_type = local_config.file_type
 
         return getattr(self, f"_read_{file_type}_file")(file_path, self.schema, **self.options)
 
@@ -56,15 +57,15 @@ class WithLocal:
         Args:
             df: The dataframe to be written out.
         """
-        local_config = self.sources_config["local"]
-        file_path = utils.resolve_template(local_config["file_path"], self.options)
-        file_type = local_config["file_type"]
+        local_config = self.sources_config.local
+        file_path = utils.resolve_template(local_config.file_path, self.options)
+        file_type = local_config.file_type
 
         getattr(self, f"_write_{file_type}_file")(df, file_path, **self.options)
 
     @staticmethod
     @utils.allow_options(pd.read_hdf)
-    def _read_hdf_file(file_path: str, schema: Mapping[str, str], **options: Any) -> pd.DataFrame:
+    def _read_hdf_file(file_path: str, schema: DataframeSchema, **options: Any) -> pd.DataFrame:
         """Read a HDF file as a DataFrame using `pd.read_hdf`.
 
         All `options` are passed directly to `pd.read_hdf`.
@@ -83,13 +84,13 @@ class WithLocal:
         with hdf_lock:
             df = pd.read_hdf(file_path, **options)
 
-        columns = [column for column in df.columns.to_list() if column in schema.keys()]
+        columns = [column for column in df.columns.to_list() if column in schema.column_names]
         df = df[columns]
         return df
 
     @staticmethod
     @utils.allow_options(pd.read_csv)
-    def _read_csv_file(file_path: str, schema: Mapping[str, str], **options: Any) -> pd.DataFrame:
+    def _read_csv_file(file_path: str, schema: DataframeSchema, **options: Any) -> pd.DataFrame:
         """Read a CSV file as a DataFrame using `pd.read_csv`.
 
         All `options` are passed directly to `pd.read_csv`.
@@ -101,12 +102,12 @@ class WithLocal:
         Returns:
             DataFrame: The dataframe read from the csv file.
         """
-        options["usecols"] = list(schema.keys())
+        options["usecols"] = list(schema.column_names)
         return pd.read_csv(file_path, **options)
 
     @staticmethod
     @utils.allow_options(pd.read_json)
-    def _read_json_file(file_path: str, schema: Mapping[str, str], **options: Any) -> pd.DataFrame:
+    def _read_json_file(file_path: str, schema: DataframeSchema, **options: Any) -> pd.DataFrame:
         """Read a json file as a DataFrame using `pd.read_hdf`.
 
         All `options` are passed directly to `pd.read_hdf`.
@@ -119,12 +120,12 @@ class WithLocal:
             DataFrame
         """
         df = pd.read_json(file_path, **options)
-        columns = [column for column in df.columns.to_list() if column in schema.keys()]
+        columns = [column for column in df.columns.to_list() if column in schema.column_names]
         df = df[columns]
         return df
 
     @staticmethod
-    def _read_parquet_file(file_path: str, schema: Mapping[str, str], **options: Any) -> pd.DataFrame:
+    def _read_parquet_file(file_path: str, schema: DataframeSchema, **options: Any) -> pd.DataFrame:
         """Read a Parquet file as a DataFrame using `pd.read_parquet`.
 
         All `options` are passed directly to `pd.read_parquet`.
@@ -136,7 +137,7 @@ class WithLocal:
         Returns:
             DataFrame: The dataframe read from the parquet file.
         """
-        options["columns"] = list(schema.keys())
+        options["columns"] = list(schema.column_names)
 
         if options.get("engine") == "fastparquet":
             return WithLocal.__read_with_fastparquet(file_path, **options)
@@ -231,24 +232,26 @@ class WithLocal:
 class WithLocalBatch(WithLocal):
     """Responsible for batch reading local files."""
 
+    sources_config: LocalBatchDataEnvironment  # type: ignore
+
     def _read_from_local_batch(self) -> pd.DataFrame:
         """Reads a set of files for a specified file type, concatenates them and returns a dataframe.
 
         Returns:
             A concatenated dataframe composed of all files read through local_batch.
         """
-        local_batch_config = self.sources_config["local"]
+        local_batch_config = self.sources_config.local
 
-        file_type = local_batch_config["file_type"]
-        filtering_file_type = file_type
+        file_type = local_batch_config.file_type
+        filtering_file_type = file_type.value
         if filtering_file_type == "hdf":
             filtering_file_type = "h5"
 
-        files = glob.glob(f"{local_batch_config['path_prefix']}/*.{filtering_file_type}")
+        files = glob.glob(os.path.join(local_batch_config.path_prefix, f"*.{filtering_file_type}"))
 
         dfs_to_concatenate = []
         for file in files:
-            file_to_load = os.path.join(local_batch_config["path_prefix"], file)
+            file_to_load = os.path.join(local_batch_config.path_prefix, file)
             dfs_to_concatenate.append(getattr(self, f"_read_{file_type}_file")(file_to_load, self.schema, **self.options))  # type: ignore
 
         return pd.concat(dfs_to_concatenate).reset_index(drop=True)

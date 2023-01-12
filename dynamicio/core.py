@@ -9,10 +9,12 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Mapping, MutableMapping, Optional
 
 import pandas as pd  # type: ignore
+import pydantic
 from magic_logger import logger
 
 from dynamicio import validations
-from dynamicio.errors import CASTING_WARNING_MSG, ColumnsDataTypeError, MissingSchemaDefinition, NOTICE_MSG, SchemaNotFoundError, SchemaValidationError
+from dynamicio.config.pydantic import DataframeSchema, IOEnvironment
+from dynamicio.errors import CASTING_WARNING_MSG, ColumnsDataTypeError, NOTICE_MSG, SchemaNotFoundError, SchemaValidationError
 from dynamicio.metrics import get_metric
 
 SCHEMA_FROM_FILE = {"schema": object()}
@@ -37,11 +39,12 @@ class DynamicDataIO:
        >>> my_dataset_df = my_dataset_io.read()
     """
 
-    schema: Mapping
+    schema: DataframeSchema
+    sources_config: IOEnvironment
 
     def __init__(
         self,
-        source_config: Mapping,
+        source_config: IOEnvironment,
         apply_schema_validations: bool = False,
         log_schema_metrics: bool = False,
         show_casting_warnings: bool = False,
@@ -64,20 +67,57 @@ class DynamicDataIO:
         self.apply_schema_validations = apply_schema_validations
         self.log_schema_metrics = log_schema_metrics
         self.show_casting_warnings = show_casting_warnings
-        self.options = self._get_options(options, source_config.get("options"))
-        source_name = self.sources_config.get("type")
+        self.options = self._get_options(options, source_config.options)
+        source_name = self.sources_config.data_backend_type
         if self.schema is SCHEMA_FROM_FILE:
-            try:
-                self.schema = self.sources_config["schema"]
-                self.name = self.sources_config["name"].upper()
-                self.schema_validations = self.sources_config["validations"]
-                self.schema_metrics = self.sources_config["metrics"]
-            except KeyError as _error:
-                raise SchemaNotFoundError() from _error
+            active_schema = self.sources_config.dynamicio_schema
+        else:
+            active_schema = self._schema_from_obj(self)
+
+        if not active_schema:
+            raise SchemaNotFoundError()
+
+        assert isinstance(active_schema, DataframeSchema)
+        self.schema = active_schema
+        self.name = self.schema.name.upper()
+        self.schema_validations = self.schema.validations
+        self.schema_metrics = self.schema.metrics
 
         assert hasattr(self, f"_read_from_{source_name}") or hasattr(
             self, f"_write_to_{source_name}"
         ), f"No method '_read_from_{source_name}' or '_write_to_{source_name}'. Have you registered a mixin for {source_name}?"
+
+    @staticmethod
+    def _schema_from_obj(target) -> DataframeSchema:
+        """Construct `DataframeSchema` from an object.
+
+        The object:
+            - MUST have `schema` attribute that is a dictionary specifying columns and datatypes
+            - CAN have `schema_validations` and `schema_metrics` attributes
+        """
+        col_info = {}
+        for (col_name, dtype) in target.schema.items():
+            col_validations = {}
+            col_metrics = []
+            try:
+                col_validations = target.schema_validations[col_name]
+            except (KeyError, AttributeError):
+                pass
+            try:
+                col_metrics = target.schema_metrics[col_name]
+            except (KeyError, AttributeError):
+                pass
+            col_info[col_name] = {
+                "type": dtype,
+                "validations": col_validations,
+                "metrics": col_metrics,
+            }
+        try:
+            out = DataframeSchema(name=target.name, columns=col_info)
+        except pydantic.ValidationError:
+            logger.exception(f"Error parsing {target.name=!r} {col_info=!r}")
+            raise
+        return out
 
     def __init_subclass__(cls):
         """Ensure that all subclasses have a `schema` attribute and a `validate` method.
@@ -106,7 +146,7 @@ class DynamicDataIO:
         Returns:
             A pandas dataframe or an iterable.
         """
-        source_name = self.sources_config.get("type")
+        source_name = self.sources_config.data_backend_type
         df = getattr(self, f"_read_from_{source_name}")()
 
         df = self._apply_schema(df)
@@ -132,9 +172,9 @@ class DynamicDataIO:
         Args:
             df: The data to be written
         """
-        source_name = self.sources_config.get("type")
-        if set(df.columns) != set(self.schema.keys()):  # pylint: disable=E1101
-            columns = [column for column in df.columns.to_list() if column in self.schema.keys()]
+        source_name = self.sources_config.data_backend_type
+        if set(df.columns) != self.schema.column_names:  # pylint: disable=E1101
+            columns = [column for column in df.columns.to_list() if column in self.schema.column_names]
             df = df[columns]
 
         if self.apply_schema_validations:
@@ -160,16 +200,16 @@ class DynamicDataIO:
                 the exception object is a `List[str]`, where each element is the name of a
                 validation that failed.
         """
-        if not hasattr(self, "schema_validations"):
-            raise MissingSchemaDefinition(self.__class__)
 
         failed_validations = {}
         for column in self.schema_validations.keys():
-            for validation in self.schema_validations[column].keys():
-                if self.schema_validations[column][validation]["apply"] is True:
-                    validation_result = getattr(validations, validation)(self.name, df, column, **self.schema_validations[column][validation]["options"])
+            col_validations = self.schema_validations[column]
+            for validation in col_validations:
+                if validation.apply:
+                    validator = validations.ALL_VALIDATORS[validation.name]
+                    validation_result = validator(self.name, df, column, **validation.options)
                     if not validation_result.valid:
-                        failed_validations[validation] = validation_result.message
+                        failed_validations[validation.name] = validation_result.message
 
         if len(failed_validations) > 0:
             raise SchemaValidationError(failed_validations)
@@ -185,8 +225,6 @@ class DynamicDataIO:
         Returns:
              self (to allow for method chaining).
         """
-        if not hasattr(self, "schema_metrics"):
-            raise MissingSchemaDefinition(self.__class__)
 
         for column in self.schema_metrics.keys():
             for metric in self.schema_metrics[column]:
@@ -241,7 +279,9 @@ class DynamicDataIO:
         """
         dtypes = df.dtypes
 
-        for column_name, expected_dtype in self.schema.items():
+        for col_info in self.schema.columns.values():
+            column_name = col_info.name
+            expected_dtype = col_info.data_type
             found_dtype = dtypes[column_name].name
             if found_dtype != expected_dtype:
                 if self.show_casting_warnings:
@@ -250,9 +290,9 @@ class DynamicDataIO:
                     if len(set(type(v) for v in df[column_name].values)) > 1:  # pylint: disable=consider-using-set-comprehension
                         logger.warning(CASTING_WARNING_MSG.format(column_name, expected_dtype, found_dtype))  # pylint: disable=logging-format-interpolation
                         logger.info(NOTICE_MSG.format(column_name))  # pylint: disable=logging-format-interpolation
-                    df[column_name] = df[column_name].astype(self.schema[column_name])
+                    df[column_name] = df[column_name].astype(self.schema.columns[column_name].data_type)
                 except (ValueError, TypeError):
-                    logger.error(f"ValueError: Tried casting column {self.name}['{column_name}]' to '{expected_dtype}' " f"from '{found_dtype}', but failed")
+                    logger.exception(f"ValueError: Tried casting column {self.name}['{column_name}'] to '{expected_dtype}' from '{found_dtype}', but failed")
                     return False
         return True
 

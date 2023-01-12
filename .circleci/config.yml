@@ -22,8 +22,8 @@ jobs:
       - run:
           name: "Code Quality Check"
           command: |
-            black dynamicio
-            black tests
+            black --check dynamicio
+            black --check tests
             flake8 --verbose dynamicio
             flake8 --verbose tests
             pylint -v dynamicio

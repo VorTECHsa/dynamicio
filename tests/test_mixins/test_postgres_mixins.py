@@ -85,7 +85,9 @@ class TestPostgresIO:
         write_config.write(df)
 
         # Then
-        mock__write_to_postgres.assert_called_with(test_df)
+        mock__write_to_postgres.assert_called_once()
+        (called_with_df,) = mock__write_to_postgres.call_args[0]
+        pd.testing.assert_frame_equal(test_df, called_with_df)
         assert "truncate_and_append" in write_config.options
 
     @pytest.mark.unit
@@ -161,12 +163,12 @@ class TestPostgresIO:
         ).get(source_key="READ_FROM_POSTGRES")
 
         # When
-        schema = postgres_cloud_config["schema"]
-        schema_name = postgres_cloud_config["name"]
-        model = ReadPostgresIO(source_config=postgres_cloud_config)._generate_model_from_schema(schema, schema_name)
+        schema = postgres_cloud_config.dynamicio_schema
+        schema_name = postgres_cloud_config.dynamicio_schema.name
+        model = ReadPostgresIO(source_config=postgres_cloud_config)._generate_model_from_schema(schema)
 
         # Then
-        assert len(model.__table__.columns) == len(schema) and model.__tablename__ == schema_name
+        assert len(model.__table__.columns) == len(schema.columns) and model.__tablename__ == schema_name
 
     @pytest.mark.unit
     def test_get_table_columns_from_generated_model_returns_valid_list_of_columns(self):
@@ -178,9 +180,8 @@ class TestPostgresIO:
         ).get(source_key="READ_FROM_POSTGRES")
 
         # When
-        schema = pg_cloud_config["schema"]
-        schema_name = pg_cloud_config["name"]
-        model = ReadPostgresIO(source_config=pg_cloud_config)._generate_model_from_schema(schema, schema_name)  # pylint: disable=protected-access
+        schema = pg_cloud_config.dynamicio_schema
+        model = ReadPostgresIO(source_config=pg_cloud_config)._generate_model_from_schema(schema)  # pylint: disable=protected-access
         columns = ReadPostgresIO(source_config=pg_cloud_config)._get_table_columns(model)  # pylint: disable=protected-access
 
         # Then

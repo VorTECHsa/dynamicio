@@ -1,16 +1,16 @@
 """Default dynamicio mixins module"""
 
-from .with_kafka import (
+from dynamicio.mixins.with_kafka import (
     WithKafka,
 )
-from .with_local import (
+from dynamicio.mixins.with_local import (
     WithLocal,
     WithLocalBatch,
 )
-from .with_postgres import (
+from dynamicio.mixins.with_postgres import (
     WithPostgres,
 )
-from .with_s3 import (
+from dynamicio.mixins.with_s3 import (
     WithS3File,
     WithS3PathPrefix,
 )

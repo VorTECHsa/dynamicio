@@ -32,12 +32,24 @@ class TestPipeline:
 
         # Then
         try:
-            assert expected_staged_foo_df.equals(pd.read_parquet(raw_config.get(source_key="STAGED_FOO")["local"]["file_path"]))
-            assert expected_staged_bar_df.equals(pd.read_parquet(raw_config.get(source_key="STAGED_BAR")["local"]["file_path"]))
-            assert expected_final_foo_df.equals(pd.read_parquet(processed_config.get(source_key="FINAL_FOO")["local"]["file_path"]))
-            assert expected_final_bar_df.equals(pd.read_parquet(processed_config.get(source_key="FINAL_BAR")["local"]["file_path"]))
+            pd.testing.assert_frame_equal(
+                expected_staged_foo_df,
+                pd.read_parquet(raw_config.get(source_key="STAGED_FOO").local.file_path)
+            )
+            pd.testing.assert_frame_equal(
+                expected_staged_bar_df,
+                pd.read_parquet(raw_config.get(source_key="STAGED_BAR").local.file_path)
+            )
+            pd.testing.assert_frame_equal(
+                expected_final_foo_df,
+                pd.read_parquet(processed_config.get(source_key="FINAL_FOO").local.file_path)
+            )
+            pd.testing.assert_frame_equal(
+                expected_final_bar_df,
+                pd.read_parquet(processed_config.get(source_key="FINAL_BAR").local.file_path)
+            )
         finally:
-            os.remove(raw_config.get(source_key="STAGED_FOO")["local"]["file_path"])
-            os.remove(raw_config.get(source_key="STAGED_BAR")["local"]["file_path"])
-            os.remove(processed_config.get(source_key="FINAL_FOO")["local"]["file_path"])
-            os.remove(processed_config.get(source_key="FINAL_BAR")["local"]["file_path"])
+            os.remove(raw_config.get(source_key="STAGED_FOO").local.file_path)
+            os.remove(raw_config.get(source_key="STAGED_BAR").local.file_path)
+            os.remove(processed_config.get(source_key="FINAL_FOO").local.file_path)
+            os.remove(processed_config.get(source_key="FINAL_BAR").local.file_path)

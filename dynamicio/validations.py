@@ -1,20 +1,18 @@
 """Implements the Validator class responsible for various generic data validations and metrics generation."""
-__all__ = [
-    "has_unique_values",
-    "has_no_null_values",
-    "has_acceptable_percentage_of_nulls",
-    "is_in",
-    "is_greater_than",
-    "is_greater_than_or_equal",
-    "is_lower_than",
-    "is_lower_than_or_equal",
-    "is_between",
-]
-
 import operator
-from typing import NamedTuple, Set
+from typing import Callable, NamedTuple, Set
 
 import pandas as pd  # type: ignore
+
+ALL_VALIDATORS = {}  # name -> function
+
+
+def validator(func: Callable):
+    """A decorator to add the function to the ALL_VALIDATORS dict"""
+    name = func.__name__
+    assert name not in ALL_VALIDATORS
+    ALL_VALIDATORS[name] = func
+    return func
 
 
 class ValidationResult(NamedTuple):
@@ -25,6 +23,7 @@ class ValidationResult(NamedTuple):
     value: float
 
 
+@validator
 def has_unique_values(dataset: str, df: pd.DataFrame, column: str) -> ValidationResult:
     """Checks if values in column are unique.
 
@@ -45,6 +44,7 @@ def has_unique_values(dataset: str, df: pd.DataFrame, column: str) -> Validation
     return ValidationResult(valid=False, message=f"Values {duplicates} for {dataset}[{column}] are duplicated!", value=len(duplicates))
 
 
+@validator
 def has_no_null_values(dataset: str, df: pd.DataFrame, column: str) -> ValidationResult:
     """Checks if column has any null values (including NaN and NaT values).
 
@@ -62,6 +62,7 @@ def has_no_null_values(dataset: str, df: pd.DataFrame, column: str) -> Validatio
     return ValidationResult(valid=not mask.any(), message=f"{dataset}[{column}] has {no_of_nulls} nulls", value=no_of_nulls)
 
 
+@validator
 def has_acceptable_percentage_of_nulls(
     dataset: str,
     df: pd.DataFrame,
@@ -104,6 +105,7 @@ def has_acceptable_percentage_of_nulls(
     )
 
 
+@validator
 def is_in(dataset: str, df: pd.DataFrame, column: str, categorical_values: Set[str], match_all: bool = True) -> ValidationResult:
     """Checks if the column only has allowed categorical values as per the set provided.
 
@@ -128,6 +130,7 @@ def is_in(dataset: str, df: pd.DataFrame, column: str, categorical_values: Set[s
     return _validate_all_acceptable_categoricals_are_present(categorical_values, unique_values, column, dataset, df)
 
 
+@validator
 def _validate_all_acceptable_categoricals_are_present(acceptable_categoricals: Set[str], unique_values: Set[str], column: str, dataset: str, df: pd.DataFrame) -> ValidationResult:
     if unique_values == acceptable_categoricals:
         validation_result = ValidationResult(valid=True, message=f"All acceptable categorical values for {dataset}[{column}] are present", value=0)
@@ -147,6 +150,7 @@ def _validate_all_acceptable_categoricals_are_present(acceptable_categoricals: S
     return validation_result
 
 
+@validator
 def _validate_categoricals_are_a_subset_of_the_acceptable(acceptable_categoricals: Set[str], unique_values: Set[str], column: str, dataset: str, df: pd.DataFrame) -> ValidationResult:
     if unique_values.issubset(acceptable_categoricals):
         return ValidationResult(valid=True, message=f"Categorical values for {dataset}[{column}] are acceptable", value=0)
@@ -158,6 +162,7 @@ def _validate_categoricals_are_a_subset_of_the_acceptable(acceptable_categorical
     )
 
 
+@validator
 def is_greater_than(
     dataset: str,
     df: pd.DataFrame,
@@ -191,6 +196,7 @@ def is_greater_than(
     )
 
 
+@validator
 def is_greater_than_or_equal(
     dataset: str,
     df: pd.DataFrame,
@@ -224,6 +230,7 @@ def is_greater_than_or_equal(
     )
 
 
+@validator
 def is_lower_than(
     dataset: str,
     df: pd.DataFrame,
@@ -259,6 +266,7 @@ def is_lower_than(
     )
 
 
+@validator
 def is_lower_than_or_equal(
     dataset: str,
     df: pd.DataFrame,
@@ -294,6 +302,7 @@ def is_lower_than_or_equal(
     )
 
 
+@validator
 def is_between(
     dataset: str,
     df: pd.DataFrame,
