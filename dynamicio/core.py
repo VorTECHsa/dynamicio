@@ -14,7 +14,7 @@ from magic_logger import logger
 
 from dynamicio import validations
 from dynamicio.config.pydantic import DataframeSchema, IOEnvironment
-from dynamicio.errors import CASTING_WARNING_MSG, ColumnsDataTypeError, MissingSchemaDefinition, NOTICE_MSG, SchemaNotFoundError, SchemaValidationError
+from dynamicio.errors import CASTING_WARNING_MSG, ColumnsDataTypeError, NOTICE_MSG, SchemaNotFoundError, SchemaValidationError
 from dynamicio.metrics import get_metric
 
 SCHEMA_FROM_FILE = {"schema": object()}
@@ -205,7 +205,7 @@ class DynamicDataIO:
         for column in self.schema_validations.keys():
             col_validations = self.schema_validations[column]
             if not col_validations:
-                raise MissingSchemaDefinition(f"{self.__class__} is missing validations for {column} column")
+                continue
             for validation in col_validations:
                 if validation.apply:
                     validator = validations.ALL_VALIDATORS[validation.name]
@@ -228,14 +228,9 @@ class DynamicDataIO:
              self (to allow for method chaining).
         """
 
-        any_metrices = False
         for column in self.schema_metrics.keys():
             for metric in self.schema_metrics[column]:
-                any_metrices = True
                 get_metric(metric)(self.name, df, column)()  # type: ignore
-
-        if not any_metrices:
-            raise MissingSchemaDefinition(self.__class__)
 
         return self
 
