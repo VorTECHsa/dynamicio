@@ -204,8 +204,6 @@ class DynamicDataIO:
         failed_validations = {}
         for column in self.schema_validations.keys():
             col_validations = self.schema_validations[column]
-            if not col_validations:
-                continue
             for validation in col_validations:
                 if validation.apply:
                     validator = validations.ALL_VALIDATORS[validation.name]

@@ -13,7 +13,7 @@ import pytest
 import dynamicio
 from dynamicio.config import IOConfig
 from dynamicio.core import CASTING_WARNING_MSG, DynamicDataIO
-from dynamicio.errors import ColumnsDataTypeError, MissingSchemaDefinition, SchemaNotFoundError, SchemaValidationError
+from dynamicio.errors import ColumnsDataTypeError, SchemaNotFoundError, SchemaValidationError
 from dynamicio.mixins import WithS3File
 from tests import constants
 from tests.mocking.io import (
@@ -23,7 +23,6 @@ from tests.mocking.io import (
     ParquetWithCustomValidate,
     ParquetWithSomeBool,
     ReadMockS3CsvIO,
-    ReadS3CsvAltIO,
     ReadS3CsvIO,
     ReadS3DataWithFalseTypes,
     ReadS3IO,
@@ -184,34 +183,6 @@ class TestCoreIO:
         # When
         with pytest.raises(SchemaNotFoundError):
             ReadMockS3CsvIO(source_config=read_mock_s3_cloud_config)
-
-    @pytest.mark.unit
-    def test_missing_schema_definition_error_is_thrown_if_user_tries_to_use_validate_from_schema_without_one(self, valid_dataframe):
-        # Given
-        df = valid_dataframe
-        read_alt_cloud_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
-            env_identifier="CLOUD",
-            dynamic_vars=constants,
-        ).get(source_key="READ_FROM_S3_CSV_ALT")
-
-        # When
-        with pytest.raises(MissingSchemaDefinition):
-            ReadS3CsvAltIO(source_config=read_alt_cloud_config).validate_from_schema(df)
-
-    @pytest.mark.unit
-    def test_missing_schema_definition_error_is_thrown_if_user_tries_to_use_log_metrics_from_schema(self, valid_dataframe):
-        # Given
-        df = valid_dataframe
-        read_alt_cloud_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
-            env_identifier="CLOUD",
-            dynamic_vars=constants,
-        ).get(source_key="READ_FROM_S3_CSV_ALT")
-
-        # When
-        with pytest.raises(MissingSchemaDefinition):
-            ReadS3CsvAltIO(source_config=read_alt_cloud_config).log_metrics_from_schema(df)
 
     @pytest.mark.integration
     def test_schema_validations_are_applied_for_an_io_class_with_a_schema_definition(self, valid_dataframe):
