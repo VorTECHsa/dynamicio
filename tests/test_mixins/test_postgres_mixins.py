@@ -86,7 +86,7 @@ class TestPostgresIO:
 
         # Then
         mock__write_to_postgres.assert_called_once()
-        (called_with_df, ) = mock__write_to_postgres.call_args[0]
+        (called_with_df,) = mock__write_to_postgres.call_args[0]
         pd.testing.assert_frame_equal(test_df, called_with_df)
         assert "truncate_and_append" in write_config.options
 

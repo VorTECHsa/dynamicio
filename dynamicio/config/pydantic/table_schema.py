@@ -3,7 +3,7 @@
 """This module defines Config schema for data source (pandas dataframe)"""
 
 import enum
-from typing import Mapping, Sequence, Union
+from typing import Mapping, Sequence
 
 import pydantic
 
@@ -116,7 +116,7 @@ class DataframeSchema(pydantic.BaseModel):
         return {col_name: {**{"name": col_name}, **col_data} for (col_name, col_data) in field.items()}
 
     @property
-    def validations(self) -> Mapping[str, Sequence[ColumnValidationType]]:
+    def validations(self) -> Mapping[str, Sequence[ColumnValidationBase]]:
         """A short-hand property to access the validators for each column."""
         return {col_name: col.validations for (col_name, col) in self.columns.items()}
 
