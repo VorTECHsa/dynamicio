@@ -1,8 +1,8 @@
 """Test regressions discovered in v4.3.0 release"""
 
 from dynamicio import UnifiedIO
-from dynamicio.core import SCHEMA_FROM_FILE
 from dynamicio.config import IOConfig
+from dynamicio.core import SCHEMA_FROM_FILE
 
 
 class IO(UnifiedIO):

@@ -1,5 +1,5 @@
-import pathlib
 import imp
+import pathlib
 
 import pytest
 
