@@ -2,12 +2,18 @@
 # pylint: disable=too-few-public-methods
 __all__ = ["InputIO", "StagedFoo", "StagedBar"]
 
-from sqlalchemy.ext.declarative import declarative_base
+from pandera import SchemaModel, String, Float, Field
+from pandera.typing import Series
 
 from dynamicio import UnifiedIO, WithLocal, WithPostgres, WithS3File
 from dynamicio.core import SCHEMA_FROM_FILE, DynamicDataIO
 
-Base = declarative_base()
+
+class Foo(SchemaModel):
+    column_a: Series[String] = Field(unique=True, report_duplicates="all", logging={"metrics": ["Counts"], "dataset_name": "Foo", "column": "column_a"})
+    column_b: Series[String] = Field(nullable=False, logging={"metrics": ["CountsPerLabel"], "dataset_name": "Foo", "column": "column_a"})
+    column_c: Series[Float] = Field(gt=1000)
+    column_d: Series[Float] = Field(lt=1000, logging={"metrics": ["Min", "Max", "Mean", "Std", "Variance"], "dataset_name": "Foo", "column": "column_a"})
 
 
 class InputIO(UnifiedIO):
