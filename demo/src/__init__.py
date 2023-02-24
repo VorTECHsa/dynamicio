@@ -1,5 +1,5 @@
 """Set config IOs."""
-__all__ = ["input_config", "raw_config", "processed_config"]
+__all__ = ["staging_input_config", "staging_output_config", "transform_input_config", "transform_output_config"]
 
 import logging
 import os
@@ -12,18 +12,23 @@ logging.basicConfig(level=logging.INFO)
 logging.getLogger("kafka").setLevel(logging.WARNING)
 
 
-input_config = IOConfig(
-    path_to_source_yaml=(os.path.join(RESOURCES, "definitions/input.yaml")),
+staging_input_config = IOConfig(
+    path_to_source_yaml=(os.path.join(RESOURCES, "definitions/staging_input.yaml")),
     env_identifier=ENVIRONMENT,
     dynamic_vars=environment,
 )
-raw_config = IOConfig(
-    path_to_source_yaml=(os.path.join(RESOURCES, "definitions/raw.yaml")),
+staging_output_config = IOConfig(
+    path_to_source_yaml=(os.path.join(RESOURCES, "definitions/staging_output.yaml")),
     env_identifier=ENVIRONMENT,
     dynamic_vars=environment,
 )
-processed_config = IOConfig(
-    path_to_source_yaml=(os.path.join(RESOURCES, "definitions/processed.yaml")),
+transform_input_config = IOConfig(
+    path_to_source_yaml=(os.path.join(RESOURCES, "definitions/transform_input.yaml")),
+    env_identifier=ENVIRONMENT,
+    dynamic_vars=environment,
+)
+transform_output_config = IOConfig(
+    path_to_source_yaml=(os.path.join(RESOURCES, "definitions/transform_output.yaml")),
     env_identifier=ENVIRONMENT,
     dynamic_vars=environment,
 )

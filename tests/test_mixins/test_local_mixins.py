@@ -49,7 +49,7 @@ class TestLocalIO:
         ).get(source_key="READ_FROM_S3_PARQUET")
 
         # When
-        s3_parquet_df = ReadS3DataWithLessColumnsIO(source_config=s3_parquet_local_config).read()
+        s3_parquet_df = ReadS3DataWithLessColumnsIO(resource_definition=s3_parquet_local_config).read()
 
         # Then
         assert expected_df_with_less_columns.equals(s3_parquet_df)
@@ -67,7 +67,7 @@ class TestLocalIO:
         ).get(source_key="READ_FROM_S3_JSON")
 
         # When
-        s3_json_df = ReadS3DataWithLessColumnsAndMessedOrderOfColumnsIO(source_config=s3_json_local_config).read()
+        s3_json_df = ReadS3DataWithLessColumnsAndMessedOrderOfColumnsIO(resource_definition=s3_json_local_config).read()
 
         # Then
         assert s3_json_df.columns.to_list() == ["foo_name", "bar", "bar_type", "a_number", "b_number"]
@@ -85,7 +85,7 @@ class TestLocalIO:
         ).get(source_key="READ_FROM_S3_HDF")
 
         # When
-        s3_hdf_df = ReadS3DataWithLessColumnsAndMessedOrderOfColumnsIO(source_config=s3_hdf_local_config).read()
+        s3_hdf_df = ReadS3DataWithLessColumnsAndMessedOrderOfColumnsIO(resource_definition=s3_hdf_local_config).read()
 
         # Then
         assert s3_hdf_df.columns.to_list() == ["foo_name", "bar", "bar_type", "a_number", "b_number"]
@@ -101,7 +101,7 @@ class TestLocalIO:
         ).get(source_key="READ_FROM_S3_CSV_ALT")
 
         # When
-        s3_csv_df = ReadS3DataWithLessColumnsIO(source_config=s3_csv_local_config).read()
+        s3_csv_df = ReadS3DataWithLessColumnsIO(resource_definition=s3_csv_local_config).read()
 
         # Then
         assert expected_df_with_less_columns.equals(s3_csv_df)
@@ -117,7 +117,7 @@ class TestLocalIO:
         ).get(source_key="READ_FROM_S3_HDF")
 
         # When
-        s3_hdf_df = ReadS3DataWithLessColumnsIO(source_config=s3_parquet_local_config).read()
+        s3_hdf_df = ReadS3DataWithLessColumnsIO(resource_definition=s3_parquet_local_config).read()
 
         # Then
         assert expected_df_with_less_columns.equals(s3_hdf_df)
@@ -133,7 +133,7 @@ class TestLocalIO:
         ).get(source_key="READ_FROM_S3_JSON")
 
         # When
-        s3_json_df = ReadS3DataWithLessColumnsIO(source_config=s3_json_local_config).read()
+        s3_json_df = ReadS3DataWithLessColumnsIO(resource_definition=s3_json_local_config).read()
 
         # Then
         assert expected_df_with_less_columns.equals(s3_json_df)
@@ -148,7 +148,7 @@ class TestLocalIO:
         ).get(source_key="READ_FROM_S3_JSON")
 
         # When
-        s3_json_df = ReadS3DataWithLessColumnsIO(source_config=s3_json_local_config).read()
+        s3_json_df = ReadS3DataWithLessColumnsIO(resource_definition=s3_json_local_config).read()
 
         # Then
         assert expected_df_with_less_columns.equals(s3_json_df)
@@ -163,7 +163,7 @@ class TestLocalIO:
         ).get(source_key="READ_FROM_S3_HDF")
 
         # When
-        s3_hdf_df = ReadS3DataWithLessColumnsIO(source_config=s3_hdf_local_config).read()
+        s3_hdf_df = ReadS3DataWithLessColumnsIO(resource_definition=s3_hdf_local_config).read()
 
         # Then
         assert expected_df_with_less_columns.equals(s3_hdf_df)
@@ -180,7 +180,7 @@ class TestLocalIO:
         mock__read_from_local.return_value = expected_s3_csv_df
 
         # When
-        ReadS3CsvIO(source_config=s3_csv_local_config).read()
+        ReadS3CsvIO(resource_definition=s3_csv_local_config).read()
 
         # Then
         mock__read_from_local.assert_called()
@@ -195,7 +195,7 @@ class TestLocalIO:
         ).get(source_key="READ_FROM_POSTGRES")
 
         # When
-        pg_parquet_df = ReadPostgresIO(source_config=pg_parquet_local_config).read()
+        pg_parquet_df = ReadPostgresIO(resource_definition=pg_parquet_local_config).read()
 
         # Then
         assert test_df.equals(pg_parquet_df)
@@ -210,7 +210,7 @@ class TestLocalIO:
         ).get(source_key="READ_FROM_S3_HDF")
 
         # When
-        s3_hdf_df = ReadS3HdfIO(source_config=s3_hdf_local_config).read()
+        s3_hdf_df = ReadS3HdfIO(resource_definition=s3_hdf_local_config).read()
 
         # Then
         assert expected_s3_hdf_df.equals(s3_hdf_df)
@@ -226,7 +226,7 @@ class TestLocalIO:
 
         # When
         options = {"orient": "columns"}
-        s3_json_df = ReadS3JsonIO(source_config=s3_json_local_config, **options).read()
+        s3_json_df = ReadS3JsonIO(resource_definition=s3_json_local_config, **options).read()
 
         # Then
         assert expected_s3_json_df.equals(s3_json_df)
@@ -241,7 +241,7 @@ class TestLocalIO:
         ).get(source_key="READ_FROM_S3_CSV")
 
         # When
-        s3_csv_df = ReadS3CsvIO(source_config=s3_csv_local_config).read()
+        s3_csv_df = ReadS3CsvIO(resource_definition=s3_csv_local_config).read()
 
         # Then
         assert expected_s3_csv_df.equals(s3_csv_df)
@@ -256,7 +256,7 @@ class TestLocalIO:
         ).get(source_key="READ_FROM_POSTGRES")
 
         # When
-        pg_df = ReadPostgresIO(source_config=pg_local_config, model=ERModel).read()
+        pg_df = ReadPostgresIO(resource_definition=pg_local_config, model=ERModel).read()
 
         # Then
         assert test_df.equals(pg_df)
@@ -274,7 +274,7 @@ class TestLocalIO:
         ).get(source_key="WRITE_TO_S3_CSV")
 
         # When
-        WriteS3CsvIO(source_config=s3_csv_local_config).write(df)
+        WriteS3CsvIO(resource_definition=s3_csv_local_config).write(df)
 
         # Then
         mock__write_to_local.assert_called()
@@ -294,7 +294,7 @@ class TestLocalIO:
         ).get(source_key="WRITE_TO_PG_PARQUET")
 
         # When
-        WritePostgresIO(source_config=pg_parquet_local_config).write(df)
+        WritePostgresIO(resource_definition=pg_parquet_local_config).write(df)
 
         # Then
         try:
@@ -316,7 +316,7 @@ class TestLocalIO:
         ).get(source_key="WRITE_TO_S3_CSV")
 
         # When
-        WriteS3CsvIO(source_config=s3_csv_local_config).write(df)
+        WriteS3CsvIO(resource_definition=s3_csv_local_config).write(df)
 
         # Then
         try:
@@ -336,7 +336,7 @@ class TestLocalIO:
         ).get(source_key="WRITE_TO_KAFKA_JSON")
 
         # When
-        WriteKafkaIO(source_config=kafka_json_local_config).write(df)
+        WriteKafkaIO(resource_definition=kafka_json_local_config).write(df)
 
         # Then
         try:
@@ -358,7 +358,7 @@ class TestLocalIO:
         ).get(source_key="WRITE_TO_S3_HDF")
 
         # When
-        WriteS3HdfIO(source_config=s3_hdf_local_config).write(df)
+        WriteS3HdfIO(resource_definition=s3_hdf_local_config).write(df)
 
         # Then
         try:
@@ -380,7 +380,7 @@ class TestLocalIO:
         ).get(source_key="WRITE_TO_S3_HDF")
 
         # When
-        WriteS3HdfIO(source_config=s3_hdf_local_config).write(df)
+        WriteS3HdfIO(resource_definition=s3_hdf_local_config).write(df)
 
         # Then
         try:
@@ -402,7 +402,7 @@ class TestLocalIO:
         ).get(source_key="WRITE_TO_S3_HDF")
 
         # When
-        WriteS3HdfIO(source_config=s3_hdf_local_config, protocol=5).write(df)
+        WriteS3HdfIO(resource_definition=s3_hdf_local_config, protocol=5).write(df)
 
         # Then
         try:
@@ -419,7 +419,7 @@ class TestLocalIO:
             dynamic_vars=constants,
         ).get(source_key="TEMPLATED_FILE_PATH")
 
-        io_object = TemplatedFile(source_config=config, file_name_to_replace="some_csv_to_read")
+        io_object = TemplatedFile(resource_definition=config, file_name_to_replace="some_csv_to_read")
 
         with patch.object(io_object, "_read_csv_file") as mocked__read_csv_file:
             mocked__read_csv_file.return_value = pd.read_csv(os.path.join(TEST_RESOURCES, "data/input/some_csv_to_read.csv"))
@@ -439,7 +439,7 @@ class TestLocalIO:
             dynamic_vars=constants,
         ).get(source_key="TEMPLATED_FILE_PATH")
 
-        io_object = TemplatedFile(source_config=config, file_name_to_replace="some_csv_to_read")
+        io_object = TemplatedFile(resource_definition=config, file_name_to_replace="some_csv_to_read")
 
         df = pd.read_csv(os.path.join(TEST_RESOURCES, "data/input/some_csv_to_read.csv"))
         with patch.object(io_object, "_write_csv_file") as mocked__write_csv_file:
@@ -472,7 +472,7 @@ class TestLocalIO:
         #     @staticmethod
         #     def validate(df: pd.DataFrame):
         #         pass
-        write_s3_io = WriteS3ParquetIO(source_config=s3_parquet_local_config)
+        write_s3_io = WriteS3ParquetIO(resource_definition=s3_parquet_local_config)
         write_s3_io.write(input_df)
 
         # # Then
@@ -504,7 +504,7 @@ class TestLocalIO:
         #     @staticmethod
         #     def validate(df: pd.DataFrame):
         #         pass
-        write_s3_io = WriteS3ParquetIO(source_config=s3_parquet_local_config)
+        write_s3_io = WriteS3ParquetIO(resource_definition=s3_parquet_local_config)
         write_s3_io.write(input_df)
 
         # Then
@@ -546,7 +546,7 @@ class TestLocalIO:
 
         # When
         with patch.object(dynamicio.mixins.with_local.pd.DataFrame, "to_parquet") as mocked__to_parquet:
-            write_s3_io = WriteS3ParquetIO(source_config=s3_parquet_local_config, **to_parquet_kwargs)
+            write_s3_io = WriteS3ParquetIO(resource_definition=s3_parquet_local_config, **to_parquet_kwargs)
             write_s3_io.write(input_df)
 
         # Then
@@ -684,8 +684,8 @@ class TestLocalIO:
 
         async def multi_read(config: Mapping[str, str]) -> Tuple:
             return await asyncio.gather(
-                AsyncReadS3HdfIO(source_config=config).async_read(),
-                AsyncReadS3HdfIO(source_config=config).async_read(),
+                AsyncReadS3HdfIO(resource_definition=config).async_read(),
+                AsyncReadS3HdfIO(resource_definition=config).async_read(),
             )
 
         def dummy_read_hdf(*args, **kwargs) -> pd.DataFrame:  # pylint: disable=unused-argument
@@ -713,7 +713,7 @@ class TestLocalIO:
         ).get(source_key="WRITE_TO_S3_HDF")
 
         async def multi_write(config: Mapping[str, str], _df: pd.DataFrame) -> Tuple:
-            return await asyncio.gather(WriteS3HdfIO(source_config=config).async_write(_df), WriteS3HdfIO(source_config=config).async_write(_df))
+            return await asyncio.gather(WriteS3HdfIO(resource_definition=config).async_write(_df), WriteS3HdfIO(resource_definition=config).async_write(_df))
 
         @dynamicio.mixins.utils.allow_options([*dynamicio.mixins.utils.args_of(pd.DataFrame.to_hdf), *["protocol"]])
         def dummy_to_hdf(*args, **kwargs):  # pylint: disable=unused-argument
@@ -741,7 +741,7 @@ class TestBatchLocal:
         expected_concatenated_df = expected_s3_parquet_df
 
         # When
-        concatenated_df = ReadFromBatchLocalParquet(source_config=parquet_local_batch_config).read()
+        concatenated_df = ReadFromBatchLocalParquet(resource_definition=parquet_local_batch_config).read()
 
         # Then
         pd.testing.assert_frame_equal(expected_concatenated_df, concatenated_df)
@@ -757,7 +757,7 @@ class TestBatchLocal:
         expected_concatenated_df = expected_s3_parquet_df
 
         # When
-        concatenated_df = ReadFromBatchLocalParquet(source_config=parquet_local_batch_config).read()
+        concatenated_df = ReadFromBatchLocalParquet(resource_definition=parquet_local_batch_config).read()
 
         # Then
         pd.testing.assert_frame_equal(expected_concatenated_df, concatenated_df)
@@ -773,7 +773,7 @@ class TestBatchLocal:
         expected_concatenated_df = expected_s3_parquet_df
 
         # When
-        concatenated_df = ReadFromBatchLocalParquet(source_config=parquet_local_batch_config).read()
+        concatenated_df = ReadFromBatchLocalParquet(resource_definition=parquet_local_batch_config).read()
 
         # Then
         pd.testing.assert_frame_equal(expected_concatenated_df, concatenated_df)
@@ -789,7 +789,7 @@ class TestBatchLocal:
         expected_concatenated_df = expected_s3_hdf_df
 
         # When
-        concatenated_df = ReadFromBatchLocalHdf(source_config=parquet_local_batch_config).read()
+        concatenated_df = ReadFromBatchLocalHdf(resource_definition=parquet_local_batch_config).read()
 
         # Then
         pd.testing.assert_frame_equal(expected_concatenated_df, concatenated_df.sort_values(by="id").reset_index(drop=True))
