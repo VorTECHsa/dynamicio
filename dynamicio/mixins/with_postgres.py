@@ -5,6 +5,7 @@
 import csv
 import tempfile
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Any, Dict, Generator, MutableMapping, Union
 
 import pandas as pd  # type: ignore
@@ -45,13 +46,24 @@ def session_for(connection_string: str) -> Generator[SqlAlchemySession, None, No
     Yields:
         Active session
     """
-    engine = create_engine(connection_string)
+    engine = create_engine(connection_string, connect_args={"application_name": f"{_get_application_name}"})
     session = Session(bind=engine)
 
     try:
         yield session
     finally:
         session.close()  # pylint: disable=no-member
+
+
+def _get_application_name() -> str:
+    """Get a proxy for the application name from the path this file lives in.
+
+    Useful for docummenting postgress connections.
+
+    Returns:
+        Application name
+    """
+    return Path(__file__).parents[5].name
 
 
 class WithPostgres:
