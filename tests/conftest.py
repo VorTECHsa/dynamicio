@@ -46,7 +46,7 @@ class DummyYaml:
         return f"DummyYaml({self.path!r})"
 
     def __enter__(self):
-        return Mock(), None
+        return Mock()
 
     def __exit__(self, *args):
         return None
