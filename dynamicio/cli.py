@@ -88,11 +88,13 @@ def main(args: argparse.Namespace):
                 print(f"Skipping {exception.message}! You may want to remove this file from the datasets directory")
             else:
                 with open(os.path.join(args.output, f"{json_schema['name']}.yaml"), "w") as yml:  # pylint: disable=unspecified-encoding]
+                    yml.write("---\n")
                     yaml.safe_dump(json_schema, yml)
 
     if args.single:
         json_schema = generate_schema_for(str(args.path))
         with open(os.path.join(args.output, f"{json_schema['name']}.yaml"), "w") as yml:  # pylint: disable=unspecified-encoding]
+            yml.write("---\n")
             yaml.safe_dump(json_schema, yml)
         pprint.pprint(json_schema)
 
