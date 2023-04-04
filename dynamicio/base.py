@@ -41,6 +41,10 @@ class BaseResource(BaseModel, ABC):
         df = self._process(df, validate, log_metrics, pa_schema)
         return self._resource_write(df)
 
+    def inject(self, **_) -> "BaseResource":
+        """Inject kwargs into resource paths/wherever relevant. Implement in subclass if needed."""
+        return self
+
     def _process(
         self,
         df: pd.DataFrame,
@@ -75,9 +79,6 @@ class BaseResource(BaseModel, ABC):
 
     def _check_injections(self) -> None:
         """Check that there are no missing injections. Implement in subclass if relevant."""
-
-    def inject(self, **kwargs) -> None:
-        """Inject kwargs into resource paths/wherever relevant. Implement in subclass if needed."""
 
     @abstractmethod
     def _resource_read(self) -> pd.DataFrame:

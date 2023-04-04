@@ -35,6 +35,13 @@ class KeyedResource(BaseResource):
         """Set key explicitly."""
         self.selected_key = key
 
+    def inject(self, **kwargs) -> "KeyedResource":
+        """Inject kwargs into selected resource. Warning, correct resource needs to be selected first."""
+        super().inject(**kwargs)
+        key = self._get_key()
+        self.keyed_resources[key] = self.keyed_resources[key].inject(**kwargs)
+        return self
+
     def _resource_read(self) -> pd.DataFrame:
         key = self._get_key()
         try:

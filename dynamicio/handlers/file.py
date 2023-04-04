@@ -33,12 +33,13 @@ class BaseFileResource(BaseResource):
         if self._injected_path is None:
             inject(str(self.path))
 
-    def inject(self, **kwargs) -> None:
+    def inject(self, **kwargs) -> "BaseFileResource":
         """Inject variables into path."""
         super().inject(**kwargs)
         path_str = str(self.path)
         path_str = inject(path_str, **kwargs)
         self._injected_path = Path(path_str)
+        return self
 
 
 class HdfFileResource(BaseFileResource):
