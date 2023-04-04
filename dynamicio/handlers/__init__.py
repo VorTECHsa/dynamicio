@@ -2,5 +2,5 @@
 
 """Functional handlers pydantic models for supported I/O targets."""
 
-from .environment import KeyedResource
-from .file import CsvFileResource, HdfFileResource, JsonFileResource, ParquetFileResource
+from dynamicio.handlers.file import CsvFileResource, HdfFileResource, JsonFileResource, ParquetFileResource
+from dynamicio.handlers.keyed import KeyedResource
