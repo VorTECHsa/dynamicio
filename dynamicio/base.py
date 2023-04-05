@@ -9,7 +9,7 @@ import pandera as pa
 from pandera import SchemaModel
 from pydantic import BaseModel
 
-SchemaType = TypeVar("SchemaType", bound=pa.SchemaModel)  # Todo utilise this
+SchemaType = TypeVar("SchemaType", bound=pa.SchemaModel)  # TODO: utilise this
 
 
 class BaseResource(BaseModel, ABC):
@@ -26,7 +26,22 @@ class BaseResource(BaseModel, ABC):
         log_metrics: Optional[bool] = None,
         pa_schema: Optional[Type[SchemaModel]] = None,
     ) -> pd.DataFrame:
-        """Read from resource. Read, then process."""
+        """Read from resource.
+
+        Read, then process.
+
+        Args:
+            validate: Whether to validate the dataframe before writing. If not given, will validate if a schema is
+                available.
+            log_metrics: Whether to log metrics for the dataframe before writing. If not given, will log metrics if a
+                schema is available.
+            pa_schema: Schema to validate against. If not given, will use the schema defined to the resource.
+                If given, will override the resource schema.
+
+        Returns:
+            Processed dataframe.
+        """
+        self._check_injections()
         df = self._resource_read()
         return self._process(df, validate, log_metrics, pa_schema)
 
@@ -37,7 +52,23 @@ class BaseResource(BaseModel, ABC):
         log_metrics: Optional[bool] = None,
         pa_schema: Optional[Type[SchemaModel]] = None,
     ) -> None:
-        """Write to resource. Process, then write."""
+        """Write to resource.
+
+        Process, then write.
+
+        Args:
+            df: Dataframe to write.
+            validate: Whether to validate the dataframe before writing. If not given, will validate if a schema is
+                available.
+            log_metrics: Whether to log metrics for the dataframe before writing. If not given, will log metrics if a
+                schema is available.
+            pa_schema: Schema to validate against. If not given, will use the schema defined to the resource.
+                If given, will override the resource schema.
+
+        Returns:
+            None
+        """
+        self._check_injections()
         df = self._process(df, validate, log_metrics, pa_schema)
         return self._resource_write(df)
 
@@ -53,8 +84,6 @@ class BaseResource(BaseModel, ABC):
         pa_schema: Optional[Type[SchemaModel]],
     ) -> pd.DataFrame:
         """Process data."""
-        self._check_injections()
-
         # Use defaults if not specified during read/write
         if (validate is None and self.validate_default) or validate:
             df = self._validate(df, pa_schema)

@@ -34,7 +34,7 @@ class BaseFileResource(BaseResource):
 class HdfFileResource(BaseFileResource):
     """HDF file resource."""
 
-    pickle_protocol: int = Field(4, ge=0, le=5)
+    pickle_protocol: int = Field(4, ge=0, le=5)  # Default covers python 3.4+
 
     def _resource_read(self) -> pd.DataFrame:
         """Read from HDF file."""

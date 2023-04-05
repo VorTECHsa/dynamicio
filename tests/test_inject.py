@@ -1,10 +1,13 @@
 # pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring, R0801
+# flake8: noqa: I101
+
 from datetime import datetime
 
 import numpy as np
 import pytest
 
 from dynamicio.inject import (
+    InjectionError,
     _check_curly_braces_injections,
     _check_square_bracket_injections,
     _inject_curly_braces_vars,
@@ -104,12 +107,12 @@ def test_inject_curly_braces_vars_works_correctly_with_multiple_some_not_injecte
 
 
 def test__check_square_bracket_injections_throws_on_missing_var():
-    with pytest.raises(ValueError):
+    with pytest.raises(InjectionError):
         result = _inject_square_bracket_vars("[[ VAR1 ]]/[[ VAR2 ]]/[[ VAR3 ]]", var2="there")
         _check_square_bracket_injections(result)
 
 
 def test_inject_curly_braces_vars_throws_on_missing_var():
-    with pytest.raises(ValueError):
+    with pytest.raises(InjectionError):
         result = _inject_curly_braces_vars("{VAR1}", var2="there")
         _check_curly_braces_injections(result)

@@ -4,8 +4,12 @@ import re
 import string
 from typing import Any, Dict
 
-double_bracket_matcher = re.compile(r"(.*)(\[\[\s*(\S+)\s*]])(.*)")
+double_bracket_matcher = re.compile(r"""(.*)(\[\[\s*(\S+)\s*]])(.*)""")
 curly_braces_matcher = re.compile(r"(.*)(\{\s*(\S+)\s*\})(.*)")
+
+
+class InjectionError(Exception):
+    """Raised when a string has any dynamic values in the form of "{DYNAMIC_VAR}" or "[[ DYNAMIC_VAR ]]"."""
 
 
 def inject(value: str, **kwargs) -> str:
@@ -31,14 +35,14 @@ def check_injections(value: str) -> None:
 
 
 def _check_square_bracket_injections(value: str) -> None:
-    while _ := double_bracket_matcher.match(value):
-        raise ValueError(f'Path is not fully injected: "{value}"')
+    while _ := double_bracket_matcher.search(value):
+        raise InjectionError(f'Path is not fully injected: "{value!r}"')
 
 
 def _check_curly_braces_injections(value: str) -> None:
     fields = [group[1] for group in string.Formatter().parse(value) if group[1] is not None]
     if len(fields) > 0:
-        raise ValueError(f'Path is not fully injected: "{value}"')
+        raise InjectionError(f'Path is not fully injected: "{value!r}"')
 
 
 def _inject_square_bracket_vars(value: str, **kwargs) -> str:
@@ -84,7 +88,7 @@ def _inject_with_matcher(value: str, matcher, **kwargs) -> str:
 
     temp_suffix_value = ""
 
-    while result := matcher.match(value):
+    while result := matcher.search(value):
         str_to_replace = result.group(3).lower()  # we want to be case-insensitive
         replacement = kwargs_lower.get(str_to_replace, None)
 
