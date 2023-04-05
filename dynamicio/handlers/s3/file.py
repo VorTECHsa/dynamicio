@@ -3,7 +3,7 @@
 from copy import deepcopy
 from pathlib import Path
 from threading import Lock
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import boto3  # type: ignore
 import pandas as pd  # type: ignore
@@ -23,17 +23,19 @@ class BaseS3Resource(BaseResource):
 
     S3 Resources try to read data directly into memory if no_disk_space is set to True.
     Otherwise, will use a temporary file.
+
+    Attributes:
+        bucket: The name of the bucket.
+        path: The path to the file.
+        kwargs: A dictionary of kwargs to be passed to the read/write function.
+        no_disk_space: If True, will read data directly into memory. (uses s3fs + fsspec)
     """
 
     bucket: str
     path: Path
     kwargs: Dict[str, Any] = {}
 
-    no_disk_space: bool = Field(
-        False,
-        description="enable this to use s3fs + fsspec to read data directly into memory",
-    )
-    pickle_protocol: Optional[int] = Field(None, ge=0, le=5)
+    no_disk_space: bool = False
 
     @property
     def path_str(self):
@@ -59,9 +61,13 @@ class BaseS3Resource(BaseResource):
 
 
 class S3HdfResource(BaseS3Resource):
-    """S3 Resource for HDF files."""
+    """S3 Resource for HDF files.
 
-    pickle_protocol: int = Field(4, ge=0, le=5)  # Default covers python 3.4+
+    Attributes:
+        pickle_protocol: The pickle protocol to use when writing to HDF. Default is 4, which covers python 3.4+.
+    """
+
+    pickle_protocol: int = Field(4, ge=0, le=5)
 
     def _resource_read(self) -> pd.DataFrame:
         if self.no_disk_space:
