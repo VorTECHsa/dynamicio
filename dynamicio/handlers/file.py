@@ -25,7 +25,7 @@ class BaseFileResource(BaseResource):
         check_injections(str(self.path))
 
     def inject(self, **kwargs) -> "BaseFileResource":
-        """Inject variables into path. Not in place."""
+        """Inject variables into path. Immutable."""
         new = deepcopy(self)
         new.path = inject(str(new.path), **kwargs)  # type: ignore
         return new
