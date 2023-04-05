@@ -40,5 +40,5 @@ def test__resource_read_with_schema(parquet_file_resource, parquet_df):
 
 def test__resource_write(parquet_write_resource, parquet_df):
     parquet_write_resource.write(parquet_df)
-    df = pd.read_parquet(parquet_write_resource._final_path)
+    df = pd.read_parquet(parquet_write_resource.path)
     pd.testing.assert_frame_equal(df, parquet_df)
