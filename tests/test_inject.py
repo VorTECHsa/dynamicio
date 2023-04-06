@@ -1,4 +1,3 @@
-# pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring, R0801
 # flake8: noqa: I101
 
 from datetime import datetime

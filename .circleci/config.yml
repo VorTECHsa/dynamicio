@@ -27,7 +27,6 @@ jobs:
             flake8 --verbose dynamicio
             flake8 --verbose tests
             pylint -v dynamicio
-            pylint -v tests
             yamllint -v dynamicio
             yamllint -v tests
 

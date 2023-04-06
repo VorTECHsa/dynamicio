@@ -1,4 +1,3 @@
-# pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring, R0801, W0621, W0212
 from pathlib import Path
 
 import pandas as pd
