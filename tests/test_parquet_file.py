@@ -10,7 +10,7 @@ from tests.resources.schemas import SomeParquetToRead
 @pytest.fixture()
 def parquet_file_resource() -> ParquetFileResource:
     return ParquetFileResource(
-        path=f"{constants.TEST_RESOURCES}/data/input/some_parquet_to_read.parquet",
+        path=f"{constants.TEST_RESOURCES}/data/input/parquet_sample.parquet",
         allow_no_schema=True,
     )
 
@@ -23,7 +23,7 @@ def parquet_df(parquet_file_resource) -> pd.DataFrame:
 @pytest.fixture()
 def parquet_write_resource() -> ParquetFileResource:
     return ParquetFileResource(
-        path=f"{constants.TEST_RESOURCES}/data/processed/some_parquet_to_read.parquet",
+        path=f"{constants.TEST_RESOURCES}/data/processed/parquet_sample.parquet",
         allow_no_schema=True,
     )
 

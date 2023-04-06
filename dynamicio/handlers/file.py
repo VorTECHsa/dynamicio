@@ -1,8 +1,9 @@
+# pylint: disable=protected-access
 """File handlers for dynamicio."""
 from copy import deepcopy
 from pathlib import Path
 from threading import Lock
-from typing import Any, Dict
+from typing import Any, Callable, Dict
 
 import pandas as pd
 from pydantic import Field
@@ -19,16 +20,27 @@ class BaseFileResource(BaseResource):
 
     path: Path
     kwargs: Dict[str, Any] = {}
-
-    def _check_injections(self) -> None:
-        """Check that all injections have been completed."""
-        check_injections(str(self.path))
+    _file_read_method: Callable[[Path, Any], Any]
+    _file_write_method: Callable[[pd.DataFrame, Path, Any], Any]
 
     def inject(self, **kwargs) -> "BaseFileResource":
         """Inject variables into path. Immutable."""
         new = deepcopy(self)
         new.path = inject(str(new.path), **kwargs)  # type: ignore
         return new
+
+    def _check_injections(self) -> None:
+        """Check that all injections have been completed."""
+        check_injections(str(self.path))
+
+    def _resource_read(self) -> pd.DataFrame:
+        """Read from file."""
+        return self.__class__._file_read_method(self.path, **self.kwargs)  # type: ignore
+
+    def _resource_write(self, df: pd.DataFrame) -> None:
+        """Write to file."""
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.__class__._file_write_method(df, self.path, **self.kwargs)  # type: ignore
 
 
 class HdfFileResource(BaseFileResource):
@@ -39,7 +51,7 @@ class HdfFileResource(BaseFileResource):
     def _resource_read(self) -> pd.DataFrame:
         """Read from HDF file."""
         with hdf_lock:
-            return pd.read_hdf(self.path, **self.kwargs)
+            return super()._resource_read()
 
     def _resource_write(self, df: pd.DataFrame) -> None:
         """Write to HDF file."""
@@ -50,34 +62,19 @@ class HdfFileResource(BaseFileResource):
 class CsvFileResource(BaseFileResource):
     """CSV file resource."""
 
-    def _resource_read(self) -> pd.DataFrame:
-        """Read from CSV file."""
-        return pd.read_csv(self.path, **self.kwargs)
-
-    def _resource_write(self, df: pd.DataFrame) -> None:
-        """Write to CSV file."""
-        df.to_csv(self.path, **self.kwargs)
+    _file_read_method = pd.read_csv  # type: ignore
+    _file_write_method = pd.DataFrame.to_csv
 
 
 class JsonFileResource(BaseFileResource):
     """JSON file resource."""
 
-    def _resource_read(self) -> pd.DataFrame:
-        """Read from JSON file."""
-        return pd.read_json(self.path, **self.kwargs)
-
-    def _resource_write(self, df: pd.DataFrame) -> None:
-        """Write to JSON file."""
-        df.to_json(self.path, **self.kwargs)
+    _file_read_method = pd.read_json  # type: ignore
+    _file_write_method = pd.DataFrame.to_json
 
 
 class ParquetFileResource(BaseFileResource):
     """Parquet file resource."""
 
-    def _resource_read(self) -> pd.DataFrame:
-        """Read from Parquet file."""
-        return pd.read_parquet(self.path, **self.kwargs)
-
-    def _resource_write(self, df: pd.DataFrame) -> None:
-        """Write to Parquet file."""
-        df.to_parquet(self.path, **self.kwargs)
+    _file_read_method = pd.read_parquet
+    _file_write_method = pd.DataFrame.to_parquet
