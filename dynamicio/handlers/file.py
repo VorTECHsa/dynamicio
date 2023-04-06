@@ -35,19 +35,19 @@ class BaseFileResource(BaseResource):
 
     def _resource_read(self) -> pd.DataFrame:
         """Read from file."""
-        return self.__class__._file_read_method(self.path, **self.kwargs)  # type: ignore
+        return self._file_read_method(self.path, **self.kwargs)  # type: ignore
 
     def _resource_write(self, df: pd.DataFrame) -> None:
         """Write to file."""
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.__class__._file_write_method(df, self.path, **self.kwargs)  # type: ignore
+        self._file_write_method(df, self.path, **self.kwargs)  # type: ignore
 
 
 class HdfFileResource(BaseFileResource):
     """HDF file resource."""
 
-    _file_read_method = pd.read_hdf  # type: ignore
-    _file_write_method = pd.DataFrame.to_hdf  # type: ignore
+    _file_read_method = staticmethod(pd.read_hdf)  # type: ignore
+    _file_write_method = staticmethod(pd.DataFrame.to_hdf)  # type: ignore
 
     pickle_protocol: int = Field(4, ge=0, le=5)  # Default covers python 3.4+
 
@@ -59,25 +59,25 @@ class HdfFileResource(BaseFileResource):
     def _resource_write(self, df: pd.DataFrame) -> None:
         """Write to HDF file."""
         with utils.pickle_protocol(protocol=self.pickle_protocol), hdf_lock:
-            self.__class__._file_write_method(df, self.path, key="df", mode="w", **self.kwargs)
+            self._file_write_method(df, self.path, key="df", mode="w", **self.kwargs)  # type: ignore
 
 
 class CsvFileResource(BaseFileResource):
     """CSV file resource."""
 
-    _file_read_method = pd.read_csv  # type: ignore
-    _file_write_method = pd.DataFrame.to_csv
+    _file_read_method = staticmethod(pd.read_csv)  # type: ignore
+    _file_write_method = staticmethod(pd.DataFrame.to_csv)  # type: ignore
 
 
 class JsonFileResource(BaseFileResource):
     """JSON file resource."""
 
-    _file_read_method = pd.read_json  # type: ignore
-    _file_write_method = pd.DataFrame.to_json
+    _file_read_method = staticmethod(pd.read_json)  # type: ignore
+    _file_write_method = staticmethod(pd.DataFrame.to_json)  # type: ignore
 
 
 class ParquetFileResource(BaseFileResource):
     """Parquet file resource."""
 
-    _file_read_method = pd.read_parquet
-    _file_write_method = pd.DataFrame.to_parquet
+    _file_read_method = staticmethod(pd.read_parquet)  # type: ignore
+    _file_write_method = staticmethod(pd.DataFrame.to_parquet)  # type: ignore
