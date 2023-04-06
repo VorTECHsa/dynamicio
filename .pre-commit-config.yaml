@@ -25,6 +25,7 @@ repos:
     hooks:
       - id: pylint
         name: pylint
+        exclude: ^(tests/.*|demo/*)
         entry: pylint
         language: system
         types: [python]
@@ -74,16 +75,6 @@ repos:
       - id: pytest-check
         name: pytest-check-src
         entry: python -m pytest tests --cov=dynamicio --cov-report=html --cov-report=xml -v
-        exclude: ^(.github|.circleci|docs|.flake8|.gitlint|.pylintrc|.docs.Dockerfile|README.md|Makefile|setup.py)
-        language: system
-        pass_filenames: false
-        stages: [commit]
-
-  - repo: local
-    hooks:
-      - id: pytest-check
-        name: pytest-check-demo
-        entry: python -m pytest demo/tests
         exclude: ^(.github|.circleci|docs|.flake8|.gitlint|.pylintrc|.docs.Dockerfile|README.md|Makefile|setup.py)
         language: system
         pass_filenames: false

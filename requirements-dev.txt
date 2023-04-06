@@ -18,3 +18,4 @@ types-PyYAML==6.0.12.2
 types-setuptools==65.5.0.3
 types-simplejson==3.17.7.2
 yamllint==1.28.0
+pytest-mock==3.10.0
