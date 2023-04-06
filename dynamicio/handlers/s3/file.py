@@ -3,16 +3,13 @@
 from copy import deepcopy
 from pathlib import Path
 from threading import Lock
-from typing import Any, Dict
+from typing import Any, Callable, Dict
 
 import boto3  # type: ignore
 import pandas as pd  # type: ignore
-from pydantic import Field
 
-from dynamicio import utils
 from dynamicio.base import BaseResource
-from dynamicio.handlers.s3.contexts import s3_named_file_reader, s3_reader, s3_writer
-from dynamicio.handlers.s3.hdf import HdfIO
+from dynamicio.handlers.s3.contexts import s3_named_file_reader
 from dynamicio.inject import check_injections, inject
 
 hdf_lock = Lock()
@@ -37,10 +34,8 @@ class BaseS3Resource(BaseResource):
 
     no_disk_space: bool = False
 
-    @property
-    def path_str(self):
-        """Path string, path is often needed as a string and this provides nicer syntax than str(resource.path)."""
-        return str(self.path)
+    _file_read_method: Callable[[Path, Any], Any]  # must be declared as staticmethod
+    _file_write_method: Callable[[pd.DataFrame, Path, Any], Any]  # must be declared as staticmethod
 
     def inject(self, **kwargs) -> "BaseS3Resource":
         """Inject variables into path. Not in place."""
@@ -59,72 +54,35 @@ class BaseS3Resource(BaseResource):
         check_injections(self.bucket)
         check_injections(str(self.path))
 
-
-class S3HdfResource(BaseS3Resource):
-    """S3 Resource for HDF files.
-
-    Attributes:
-        pickle_protocol: The pickle protocol to use when writing to HDF. Default is 4, which covers python 3.4+.
-    """
-
-    pickle_protocol: int = Field(4, ge=0, le=5)
-
     def _resource_read(self) -> pd.DataFrame:
         if self.no_disk_space:
-            with s3_reader(boto3.client("s3"), s3_bucket=self.bucket, s3_key=self.path_str) as fobj:
-                if (result := HdfIO().load(fobj)) is not None:  # type: ignore
-                    return result
-        with s3_named_file_reader(boto3.client("s3"), s3_bucket=self.bucket, s3_key=self.path_str) as target_file:
-            with hdf_lock:
-                return pd.read_hdf(target_file.name, **self.kwargs)
+            result = self._file_read_method(self._full_path, **self.kwargs)  # type: ignore
+            if result is not None:
+                return result
+
+        with s3_named_file_reader(boto3.client("s3"), s3_bucket=self.bucket, s3_key=str(self.path)) as target_file:
+            return self._file_read_method(target_file.name, **self.kwargs)  # type: ignore
 
     def _resource_write(self, df: pd.DataFrame) -> None:
-        with s3_writer(boto3.client("s3"), s3_bucket=self.bucket, s3_key=self.path_str) as fobj, utils.pickle_protocol(
-            protocol=self.pickle_protocol
-        ):
-            HdfIO().save(df, fobj, **self.kwargs)  # pylint: disable=E1101
+        self._file_write_method(df, self._full_path, **self.kwargs)  # type: ignore
 
 
 class S3CsvResource(BaseS3Resource):
     """S3 Resource for CSV files."""
 
-    def _resource_read(self) -> pd.DataFrame:
-        if self.no_disk_space:
-            if (result := pd.read_csv(self._full_path, **self.kwargs)) is not None:
-                return result
-
-        with s3_named_file_reader(boto3.client("s3"), s3_bucket=self.bucket, s3_key=self.path_str) as target_file:
-            return pd.read_csv(target_file.name, **self.kwargs)
-
-    def _resource_write(self, df: pd.DataFrame) -> None:
-        df.to_csv(self._full_path, **self.kwargs)
+    _file_read_method = staticmethod(pd.read_csv)  # type: ignore
+    _file_write_method = staticmethod(pd.DataFrame.to_csv)  # type: ignore
 
 
 class S3JsonResource(BaseS3Resource):
     """S3 Resource for JSON files."""
 
-    def _resource_read(self) -> pd.DataFrame:
-        if self.no_disk_space:
-            if (result := pd.read_json(self._full_path, **self.kwargs)) is not None:
-                return result
-
-        with s3_named_file_reader(boto3.client("s3"), s3_bucket=self.bucket, s3_key=self.path_str) as target_file:
-            return pd.read_json(target_file.name, **self.kwargs)
-
-    def _resource_write(self, df: pd.DataFrame) -> None:
-        df.to_json(self._full_path, **self.kwargs)
+    _file_read_method = staticmethod(pd.read_json)  # type: ignore
+    _file_write_method = staticmethod(pd.DataFrame.to_json)  # type: ignore
 
 
 class S3ParquetResource(BaseS3Resource):
     """S3 Resource for Parquet files."""
 
-    def _resource_read(self) -> pd.DataFrame:
-        if self.no_disk_space:
-            if (result := pd.read_parquet(self._full_path, **self.kwargs)) is not None:
-                return result
-
-        with s3_named_file_reader(boto3.client("s3"), s3_bucket=self.bucket, s3_key=self.path_str) as target_file:
-            return pd.read_parquet(target_file.name, **self.kwargs)
-
-    def _resource_write(self, df: pd.DataFrame) -> None:
-        df.to_parquet(self._full_path, **self.kwargs)
+    _file_read_method = staticmethod(pd.read_parquet)  # type: ignore
+    _file_write_method = staticmethod(pd.DataFrame.to_parquet)  # type: ignore

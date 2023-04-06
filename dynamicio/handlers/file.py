@@ -20,8 +20,8 @@ class BaseFileResource(BaseResource):
 
     path: Path
     kwargs: Dict[str, Any] = {}
-    _file_read_method: Callable[[Path, Any], Any]
-    _file_write_method: Callable[[pd.DataFrame, Path, Any], Any]
+    _file_read_method: Callable[[Path, Any], Any]  # must be declared as staticmethod
+    _file_write_method: Callable[[pd.DataFrame, Path, Any], Any]  # must be declared as staticmethod
 
     def inject(self, **kwargs) -> "BaseFileResource":
         """Inject variables into path. Immutable."""
@@ -43,25 +43,6 @@ class BaseFileResource(BaseResource):
         self._file_write_method(df, self.path, **self.kwargs)  # type: ignore
 
 
-class HdfFileResource(BaseFileResource):
-    """HDF file resource."""
-
-    _file_read_method = staticmethod(pd.read_hdf)  # type: ignore
-    _file_write_method = staticmethod(pd.DataFrame.to_hdf)  # type: ignore
-
-    pickle_protocol: int = Field(4, ge=0, le=5)  # Default covers python 3.4+
-
-    def _resource_read(self) -> pd.DataFrame:
-        """Read from HDF file."""
-        with hdf_lock:
-            return super()._resource_read()
-
-    def _resource_write(self, df: pd.DataFrame) -> None:
-        """Write to HDF file."""
-        with utils.pickle_protocol(protocol=self.pickle_protocol), hdf_lock:
-            self._file_write_method(df, self.path, key="df", mode="w", **self.kwargs)  # type: ignore
-
-
 class CsvFileResource(BaseFileResource):
     """CSV file resource."""
 
@@ -81,3 +62,22 @@ class ParquetFileResource(BaseFileResource):
 
     _file_read_method = staticmethod(pd.read_parquet)  # type: ignore
     _file_write_method = staticmethod(pd.DataFrame.to_parquet)  # type: ignore
+
+
+class HdfFileResource(BaseFileResource):
+    """HDF file resource."""
+
+    _file_read_method = staticmethod(pd.read_hdf)  # type: ignore
+    _file_write_method = staticmethod(pd.DataFrame.to_hdf)  # type: ignore
+
+    pickle_protocol: int = Field(4, ge=0, le=5)  # Default covers python 3.4+
+
+    def _resource_read(self) -> pd.DataFrame:
+        """Read from HDF file."""
+        with hdf_lock:
+            return super()._resource_read()
+
+    def _resource_write(self, df: pd.DataFrame) -> None:
+        """Write to HDF file."""
+        with utils.pickle_protocol(protocol=self.pickle_protocol), hdf_lock:
+            self._file_write_method(df, self.path, key="df", mode="w", **self.kwargs)  # type: ignore
