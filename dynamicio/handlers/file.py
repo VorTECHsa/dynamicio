@@ -46,6 +46,9 @@ class BaseFileResource(BaseResource):
 class HdfFileResource(BaseFileResource):
     """HDF file resource."""
 
+    _file_read_method = pd.read_hdf  # type: ignore
+    _file_write_method = pd.DataFrame.to_hdf  # type: ignore
+
     pickle_protocol: int = Field(4, ge=0, le=5)  # Default covers python 3.4+
 
     def _resource_read(self) -> pd.DataFrame:
@@ -56,7 +59,7 @@ class HdfFileResource(BaseFileResource):
     def _resource_write(self, df: pd.DataFrame) -> None:
         """Write to HDF file."""
         with utils.pickle_protocol(protocol=self.pickle_protocol), hdf_lock:
-            df.to_hdf(self.path, key="df", mode="w", **self.kwargs)
+            self.__class__._file_write_method(df, self.path, key="df", mode="w", **self.kwargs)
 
 
 class CsvFileResource(BaseFileResource):
