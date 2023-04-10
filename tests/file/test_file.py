@@ -4,7 +4,7 @@ from unittest.mock import Mock
 import pandas as pd
 import pytest
 
-from dynamicio.handlers.file import BaseFileResource, ParquetFileResource
+from dynamicio.handlers.file import BaseFileResource
 from dynamicio.inject import InjectionError
 
 
@@ -44,13 +44,13 @@ def test_file_resource_inject_read():
 
 
 def test_file_resource_inject_read_raises_on_incomplete_injection():
-    resource = ParquetFileResource(path="foo/{bar}/{baz}", kwargs={"foo": "bar"}, allow_no_schema=True)
+    resource = MockImplementedFileResource(path="foo/{bar}/{baz}", kwargs={"foo": "bar"}, allow_no_schema=True)
     resource = resource.inject(bar="baz")
 
     with pytest.raises(InjectionError):
         resource.read()
 
-    resource = ParquetFileResource(path="foo/[[bar]]/[[baz]]", kwargs={"foo": "bar"}, allow_no_schema=True)
+    resource = MockImplementedFileResource(path="foo/[[bar]]/[[baz]]", kwargs={"foo": "bar"}, allow_no_schema=True)
     resource = resource.inject(bar="baz")
 
     with pytest.raises(InjectionError):
@@ -76,12 +76,12 @@ def test_file_resource_inject_write():
 
 
 def test_file_resource_inject_write_raises_on_incomplete_injection():
-    resource = ParquetFileResource(path="foo/{bar}/{baz}", kwargs={"foo": "bar"}, allow_no_schema=True)
+    resource = MockImplementedFileResource(path="foo/{bar}/{baz}", kwargs={"foo": "bar"}, allow_no_schema=True)
     resource = resource.inject(bar="baz")
     with pytest.raises(InjectionError):
         resource.write(pd.DataFrame())
 
-    resource = ParquetFileResource(path="foo/[[bar]]/[[baz]]", kwargs={"foo": "bar"}, allow_no_schema=True)
+    resource = MockImplementedFileResource(path="foo/[[bar]]/[[baz]]", kwargs={"foo": "bar"}, allow_no_schema=True)
     resource = resource.inject(bar="boo")
     with pytest.raises(InjectionError):
         resource.write(pd.DataFrame())
