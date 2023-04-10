@@ -5,26 +5,20 @@ from dynamicio.handlers.file import CsvFileResource
 from tests import constants
 from tests.resources.schemas import SampleSchema
 
+sample_path = constants.TEST_RESOURCES / "data/input/csv_sample.csv"
+
 
 @pytest.fixture()
 def csv_file_resource() -> CsvFileResource:
     return CsvFileResource(
-        path=f"{constants.TEST_RESOURCES}/data/input/csv_sample.csv",
+        path=sample_path,
         allow_no_schema=True,
     )
 
 
 @pytest.fixture()
 def csv_df(csv_file_resource) -> pd.DataFrame:
-    return csv_file_resource.read()
-
-
-@pytest.fixture()
-def csv_write_resource() -> CsvFileResource:
-    return CsvFileResource(
-        path=f"{constants.TEST_RESOURCES}/data/processed/csv_sample.csv",
-        allow_no_schema=True,
-    )
+    return pd.read_csv(sample_path)
 
 
 def test__resource_read(csv_file_resource, csv_df):
