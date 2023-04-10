@@ -46,8 +46,19 @@ class BaseFileResource(BaseResource):
 class CsvFileResource(BaseFileResource):
     """CSV file resource."""
 
+    write_kwargs: Dict[str, Any] = Field(
+        default_factory=lambda: {"index": False}
+    )  # TODO: I don't like this inconsistency
+
     _file_read_method = staticmethod(pd.read_csv)  # type: ignore
     _file_write_method = staticmethod(pd.DataFrame.to_csv)  # type: ignore
+
+    def _resource_write(self, df: pd.DataFrame) -> None:
+        """Write to file."""
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        write_kwargs = self.kwargs.copy()
+        write_kwargs.update(self.write_kwargs)
+        self._file_write_method(df, self.path, **write_kwargs)  # type: ignore
 
 
 class JsonFileResource(BaseFileResource):

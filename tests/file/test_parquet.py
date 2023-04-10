@@ -3,7 +3,7 @@ import pytest
 
 from dynamicio.handlers.file import ParquetFileResource
 from tests import constants
-from tests.resources.schemas import SomeParquetToRead
+from tests.resources.schemas import SampleSchema
 
 
 @pytest.fixture()
@@ -33,7 +33,7 @@ def test__resource_read(parquet_file_resource, parquet_df):
 
 
 def test__resource_read_with_schema(parquet_file_resource, parquet_df):
-    df = parquet_file_resource.read(pa_schema=SomeParquetToRead)
+    df = parquet_file_resource.read(pa_schema=SampleSchema)
     pd.testing.assert_frame_equal(df, parquet_df)
 
 
