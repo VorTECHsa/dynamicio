@@ -42,10 +42,9 @@ def csv_df(csv_s3_resource) -> pd.DataFrame:
     return pd.read_csv(sample_path)
 
 
-def test__resource_read(s3_stubber, csv_s3_resource, s3_named_file_reader):
+def test__resource_read(s3_stubber, csv_s3_resource, csv_df, s3_named_file_reader):
     df = csv_s3_resource.read()
-    expected_df = pd.read_csv(sample_path)
-    pd.testing.assert_frame_equal(df, expected_df)
+    pd.testing.assert_frame_equal(df, csv_df)
 
 
 def test__resource_read_with_schema(s3_stubber, csv_s3_resource, csv_df, s3_named_file_reader):
@@ -60,12 +59,12 @@ class MockS3CsvResource(S3CsvResource):
 
 
 def test__resource_write(s3_stubber, csv_df, s3_named_file_reader, tmpdir):
-    target_location = tmpdir / "csv_sample.csv"
+    tmp_location = tmpdir / "csv_sample.csv"
     resource = MockS3CsvResource(
         bucket="my_bucket",
-        path=target_location,
+        path=tmp_location,
         allow_no_schema=True,
     )
     resource.write(csv_df)
-    df = pd.read_csv(resource.path)
+    df = pd.read_csv(tmp_location)
     pd.testing.assert_frame_equal(df, csv_df)

@@ -42,10 +42,9 @@ def parquet_df(parquet_s3_resource) -> pd.DataFrame:
     return pd.read_parquet(sample_path)
 
 
-def test__resource_read(s3_stubber, parquet_s3_resource, s3_named_file_reader):
+def test__resource_read(s3_stubber, parquet_s3_resource, parquet_df, s3_named_file_reader):
     df = parquet_s3_resource.read()
-    expected_df = pd.read_parquet(sample_path)
-    pd.testing.assert_frame_equal(df, expected_df)
+    pd.testing.assert_frame_equal(df, parquet_df)
 
 
 def test__resource_read_with_schema(s3_stubber, parquet_s3_resource, parquet_df, s3_named_file_reader):
@@ -60,12 +59,12 @@ class MockS3ParquetResource(S3ParquetResource):
 
 
 def test__resource_write(s3_stubber, parquet_df, s3_named_file_reader, tmpdir):
-    target_location = tmpdir / "parquet_sample.parquet"
+    tmp_location = tmpdir / "parquet_sample.parquet"
     resource = MockS3ParquetResource(
         bucket="my_bucket",
-        path=target_location,
+        path=tmp_location,
         allow_no_schema=True,
     )
     resource.write(parquet_df)
-    df = pd.read_parquet(resource.path)
+    df = pd.read_parquet(tmp_location)
     pd.testing.assert_frame_equal(df, parquet_df)

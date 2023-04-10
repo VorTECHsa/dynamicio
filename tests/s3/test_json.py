@@ -42,10 +42,9 @@ def json_df(json_s3_resource) -> pd.DataFrame:
     return pd.read_json(sample_path)
 
 
-def test__resource_read(s3_stubber, json_s3_resource, s3_named_file_reader):
+def test__resource_read(s3_stubber, json_s3_resource, json_df, s3_named_file_reader):
     df = json_s3_resource.read()
-    expected_df = pd.read_json(sample_path)
-    pd.testing.assert_frame_equal(df, expected_df)
+    pd.testing.assert_frame_equal(df, json_df)
 
 
 def test__resource_read_with_schema(s3_stubber, json_s3_resource, json_df, s3_named_file_reader):
@@ -60,12 +59,12 @@ class MockS3JsonResource(S3JsonResource):
 
 
 def test__resource_write(s3_stubber, json_df, s3_named_file_reader, tmpdir):
-    target_location = tmpdir / "json_sample.json"
+    tmp_location = tmpdir / "json_sample.json"
     resource = MockS3JsonResource(
         bucket="my_bucket",
-        path=target_location,
+        path=tmp_location,
         allow_no_schema=True,
     )
     resource.write(json_df)
-    df = pd.read_json(resource.path)
+    df = pd.read_json(tmp_location)
     pd.testing.assert_frame_equal(df, json_df)
