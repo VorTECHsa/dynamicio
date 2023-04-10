@@ -1,21 +1,48 @@
 import pandas as pd
+import pytest
 
-from dynamicio.handlers import ParquetFileResource
-from tests.constants import TEST_RESOURCES
-
-
-def test_parquet_resource_read():
-    test_path = TEST_RESOURCES / "data/input/parquet_sample.parquet"
-    resource = ParquetFileResource(path=test_path, allow_no_schema=True)
-    df = resource.read()
-    target_df = pd.read_parquet(test_path)
-    pd.testing.assert_frame_equal(df, target_df)
+from dynamicio.handlers.file import ParquetFileResource
+from tests import constants
+from tests.resources.schemas import SomeParquetToRead
 
 
-def test_parquet_resource_write(output_dir_path):
-    test_path = output_dir_path / "test_parquet_resource_write.parquet"
-    resource = ParquetFileResource(path=test_path, allow_no_schema=True)
-    df = pd.DataFrame({"A": [1, 2, 3], "B": ["a", "b", "c"]})
-    resource.write(df)
-    target_df = pd.read_parquet(test_path)
-    pd.testing.assert_frame_equal(df, target_df)
+@pytest.fixture()
+def parquet_file_resource() -> ParquetFileResource:
+    return ParquetFileResource(
+        path=f"{constants.TEST_RESOURCES}/data/input/parquet_sample.parquet",
+        allow_no_schema=True,
+    )
+
+
+@pytest.fixture()
+def parquet_df(parquet_file_resource) -> pd.DataFrame:
+    return parquet_file_resource.read()
+
+
+@pytest.fixture()
+def parquet_write_resource() -> ParquetFileResource:
+    return ParquetFileResource(
+        path=f"{constants.TEST_RESOURCES}/data/processed/parquet_sample.parquet",
+        allow_no_schema=True,
+    )
+
+
+def test__resource_read(parquet_file_resource, parquet_df):
+    df = parquet_file_resource.read()
+    pd.testing.assert_frame_equal(df, parquet_df)
+
+
+def test__resource_read_with_schema(parquet_file_resource, parquet_df):
+    df = parquet_file_resource.read(pa_schema=SomeParquetToRead)
+    pd.testing.assert_frame_equal(df, parquet_df)
+
+
+def test__resource_write(parquet_df, tmpdir):
+    target_location = tmpdir / "parquet_sample.parquet"
+    resource = ParquetFileResource(
+        path=target_location,
+        allow_no_schema=True,
+    )
+    resource.write(parquet_df)
+    df = pd.read_parquet(resource.path)
+    pd.testing.assert_frame_equal(df, parquet_df)
