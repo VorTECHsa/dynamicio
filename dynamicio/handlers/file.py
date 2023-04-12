@@ -25,9 +25,9 @@ class BaseFileResource(BaseResource):
 
     def inject(self, **kwargs) -> "BaseFileResource":
         """Inject variables into path. Immutable."""
-        new = deepcopy(self)
-        new.path = inject(str(new.path), **kwargs)  # type: ignore
-        return new
+        clone = deepcopy(self)
+        clone.path = inject(clone.path, **kwargs)  # type: ignore
+        return clone
 
     def _check_injections(self) -> None:
         """Check that all injections have been completed."""

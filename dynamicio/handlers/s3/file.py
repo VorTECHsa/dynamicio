@@ -40,10 +40,10 @@ class BaseS3Resource(BaseResource):
 
     def inject(self, **kwargs) -> "BaseS3Resource":
         """Inject variables into path. Not in place."""
-        new = deepcopy(self)
-        new.path = inject(str(new.path), **kwargs)  # type: ignore
-        new.bucket = inject(new.bucket, **kwargs)
-        return new
+        clone = deepcopy(self)
+        clone.path = inject(str(clone.path), **kwargs)  # type: ignore
+        clone.bucket = inject(clone.bucket, **kwargs)
+        return clone
 
     @property
     def _full_path(self) -> str:

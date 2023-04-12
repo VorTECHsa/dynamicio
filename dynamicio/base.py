@@ -16,7 +16,7 @@ class BaseResource(BaseModel, ABC):
     """BaseClass for resource classes."""
 
     pa_schema: Optional[pa.SchemaModel]
-    validate_default: bool = True
+    disable_validation: bool = False
     log_metrics_default: bool = True
     allow_no_schema: bool = False
 
@@ -85,7 +85,7 @@ class BaseResource(BaseModel, ABC):
     ) -> pd.DataFrame:
         """Process data."""
         # Use defaults if not specified during read/write
-        if (validate is None and self.validate_default) or validate:
+        if (validate is None and not self.disable_validation) or validate:
             df = self._validate(df, pa_schema)
         if (log_metrics is None and self.log_metrics_default) or log_metrics:
             self._log_metrics(df)
@@ -123,4 +123,4 @@ class BaseResource(BaseModel, ABC):
         """Pydantic config."""
 
         validate_assignment = True
-        allow_arbitrary_types = True
+        arbitrary_types_allowed = True
