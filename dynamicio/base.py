@@ -2,14 +2,13 @@
 
 """BaseResource class for creating various resources types."""
 from abc import ABC, abstractmethod
-from typing import Optional, Type, TypeVar
+from copy import deepcopy
+from typing import Optional, Type
 
 import pandas as pd
 import pandera as pa
 from pandera import SchemaModel
 from pydantic import BaseModel
-
-SchemaType = TypeVar("SchemaType", bound=pa.SchemaModel)  # TODO: utilise this
 
 
 class BaseResource(BaseModel, ABC):
@@ -73,8 +72,8 @@ class BaseResource(BaseModel, ABC):
         return self._resource_write(df)
 
     def inject(self, **_) -> "BaseResource":
-        """Inject kwargs into resource paths/wherever relevant. Implement in subclass if needed."""
-        return self
+        """Inject kwargs into relevant resource attributes. Immutable."""
+        return deepcopy(self)
 
     def _process(
         self,

@@ -14,6 +14,11 @@ def test_inject():
     assert res == "hello there"
 
 
+def test_inject_does_not_inject_nones():
+    res = inject("hello [[ world ]]", world=None)
+    assert res == "hello [[ world ]]"
+
+
 def test_inject_with_path():
     res = inject(Path("hello [[ world ]]"), world="there")
     assert res == Path("hello there")

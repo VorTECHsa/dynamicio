@@ -44,14 +44,14 @@ def test_file_resource_inject_read():
 
 
 def test_file_resource_inject_read_raises_on_incomplete_injection():
-    resource = MockImplementedFileResource(path="foo/{bar}/{baz}", kwargs={"foo": "bar"}, allow_no_schema=True)
+    resource = MockImplementedFileResource(path="foo/{bar}/[[baz]]", kwargs={"foo": "bar"}, allow_no_schema=True)
     resource = resource.inject(bar="baz")
 
     with pytest.raises(InjectionError):
         resource.read()
 
     resource = MockImplementedFileResource(path="foo/[[bar]]/[[baz]]", kwargs={"foo": "bar"}, allow_no_schema=True)
-    resource = resource.inject(bar="baz")
+    resource = resource.inject(bar="baz", baz=None)
 
     with pytest.raises(InjectionError):
         resource.read()
