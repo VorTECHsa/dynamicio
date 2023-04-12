@@ -21,17 +21,17 @@ def parquet_df(parquet_file_resource) -> pd.DataFrame:
     return pd.read_parquet(sample_path)
 
 
-def test__resource_read(parquet_file_resource, parquet_df):
+def test_parquet_resource_read(parquet_file_resource, parquet_df):
     df = parquet_file_resource.read()
     pd.testing.assert_frame_equal(df, parquet_df)
 
 
-def test__resource_read_with_schema(parquet_file_resource, parquet_df):
+def test_parquet_resource_read_with_schema(parquet_file_resource, parquet_df):
     df = parquet_file_resource.read(pa_schema=SampleSchema)
     pd.testing.assert_frame_equal(df, parquet_df)
 
 
-def test__resource_write(parquet_df, tmpdir):
+def test_parquet_resource_write(parquet_df, tmpdir):
     tmp_location = tmpdir / "parquet_sample.parquet"
     resource = ParquetFileResource(
         path=tmp_location,

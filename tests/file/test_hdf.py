@@ -21,17 +21,17 @@ def hdf_df(hdf_file_resource) -> pd.DataFrame:
     return pd.read_hdf(sample_path)
 
 
-def test__resource_read(hdf_file_resource, hdf_df):
+def test_hdf_resource_read(hdf_file_resource, hdf_df):
     df = hdf_file_resource.read()
     pd.testing.assert_frame_equal(df, hdf_df)
 
 
-def test__resource_read_with_schema(hdf_file_resource, hdf_df):
+def test_hdf_resource_read_with_schema(hdf_file_resource, hdf_df):
     df = hdf_file_resource.read(pa_schema=SampleSchema)
     pd.testing.assert_frame_equal(df, hdf_df)
 
 
-def test__resource_write(hdf_df, tmpdir):
+def test_hdf_resource_write(hdf_df, tmpdir):
     tmp_location = tmpdir / "hdf_sample.hdf"
     resource = HdfFileResource(
         path=tmp_location,

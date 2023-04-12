@@ -21,17 +21,17 @@ def csv_df(csv_file_resource) -> pd.DataFrame:
     return pd.read_csv(sample_path)
 
 
-def test__resource_read(csv_file_resource, csv_df):
+def test_csv_resource_read(csv_file_resource, csv_df):
     df = csv_file_resource.read()
     pd.testing.assert_frame_equal(df, csv_df)
 
 
-def test__resource_read_with_schema(csv_file_resource, csv_df):
+def test_csv_resource_read_with_schema(csv_file_resource, csv_df):
     df = csv_file_resource.read(pa_schema=SampleSchema)
     pd.testing.assert_frame_equal(df, csv_df)
 
 
-def test__resource_write(csv_df, tmpdir):
+def test_csv_resource_write(csv_df, tmpdir):
     target_location = tmpdir / "csv_sample.csv"
     resource = CsvFileResource(
         path=target_location,

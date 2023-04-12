@@ -2,6 +2,7 @@ import shutil
 from pathlib import Path
 from typing import Generator
 
+import pandas as pd
 import pytest
 
 from tests.constants import TEST_RESOURCES
@@ -15,3 +16,8 @@ def output_dir_path() -> Generator[Path, None, None]:
     finally:
         if output_dir_path.exists():
             shutil.rmtree(output_dir_path)
+
+
+@pytest.fixture
+def sample_df():
+    return pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})

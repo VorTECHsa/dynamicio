@@ -21,17 +21,17 @@ def json_df(json_file_resource) -> pd.DataFrame:
     return pd.read_json(sample_path)
 
 
-def test__resource_read(json_file_resource, json_df):
+def test_json_resource_read(json_file_resource, json_df):
     df = json_file_resource.read()
     pd.testing.assert_frame_equal(df, json_df)
 
 
-def test__resource_read_with_schema(json_file_resource, json_df):
+def test_json_resource_read_with_schema(json_file_resource, json_df):
     df = json_file_resource.read(pa_schema=SampleSchema)
     pd.testing.assert_frame_equal(df, json_df)
 
 
-def test__resource_write(json_df, tmpdir):
+def test_json_resource_write(json_df, tmpdir):
     tmp_location = tmpdir / "json_sample.json"
     resource = JsonFileResource(
         path=tmp_location,
