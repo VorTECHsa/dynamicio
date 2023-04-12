@@ -32,12 +32,13 @@ def inject(value: Injectable, **kwargs) -> Injectable:
     return type(value)(injected)
 
 
-def check_injections(value: str) -> None:
+def check_injections(value: Injectable) -> None:
     """Raise if a string has any dynamic values in the form of "{DYNAMIC_VAR}" or "[[ DYNAMIC_VAR ]]"."""
-    while _ := double_bracket_matcher.search(value):
-        raise InjectionError(f'Path is not fully injected: "{value!r}"')
-    while _ := curly_braces_matcher.search(value):
-        raise InjectionError(f'Path is not fully injected: "{value!r}"')
+    to_check: str = str(value)
+    while _ := double_bracket_matcher.search(to_check):
+        raise InjectionError(f'Path is not fully injected: "{to_check!r}"')
+    while _ := curly_braces_matcher.search(to_check):
+        raise InjectionError(f'Path is not fully injected: "{to_check!r}"')
 
 
 def _inject_with_matcher(value: str, matcher, **kwargs) -> str:

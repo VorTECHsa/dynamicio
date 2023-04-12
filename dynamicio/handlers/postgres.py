@@ -1,0 +1,148 @@
+"""I/O functions and Resource class for postgres targeted operations."""
+
+
+import csv
+import tempfile
+from contextlib import contextmanager
+from copy import deepcopy
+from typing import Any, Dict, Generator, List, Optional
+
+import pandas as pd  # type: ignore
+from magic_logger import logger
+from pydantic import BaseModel, Field  # pylint: disable=no-name-in-module
+from sqlalchemy import create_engine  # type: ignore
+from sqlalchemy.orm import Session as SqlAlchemySession  # type: ignore
+from sqlalchemy.orm import sessionmaker  # type: ignore
+from sqlalchemy.sql import column, select, table  # type: ignore
+
+from dynamicio.base import BaseResource
+from dynamicio.inject import check_injections, inject
+
+Session = sessionmaker()
+
+
+@contextmanager
+def session_scope(connection_string: str) -> Generator[SqlAlchemySession, None, None]:
+    """Connect to a database using `connection_string` and returns an active session to that connection.
+
+    Args:
+        connection_string:
+
+    Yields:
+        Active session
+    """
+    engine = create_engine(connection_string)
+    session = Session(bind=engine)
+
+    try:
+        yield session
+        session.commit()
+    except Exception as exc:
+        session.rollback()
+        raise exc
+    finally:
+        session.close()  # pylint: disable=no-member
+
+
+class PostgresCredentials(BaseModel):
+    """..."""
+
+    db_user: str
+    db_password: Optional[str]
+    db_host: str
+    db_port: int
+    db_name: str
+
+    @property
+    def connection_string(self) -> str:
+        """Build connection string out of components."""
+        password = f":{self.db_password}" if self.db_password else ""
+        return f"postgresql://{self.db_user}{password}@{self.db_host}:{self.db_port}/{self.db_name}"
+
+
+class PostgresResource(PostgresCredentials, BaseResource):
+    """...
+
+    Warning: Special case, where even if you explicitly don't validate, but give a pa_schema with strict="filter",
+    the generated sql query will only query specified columns.
+    """
+
+    table_name: Optional[str] = Field(None, description="SQL table name. Needs to be given if no sql_query is given")
+    sql_query: Optional[str] = Field(
+        None, description="SQL query. Will fetch schema defined columns if this is not given."
+    )
+    truncate_and_append: bool = False
+    kwargs: Dict[str, Any] = {}
+
+    def inject(self, **kwargs) -> "PostgresResource":
+        """Inject variables into stuff. Not in place."""
+        clone = deepcopy(self)
+        clone.db_user = inject(clone.db_user, **kwargs)
+        if db_password := self.db_password:
+            clone.db_password = inject(db_password, **kwargs)
+        clone.db_host = inject(clone.db_host, **kwargs)
+        clone.db_name = inject(clone.db_name, **kwargs)
+        return clone
+
+    def _check_injections(self) -> None:
+        """Check that all injections have been completed."""
+        check_injections(self.db_user)
+        if self.db_password:
+            check_injections(self.db_password)
+        check_injections(self.db_host)
+        check_injections(self.db_name)
+
+    def _resource_read(self):
+        """Handles Read operations for Postgres."""
+        assert self.sql_query or self.table_name, ValueError("PostgresResource must define sql_query or table_name.")
+
+        if self.pa_schema is not None and (not self.sql_query and self.pa_schema.Config.strict):
+            # filtering can now be done at sql level
+            columns: List[str] = list(self.pa_schema.to_schema().columns.keys())  # type: ignore
+            table_to_query = table(self.table_name, *[column(name) for name in columns])
+            query = select(table_to_query.columns)
+            sql_query = str(query)
+        elif self.sql_query is None:
+            sql_query = f"SELECT * FROM {self.table_name}"
+        else:
+            sql_query = self.sql_query
+
+        logger.info(f"Downloading table: {self.table_name} from: {self.db_host}:{self.db_name}")
+        with session_scope(self.connection_string) as session:
+            return pd.read_sql(sql=sql_query, con=session.get_bind(), **self.kwargs)
+
+        # TODO: sqlalchemy 2.0 breaks here
+        #       session.get_bind() is probably the culprit
+        # TODO: Check if type coercion is needed here
+        #       For example objects -> String(64)
+        #       For example date goes to Date and datetime64[ns] -> DateTime
+
+    def _resource_write(self, df: pd.DataFrame):
+        """Handles Write operations for Postgres."""
+        assert self.table_name is not None, "table_name must be specified in given PostgresResource"
+        with session_scope(self.connection_string) as session:
+            session: SqlAlchemySession  # type: ignore # this is done for IDE purposes
+            if self.truncate_and_append:
+                logger.info(f"Writing to table (csv-hack): {self.table_name} from: {self.db_host}:{self.db_name}")
+                session.execute(f"TRUNCATE TABLE {self.table_name};")
+
+                # Speed hack: dump file as csv, use Postgres' CSV import function.
+                # https://stackoverflow.com/questions/2987433/how-to-import-csv-file-data-into-a-postgresql-table
+                with tempfile.NamedTemporaryFile(mode="r+") as temp_file:
+                    df.to_csv(
+                        temp_file,
+                        index=False,
+                        header=False,
+                        sep="\t",
+                        doublequote=False,
+                        escapechar="\\",
+                        quoting=csv.QUOTE_NONE,
+                    )
+                    temp_file.flush()
+                    temp_file.seek(0)
+
+                    cur = session.connection().connection.cursor()
+                    cur.copy_from(temp_file, self.table_name, columns=df.columns, null="")
+            else:
+                logger.info(f"Writing to table: {self.table_name} from: {self.db_host}:{self.db_name}")
+                df.to_sql(name=self.table_name, con=session.get_bind(), if_exists="replace", index=False)

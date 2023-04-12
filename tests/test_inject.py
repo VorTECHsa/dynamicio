@@ -66,3 +66,13 @@ def test_check_injections_throws_on_missing_var():
     with pytest.raises(InjectionError):
         result = inject("[[ VAR1 ]]/[[ VAR2 ]]/[[ VAR3 ]]", var2="there")
         check_injections(result)
+
+
+def test_check_injections():
+    result = inject("hello [[ world ]]", world="there")
+    check_injections(result)
+
+
+def test_check_injections_with_path():
+    result = inject(Path("hello [[ world ]]"), world="there")
+    check_injections(result)
