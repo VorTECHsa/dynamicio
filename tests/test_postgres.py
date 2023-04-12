@@ -4,6 +4,8 @@ import pandas as pd
 import pytest
 
 from dynamicio.handlers import PostgresResource
+from dynamicio.handlers.postgres import ConfigurationError
+from dynamicio.inject import InjectionError
 from tests import constants
 from tests.resources.schemas import PgSampleSchema
 
@@ -127,3 +129,81 @@ def test_postgres_resource_write_truncate_and_append(
     postgres_table_resource.write(postgres_df)
     mocked_session.execute.assert_called_once_with("TRUNCATE TABLE test_table;")
     mock_cursor.copy_from.assert_called_once_with(ANY, "test_table", columns=postgres_df.columns, null="")
+
+
+def test_postgres_resource_inject_and_read(postgres_df, read_sql_mock, mocked_session, mock_binding):
+    resource = PostgresResource(
+        db_user="[[db_user]]",
+        db_host="{db_host}",
+        db_port=1234,
+        db_name="that_{db_name}",
+        table_name="[[table]]",
+        allow_no_schema=True,
+    )
+    resource = resource.inject(db_user="test_user", db_host="test_host", db_name="test_db", table="test_table")
+    df = resource.read()
+    read_sql_mock.assert_called_once_with(sql="SELECT * FROM test_table", con=mock_binding)
+    pd.testing.assert_frame_equal(df, postgres_df)
+
+
+def test_postgres_resource_inject_and_read_query(postgres_df, read_sql_mock, mocked_session, mock_binding):
+    resource = PostgresResource(
+        db_user="[[db_user]]",
+        db_host="{db_host}",
+        db_port=1234,
+        db_name="that_{db_name}",
+        allow_no_schema=True,
+        sql_query="SELECT * FROM [[table]]",
+    )
+    resource = resource.inject(db_user="test_user", db_host="test_host", db_name="test_db", table="test_table")
+    df = resource.read()
+    read_sql_mock.assert_called_once_with(sql="SELECT * FROM test_table", con=mock_binding)
+    pd.testing.assert_frame_equal(df, postgres_df)
+
+
+@pytest.mark.parametrize("arg_to_miss_out", ["db_user", "db_host", "db_name", "table"])
+def test_postgres_resource_check_raises_on_incomplete_injection(
+    arg_to_miss_out, postgres_df, read_sql_mock, mocked_session, mock_binding
+):
+    args = {"db_user": "test_user", "db_host": "test_host", "db_name": "test_db", "table": "test_table"}
+    args.pop(arg_to_miss_out)
+    resource = PostgresResource(
+        db_user="[[db_user]]",
+        db_host="{db_host}",
+        db_port=1234,
+        db_name="that_{db_name}",
+        table_name="[[table]]",
+        allow_no_schema=True,
+    )
+    resource = resource.inject(**args)
+    with pytest.raises(InjectionError):
+        resource.read()
+
+
+def test_postgres_resource_raises_on_wrong_read_configuration(postgres_df, read_sql_mock, mocked_session, mock_binding):
+    resource = PostgresResource(
+        db_user="test_user",
+        db_host="test_host",
+        db_port=1234,
+        db_name="test_db",
+        table_name="test_table",
+        sql_query="SELECT * FROM other_table",
+        allow_no_schema=True,
+    )
+    with pytest.raises(ConfigurationError):
+        resource.read()
+
+
+def test_postgres_resource_raises_on_wrong_write_configuration(
+    postgres_df, read_sql_mock, mocked_session, mock_binding, to_sql_mock, mock_cursor
+):
+    resource = PostgresResource(
+        db_user="test_user",
+        db_host="test_host",
+        db_port=1234,
+        db_name="test_db",
+        sql_query="SELECT * FROM other_table",
+        allow_no_schema=True,
+    )
+    with pytest.raises(ConfigurationError):
+        resource.write(postgres_df)

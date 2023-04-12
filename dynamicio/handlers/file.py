@@ -31,7 +31,7 @@ class BaseFileResource(BaseResource):
 
     def _check_injections(self) -> None:
         """Check that all injections have been completed."""
-        check_injections(str(self.path))
+        check_injections(self.path)
 
     def _resource_read(self) -> pd.DataFrame:
         """Read from file."""

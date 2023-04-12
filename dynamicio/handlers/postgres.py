@@ -60,6 +60,10 @@ class PostgresCredentials(BaseModel):
         return f"postgresql://{self.db_user}{password}@{self.db_host}:{self.db_port}/{self.db_name}"
 
 
+class ConfigurationError(Exception):
+    """Raised when configuration is wrong."""
+
+
 class PostgresResource(PostgresCredentials, BaseResource):
     """...
 
@@ -82,19 +86,28 @@ class PostgresResource(PostgresCredentials, BaseResource):
             clone.db_password = inject(db_password, **kwargs)
         clone.db_host = inject(clone.db_host, **kwargs)
         clone.db_name = inject(clone.db_name, **kwargs)
+        if table_name := self.table_name:
+            clone.table_name = inject(table_name, **kwargs)
+        if sql_query := self.sql_query:
+            clone.sql_query = inject(sql_query, **kwargs)
         return clone
 
     def _check_injections(self) -> None:
         """Check that all injections have been completed."""
         check_injections(self.db_user)
-        if self.db_password:
-            check_injections(self.db_password)
+        if db_password := self.db_password:
+            check_injections(db_password)
         check_injections(self.db_host)
         check_injections(self.db_name)
+        if table_name := self.table_name:
+            check_injections(table_name)
+        if sql_query := self.sql_query:
+            check_injections(sql_query)
 
     def _resource_read(self):
         """Handles Read operations for Postgres."""
-        assert self.sql_query or self.table_name, ValueError("PostgresResource must define sql_query or table_name.")
+        if not bool(self.sql_query) ^ bool(self.table_name):
+            raise ConfigurationError("PostgresResource must define EITHER sql_query OR table_name.")
 
         if self.pa_schema is not None and (not self.sql_query and self.pa_schema.Config.strict):
             # filtering can now be done at sql level
@@ -114,12 +127,14 @@ class PostgresResource(PostgresCredentials, BaseResource):
         # TODO: sqlalchemy 2.0 breaks here
         #       session.get_bind() is probably the culprit
         # TODO: Check if type coercion is needed here
-        #       For example objects -> String(64)
+        #       For example objects -> String(64)s
         #       For example date goes to Date and datetime64[ns] -> DateTime
 
     def _resource_write(self, df: pd.DataFrame):
         """Handles Write operations for Postgres."""
-        assert self.table_name is not None, "table_name must be specified in given PostgresResource"
+        if not self.table_name:
+            raise ConfigurationError("PostgresResource must specify table_name for writing.")
+
         with session_scope(self.connection_string) as session:
             session: SqlAlchemySession  # type: ignore # this is done for IDE purposes
             if self.truncate_and_append:
