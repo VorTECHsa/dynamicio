@@ -9,11 +9,10 @@ from typing import Any, Dict, Generator, List, Optional
 
 import pandas as pd  # type: ignore
 from magic_logger import logger
-from pydantic import BaseModel, Field  # pylint: disable=no-name-in-module
+from pydantic import Field  # pylint: disable=no-name-in-module
 from sqlalchemy import create_engine  # type: ignore
 from sqlalchemy.orm import Session as SqlAlchemySession  # type: ignore
 from sqlalchemy.orm import sessionmaker  # type: ignore
-from sqlalchemy.sql import column, select, table  # type: ignore
 
 from dynamicio.base import BaseResource
 from dynamicio.inject import check_injections, inject
@@ -44,27 +43,11 @@ def session_scope(connection_string: str) -> Generator[SqlAlchemySession, None, 
         session.close()  # pylint: disable=no-member
 
 
-class PostgresCredentials(BaseModel):
-    """Postgres credentials."""
-
-    db_user: str
-    db_password: Optional[str]
-    db_host: str
-    db_port: int
-    db_name: str
-
-    @property
-    def connection_string(self) -> str:
-        """Build connection string out of components."""
-        password = f":{self.db_password}" if self.db_password else ""
-        return f"postgresql://{self.db_user}{password}@{self.db_host}:{self.db_port}/{self.db_name}"
-
-
 class ConfigurationError(Exception):
     """Raised when configuration is wrong."""
 
 
-class PostgresResource(PostgresCredentials, BaseResource):
+class PostgresResource(BaseResource):
     """Postgres Resource class.
 
     This resource handles reading and writing to postgres databases. If a pa_schema has been given, it will
@@ -74,6 +57,24 @@ class PostgresResource(PostgresCredentials, BaseResource):
     Warning: Special case, where even if you explicitly don't validate, but give a pa_schema with strict="filter",
     the generated sql query will only query specified columns.
     """
+
+    db_user: str
+    db_password: Optional[str]
+    db_host: str
+    db_port: int
+    db_name: str
+    db_schema: str = "public"
+
+    @property
+    def connection_string(self) -> str:
+        """Build connection string out of components."""
+        password = f":{self.db_password}" if self.db_password else ""
+        return f"postgresql://{self.db_user}{password}@{self.db_host}:{self.db_port}/{self.db_name}"
+
+    @property
+    def final_table_name(self) -> str:
+        """Return schema and table name in a format of schema.table_name."""
+        return f"{self.db_schema}.{self.table_name}"
 
     table_name: Optional[str] = Field(None, description="SQL table name. Needs to be given if no sql_query is given")
     sql_query: Optional[str] = Field(
@@ -94,6 +95,7 @@ class PostgresResource(PostgresCredentials, BaseResource):
             clone.table_name = inject(table_name, **kwargs)
         if sql_query := self.sql_query:
             clone.sql_query = inject(sql_query, **kwargs)
+        clone.db_schema = inject(clone.db_schema, **kwargs)
         return clone
 
     def _check_injections(self) -> None:
@@ -107,6 +109,7 @@ class PostgresResource(PostgresCredentials, BaseResource):
             check_injections(table_name)
         if sql_query := self.sql_query:
             check_injections(sql_query)
+        check_injections(self.db_schema)
 
     def _resource_read(self):
         """Handles Read operations for Postgres."""
@@ -116,15 +119,14 @@ class PostgresResource(PostgresCredentials, BaseResource):
         if self.pa_schema is not None and (not self.sql_query and self.pa_schema.Config.strict):
             # filtering can now be done at sql level
             columns: List[str] = list(self.pa_schema.to_schema().columns.keys())  # type: ignore
-            table_to_query = table(self.table_name, *[column(name) for name in columns])
-            query = select(table_to_query.columns)
-            sql_query = str(query)
+            columns_str = ", ".join(columns)
+            sql_query = f"SELECT {columns_str} FROM {self.final_table_name}"
         elif self.sql_query is None:
-            sql_query = f"SELECT * FROM {self.table_name}"
+            sql_query = f"SELECT * FROM {self.final_table_name}"
         else:
             sql_query = self.sql_query
 
-        logger.info(f"Downloading table: {self.table_name} from: {self.db_host}:{self.db_name}")
+        logger.info(f"Downloading table: {self.final_table_name} from: {self.db_host}:{self.db_name}")
         with session_scope(self.connection_string) as session:
             return pd.read_sql(sql=sql_query, con=session.get_bind(), **self.kwargs)
 
@@ -142,8 +144,8 @@ class PostgresResource(PostgresCredentials, BaseResource):
         with session_scope(self.connection_string) as session:
             session: SqlAlchemySession  # type: ignore # this is done for IDE purposes
             if self.truncate_and_append:
-                logger.info(f"Writing to table (csv-hack): {self.table_name} from: {self.db_host}:{self.db_name}")
-                session.execute(f"TRUNCATE TABLE {self.table_name};")
+                logger.info(f"Writing to table (csv-hack): {self.final_table_name} from: {self.db_host}:{self.db_name}")
+                session.execute(f"TRUNCATE TABLE {self.final_table_name};")
 
                 # Speed hack: dump file as csv, use Postgres' CSV import function.
                 # https://stackoverflow.com/questions/2987433/how-to-import-csv-file-data-into-a-postgresql-table
@@ -161,7 +163,7 @@ class PostgresResource(PostgresCredentials, BaseResource):
                     temp_file.seek(0)
 
                     cur = session.connection().connection.cursor()
-                    cur.copy_from(temp_file, self.table_name, columns=df.columns, null="")
+                    cur.copy_from(temp_file, self.final_table_name, columns=df.columns, null="")
             else:
-                logger.info(f"Writing to table: {self.table_name} from: {self.db_host}:{self.db_name}")
-                df.to_sql(name=self.table_name, con=session.get_bind(), if_exists="replace", index=False)
+                logger.info(f"Writing to table: {self.final_table_name} from: {self.db_host}:{self.db_name}")
+                df.to_sql(name=self.final_table_name, con=session.get_bind(), if_exists="replace", index=False)

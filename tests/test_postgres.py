@@ -19,6 +19,7 @@ def postgres_table_resource() -> PostgresResource:
         db_host="test_host",
         db_port=1234,
         db_name="test_db",
+        db_schema="republic",
         table_name="test_table",
         allow_no_schema=True,
     )
@@ -31,6 +32,7 @@ def postgres_query_resource() -> PostgresResource:
         db_host="test_host",
         db_port=1234,
         db_name="test_db",
+        db_schema="republic",
         sql_query="SELECT * FROM other_table",
         allow_no_schema=True,
     )
@@ -75,7 +77,7 @@ def to_sql_mock(postgres_df):
 
 def test_postgres_resource_read(postgres_table_resource, postgres_df, read_sql_mock, mocked_session, mock_binding):
     df = postgres_table_resource.read()
-    read_sql_mock.assert_called_once_with(sql="SELECT * FROM test_table", con=mock_binding)
+    read_sql_mock.assert_called_once_with(sql="SELECT * FROM republic.test_table", con=mock_binding)
     pd.testing.assert_frame_equal(df, postgres_df)
 
 
@@ -83,7 +85,7 @@ def test_postgres_resource_read_with_schema(
     postgres_table_resource, postgres_df, read_sql_mock, mocked_session, mock_binding
 ):
     df = postgres_table_resource.read(pa_schema=PgSampleSchema)
-    read_sql_mock.assert_called_once_with(sql="SELECT * FROM test_table", con=mock_binding)
+    read_sql_mock.assert_called_once_with(sql="SELECT * FROM republic.test_table", con=mock_binding)
     pd.testing.assert_frame_equal(df, postgres_df)
 
 
@@ -99,7 +101,8 @@ def test_postgres_resource_read_with_filter_schema(
     postgres_table_resource.pa_schema = PgFilterSampleSchema
     df = postgres_table_resource.read()
     read_sql_mock.assert_called_once_with(
-        sql="SELECT test_table.id, test_table.foo, test_table.bar, test_table.baz \nFROM test_table", con=mock_binding
+        sql="SELECT id, foo, bar, baz FROM republic.test_table",
+        con=mock_binding,
     )
     pd.testing.assert_frame_equal(df, postgres_df)
 
@@ -119,7 +122,7 @@ def test_postgres_resource_write(
     postgres_table_resource, postgres_df, to_sql_mock, mocked_session, mock_binding, mock_cursor
 ):
     postgres_table_resource.write(postgres_df)
-    to_sql_mock.assert_called_once_with(name="test_table", con=mock_binding, if_exists="replace", index=False)
+    to_sql_mock.assert_called_once_with(name="republic.test_table", con=mock_binding, if_exists="replace", index=False)
 
 
 def test_postgres_resource_write_truncate_and_append(
@@ -127,8 +130,8 @@ def test_postgres_resource_write_truncate_and_append(
 ):
     postgres_table_resource.truncate_and_append = True
     postgres_table_resource.write(postgres_df)
-    mocked_session.execute.assert_called_once_with("TRUNCATE TABLE test_table;")
-    mock_cursor.copy_from.assert_called_once_with(ANY, "test_table", columns=postgres_df.columns, null="")
+    mocked_session.execute.assert_called_once_with("TRUNCATE TABLE republic.test_table;")
+    mock_cursor.copy_from.assert_called_once_with(ANY, "republic.test_table", columns=postgres_df.columns, null="")
 
 
 def test_postgres_resource_inject_and_read(postgres_df, read_sql_mock, mocked_session, mock_binding):
@@ -137,12 +140,15 @@ def test_postgres_resource_inject_and_read(postgres_df, read_sql_mock, mocked_se
         db_host="{db_host}",
         db_port=1234,
         db_name="that_{db_name}",
+        db_schema="[[republic]]",
         table_name="[[table]]",
         allow_no_schema=True,
     )
-    resource = resource.inject(db_user="test_user", db_host="test_host", db_name="test_db", table="test_table")
+    resource = resource.inject(
+        db_user="test_user", db_host="test_host", db_name="test_db", table="test_table", republic="republic"
+    )
     df = resource.read()
-    read_sql_mock.assert_called_once_with(sql="SELECT * FROM test_table", con=mock_binding)
+    read_sql_mock.assert_called_once_with(sql="SELECT * FROM republic.test_table", con=mock_binding)
     pd.testing.assert_frame_equal(df, postgres_df)
 
 
@@ -152,12 +158,15 @@ def test_postgres_resource_inject_and_read_query(postgres_df, read_sql_mock, moc
         db_host="{db_host}",
         db_port=1234,
         db_name="that_{db_name}",
+        db_schema="[[republic]]",
         allow_no_schema=True,
-        sql_query="SELECT * FROM [[table]]",
+        sql_query="SELECT * FROM [[republic]].[[table]]",
     )
-    resource = resource.inject(db_user="test_user", db_host="test_host", db_name="test_db", table="test_table")
+    resource = resource.inject(
+        db_user="test_user", db_host="test_host", db_name="test_db", table="test_table", republic="republic"
+    )
     df = resource.read()
-    read_sql_mock.assert_called_once_with(sql="SELECT * FROM test_table", con=mock_binding)
+    read_sql_mock.assert_called_once_with(sql="SELECT * FROM republic.test_table", con=mock_binding)
     pd.testing.assert_frame_equal(df, postgres_df)
 
 
