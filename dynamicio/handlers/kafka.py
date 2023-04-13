@@ -1,15 +1,18 @@
 """I/O functions and Resource class for kafka targeted operations."""
+from __future__ import annotations
 
+from copy import deepcopy
 from enum import Enum
-from typing import Any, Callable, Dict, Mapping, Optional
+from typing import Any, Callable, Dict, Mapping, Optional, Type
 
 import pandas as pd  # type: ignore
 import simplejson
 from kafka import KafkaProducer  # type: ignore
 from magic_logger import logger
-from pydantic import Field
+from pandera import SchemaModel
+from pydantic import BaseModel, Field
 
-from dynamicio.base import BaseResource
+from dynamicio.inject import check_injections, inject
 
 
 class CompressionType(str, Enum):
@@ -21,7 +24,7 @@ class CompressionType(str, Enum):
     ZSTD = "zstd"
 
 
-class KafkaResource(BaseResource):
+class KafkaConfig(BaseModel):
     """Kafka Resource class.
 
     This class is used to write to Kafka topics. Reading is not yet supported.
@@ -44,30 +47,63 @@ class KafkaResource(BaseResource):
     compression_type: CompressionType = "snappy"  # type: ignore
     producer_kwargs: Dict[str, Any] = {}
 
-    def _resource_write(self, df: pd.DataFrame) -> None:
-        """Handles Write operations for Kafka."""
+    def inject(self, **kwargs) -> "KafkaConfig":
+        """Inject variables into topic and server. Immutable."""
+        clone = deepcopy(self)
+        clone.topic = inject(clone.topic, **kwargs)
+        clone.server = inject(clone.server, **kwargs)
+        return clone
+
+    def check_injections(self) -> None:
+        """Check that all injections have been completed."""
+        check_injections(self.topic)
+        check_injections(self.server)
+
+    def get_kafka_producer(self) -> KafkaProducer:
+        """Get a KafkaProducer instance."""
         if self.kafka_producer is None:
-            kafka_producer = KafkaProducer(
+            return KafkaProducer(
                 bootstrap_servers=self.server,
                 compression_type=self.compression_type,
                 key_serializer=self.key_serializer,
                 value_serializer=self.value_serializer,
                 **self.producer_kwargs,
             )
-        else:
-            kafka_producer = self.kafka_producer
+        return self.kafka_producer
 
-        logger.info(f"Sending {len(df)} messages to Kafka topic:{self.topic}")
+    class Config:
+        """Pydantic Config class."""
+
+        arbitrary_types_allowed = True
+        validate_assignment = True
+
+
+class KafkaHandler:
+    """Kafka Handler."""
+
+    def __init__(self, config: KafkaConfig, pa_schema: Type[SchemaModel] | None = None):
+        """Initialize the Kafka Handler."""
+        config.check_injections()
+        self.config = config
+        self.pa_schema = pa_schema
+
+    def write(self, df: pd.DataFrame) -> None:
+        """Handles Write operations for Kafka."""
+        kafka_producer = self.config.get_kafka_producer()
+
+        logger.info(f"Sending {len(df)} messages to Kafka topic:{self.config.topic}")
 
         messages = df.reset_index(drop=True).to_dict("records")
 
         for idx, message in zip(df.index.values, messages):
             kafka_producer.send(
-                self.topic, key=self.key_generator(idx, message), value=self.document_transformer(message)
+                self.config.topic,
+                key=self.config.key_generator(idx, message),
+                value=self.config.document_transformer(message),
             )  # type: ignore
 
         kafka_producer.flush()  # type: ignore
 
-    def _resource_read(self) -> pd.DataFrame:
-        """TODO: ...."""
+    def read(self) -> pd.DataFrame:
+        """Not yet implemented."""
         raise NotImplementedError("No kafka reader implemented")

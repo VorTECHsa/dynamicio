@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 import pandas as pd
 import pytest
 
-from dynamicio.handlers.s3 import S3HdfResource
+from dynamicio import S3HdfConfig, S3HdfHandler
 from tests import constants
 from tests.resources.schemas import SampleSchema
 
@@ -57,36 +57,45 @@ def mock_s3_writer(mock_reader, tmp_path):
 
 
 @pytest.fixture()
-def hdf_s3_resource() -> S3HdfResource:
-    return S3HdfResource(
-        bucket="my_bucket",
-        path="some/path.hdf",
-        allow_no_schema=True,
+def hdf_s3_handler() -> S3HdfHandler:
+    return S3HdfHandler(
+        S3HdfConfig(
+            bucket="my_bucket",
+            path="some/path.hdf",
+        )
     )
 
 
 @pytest.fixture()
-def hdf_df(hdf_s3_resource) -> pd.DataFrame:
+def hdf_s3_config() -> S3HdfHandler:
+    return S3HdfConfig(
+        bucket="my_bucket",
+        path="some/path.hdf",
+    )
+
+
+@pytest.fixture()
+def hdf_df(hdf_s3_handler) -> pd.DataFrame:
     return pd.read_hdf(sample_path)
 
 
-def test__resource_read(s3_stubber, hdf_s3_resource, hdf_df, mock_s3_named_file_reader):
-    df = hdf_s3_resource.read()
+def test__resource_read(s3_stubber, hdf_s3_handler, hdf_df, mock_s3_named_file_reader):
+    df = hdf_s3_handler.read()
     pd.testing.assert_frame_equal(df, hdf_df)
 
 
-def test__resource_read_with_schema(s3_stubber, hdf_s3_resource, hdf_df, mock_s3_named_file_reader):
-    df = hdf_s3_resource.read(pa_schema=SampleSchema)
+def test__resource_read_with_schema(s3_stubber, hdf_s3_config, hdf_df, mock_s3_named_file_reader):
+    df = S3HdfHandler(hdf_s3_config, SampleSchema).read()
     pd.testing.assert_frame_equal(df, hdf_df)
 
 
-def test__resource_read_no_disk_space(s3_stubber, hdf_s3_resource, hdf_df, mock_s3_reader):
-    hdf_s3_resource.force_read_to_memory = True
-    df = hdf_s3_resource.read()
+def test__resource_read_no_disk_space(s3_stubber, hdf_s3_config, hdf_df, mock_s3_reader):
+    hdf_s3_config.force_read_to_memory = True
+    df = S3HdfHandler(hdf_s3_config).read()
     pd.testing.assert_frame_equal(df, hdf_df)
 
 
-class MockS3HdfResource(S3HdfResource):
+class MockS3HdfConfig(S3HdfConfig):
     @property
     def _full_path(self) -> Path:
         return self.path
@@ -94,11 +103,11 @@ class MockS3HdfResource(S3HdfResource):
 
 def test__resource_write(s3_stubber, hdf_df, mock_s3_writer, tmp_path):
     tmp_location = tmp_path / "sample_file.hdf"
-    resource = MockS3HdfResource(
+    config = MockS3HdfConfig(
         bucket="my_bucket",
         path=tmp_location,
-        allow_no_schema=True,
     )
-    resource.write(hdf_df)
+    handler = S3HdfHandler(config)
+    handler.write(hdf_df)
     df = pd.read_hdf(tmp_location)
     pd.testing.assert_frame_equal(df, hdf_df)

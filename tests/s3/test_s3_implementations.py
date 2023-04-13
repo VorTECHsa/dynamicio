@@ -6,8 +6,7 @@ from unittest.mock import Mock, patch
 import pandas as pd
 import pytest
 
-from dynamicio.handlers.s3 import S3CsvResource, S3ParquetResource
-from dynamicio.handlers.s3.file import BaseS3Resource, S3JsonResource
+from dynamicio import S3CsvConfig, S3CsvHandler, S3JsonConfig, S3JsonHandler, S3ParquetConfig, S3ParquetHandler
 from tests import constants
 from tests.resources.schemas import SampleSchema
 
@@ -17,68 +16,83 @@ s3_bucket = "my_bucket"
 
 @pytest.fixture(
     params=[
-        (S3CsvResource, "csv_sample.csv", pd.read_csv),
-        (S3ParquetResource, "parquet_sample.parquet", pd.read_parquet),
-        (S3JsonResource, "json_sample.json", pd.read_json),
+        (S3CsvConfig, "csv_sample.csv", pd.read_csv, S3CsvHandler, "csv"),
+        (S3ParquetConfig, "parquet_sample.parquet", pd.read_parquet, S3ParquetHandler, "parquet"),
+        (S3JsonConfig, "json_sample.json", pd.read_json, S3JsonHandler, "json"),
     ],
     ids=lambda v: v[1],
 )
-def resource_file_function(request):
+def config_file_function(request):
     return request.param
 
 
 @pytest.fixture
-def mock_reader(resource_file_function):
-    return Mock(return_value=type("FileObj", (object,), {"name": input_path / resource_file_function[1]})())
+def mock_reader(config_file_function):
+    return Mock(return_value=type("FileObj", (object,), {"name": input_path / config_file_function[1]})())
 
 
 @pytest.fixture
-def s3_named_file_reader(mock_reader):
+def s3_named_file_reader(mock_reader, config_file_function):
     @contextmanager
     def plain_s3_reader(s3_client, s3_bucket: str, s3_key: str) -> Generator:
         yield mock_reader(s3_client, s3_bucket, s3_key)
 
-    with patch("dynamicio.handlers.s3.file.s3_named_file_reader", new=plain_s3_reader) as target:
+    module = config_file_function[4]
+
+    with patch(f"dynamicio.handlers.s3.{module}.s3_named_file_reader", new=plain_s3_reader) as target:
         yield target
 
 
-@pytest.fixture
-def resource_and_expected_df(resource_file_function) -> (BaseS3Resource, pd.DataFrame):
-    resource_class, file_name, read_func = resource_file_function
-    return resource_class(
+# --- Tests ---
+
+
+def test_s3_config_read(s3_stubber, s3_named_file_reader, config_file_function):
+    config_class, file_name, read_func, handler_class, _ = config_file_function
+    handler = handler_class(
+        config_class(
+            bucket=s3_bucket,
+            path=f"some/{file_name}",
+        )
+    )
+    expected_df = read_func(input_path / file_name)
+    df = handler.read()
+    pd.testing.assert_frame_equal(df, expected_df)
+
+
+def test_s3_config_read_with_schema(s3_stubber, s3_named_file_reader, config_file_function):
+    config_class, file_name, read_func, handler_class, _ = config_file_function
+    config = config_class(
+        bucket=s3_bucket,
+        path=f"some/{file_name}",
+    )
+
+    expected_df = read_func(input_path / file_name)
+
+    df = handler_class(config, SampleSchema).read()
+
+    pd.testing.assert_frame_equal(df, expected_df)
+
+
+def test_s3_config_write(s3_stubber, s3_named_file_reader, tmpdir, config_file_function):
+    config_class, file_name, read_func, handler_class, _ = config_file_function
+
+    class MockConfig(config_class):
+        @property
+        def full_path(self) -> Path:
+            return self.path
+
+    config = MockConfig(
         bucket=s3_bucket,
         path=f"some/{file_name}",
         allow_no_schema=True,
-    ), read_func(input_path / file_name)
-
-
-def test_s3_resource_read(s3_stubber, resource_and_expected_df, s3_named_file_reader):
-    resource, expected_df = resource_and_expected_df
-    df = resource.read()
-    pd.testing.assert_frame_equal(df, expected_df)
-
-
-def test_s3_resource_read_with_schema(s3_stubber, resource_and_expected_df, s3_named_file_reader):
-    resource, expected_df = resource_and_expected_df
-    df = resource.read(pa_schema=SampleSchema)
-    pd.testing.assert_frame_equal(df, expected_df)
-
-
-def test_s3_resource_write(s3_stubber, resource_and_expected_df, s3_named_file_reader, tmpdir):
-    resource, expected_df = resource_and_expected_df
-
-    class MockResource(resource.__class__):
-        @property
-        def _full_path(self) -> Path:
-            return self.path
-
-    resource = MockResource(
-        bucket=s3_bucket,
-        path=f"some/{resource.path.name}",
-        allow_no_schema=True,
     )
+
+    expected_df = read_func(input_path / file_name)
+
     target_location = tmpdir / "sample"
-    resource.path = target_location
-    resource.write(expected_df)
-    df = resource.read()
+    config.path = target_location
+
+    handler = handler_class(config)
+    handler.write(expected_df)
+    df = handler.read()
     pd.testing.assert_frame_equal(df, expected_df)

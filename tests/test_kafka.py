@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from dynamicio.handlers.kafka import KafkaResource
+from dynamicio.handlers.kafka import KafkaConfig, KafkaHandler
 
 
 @pytest.fixture
@@ -16,12 +16,13 @@ def mocked_kafka_producer():
 
 
 @pytest.fixture
-def kafka_resource() -> KafkaResource:
-    return KafkaResource(topic="test_topic", server="test_server", allow_no_schema=True)
+def kafka_handler() -> KafkaHandler:
+    config = KafkaConfig(topic="test_topic", server="test_server")
+    return KafkaHandler(config)
 
 
-def test_kafka_resource_write(sample_df, kafka_resource, mocked_kafka_producer):
-    kafka_resource.write(sample_df)
+def test_kafka_resource_write(sample_df, kafka_handler, mocked_kafka_producer):
+    kafka_handler.write(sample_df)
     mocked_kafka_producer.send.assert_has_calls(
         [
             call("test_topic", key=0, value={"a": 1, "b": 4}),
@@ -31,6 +32,6 @@ def test_kafka_resource_write(sample_df, kafka_resource, mocked_kafka_producer):
     )
 
 
-def test_kafka_resource_read(kafka_resource):
+def test_kafka_resource_read(kafka_handler):
     with pytest.raises(NotImplementedError):
-        kafka_resource.read()
+        kafka_handler.read()
