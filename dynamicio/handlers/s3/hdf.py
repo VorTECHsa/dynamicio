@@ -49,7 +49,7 @@ class InMemStore(pd.io.pytables.HDFStore):
     _in_mem_table = None
 
     def __init__(self, path: str, table: tables.File, mode: str = "r"):
-        """..."""
+        """Initialize the store."""
         self._in_mem_table = table
         super().__init__(path=path, mode=mode)  # type: ignore
 

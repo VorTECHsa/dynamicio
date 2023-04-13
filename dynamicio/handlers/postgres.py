@@ -45,7 +45,7 @@ def session_scope(connection_string: str) -> Generator[SqlAlchemySession, None, 
 
 
 class PostgresCredentials(BaseModel):
-    """..."""
+    """Postgres credentials."""
 
     db_user: str
     db_password: Optional[str]
@@ -65,7 +65,11 @@ class ConfigurationError(Exception):
 
 
 class PostgresResource(PostgresCredentials, BaseResource):
-    """...
+    """Postgres Resource class.
+
+    This resource handles reading and writing to postgres databases. If a pa_schema has been given, it will
+    construct a sql query that only fetches the columns specified in the schema, this pushes down
+    the filtering to the database, prevents us from unnecessarily loading data.
 
     Warning: Special case, where even if you explicitly don't validate, but give a pa_schema with strict="filter",
     the generated sql query will only query specified columns.

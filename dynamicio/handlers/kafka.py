@@ -13,7 +13,7 @@ from dynamicio.base import BaseResource
 
 
 class CompressionType(str, Enum):
-    """..."""
+    """Compression types for Kafka."""
 
     GZIP = "gzip"
     SNAPPY = "snappy"
@@ -22,7 +22,11 @@ class CompressionType(str, Enum):
 
 
 class KafkaResource(BaseResource):
-    """..."""
+    """Kafka Resource class.
+
+    This class is used to write to Kafka topics. Reading is not yet supported.
+    Only requires a `topic` and `server` to be initialized.
+    """
 
     topic: str
     server: str
@@ -37,7 +41,7 @@ class KafkaResource(BaseResource):
 
     kafka_producer: Optional[KafkaProducer] = None
 
-    compression_type: Optional[CompressionType] = "snappy"  # type: ignore
+    compression_type: CompressionType = "snappy"  # type: ignore
     producer_kwargs: Dict[str, Any] = {}
 
     def _resource_write(self, df: pd.DataFrame) -> None:
