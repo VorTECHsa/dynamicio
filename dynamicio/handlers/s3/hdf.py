@@ -28,7 +28,7 @@ class S3HdfResource(BaseS3Resource):
     _file_write_method = None  # type: ignore
 
     def _resource_read(self) -> pd.DataFrame:
-        if self.no_disk_space:
+        if self.force_read_to_memory:
             with s3_reader(boto3.client("s3"), s3_bucket=self.bucket, s3_key=str(self.path)) as fobj:  # type: ignore
                 if (result := HdfIO().load(fobj)) is not None:  # type: ignore
                     return result

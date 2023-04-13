@@ -38,7 +38,7 @@ def test_s3_resource_inject_read(s3_stubber, s3_named_file_reader, mock_reader):
 
 def test_s3_resource_inject_read_no_disk_space():
     resource = MockImplementedS3Resource(
-        no_disk_space=True,
+        force_read_to_memory=True,
         bucket="my_bucket",
         path="foo/{bar}/[[baz]].file",
         kwargs={"foo": "bar"},

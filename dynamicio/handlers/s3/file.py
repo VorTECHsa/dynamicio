@@ -26,14 +26,14 @@ class BaseS3Resource(BaseResource):
         bucket: The name of the bucket.
         path: The path to the file.
         kwargs: A dictionary of kwargs to be passed to the read/write function.
-        no_disk_space: If True, will read data directly into memory. (uses s3fs + fsspec)
+        force_read_to_memory: If True, will read data directly into memory. (uses s3fs + fsspec), otherwise will use a temporary file.
     """
 
     bucket: str
     path: Path
     kwargs: Dict[str, Any] = {}
 
-    no_disk_space: bool = False
+    force_read_to_memory: bool = False
 
     _file_read_method: Callable[[Path, Any], Any]  # must be declared as staticmethod
     _file_write_method: Callable[[pd.DataFrame, Path, Any], Any]  # must be declared as staticmethod
@@ -56,7 +56,7 @@ class BaseS3Resource(BaseResource):
         check_injections(str(self.path))
 
     def _resource_read(self) -> pd.DataFrame:
-        if self.no_disk_space:
+        if self.force_read_to_memory:
             result = self._file_read_method(self._full_path, **self.kwargs)  # type: ignore
             if result is not None:
                 return result

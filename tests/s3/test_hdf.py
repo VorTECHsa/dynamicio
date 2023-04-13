@@ -81,7 +81,7 @@ def test__resource_read_with_schema(s3_stubber, hdf_s3_resource, hdf_df, mock_s3
 
 
 def test__resource_read_no_disk_space(s3_stubber, hdf_s3_resource, hdf_df, mock_s3_reader):
-    hdf_s3_resource.no_disk_space = True
+    hdf_s3_resource.force_read_to_memory = True
     df = hdf_s3_resource.read()
     pd.testing.assert_frame_equal(df, hdf_df)
 
