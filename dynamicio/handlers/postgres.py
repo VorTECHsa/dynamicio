@@ -110,7 +110,7 @@ class PostgresResource(PostgresCredentials, BaseResource):
 
     def _resource_read(self):
         """Handles Read operations for Postgres."""
-        if not bool(self.sql_query) ^ bool(self.table_name):
+        if not bool(self.sql_query) ^ bool(self.table_name):  # Xor
             raise ConfigurationError("PostgresResource must define EITHER sql_query OR table_name.")
 
         if self.pa_schema is not None and (not self.sql_query and self.pa_schema.Config.strict):
