@@ -78,11 +78,11 @@ class KafkaConfig(BaseModel):
         validate_assignment = True
 
 
-class KafkaHandler:
-    """Kafka Handler."""
+class KafkaResource:
+    """Kafka Resource."""
 
     def __init__(self, config: KafkaConfig, pa_schema: Type[SchemaModel] | None = None):
-        """Initialize the Kafka Handler."""
+        """Initialize the Kafka Resource."""
         config.check_injections()
         self.config = config
         self.pa_schema = pa_schema

@@ -11,8 +11,8 @@ import pandas as pd
 from pandera import SchemaModel
 from pydantic import BaseModel  # type: ignore
 
-from dynamicio.handlers.s3.contexts import s3_named_file_reader
 from dynamicio.inject import check_injections, inject
+from dynamicio.io.s3.contexts import s3_named_file_reader
 
 
 class S3JsonConfig(BaseModel):
@@ -42,11 +42,11 @@ class S3JsonConfig(BaseModel):
         return f"s3://{self.bucket}/{self.path}"
 
 
-class S3JsonHandler:
-    """JSON Handler."""
+class S3JsonResource:
+    """JSON Resource."""
 
     def __init__(self, config: S3JsonConfig, pa_schema: Type[SchemaModel] | None = None):
-        """Initialize the JSON Handler."""
+        """Initialize the JSON Resource."""
         config.check_injections()
         self.config = config
         self.pa_schema = pa_schema

@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, Mock
 import pandas as pd
 import pytest
 
-from dynamicio import KeyedHandler
+from dynamicio import KeyedResource
 from tests.resources.schemas import SampleSchema
 
 sample_df = pd.DataFrame([{"id": 1, "value": "foo"}])
@@ -39,68 +39,68 @@ sample_df = pd.DataFrame([{"id": 1, "value": "foo"}])
 
 
 @pytest.fixture
-def create_mock_handler():
-    def _create_mock_handler():
-        mock_handler = MagicMock()
-        mock_handler.return_value = mock_handler
-        return mock_handler
+def create_mock_resource():
+    def _create_mock_resource():
+        mock_resource = MagicMock()
+        mock_resource.return_value = mock_resource
+        return mock_resource
 
-    return _create_mock_handler
+    return _create_mock_resource
 
 
 @pytest.fixture
-def mock_resources(create_mock_handler):
+def mock_resources(create_mock_resource):
     return {
-        "default": (create_mock_handler(), MockConfig()),
-        "foo": (create_mock_handler(), MockConfig()),
-        "bar": (create_mock_handler(), MockConfig()),
+        "default": (create_mock_resource(), MockConfig()),
+        "foo": (create_mock_resource(), MockConfig()),
+        "bar": (create_mock_resource(), MockConfig()),
     }
 
 
 def test_inject(mock_resources):
-    keyed_resource = KeyedHandler(mock_resources)
+    keyed_resource = KeyedResource(mock_resources)
     keyed_resource = keyed_resource.inject(foo="bar")
     for key in mock_resources.keys():
         assert keyed_resource.keyed_build_configs[key][1].injected
 
 
 def test_resource_read(mock_resources):
-    keyed_resource = KeyedHandler(mock_resources)
+    keyed_resource = KeyedResource(mock_resources)
     keyed_resource.read()
 
-    handler = keyed_resource.keyed_build_configs[keyed_resource.key][0]
+    resource = keyed_resource.keyed_build_configs[keyed_resource.key][0]
     config = keyed_resource.keyed_build_configs[keyed_resource.key][1]
-    handler.assert_called_once_with(config, None)
-    handler.read.assert_called_once_with()
+    resource.assert_called_once_with(config, None)
+    resource.read.assert_called_once_with()
 
 
 def test_resource_write(mock_resources):
-    keyed_resource = KeyedHandler(mock_resources)
+    keyed_resource = KeyedResource(mock_resources)
     sample_df = pd.DataFrame([{"id": 4, "value": "qux"}])
     keyed_resource.write(sample_df)
 
-    handler = keyed_resource.keyed_build_configs[keyed_resource.key][0]
+    resource = keyed_resource.keyed_build_configs[keyed_resource.key][0]
     config = keyed_resource.keyed_build_configs[keyed_resource.key][1]
-    handler.assert_called_once_with(config, None)
-    handler.write.assert_called_once_with(sample_df)
+    resource.assert_called_once_with(config, None)
+    resource.write.assert_called_once_with(sample_df)
 
 
 def test_resource_read_with_schema(mock_resources):
-    keyed_resource = KeyedHandler(mock_resources, SampleSchema)
+    keyed_resource = KeyedResource(mock_resources, SampleSchema)
     keyed_resource.read()
 
-    handler = keyed_resource.keyed_build_configs[keyed_resource.key][0]
+    resource = keyed_resource.keyed_build_configs[keyed_resource.key][0]
     config = keyed_resource.keyed_build_configs[keyed_resource.key][1]
-    handler.assert_called_once_with(config, SampleSchema)
-    handler.read.assert_called_once_with()
+    resource.assert_called_once_with(config, SampleSchema)
+    resource.read.assert_called_once_with()
 
 
 def test_resource_write_with_schema(mock_resources):
-    keyed_resource = KeyedHandler(mock_resources, SampleSchema)
+    keyed_resource = KeyedResource(mock_resources, SampleSchema)
     sample_df = pd.DataFrame([{"id": 4, "value": "qux"}])
     keyed_resource.write(sample_df)
 
-    handler = keyed_resource.keyed_build_configs[keyed_resource.key][0]
+    resource = keyed_resource.keyed_build_configs[keyed_resource.key][0]
     config = keyed_resource.keyed_build_configs[keyed_resource.key][1]
-    handler.assert_called_once_with(config, SampleSchema)
-    handler.write.assert_called_once_with(sample_df)
+    resource.assert_called_once_with(config, SampleSchema)
+    resource.write.assert_called_once_with(sample_df)

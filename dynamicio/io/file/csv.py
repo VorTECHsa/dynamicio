@@ -31,11 +31,11 @@ class CsvConfig(BaseModel):
         check_injections(self.path)
 
 
-class CsvHandler:
-    """CSV Handler."""
+class CsvResource:
+    """CSV Resource."""
 
     def __init__(self, config: CsvConfig, pa_schema: Type[SchemaModel] | None = None):
-        """Initialize the CSV Handler."""
+        """Initialize the CSV Resource."""
         config.check_injections()
         self.config = config
         self.pa_schema = pa_schema

@@ -36,11 +36,11 @@ class HdfConfig(BaseModel):
         check_injections(self.path)
 
 
-class HdfHandler:
-    """HDF Handler."""
+class HdfResource:
+    """HDF Resource."""
 
     def __init__(self, config: HdfConfig, pa_schema: Type[SchemaModel] | None = None):
-        """Initialize the HDF Handler."""
+        """Initialize the HDF Resource."""
         config.check_injections()
         self.config = config
         self.pa_schema = pa_schema

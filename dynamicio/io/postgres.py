@@ -105,11 +105,11 @@ class PostgresConfig(BaseModel):
         check_injections(self.db_schema)
 
 
-class PostgresHandler:
-    """Postgres Handler."""
+class PostgresResource:
+    """Postgres Resource."""
 
     def __init__(self, config: PostgresConfig, pa_schema: Type[SchemaModel] | None = None):
-        """Initialize the Postgres Handler."""
+        """Initialize the Postgres Resource."""
         config.check_injections()
         self.config = config
         self.pa_schema = pa_schema

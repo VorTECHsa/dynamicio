@@ -1,5 +1,5 @@
 # flake8: noqa: T201
-"""Demo for PostgresHandler.
+"""Demo for PostgresResource.
 
 This demo shows how to read and write data from a postgres database. 
 It will read/write from your local postgres database and requires you to run the sql provided first.
@@ -19,7 +19,7 @@ DROP TABLE public.new_table;
 from pandera import SchemaModel
 from pandera.typing import Series
 
-from dynamicio import PostgresConfig, PostgresHandler
+from dynamicio import PostgresConfig, PostgresResource
 
 config = PostgresConfig(
     db_user="",
@@ -30,13 +30,13 @@ config = PostgresConfig(
     truncate_and_append=True,
 )
 
-df = PostgresHandler(config).read()
+df = PostgresResource(config).read()
 print(df)
 
 df["test_col"] = 123
 
 
-PostgresHandler(config).write(df)
+PostgresResource(config).write(df)
 
 
 class PGSchema(SchemaModel):
@@ -46,7 +46,7 @@ class PGSchema(SchemaModel):
         strict = "filter"
 
 
-df2 = PostgresHandler(config, pa_schema=PGSchema).read()
+df2 = PostgresResource(config, pa_schema=PGSchema).read()
 
 print(df2)
 

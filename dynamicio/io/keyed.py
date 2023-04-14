@@ -20,11 +20,11 @@ class IOConfig(Protocol):
         """Check that all injections have been completed. Raise InjectionError if not."""
 
 
-class IOHandler(Protocol):
-    """IOHandler Protocol."""
+class IOResource(Protocol):
+    """IOResource Protocol."""
 
     def __init__(self, config: IOConfig, pa_schema: Type[SchemaModel] | None = None):
-        """Initialize the IO Handler."""
+        """Initialize the IO Resource."""
 
     def read(self) -> pd.DataFrame:
         """Read."""
@@ -33,11 +33,11 @@ class IOHandler(Protocol):
         """Write."""
 
 
-BuildConfig = Tuple[Type[IOHandler], IOConfig]
+BuildConfig = Tuple[Type[IOResource], IOConfig]
 
 
-class KeyedHandler:
-    """KeyedHandler class for reading and writing based on a key and given configs and handlers."""
+class KeyedResource:
+    """KeyedResource class for reading and writing based on a key and given configs and io."""
 
     def __init__(
         self,
@@ -45,26 +45,26 @@ class KeyedHandler:
         pa_schema: Type[SchemaModel] | None = None,
         default_key: str | None = None,
     ):
-        """Initialize the KeyedHandler."""
+        """Initialize the KeyedResource."""
         if len(keyed_build_configs) == 0:
-            raise ValueError("KeyedHandler must have at least one build_config.")
+            raise ValueError("KeyedResource must have at least one build_config.")
         self.keyed_build_configs = keyed_build_configs
         self.pa_schema = pa_schema
         self.key = default_key or list(keyed_build_configs.keys())[0]
 
-    def inject(self, **kwargs) -> "KeyedHandler":
+    def inject(self, **kwargs) -> "KeyedResource":
         """Inject variables into all configs. Immutable."""
         new = deepcopy(self)
-        for key, (handler, config) in new.keyed_build_configs.items():
-            new.keyed_build_configs[key] = (handler, config.inject(**kwargs))
+        for key, (resource, config) in new.keyed_build_configs.items():
+            new.keyed_build_configs[key] = (resource, config.inject(**kwargs))
         return new
 
     def read(self) -> pd.DataFrame:
         """Read from the active key resource."""
-        handler, config = self.keyed_build_configs[self.key]
-        return handler(config, self.pa_schema).read()
+        resource, config = self.keyed_build_configs[self.key]
+        return resource(config, self.pa_schema).read()
 
     def write(self, df: pd.DataFrame) -> None:
         """Write to the active key resource."""
-        handler, config = self.keyed_build_configs[self.key]
-        return handler(config, self.pa_schema).write(df)
+        resource, config = self.keyed_build_configs[self.key]
+        return resource(config, self.pa_schema).write(df)

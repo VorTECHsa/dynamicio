@@ -1,15 +1,15 @@
 import pandas as pd
 import pytest
 
-from dynamicio.handlers.file import (
+from dynamicio.io.file import (
     CsvConfig,
-    CsvHandler,
+    CsvResource,
     HdfConfig,
-    HdfHandler,
+    HdfResource,
     JsonConfig,
-    JsonHandler,
+    JsonResource,
     ParquetConfig,
-    ParquetHandler,
+    ParquetResource,
 )
 from tests import constants
 from tests.resources.schemas import SampleSchema
@@ -17,10 +17,10 @@ from tests.resources.schemas import SampleSchema
 input_path = constants.TEST_RESOURCES / "data/input"
 
 test_cases = [
-    (CsvConfig, "csv_sample.csv", CsvHandler),
-    (ParquetConfig, "parquet_sample.parquet", ParquetHandler),
-    (JsonConfig, "json_sample.json", JsonHandler),
-    (HdfConfig, "hdf_sample.h5", HdfHandler),
+    (CsvConfig, "csv_sample.csv", CsvResource),
+    (ParquetConfig, "parquet_sample.parquet", ParquetResource),
+    (JsonConfig, "json_sample.json", JsonResource),
+    (HdfConfig, "hdf_sample.h5", HdfResource),
 ]
 
 
@@ -30,39 +30,39 @@ def df() -> pd.DataFrame:
 
 
 @pytest.mark.parametrize(
-    "config_class, file_name, handler_class",
+    "config_class, file_name, resource_class",
     test_cases,
 )
-def test_config_read(df, config_class, file_name, handler_class):
+def test_config_read(df, config_class, file_name, resource_class):
     config = config_class(path=input_path / file_name)
-    handler = handler_class(config)
-    df = handler.read()
+    resource = resource_class(config)
+    df = resource.read()
     pd.testing.assert_frame_equal(df, df)
 
 
 @pytest.mark.parametrize(
-    "config_class, file_name, handler_class",
+    "config_class, file_name, resource_class",
     test_cases,
 )
-def test_config_read_with_schema(df, config_class, file_name, handler_class):
+def test_config_read_with_schema(df, config_class, file_name, resource_class):
     config = config_class(path=input_path / file_name)
-    handler = handler_class(config, SampleSchema)
-    df = handler.read()
+    resource = resource_class(config, SampleSchema)
+    df = resource.read()
     pd.testing.assert_frame_equal(df, df)
 
 
 @pytest.mark.parametrize(
-    "config_class, file_name, handler_class",
+    "config_class, file_name, resource_class",
     test_cases,
 )
-def test_config_write(df, tmpdir, config_class, handler_class, file_name):
+def test_config_write(df, tmpdir, config_class, resource_class, file_name):
     target_location = tmpdir / "sample"
-    handler = handler_class(
+    resource = resource_class(
         config_class(
             path=target_location,
         )
     )
-    handler.write(df)
+    resource.write(df)
     # reading should probably not be done with the config here
-    df = handler.read()
+    df = resource.read()
     pd.testing.assert_frame_equal(df, df)

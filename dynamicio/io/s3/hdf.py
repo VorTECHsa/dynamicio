@@ -17,8 +17,8 @@ from pandera import SchemaModel
 from pydantic import BaseModel, Field
 
 from dynamicio import utils
-from dynamicio.handlers.s3.contexts import s3_named_file_reader, s3_reader, s3_writer
 from dynamicio.inject import check_injections, inject
+from dynamicio.io.s3.contexts import s3_named_file_reader, s3_reader, s3_writer
 
 hdf_lock = Lock()
 
@@ -51,11 +51,11 @@ class S3HdfConfig(BaseModel):
         return f"s3://{self.bucket}/{self.path}"
 
 
-class S3HdfHandler:
-    """HDF Handler."""
+class S3HdfResource:
+    """HDF Resource."""
 
     def __init__(self, config: S3HdfConfig, pa_schema: Type[SchemaModel] | None = None):
-        """Initialize the HDF Handler."""
+        """Initialize the HDF Resource."""
         config.check_injections()
         self.config = config
         self.pa_schema = pa_schema

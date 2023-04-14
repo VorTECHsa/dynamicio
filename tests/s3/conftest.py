@@ -27,5 +27,5 @@ def s3_named_file_reader(mock_reader):
     def plain_s3_reader(s3_client, s3_bucket: str, s3_key: str) -> Generator:
         yield mock_reader(s3_client, s3_bucket, s3_key)
 
-    with patch("dynamicio.handlers.s3.file.s3_named_file_reader", new=plain_s3_reader) as target:
+    with patch("dynamicio.io.s3.file.s3_named_file_reader", new=plain_s3_reader) as target:
         yield target

@@ -1,5 +1,5 @@
 # pylint: disable=protected-access
-"""Json config and resource."""
+"""Parquet config and resource."""
 from __future__ import annotations
 
 from copy import deepcopy
@@ -13,14 +13,14 @@ from pydantic import BaseModel  # type: ignore
 from dynamicio.inject import check_injections, inject
 
 
-class JsonConfig(BaseModel):
-    """JSON Config."""
+class ParquetConfig(BaseModel):
+    """PARQUET Config."""
 
     path: Path
     read_kwargs: Dict[str, Any] = {}
     write_kwargs: Dict[str, Any] = {}
 
-    def inject(self, **kwargs) -> "JsonConfig":
+    def inject(self, **kwargs) -> "ParquetConfig":
         """Inject variables into path. Immutable."""
         clone = deepcopy(self)
         clone.path = inject(clone.path, **kwargs)
@@ -31,25 +31,27 @@ class JsonConfig(BaseModel):
         check_injections(self.path)
 
 
-class JsonHandler:
-    """JSON Handler."""
+class ParquetResource:
+    """PARQUET Resource."""
 
-    def __init__(self, config: JsonConfig, pa_schema: Type[SchemaModel] | None = None):
-        """Initialize the JSON Handler."""
+    config_type = ParquetConfig
+
+    def __init__(self, config: ParquetConfig, pa_schema: Type[SchemaModel] | None = None):
+        """Initialize the PARQUET Resource."""
         config.check_injections()
         self.config = config
         self.pa_schema = pa_schema
 
     def read(self) -> pd.DataFrame:
-        """Read the JSON file."""
-        df = pd.read_json(self.config.path, **self.config.read_kwargs)
+        """Read the PARQUET file."""
+        df = pd.read_parquet(self.config.path, **self.config.read_kwargs)
         if schema := self.pa_schema:
-            df = schema.validate(df)
+            df = schema.validate(df)  # type: ignore
         return df
 
     def write(self, df: pd.DataFrame) -> None:
-        """Write the JSON file."""
+        """Write the PARQUET file."""
         if schema := self.pa_schema:
             df = schema.validate(df)  # type: ignore
         self.config.path.parent.mkdir(parents=True, exist_ok=True)
-        df.to_json(self.config.path, **self.config.write_kwargs)
+        df.to_parquet(self.config.path, **self.config.write_kwargs)
