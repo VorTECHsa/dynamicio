@@ -33,11 +33,11 @@ def inject(value: str | Path | None, **kwargs: dict[str, Any]) -> str | Path | N
 
     case-insensitive.
     Args:
-        value: A string with dynamic values in the form of "{DYNAMIC_VAR}" or "[[ DYNAMIC_VAR ]]".
+        value: An injectable value (str | Path | None) with dynamic values in the form of "{DYNAMIC_VAR}" or "[[ DYNAMIC_VAR ]]".
         kwargs: A mapping of values to replace in the path.
 
     Returns:
-        str: String with all dynamic values replaced.
+        str | Path | None: Injectable with all dynamic values replaced.
     """
     if value is None:
         return value
