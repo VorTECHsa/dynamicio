@@ -14,6 +14,7 @@ class IOConfig(Protocol):
 
     def inject(self, **kwargs) -> "IOConfig":
         """Inject variables. Immutable."""
+        return deepcopy(self)
 
     def check_injections(self) -> None:
         """Check that all injections have been completed. Raise InjectionError if not."""
