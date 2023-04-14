@@ -170,9 +170,16 @@ class PostgresHandler:
                     temp_file.seek(0)
 
                     cur = session.connection().connection.cursor()
-                    cur.copy_from(temp_file, self.config.final_table_name, columns=df.columns, null="")
+                    cur.execute(f"SET search_path TO {self.config.db_schema};")
+                    cur.copy_from(temp_file, self.config.table_name, columns=df.columns, null="")
             else:
                 logger.info(
                     f"Writing to table: {self.config.final_table_name} from: {self.config.db_host}:{self.config.db_name}"
                 )
-                df.to_sql(name=self.config.final_table_name, con=session.get_bind(), if_exists="replace", index=False)
+                df.to_sql(
+                    name=self.config.table_name,
+                    con=session.get_bind(),
+                    if_exists="replace",
+                    index=False,
+                    schema=self.config.db_schema,
+                )

@@ -125,7 +125,9 @@ def test_postgres_resource_write(
     postgres_table_handler, postgres_df, to_sql_mock, mocked_session, mock_binding, mock_cursor
 ):
     postgres_table_handler.write(postgres_df)
-    to_sql_mock.assert_called_once_with(name="republic.test_table", con=mock_binding, if_exists="replace", index=False)
+    to_sql_mock.assert_called_once_with(
+        name="test_table", con=mock_binding, if_exists="replace", index=False, schema="republic"
+    )
 
 
 def test_postgres_resource_write_truncate_and_append(
@@ -134,7 +136,8 @@ def test_postgres_resource_write_truncate_and_append(
     postgres_table_handler.config.truncate_and_append = True
     postgres_table_handler.write(postgres_df)
     mocked_session.execute.assert_called_once_with("TRUNCATE TABLE republic.test_table;")
-    mock_cursor.copy_from.assert_called_once_with(ANY, "republic.test_table", columns=postgres_df.columns, null="")
+    mock_cursor.execute.assert_called_once_with("SET search_path TO republic;")
+    mock_cursor.copy_from.assert_called_once_with(ANY, "test_table", columns=postgres_df.columns, null="")
 
 
 def test_postgres_resource_inject_and_read(postgres_df, read_sql_mock, mocked_session, mock_binding):
