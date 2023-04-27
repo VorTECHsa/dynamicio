@@ -4,7 +4,14 @@ from pandera import SchemaModel
 from pandera.typing import Series
 
 
-class SomeParquetToRead(SchemaModel):
+class SampleSchema(SchemaModel):
     id: Series[int]
     bar: Series[int]
     foo_name: Series[str]
+
+
+class PgSampleSchema(SchemaModel):
+    id: Series[str]
+    foo: Series[str]
+    bar: Series[int]
+    baz: Series[str]

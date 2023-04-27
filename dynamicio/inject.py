@@ -1,8 +1,9 @@
 """Injects dynamic values into a string."""
+from __future__ import annotations
 
 import re
-import string
-from typing import Any, Dict
+from pathlib import Path
+from typing import Any, Dict, overload
 
 double_bracket_matcher = re.compile(r"""(.*)(\[\[\s*(\S+)\s*]])(.*)""")
 curly_braces_matcher = re.compile(r"(.*)(\{\s*(\S+)\s*\})(.*)")
@@ -12,63 +13,49 @@ class InjectionError(Exception):
     """Raised when a string has any dynamic values in the form of "{DYNAMIC_VAR}" or "[[ DYNAMIC_VAR ]]"."""
 
 
-def inject(value: str, **kwargs) -> str:
+@overload
+def inject(value: None, **kwargs: dict[str, Any]) -> None:
+    ...
+
+
+@overload
+def inject(value: Path, **kwargs: dict[str, Any]) -> Path:
+    ...
+
+
+@overload
+def inject(value: str, **kwargs: dict[str, Any]) -> str:
+    ...
+
+
+def inject(value: str | Path | None, **kwargs: dict[str, Any]) -> str | Path | None:
     """Parse a string and replace any "{DYNAMIC_VAR}" and "[[ DYNAMIC_VAR ]]" with the respective values in the kwargs.
 
     case-insensitive.
     Args:
-        value: A string with dynamic values in the form of "{DYNAMIC_VAR}" or "[[ DYNAMIC_VAR ]]".
+        value: An injectable value (str | Path | None) with dynamic values in the form of "{DYNAMIC_VAR}" or "[[ DYNAMIC_VAR ]]".
         kwargs: A mapping of values to replace in the path.
 
     Returns:
-        str: String with all dynamic values replaced.
+        str | Path | None: Injectable with all dynamic values replaced.
     """
-    value = _inject_square_bracket_vars(value, **kwargs)
-    value = _inject_curly_braces_vars(value, **kwargs)
-    return value
+    if value is None:
+        return value
+    to_inject = str(value)
+    injected = _inject_with_matcher(to_inject, double_bracket_matcher, **kwargs)
+    injected = _inject_with_matcher(injected, curly_braces_matcher, **kwargs)
+    return type(value)(injected)
 
 
-def check_injections(value: str) -> None:
+def check_injections(value: str | Path | None) -> None:
     """Raise if a string has any dynamic values in the form of "{DYNAMIC_VAR}" or "[[ DYNAMIC_VAR ]]"."""
-    _check_square_bracket_injections(value)
-    _check_curly_braces_injections(value)
-
-
-def _check_square_bracket_injections(value: str) -> None:
-    while _ := double_bracket_matcher.search(value):
-        raise InjectionError(f'Path is not fully injected: "{value!r}"')
-
-
-def _check_curly_braces_injections(value: str) -> None:
-    fields = [group[1] for group in string.Formatter().parse(value) if group[1] is not None]
-    if len(fields) > 0:
-        raise InjectionError(f'Path is not fully injected: "{value!r}"')
-
-
-def _inject_square_bracket_vars(value: str, **kwargs) -> str:
-    """Inject dynamic values in the form of "[[ DYNAMIC_VAR ]]". case-insensitive.
-
-    Args:
-        value: A string with dynamic values in the form of "[[ DYNAMIC_VAR ]]".
-        kwargs: Any kwargs to inject into the string.
-
-    Returns:
-        str: String with all dynamic values replaced.
-    """
-    return _inject_with_matcher(value, double_bracket_matcher, **kwargs)
-
-
-def _inject_curly_braces_vars(value: str, **kwargs) -> str:
-    """Parse a string and replace any "{DYNAMIC_VAR}" with the respective values in the kwargs. case-insensitive.
-
-    Args:
-        path: A string with dynamic values in the form of "{DYNAMIC_VAR}".
-        kwargs: A mapping of values to replace in the path.
-
-    Returns:
-        str: The path with the dynamic values replaced with the respective values in the kwargs.
-    """
-    return _inject_with_matcher(value, curly_braces_matcher, **kwargs)
+    if value is None:
+        return value
+    to_check: str = str(value)
+    while _ := double_bracket_matcher.search(to_check):
+        raise InjectionError(f'Path is not fully injected: "{to_check!r}"')
+    while _ := curly_braces_matcher.search(to_check):
+        raise InjectionError(f'Path is not fully injected: "{to_check!r}"')
 
 
 def _inject_with_matcher(value: str, matcher, **kwargs) -> str:
