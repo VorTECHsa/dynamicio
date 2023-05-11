@@ -3,28 +3,21 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import Protocol, Tuple, Type
+from typing import Protocol, Type
 
 import pandas as pd
 from pandera import SchemaModel
 
 
-class IOConfig(Protocol):
-    """IOConfig Protocol."""
+class IOResource(Protocol):
+    """IOResource Protocol."""
 
-    def inject(self, **kwargs) -> "IOConfig":
+    def inject(self, **kwargs) -> "IOResource":
         """Inject variables. Immutable."""
         return deepcopy(self)
 
     def check_injections(self) -> None:
         """Check that all injections have been completed. Raise InjectionError if not."""
-
-
-class IOResource(Protocol):
-    """IOResource Protocol."""
-
-    def __init__(self, config: IOConfig, pa_schema: Type[SchemaModel] | None = None):
-        """Initialize the IO Resource."""
 
     def read(self) -> pd.DataFrame:
         """Read."""
@@ -33,38 +26,35 @@ class IOResource(Protocol):
         """Write."""
 
 
-BuildConfig = Tuple[Type[IOResource], IOConfig]
-
-
 class KeyedResource:
     """KeyedResource class for reading and writing based on a key and given configs and io."""
 
     def __init__(
         self,
-        keyed_build_configs: dict[str, BuildConfig],
+        keyed_resources: dict[str, IOResource],
         pa_schema: Type[SchemaModel] | None = None,
         default_key: str | None = None,
     ):
         """Initialize the KeyedResource."""
-        if len(keyed_build_configs) == 0:
-            raise ValueError("KeyedResource must have at least one build_config.")
-        self.keyed_build_configs = keyed_build_configs
+        if len(keyed_resources) == 0:
+            raise ValueError("KeyedResource must have at least one resource.")
+        self.keyed_build_configs = keyed_resources
         self.pa_schema = pa_schema
-        self.key = default_key or list(keyed_build_configs.keys())[0]
+        self.key = default_key or list(keyed_resources.keys())[0]
 
     def inject(self, **kwargs) -> "KeyedResource":
         """Inject variables into all configs. Immutable."""
         new = deepcopy(self)
-        for key, (resource, config) in new.keyed_build_configs.items():
-            new.keyed_build_configs[key] = (resource, config.inject(**kwargs))
+        for key, resource in new.keyed_build_configs.items():
+            new.keyed_build_configs[key] = resource.inject(**kwargs)
         return new
 
     def read(self) -> pd.DataFrame:
         """Read from the active key resource."""
-        resource, config = self.keyed_build_configs[self.key]
-        return resource(config, self.pa_schema).read()
+        resource = self.keyed_build_configs[self.key]
+        return resource.read()
 
     def write(self, df: pd.DataFrame) -> None:
         """Write to the active key resource."""
-        resource, config = self.keyed_build_configs[self.key]
-        return resource(config, self.pa_schema).write(df)
+        resource = self.keyed_build_configs[self.key]
+        return resource.write(df)

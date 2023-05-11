@@ -24,8 +24,8 @@ class CompressionType(str, Enum):
     ZSTD = "zstd"
 
 
-class KafkaConfig(BaseModel):
-    """Kafka Resource class.
+class KafkaResource(BaseModel):
+    """Kafka Resource.
 
     This class is used to write to Kafka topics. Reading is not yet supported.
     Only requires a `topic` and `server` to be initialized.
@@ -46,8 +46,9 @@ class KafkaConfig(BaseModel):
 
     compression_type: CompressionType = "snappy"  # type: ignore
     producer_kwargs: Dict[str, Any] = {}
+    pa_schema: Optional[Type[SchemaModel]] = None
 
-    def inject(self, **kwargs) -> "KafkaConfig":
+    def inject(self, **kwargs) -> "KafkaResource":
         """Inject variables into topic and server. Immutable."""
         clone = deepcopy(self)
         clone.topic = inject(clone.topic, **kwargs)
@@ -77,29 +78,19 @@ class KafkaConfig(BaseModel):
         arbitrary_types_allowed = True
         validate_assignment = True
 
-
-class KafkaResource:
-    """Kafka Resource."""
-
-    def __init__(self, config: KafkaConfig, pa_schema: Type[SchemaModel] | None = None):
-        """Initialize the Kafka Resource."""
-        config.check_injections()
-        self.config = config
-        self.pa_schema = pa_schema
-
     def write(self, df: pd.DataFrame) -> None:
         """Handles Write operations for Kafka."""
-        kafka_producer = self.config.get_kafka_producer()
+        kafka_producer = self.get_kafka_producer()
 
-        logger.info(f"Sending {len(df)} messages to Kafka topic:{self.config.topic}")
+        logger.info(f"Sending {len(df)} messages to Kafka topic:{self.topic}")
 
         messages = df.reset_index(drop=True).to_dict("records")
 
         for idx, message in zip(df.index.values, messages):
             kafka_producer.send(
-                self.config.topic,
-                key=self.config.key_generator(idx, message),
-                value=self.config.document_transformer(message),
+                self.topic,
+                key=self.key_generator(idx, message),
+                value=self.document_transformer(message),
             )  # type: ignore
 
         kafka_producer.flush()  # type: ignore

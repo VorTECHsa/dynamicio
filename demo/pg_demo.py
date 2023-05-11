@@ -19,9 +19,9 @@ DROP TABLE public.new_table;
 from pandera import SchemaModel
 from pandera.typing import Series
 
-from dynamicio import PostgresConfig, PostgresResource
+from dynamicio import PostgresResource
 
-config = PostgresConfig(
+resource = PostgresResource(
     db_user="",
     db_host="localhost",
     db_port=5432,
@@ -30,13 +30,13 @@ config = PostgresConfig(
     truncate_and_append=True,
 )
 
-df = PostgresResource(config).read()
+df = resource.read()
 print(df)
 
 df["test_col"] = 123
 
 
-PostgresResource(config).write(df)
+resource.write(df)
 
 
 class PGSchema(SchemaModel):
@@ -46,7 +46,15 @@ class PGSchema(SchemaModel):
         strict = "filter"
 
 
-df2 = PostgresResource(config, pa_schema=PGSchema).read()
+df2 = PostgresResource(
+    db_user="",
+    db_host="localhost",
+    db_port=5432,
+    db_name="",
+    table_name="new_table",
+    truncate_and_append=True,
+    pa_schema=PGSchema,
+).read()
 
 print(df2)
 

@@ -3,7 +3,7 @@ from unittest.mock import ANY, MagicMock, Mock, patch
 import pandas as pd
 import pytest
 
-from dynamicio import PostgresConfig, PostgresResource
+from dynamicio import PostgresResource
 from dynamicio.inject import InjectionError
 from dynamicio.io.postgres import ConfigurationError
 from tests import constants
@@ -12,9 +12,9 @@ from tests.resources.schemas import PgSampleSchema
 sample_path = f"{constants.TEST_RESOURCES}/data/input/pg_parquet_sample.parquet"
 
 
-@pytest.fixture
-def postgres_table_config() -> PostgresConfig:
-    return PostgresConfig(
+@pytest.fixture()
+def postgres_table_resource() -> PostgresResource:
+    return PostgresResource(
         db_user="test_user",
         db_host="test_host",
         db_port=1234,
@@ -25,13 +25,8 @@ def postgres_table_config() -> PostgresConfig:
 
 
 @pytest.fixture()
-def postgres_table_resource(postgres_table_config) -> PostgresResource:
-    return PostgresResource(postgres_table_config)
-
-
-@pytest.fixture()
 def postgres_query_resource() -> PostgresResource:
-    config = PostgresConfig(
+    return PostgresResource(
         db_user="test_user",
         db_host="test_host",
         db_port=1234,
@@ -39,7 +34,6 @@ def postgres_query_resource() -> PostgresResource:
         db_schema="republic",
         sql_query="SELECT * FROM other_table",
     )
-    return PostgresResource(config)
 
 
 @pytest.fixture
@@ -85,10 +79,16 @@ def test_postgres_resource_read(postgres_table_resource, postgres_df, read_sql_m
     pd.testing.assert_frame_equal(df, postgres_df)
 
 
-def test_postgres_resource_read_with_schema(
-    postgres_table_config, postgres_df, read_sql_mock, mocked_session, mock_binding
-):
-    resource = PostgresResource(postgres_table_config, pa_schema=PgSampleSchema)
+def test_postgres_resource_read_with_schema(postgres_df, read_sql_mock, mocked_session, mock_binding):
+    resource = PostgresResource(
+        db_user="test_user",
+        db_host="test_host",
+        db_port=1234,
+        db_name="test_db",
+        db_schema="republic",
+        table_name="test_table",
+        pa_schema=PgSampleSchema,
+    )
     df = resource.read()
     read_sql_mock.assert_called_once_with(sql="SELECT * FROM republic.test_table", con=mock_binding)
     pd.testing.assert_frame_equal(df, postgres_df)
@@ -135,7 +135,7 @@ def test_postgres_resource_write(
 def test_postgres_resource_write_truncate_and_append(
     postgres_table_resource, postgres_df, to_sql_mock, mocked_session, mock_binding, mock_cursor
 ):
-    postgres_table_resource.config.truncate_and_append = True
+    postgres_table_resource.truncate_and_append = True
     postgres_table_resource.write(postgres_df)
     mocked_session.execute.assert_called_once_with("TRUNCATE TABLE republic.test_table;")
     mock_cursor.execute.assert_called_once_with("SET search_path TO republic;")
@@ -143,7 +143,7 @@ def test_postgres_resource_write_truncate_and_append(
 
 
 def test_postgres_resource_inject_and_read(postgres_df, read_sql_mock, mocked_session, mock_binding):
-    config = PostgresConfig(
+    resource = PostgresResource(
         db_user="[[db_user]]",
         db_host="{db_host}",
         db_port=1234,
@@ -151,17 +151,16 @@ def test_postgres_resource_inject_and_read(postgres_df, read_sql_mock, mocked_se
         db_schema="[[republic]]",
         table_name="[[table]]",
     )
-    config = config.inject(
+    resource = resource.inject(
         db_user="test_user", db_host="test_host", db_name="test_db", table="test_table", republic="republic"
     )
-    resource = PostgresResource(config)
     df = resource.read()
     read_sql_mock.assert_called_once_with(sql="SELECT * FROM republic.test_table", con=mock_binding)
     pd.testing.assert_frame_equal(df, postgres_df)
 
 
 def test_postgres_resource_inject_and_read_query(postgres_df, read_sql_mock, mocked_session, mock_binding):
-    config = PostgresConfig(
+    resource = PostgresResource(
         db_user="[[db_user]]",
         db_host="{db_host}",
         db_port=1234,
@@ -169,10 +168,9 @@ def test_postgres_resource_inject_and_read_query(postgres_df, read_sql_mock, moc
         db_schema="[[republic]]",
         sql_query="SELECT * FROM [[republic]].[[table]]",
     )
-    config = config.inject(
+    resource = resource.inject(
         db_user="test_user", db_host="test_host", db_name="test_db", table="test_table", republic="republic"
     )
-    resource = PostgresResource(config)
     df = resource.read()
     read_sql_mock.assert_called_once_with(sql="SELECT * FROM republic.test_table", con=mock_binding)
     pd.testing.assert_frame_equal(df, postgres_df)
@@ -184,20 +182,20 @@ def test_postgres_resource_check_raises_on_incomplete_injection(
 ):
     args = {"db_user": "test_user", "db_host": "test_host", "db_name": "test_db", "table": "test_table"}
     args.pop(arg_to_miss_out)
-    config = PostgresConfig(
+    resource = PostgresResource(
         db_user="[[db_user]]",
         db_host="{db_host}",
         db_port=1234,
         db_name="that_{db_name}",
         table_name="[[table]]",
     )
-    config = config.inject(**args)
+    resource = resource.inject(**args)
     with pytest.raises(InjectionError):
-        config.check_injections()
+        resource.check_injections()
 
 
 def test_postgres_resource_raises_on_wrong_read_configuration(postgres_df, read_sql_mock, mocked_session, mock_binding):
-    config = PostgresConfig(
+    resource = PostgresResource(
         db_user="test_user",
         db_host="test_host",
         db_port=1234,
@@ -205,7 +203,6 @@ def test_postgres_resource_raises_on_wrong_read_configuration(postgres_df, read_
         table_name="test_table",
         sql_query="SELECT * FROM other_table",
     )
-    resource = PostgresResource(config)
     with pytest.raises(ConfigurationError):
         resource.read()
 
@@ -213,13 +210,12 @@ def test_postgres_resource_raises_on_wrong_read_configuration(postgres_df, read_
 def test_postgres_resource_raises_on_wrong_write_configuration(
     postgres_df, read_sql_mock, mocked_session, mock_binding, to_sql_mock, mock_cursor
 ):
-    config = PostgresConfig(
+    resource = PostgresResource(
         db_user="test_user",
         db_host="test_host",
         db_port=1234,
         db_name="test_db",
         sql_query="SELECT * FROM other_table",
     )
-    resource = PostgresResource(config)
     with pytest.raises(ConfigurationError):
         resource.write(postgres_df)

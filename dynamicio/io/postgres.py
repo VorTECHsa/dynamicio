@@ -47,7 +47,7 @@ class ConfigurationError(Exception):
     """Raised when configuration is wrong."""
 
 
-class PostgresConfig(BaseModel):
+class PostgresResource(BaseModel):
     """Postgres Resource class.
 
     This resource handles reading and writing to postgres databases. If a pa_schema has been given, it will
@@ -70,6 +70,7 @@ class PostgresConfig(BaseModel):
     )
     truncate_and_append: bool = False
     kwargs: Dict[str, Any] = {}
+    pa_schema: Optional[Type[SchemaModel]] = None
 
     @property
     def connection_string(self) -> str:
@@ -82,7 +83,7 @@ class PostgresConfig(BaseModel):
         """Return schema and table name in a format of schema.table_name."""
         return f"{self.db_schema}.{self.table_name}"
 
-    def inject(self, **kwargs) -> "PostgresConfig":
+    def inject(self, **kwargs) -> "PostgresResource":
         """Inject variables into stuff. Not in place."""
         clone = deepcopy(self)
         clone.db_user = inject(clone.db_user, **kwargs)
@@ -104,36 +105,29 @@ class PostgresConfig(BaseModel):
         check_injections(self.sql_query)
         check_injections(self.db_schema)
 
-
-class PostgresResource:
-    """Postgres Resource."""
-
-    def __init__(self, config: PostgresConfig, pa_schema: Type[SchemaModel] | None = None):
-        """Initialize the Postgres Resource."""
-        config.check_injections()
-        self.config = config
-        self.pa_schema = pa_schema
-
-    def read(self):
+    def read(self) -> pd.DataFrame:
         """Handles Read operations for Postgres."""
-        if not bool(self.config.sql_query) ^ bool(self.config.table_name):  # Xor
+        if not bool(self.sql_query) ^ bool(self.table_name):  # Xor
             raise ConfigurationError("PostgresResource must define EITHER sql_query OR table_name.")
 
-        if self.pa_schema is not None and (not self.config.sql_query and self.pa_schema.Config.strict):
+        if self.pa_schema is not None and (not self.sql_query and self.pa_schema.Config.strict):
             # filtering can now be done at sql level
             columns: List[str] = list(self.pa_schema.to_schema().columns.keys())  # type: ignore
             columns_str = ", ".join(columns)
-            sql_query = f"SELECT {columns_str} FROM {self.config.final_table_name}"
-        elif self.config.sql_query is None:
-            sql_query = f"SELECT * FROM {self.config.final_table_name}"
+            sql_query = f"SELECT {columns_str} FROM {self.final_table_name}"
+        elif self.sql_query is None:
+            sql_query = f"SELECT * FROM {self.final_table_name}"
         else:
-            sql_query = self.config.sql_query
+            sql_query = self.sql_query
 
-        logger.info(
-            f"Downloading table: {self.config.final_table_name} from: {self.config.db_host}:{self.config.db_name}"
-        )
-        with session_scope(self.config.connection_string) as session:
-            return pd.read_sql(sql=sql_query, con=session.get_bind(), **self.config.kwargs)
+        logger.info(f"Downloading table: {self.final_table_name} from: {self.db_host}:{self.db_name}")
+        with session_scope(self.connection_string) as session:
+            df = pd.read_sql(sql=sql_query, con=session.get_bind(), **self.kwargs)
+
+        if self.pa_schema is not None:
+            df = self.pa_schema.validate(df)
+
+        return df
 
         # TODO: sqlalchemy 2.0 breaks here
         #       session.get_bind() is probably the culprit
@@ -143,16 +137,17 @@ class PostgresResource:
 
     def write(self, df: pd.DataFrame):
         """Handles Write operations for Postgres."""
-        if not self.config.table_name:
+        if not self.table_name:
             raise ConfigurationError("PostgresResource must specify table_name for writing.")
 
-        with session_scope(self.config.connection_string) as session:
+        if schema := self.pa_schema:
+            df = schema.validate(df)  # type: ignore
+
+        with session_scope(self.connection_string) as session:
             session: SqlAlchemySession  # type: ignore # this is done for IDE purposes
-            if self.config.truncate_and_append:
-                logger.info(
-                    f"Writing to table (csv-hack): {self.config.final_table_name} from: {self.config.db_host}:{self.config.db_name}"
-                )
-                session.execute(f"TRUNCATE TABLE {self.config.final_table_name};")
+            if self.truncate_and_append:
+                logger.info(f"Writing to table (csv-hack): {self.final_table_name} from: {self.db_host}:{self.db_name}")
+                session.execute(f"TRUNCATE TABLE {self.final_table_name};")
 
                 # Speed hack: dump file as csv, use Postgres' CSV import function.
                 # https://stackoverflow.com/questions/2987433/how-to-import-csv-file-data-into-a-postgresql-table
@@ -170,16 +165,14 @@ class PostgresResource:
                     temp_file.seek(0)
 
                     cur = session.connection().connection.cursor()
-                    cur.execute(f"SET search_path TO {self.config.db_schema};")
-                    cur.copy_from(temp_file, self.config.table_name, columns=df.columns, null="")
+                    cur.execute(f"SET search_path TO {self.db_schema};")
+                    cur.copy_from(temp_file, self.table_name, columns=df.columns, null="")
             else:
-                logger.info(
-                    f"Writing to table: {self.config.final_table_name} from: {self.config.db_host}:{self.config.db_name}"
-                )
+                logger.info(f"Writing to table: {self.final_table_name} from: {self.db_host}:{self.db_name}")
                 df.to_sql(
-                    name=self.config.table_name,
+                    name=self.table_name,
                     con=session.get_bind(),
                     if_exists="replace",
                     index=False,
-                    schema=self.config.db_schema,
+                    schema=self.db_schema,
                 )

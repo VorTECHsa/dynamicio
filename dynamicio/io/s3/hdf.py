@@ -23,8 +23,8 @@ from dynamicio.io.s3.contexts import s3_named_file_reader, s3_reader, s3_writer
 hdf_lock = Lock()
 
 
-class S3HdfConfig(BaseModel):
-    """HDF Config."""
+class S3HdfResource(BaseModel):
+    """HDF Resource."""
 
     bucket: str
     path: Path
@@ -32,8 +32,9 @@ class S3HdfConfig(BaseModel):
     force_read_to_memory: bool = False
     read_kwargs: Dict[str, Any] = {}
     write_kwargs: Dict[str, Any] = {}
+    pa_schema: Optional[Type[SchemaModel]] = None
 
-    def inject(self, **kwargs) -> "S3HdfConfig":
+    def inject(self, **kwargs) -> "S3HdfResource":
         """Inject variables into path. Immutable."""
         clone = deepcopy(self)
         clone.bucket = inject(clone.bucket, **kwargs)
@@ -50,28 +51,16 @@ class S3HdfConfig(BaseModel):
         """Full path to the resource, including the bucket name."""
         return f"s3://{self.bucket}/{self.path}"
 
-
-class S3HdfResource:
-    """HDF Resource."""
-
-    def __init__(self, config: S3HdfConfig, pa_schema: Type[SchemaModel] | None = None):
-        """Initialize the HDF Resource."""
-        config.check_injections()
-        self.config = config
-        self.pa_schema = pa_schema
-
     def read(self) -> pd.DataFrame:
         """Read HDF from S3."""
         df = None
-        if self.config.force_read_to_memory:
-            with s3_reader(boto3.client("s3"), s3_bucket=self.config.bucket, s3_key=str(self.config.path)) as fobj:  # type: ignore
+        if self.force_read_to_memory:
+            with s3_reader(boto3.client("s3"), s3_bucket=self.bucket, s3_key=str(self.path)) as fobj:  # type: ignore
                 df = HdfIO().load(fobj)
         if df is None:
-            with s3_named_file_reader(
-                boto3.client("s3"), s3_bucket=self.config.bucket, s3_key=str(self.config.path)
-            ) as target_file:
+            with s3_named_file_reader(boto3.client("s3"), s3_bucket=self.bucket, s3_key=str(self.path)) as target_file:
                 with hdf_lock:
-                    df = pd.read_hdf(target_file.name, **self.config.read_kwargs)  # type: ignore
+                    df = pd.read_hdf(target_file.name, **self.read_kwargs)  # type: ignore
 
         if schema := self.pa_schema:
             df = schema.validate(df)  # type: ignore
@@ -83,10 +72,10 @@ class S3HdfResource:
         if schema := self.pa_schema:
             df = schema.validate(df)  # type: ignore
 
-        with s3_writer(
-            boto3.client("s3"), s3_bucket=self.config.bucket, s3_key=str(self.config.path)
-        ) as fobj, utils.pickle_protocol(protocol=self.config.pickle_protocol):
-            HdfIO().save(df, fobj, **self.config.write_kwargs)
+        with s3_writer(boto3.client("s3"), s3_bucket=self.bucket, s3_key=str(self.path)) as fobj, utils.pickle_protocol(
+            protocol=self.pickle_protocol
+        ):
+            HdfIO().save(df, fobj, **self.write_kwargs)
 
 
 class InMemStore(pd.io.pytables.HDFStore):

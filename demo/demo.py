@@ -5,14 +5,13 @@ from pathlib import Path
 from pandera import SchemaModel
 from pandera.typing import Series
 
-from dynamicio import ParquetConfig, ParquetResource
+from dynamicio import ParquetResource
 
 DEMO_DIR = Path(__file__).parent
 
-config = ParquetConfig(path=DEMO_DIR / "data/[[directory]]/{filename}.parquet")
-config = config.inject(directory="input", filename="bar")
-resource_without_schema = ParquetResource(config)
-df_without_schema = resource_without_schema.read()
+resource = ParquetResource(path=DEMO_DIR / "data/[[directory]]/{filename}.parquet")
+resource = resource.inject(directory="input", filename="bar")
+df_without_schema = resource.read()
 
 print(df_without_schema)
 
@@ -27,7 +26,9 @@ class OneFilteredColumnSchema(SchemaModel):
         strict = "filter"  # this will filter out column_d from the raw data
 
 
-resource_with_schema = ParquetResource(config, pa_schema=OneFilteredColumnSchema)
+resource_with_schema = ParquetResource(
+    path=DEMO_DIR / "data/[[directory]]/{filename}.parquet", pa_schema=OneFilteredColumnSchema
+).inject(directory="input", filename="bar")
 df_with_schema = resource_with_schema.read()
 
 print(df_with_schema)

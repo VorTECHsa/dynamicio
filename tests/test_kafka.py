@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from dynamicio import KafkaConfig, KafkaResource
+from dynamicio import KafkaResource
 
 
 @pytest.fixture
@@ -17,8 +17,7 @@ def mocked_kafka_producer():
 
 @pytest.fixture
 def kafka_resource() -> KafkaResource:
-    config = KafkaConfig(topic="test_topic", server="test_server")
-    return KafkaResource(config)
+    return KafkaResource(topic="test_topic", server="test_server")
 
 
 def test_kafka_resource_write(sample_df, kafka_resource, mocked_kafka_producer):
