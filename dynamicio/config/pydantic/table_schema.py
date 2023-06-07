@@ -42,6 +42,7 @@ class SchemaColumn(pydantic.BaseModel):
 
     @pydantic.validator("data_type")
     def is_valid_pandas_type(cls, field):
+        """Checks that the data_type is understood by pandas."""
         pandas_dtype(field)
         return field
 
