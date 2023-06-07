@@ -147,12 +147,12 @@ class TestIOConfig:
         # Then
 
         assert schema_dict == {
-            "column_a": "ColumnType.object",
-            "column_b": "ColumnType.object",
-            "column_c": "ColumnType.float64",
-            "column_d": "ColumnType.float64",
-            "0": "ColumnType.object",
-            "1": "ColumnType.object",
+            "column_a": "object",
+            "column_b": "object",
+            "column_c": "float64",
+            "column_d": "float64",
+            "0": "object",
+            "1": "object",
         }
 
 

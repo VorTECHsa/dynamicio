@@ -6,6 +6,7 @@ import enum
 from typing import Mapping, Sequence
 
 import pydantic
+from pandas.core.dtypes.common import pandas_dtype
 
 
 @enum.unique
@@ -23,46 +24,6 @@ class MetricsName(str, enum.Enum):
     unique_counts = "UniqueCounts"
 
 
-@enum.unique
-class ColumnType(str, enum.Enum):
-    """The list of valid column types."""
-
-    # pylint: disable=invalid-name
-    object = "object"
-    string = "string"
-    array = "array"
-    number = "number"
-
-    float = "float"
-    float32 = "float32"
-    float64 = "float64"
-    double = "double"
-
-    int = "int"
-    integer = "integer"
-
-    int8 = "int8"
-    int32 = "int32"
-    int64 = "int64"
-
-    Int8 = "Int8"
-    Int32 = "Int32"
-    Int64 = "Int64"
-
-    uint8 = "uint8"
-    uint32 = "uint32"
-    uint64 = "uint64"
-
-    bool = "bool"
-    boolean = "boolean"
-
-    datetime64_ns = "datetime64[ns]"
-    datetime64_ns_utc = "datetime64[ns,UTC]"
-    datetime64_ms = "datetime64[ms]"
-
-    timedelta64_ns = "timedelta64[ns]"
-
-
 class ColumnValidationBase(pydantic.BaseModel):
     """A single column validator."""
 
@@ -75,9 +36,15 @@ class SchemaColumn(pydantic.BaseModel):
     """Definition os a single data source column."""
 
     name: str
-    data_type: ColumnType = pydantic.Field(alias="type")
+    data_type: str = pydantic.Field(alias="type")
     validations: Sequence[ColumnValidationBase] = pydantic.Field(default_factory=list)
     metrics: Sequence[MetricsName] = ()
+
+    @pydantic.validator("data_type")
+    def is_valid_pandas_type(cls, field):
+        """Checks that the data_type is understood by pandas."""
+        pandas_dtype(field)
+        return field
 
     @pydantic.validator("validations", pre=True)
     def remap_validations(cls, field):
