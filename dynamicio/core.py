@@ -278,8 +278,13 @@ class DynamicDataIO:
             bool - `True` if `df` has the given dtypes, `False` otherwise
         """
         dtypes = df.dtypes
+        cols_to_validate = [self.schema.columns[c] for c in self.options.get("columns", self.schema.column_names) if c in self.schema.column_names]
 
-        for col_info in self.schema.columns.values():
+        if len(cols_to_validate) < len(self.options.get("columns", [])):
+            logger.exception(f"Some of the columns passed {self.options['columns']} do not belong to the schema")
+            return False
+
+        for col_info in cols_to_validate:
             column_name = col_info.name
             expected_dtype = col_info.data_type
             found_dtype = dtypes[column_name].name
