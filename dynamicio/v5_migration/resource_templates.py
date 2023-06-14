@@ -1,6 +1,10 @@
-from dataclasses import dataclass
+# pylint: skip-file
+# noqa
+# type: ignore
 
-import yaml
+from __future__ import annotations
+
+from dataclasses import dataclass
 
 
 @dataclass
@@ -16,7 +20,10 @@ class KeyedResourceTemplate:
 """
 
     def render_template(self) -> str:
-        return self.template.format(resource_name=self.resource_name, resources="\n".join([resource.render_own_resource() for resource in self.resources]))
+        return self.template.format(
+            resource_name=self.resource_name,
+            resources="\n".join([resource.render_own_resource() for resource in self.resources]),
+        )
 
 
 @dataclass
@@ -127,37 +134,3 @@ class Postgres:
             f"\t\t\tpa_schema=None, \n"
             f"\t\t),"
         )
-
-
-def parse_resource_configs(parsed_yaml_entry: dict[str, str]) -> list:
-    resource_configs = []
-
-    for key, val in parsed_yaml_entry.items():
-        if key == "schema":
-            continue
-
-        for resource_type in resource_types:
-            if resource_type.is_dict_parseable(val):
-                resource_configs.append(resource_type.from_dict(val, key.lower()))
-
-    return resource_configs
-
-
-# Execute script
-resource_types = [S3ParquetFileType, LocalParquetFileType, Kafka, Postgres]
-
-# Point to resource definitions
-parsed_yaml = yaml.safe_load("./test.yaml")
-
-# Write this output to file
-keyed_templates = []
-
-for resource_key, resource_value in parsed_yaml.items():
-    resource_name = f"{resource_key.lower()}_resource"
-
-    keyed_template = KeyedResourceTemplate(
-        resources=parse_resource_configs(parsed_yaml[resource_key]),
-        resource_name=f"{resource_name}",
-    )
-
-    keyed_templates.append(keyed_template)

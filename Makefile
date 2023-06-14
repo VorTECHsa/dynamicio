@@ -27,9 +27,6 @@ check-linting:
 	@python -m yamllint -v ${CODE_DIR}
 	@python -m mypy ${CODE_DIR}
 
-check-docstring:
-	@${VENV_BIN_PATH}/pydocstyle -e --count $(file)
-
 create-jupyter-kernel:
 	@${VENV_BIN_PATH}/pip install ipykernel
 	@${VENV_BIN_PATH}/ipython kernel install --user --name=${VIRTUALENV_NAME}
