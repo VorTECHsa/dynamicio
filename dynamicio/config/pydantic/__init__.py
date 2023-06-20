@@ -10,4 +10,4 @@ from dynamicio.config.pydantic.io_resources import (
     S3DataEnvironment,
     S3PathPrefixEnvironment,
 )
-from dynamicio.config.pydantic.table_schema import DataframeSchema
+from dynamicio.config.pydantic.table_schema import DataframeSchema, SchemaColumn
