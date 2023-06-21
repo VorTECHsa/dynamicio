@@ -137,7 +137,7 @@ class WithLocal:
         Returns:
             DataFrame: The dataframe read from the parquet file.
         """
-        options["columns"] = list(schema.column_names)
+        options["columns"] = options.get("columns", list(schema.column_names))
 
         if options.get("engine") == "fastparquet":
             return WithLocal.__read_with_fastparquet(file_path, **options)

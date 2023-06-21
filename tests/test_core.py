@@ -776,20 +776,53 @@ class TestCoreIO:
         assert getattr(caplog.records[0], "message") == "Expected: 'float64' dtype for READ_S3_DATA_WITH_FALSE_TYPES['id]', found 'int64'"
 
     @pytest.mark.unit
-    def test_options_are_read_from_code(self):
-
-        # Given
-        s3_parquet_local_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
-            env_identifier="LOCAL",
-            dynamic_vars=constants,
-        ).get(source_key="S3_PARQUET_WITH_OPTIONS_IN_CODE")
-
+    def test_options_are_read_from_code(self, s3_parquet_local_config):
         # When
         config_io = ReadS3ParquetIO(source_config=s3_parquet_local_config, option_1=False, option_2=True)
 
         # Then
         assert config_io.options == {"option_1": False, "option_2": True}
+
+    @pytest.mark.unit
+    def test_columns_options_is_passed_to_parquet_read(self, s3_parquet_local_config):
+        with patch("dynamicio.mixins.with_local.pd.read_parquet") as mocked_call:
+            # Given
+            reader = ReadS3ParquetIO(source_config=s3_parquet_local_config, columns=["bar"])
+
+            # When
+            reader.read()
+            kwargs_values = mocked_call.call_args.kwargs
+
+            # Then
+            assert "columns" in kwargs_values
+            assert kwargs_values["columns"] == ["bar"]
+
+    @pytest.mark.unit
+    def test_schema_columns_are_used_as_default_in_parquet_read(self, s3_parquet_local_config):
+        with patch("dynamicio.mixins.with_local.pd.read_parquet") as mocked_call:
+            # Given
+            reader = ReadS3ParquetIO(source_config=s3_parquet_local_config)
+
+            # When
+            reader.read()
+            kwargs_values = mocked_call.call_args.kwargs
+
+            # Then
+            assert "columns" in kwargs_values
+            assert kwargs_values["columns"] == ["id", "foo_name", "bar"]
+
+    @pytest.mark.unit
+    def test_columns_options_with_names_missing_from_schema_fails(self, s3_parquet_local_config):
+        with patch("dynamicio.mixins.with_local.pd.read_parquet"):
+
+            # Given
+            reader = ReadS3ParquetIO(source_config=s3_parquet_local_config, columns=["bar", "column_missing_from_schema"])
+
+            # When
+            with pytest.raises(ColumnsDataTypeError):
+
+                # Then
+                reader.read()
 
     @pytest.mark.unit
     def test_options_are_read_from_resource_definition(self):

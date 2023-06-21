@@ -6,14 +6,14 @@ import asyncio
 import inspect
 import re
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Mapping, MutableMapping, Optional
+from typing import Any, List, Mapping, MutableMapping, Optional, Tuple
 
 import pandas as pd  # type: ignore
 import pydantic
 from magic_logger import logger
 
 from dynamicio import validations
-from dynamicio.config.pydantic import DataframeSchema, IOEnvironment
+from dynamicio.config.pydantic import DataframeSchema, IOEnvironment, SchemaColumn
 from dynamicio.errors import CASTING_WARNING_MSG, ColumnsDataTypeError, NOTICE_MSG, SchemaNotFoundError, SchemaValidationError
 from dynamicio.metrics import get_metric
 
@@ -279,7 +279,12 @@ class DynamicDataIO:
         """
         dtypes = df.dtypes
 
-        for col_info in self.schema.columns.values():
+        cols_allowed, cols_not_allowed = self._split_columns_to_validate_between_allowed_and_not(columns_to_validate=self.options.get("columns", self.schema.column_names))
+        if cols_not_allowed:
+            logger.exception(f"The columns passed: {cols_not_allowed} do not belong to the schema")
+            return False
+
+        for col_info in cols_allowed:
             column_name = col_info.name
             expected_dtype = col_info.data_type
             found_dtype = dtypes[column_name].name
@@ -295,6 +300,16 @@ class DynamicDataIO:
                     logger.exception(f"ValueError: Tried casting column {self.name}['{column_name}'] to '{expected_dtype}' from '{found_dtype}', but failed")
                     return False
         return True
+
+    def _split_columns_to_validate_between_allowed_and_not(self, columns_to_validate: List[str]) -> Tuple[List[SchemaColumn], List[str]]:
+        not_allowed_cols, allowed_cols = [], []
+        for col in columns_to_validate:
+            col_from_schema = self.schema.columns.get(col)
+            if col_from_schema:
+                allowed_cols.append(col_from_schema)
+            else:
+                not_allowed_cols.append(col)
+        return allowed_cols, not_allowed_cols
 
     @staticmethod
     def _get_options(options_from_code: MutableMapping[str, Any], options_from_resource_definition: Optional[Mapping[str, Any]]) -> MutableMapping[str, Any]:

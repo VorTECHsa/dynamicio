@@ -10,6 +10,7 @@ import pandas as pd
 import pytest
 
 from dynamicio import WithS3PathPrefix
+from dynamicio.config import IOConfig
 from tests import constants
 from tests.mocking.models import ERModel
 
@@ -911,3 +912,12 @@ def mock_parquet_temporary_directory_w_empty_files():
     with patch.object(tempfile, "TemporaryDirectory") as mock:
         mock.return_value.__enter__.return_value = os.path.join(constants.TEST_RESOURCES, "data/input/batch/parquet_w_empty_files")
         yield mock
+
+
+@pytest.fixture
+def s3_parquet_local_config():
+    return IOConfig(
+        path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+        env_identifier="LOCAL",
+        dynamic_vars=constants,
+    ).get(source_key="S3_PARQUET_WITH_OPTIONS_IN_CODE")
