@@ -6,12 +6,15 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from pathlib import Path
 from string import ascii_lowercase, digits
 
-import yaml
+schema_import_str = """from datetime import datetime
 
-schema_import_str = ""
+import pandera as pa
+from pandera import SchemaModel
+from pandera.typing import Series
+
+"""
 
 _numpy_type_to_pandera_mapping = {
     r"object": "str",
@@ -22,11 +25,20 @@ _numpy_type_to_pandera_mapping = {
 }
 
 
-def convert_single_schema_file(file_path: Path) -> str:
-    yaml_schema = yaml.safe_load(file_path)
+def is_schema_dict(yaml_schema: dict) -> bool:
+    if "columns" not in yaml_schema:
+        return False
+    for name, info in yaml_schema["columns"].items():
+        if not isinstance(name, str):
+            return False
+        if "type" not in info:
+            return False
+    return True
 
-    name = yaml_schema["name"]
-    columns = _collect_columns(yaml_schema)
+
+def convert_single_schema_file(yaml_contents: dict) -> str:
+    name = yaml_contents["name"]
+    columns = _collect_columns(yaml_contents)
 
     schema_class = SchemaClass(name=name, columns=columns)
 
