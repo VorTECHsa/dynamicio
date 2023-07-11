@@ -27,6 +27,7 @@ class HdfResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):
     read_kwargs: Dict[str, Any] = {}
     write_kwargs: Dict[str, Any] = {}
     pa_schema: Optional[Type[SchemaModel]] = None
+    test_path: Optional[Path] = None
 
     def inject(self, **kwargs) -> "HdfResource":
         """Inject variables into path. Immutable."""

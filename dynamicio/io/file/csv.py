@@ -22,6 +22,7 @@ class CsvResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):
     read_kwargs: Dict[str, Any] = {}
     write_kwargs: Dict[str, Any] = {"index": False}
     pa_schema: Optional[Type[SchemaModel]] = None
+    test_path: Optional[Path] = None
 
     def inject(self, **kwargs) -> "CsvResource":
         """Inject variables into path. Immutable."""
