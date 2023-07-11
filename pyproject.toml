@@ -30,7 +30,3 @@ exclude = '''
     ]
     addopts = "-p no:warnings"
     log_cli = false
-
-[tool.pydocstyle]
-convention = 'google'
-add_ignore = 'D103' # Ignore missing docstring in public function
