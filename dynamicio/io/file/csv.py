@@ -9,11 +9,13 @@ from typing import Any, Dict, Optional, Type
 import pandas as pd
 from pandera import SchemaModel
 from pydantic import BaseModel  # type: ignore
+from uhura import Readable, Writable
 
 from dynamicio.inject import check_injections, inject
+from dynamicio.serde import CsvSerde
 
 
-class CsvResource(BaseModel):
+class CsvResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):
     """CSV Resource."""
 
     path: Path
@@ -34,13 +36,24 @@ class CsvResource(BaseModel):
     def read(self) -> pd.DataFrame:
         """Read the CSV file."""
         df = pd.read_csv(self.path, **self.read_kwargs)
-        if schema := self.pa_schema:
-            df = schema.validate(df)
+        df = self.validate(df)
         return df
 
     def write(self, df: pd.DataFrame) -> None:
         """Write the CSV file."""
-        if schema := self.pa_schema:
-            df = schema.validate(df)  # type: ignore
+        df = self.validate(df)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(self.path, **self.write_kwargs)
+
+    def validate(self, df: pd.DataFrame) -> pd.DataFrame:
+        if schema := self.pa_schema:
+            df = schema.validate(df)
+        return df
+
+    def cache_key(self):
+        if self.test_path:
+            return str(self.test_path)
+        return f"file/{self.path}"
+
+    def get_serde(self):
+        return CsvSerde(self.read_kwargs, self.write_kwargs, self.validate)

@@ -10,14 +10,16 @@ from typing import Any, Dict, Optional, Type
 import pandas as pd
 from pandera import SchemaModel
 from pydantic import BaseModel, Field
+from uhura import Readable, Writable
 
 from dynamicio import utils
 from dynamicio.inject import check_injections, inject
+from dynamicio.serde import HdfSerde
 
 hdf_lock = Lock()
 
 
-class HdfResource(BaseModel):
+class HdfResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):
     """HDF Resource."""
 
     path: Path
@@ -40,15 +42,25 @@ class HdfResource(BaseModel):
         """Read the HDF file."""
         with hdf_lock:
             df = pd.read_hdf(self.path, **self.read_kwargs)
-        if schema := self.pa_schema:
-            df = schema.validate(df)
+        df = self.validate(df)
         return df
 
     def write(self, df: pd.DataFrame) -> None:
         """Write the HDF file."""
-        if schema := self.pa_schema:
-            df = schema.validate(df)  # type: ignore
+        df = self.validate(df)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-
         with utils.pickle_protocol(protocol=self.pickle_protocol), hdf_lock:
             df.to_hdf(self.path, key="df", mode="w", **self.write_kwargs)
+
+    def validate(self, df: pd.DataFrame) -> pd.DataFrame:
+        if schema := self.pa_schema:
+            df = schema.validate(df)
+        return df
+
+    def cache_key(self):
+        if self.test_path:
+            return str(self.test_path)
+        return f"file/{self.path}"
+
+    def get_serde(self):
+        return HdfSerde(self.read_kwargs, self.write_kwargs, self.validate, self.pickle_protocol)

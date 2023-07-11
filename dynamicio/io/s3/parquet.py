@@ -10,12 +10,13 @@ import boto3  # type: ignore
 import pandas as pd
 from pandera import SchemaModel
 from pydantic import BaseModel  # type: ignore
+from uhura import Readable, Writable
 
 from dynamicio.inject import check_injections, inject
 from dynamicio.io.s3.contexts import s3_named_file_reader
 
 
-class S3ParquetResource(BaseModel):
+class S3ParquetResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):
     """S3 PARQUET Resource."""
 
     bucket: str
@@ -24,6 +25,7 @@ class S3ParquetResource(BaseModel):
     read_kwargs: Dict[str, Any] = {}
     write_kwargs: Dict[str, Any] = {}
     pa_schema: Optional[Type[SchemaModel]] = None
+    test_path: Optional[Path] = None
 
     def inject(self, **kwargs) -> "S3ParquetResource":
         """Inject variables into path. Immutable."""
@@ -41,6 +43,11 @@ class S3ParquetResource(BaseModel):
     def full_path(self) -> str:
         """Full path to the resource, including the bucket name."""
         return f"s3://{self.bucket}/{self.path}"
+
+    def cache_key(self):
+        if self.test_path:
+            return str(self.test_path)
+        return f"s3/{self.bucket}/{self.path}"
 
     def read(self) -> pd.DataFrame:
         """Read PARQUET from S3."""
