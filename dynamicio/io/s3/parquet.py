@@ -14,6 +14,7 @@ from uhura import Readable, Writable
 
 from dynamicio.inject import check_injections, inject
 from dynamicio.io.s3.contexts import s3_named_file_reader
+from dynamicio.serde import ParquetSerde
 
 
 class S3ParquetResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):
@@ -47,7 +48,7 @@ class S3ParquetResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame
     def cache_key(self):
         if self.test_path:
             return str(self.test_path)
-        return f"s3/{self.bucket}/{self.path}"
+        return f"s3/{self.bucket}/{self.bucket}/{self.path}"
 
     def read(self) -> pd.DataFrame:
         """Read PARQUET from S3."""
@@ -60,13 +61,23 @@ class S3ParquetResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame
             with s3_named_file_reader(boto3.client("s3"), s3_bucket=self.bucket, s3_key=str(self.path)) as target_file:
                 df = pd.read_parquet(target_file.name, **self.read_kwargs)  # type: ignore
 
-        if schema := self.pa_schema:
-            df = schema.validate(df)  # type: ignore
-
+        df = self.validate(df)
         return df
 
     def write(self, df: pd.DataFrame) -> None:
         """Write PARQUET to S3."""
+        df = self.validate(df)
+        df.to_parquet(self.full_path, **self.write_kwargs)
+
+    def validate(self, df: pd.DataFrame) -> pd.DataFrame:
         if schema := self.pa_schema:
             df = schema.validate(df)  # type: ignore
-        df.to_parquet(self.full_path, **self.write_kwargs)
+        return df
+
+    def cache_key(self):
+        if self.test_path:
+            return str(self.test_path)
+        return f"s3/{self.bucket}/{self.path}"
+
+    def get_serde(self):
+        return ParquetSerde(self.read_kwargs, self.write_kwargs, self.validate)

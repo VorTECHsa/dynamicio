@@ -14,16 +14,19 @@ import boto3  # type: ignore
 import pandas as pd  # type: ignore
 import tables  # type: ignore
 from pandera import SchemaModel
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
+from pydantic.fields import Field
+from uhura.modes import Readable, Writable
 
 from dynamicio import utils
 from dynamicio.inject import check_injections, inject
 from dynamicio.io.s3.contexts import s3_named_file_reader, s3_reader, s3_writer
+from dynamicio.serde import HdfSerde
 
 hdf_lock = Lock()
 
 
-class S3HdfResource(BaseModel):
+class S3HdfResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):
     """HDF Resource."""
 
     bucket: str
@@ -33,6 +36,7 @@ class S3HdfResource(BaseModel):
     read_kwargs: Dict[str, Any] = {}
     write_kwargs: Dict[str, Any] = {}
     pa_schema: Optional[Type[SchemaModel]] = None
+    test_path: Optional[Path] = None
 
     def inject(self, **kwargs) -> "S3HdfResource":
         """Inject variables into path. Immutable."""
@@ -62,20 +66,30 @@ class S3HdfResource(BaseModel):
                 with hdf_lock:
                     df = pd.read_hdf(target_file.name, **self.read_kwargs)  # type: ignore
 
-        if schema := self.pa_schema:
-            df = schema.validate(df)  # type: ignore
-
+        df = self.validate(df)
         return df
 
     def write(self, df: pd.DataFrame) -> None:
         """Write HDF to s3."""
-        if schema := self.pa_schema:
-            df = schema.validate(df)  # type: ignore
+        df = self.validate(df)
 
         with s3_writer(boto3.client("s3"), s3_bucket=self.bucket, s3_key=str(self.path)) as fobj, utils.pickle_protocol(
             protocol=self.pickle_protocol
         ):
             HdfIO().save(df, fobj, **self.write_kwargs)
+
+    def validate(self, df: pd.DataFrame) -> pd.DataFrame:
+        if schema := self.pa_schema:
+            df = schema.validate(df)
+        return df
+
+    def cache_key(self):
+        if self.test_path:
+            return str(self.test_path)
+        return f"s3/{self.bucket}/{self.path}"
+
+    def get_serde(self):
+        return HdfSerde(self.read_kwargs, self.write_kwargs, self.validate, self.pickle_protocol)
 
 
 class InMemStore(pd.io.pytables.HDFStore):
