@@ -88,7 +88,7 @@ hdf_lock = Lock()
 
 
 class HdfSerde(Serde[pd.DataFrame]):
-    file_extension = ".hdf"  # Used in cache key
+    file_extension = ".h5"  # Used in cache key
     read_kwargs: Dict[str, Any] = {}
     write_kwargs: Dict[str, Any] = {}
     validation_callback: Callable[[pd.DataFrame], pd.DataFrame]
