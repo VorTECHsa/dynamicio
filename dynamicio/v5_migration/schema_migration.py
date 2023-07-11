@@ -122,7 +122,7 @@ class {class_name}(SchemaModel):
         return normalized_class_name
 
     def render_template(self) -> str:
-        rendered_columns = "\n".join(["\t" + col.render_template() for col in self.columns])
+        rendered_columns = "\n".join(["    " + col.render_template() for col in self.columns])
 
         return self.template.format(
             class_name=f"{self._python_normalize()}Schema",

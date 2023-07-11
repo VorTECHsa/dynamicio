@@ -25,8 +25,14 @@ app = typer.Typer()
 @app.command()
 def convert_everything(source: Path, destination: Path):
     """Converts every item as far as possible. Paths can be dirs or files."""
+    schemas_source_destination, schemas_to_be_written = gather_schema_migration_actions(source, destination)
+    resources_source_destination, resources_to_be_written = gather_resource_migration_actions(source, destination)
 
-    typer.confirm(f"Found {0} items. Proceed?")
+    source_destination_pairs = schemas_source_destination + resources_source_destination
+    files_to_be_written = schemas_to_be_written + resources_to_be_written
+
+    confirm_migration_actions(source_destination_pairs, files_to_be_written)
+    write_files(files_to_be_written)
 
 
 @dataclass
@@ -43,38 +49,59 @@ class FilesToBeWritten:
 
 @app.command()
 def convert_resources(source: Path, destination: Path):
-    """Converts only resource yamls"""
-
-    source_content, source_path = handle_source_path(source)
-
-    source_content = {source: contents for source, contents in source_content.items() if is_resource_dict(contents)}
-
-    source_destination_pairs: list[SourceDestinationPair]
-    files_to_be_written: list[FilesToBeWritten]
-    source_destination_pairs, files_to_be_written = generate_source_destination_actions(
-        source_path, source_content, destination, resources_import_str, convert_single_resource_file
-    )
+    """Converts only resource yamls."""
+    files_to_be_written, source_destination_pairs = gather_resource_migration_actions(destination, source)
 
     confirm_migration_actions(source_destination_pairs, files_to_be_written)
     write_files(files_to_be_written)
 
 
+def gather_resource_migration_actions(source: Path, destination: Path):
+    source_content, source_path = handle_source_path(source)
+    source_content = {source: contents for source, contents in source_content.items() if is_resource_dict(contents)}
+    source_destination_pairs: list[SourceDestinationPair]
+    files_to_be_written: list[FilesToBeWritten]
+    source_destination_pairs, files_to_be_written = generate_source_destination_actions(
+        source_path,
+        source_content,
+        destination,
+        resources_import_str,
+        convert_single_resource_file,
+    )
+    return source_destination_pairs, files_to_be_written
+
+
 @app.command()
 def convert_schemas(source: Path, destination: Path):
-    """Converts only schemas"""
+    """Converts only schemas."""
+    source_destination_pairs, files_to_be_written = gather_schema_migration_actions(source, destination)
+
+    confirm_migration_actions(source_destination_pairs, files_to_be_written)
+    write_files(files_to_be_written)
+
+
+def gather_schema_migration_actions(
+    source: Path, destination: Path
+) -> tuple[list[SourceDestinationPair], list[FilesToBeWritten]]:
+    """Gathers the source destination pairs and files to be written."""
 
     source_content, source_path = handle_source_path(source)
-
     source_content = {source: contents for source, contents in source_content.items() if is_schema_dict(contents)}
 
     source_destination_pairs: list[SourceDestinationPair]
     files_to_be_written: list[FilesToBeWritten]
     source_destination_pairs, files_to_be_written = generate_source_destination_actions(
-        source_path, source_content, destination, schema_import_str, convert_single_schema_file
+        source_path,
+        source_content,
+        destination,
+        schema_import_str,
+        convert_single_schema_file,
     )
 
-    confirm_migration_actions(source_destination_pairs, files_to_be_written)
-    write_files(files_to_be_written)
+    return source_destination_pairs, files_to_be_written
+
+
+#  ------------------
 
 
 def generate_source_destination_actions(
@@ -141,7 +168,8 @@ def write_files(files_to_be_written: list[FilesToBeWritten]):
 
 
 def confirm_migration_actions(
-    source_destination_pairs: list[SourceDestinationPair], files_to_be_written: list[FilesToBeWritten]
+    source_destination_pairs: list[SourceDestinationPair],
+    files_to_be_written: list[FilesToBeWritten],
 ):
     """Confirms the migration actions."""
     rich_print(f"[bold red]Found [green]{len(source_destination_pairs)}[/green] source destination pairs:[/bold red]")
