@@ -100,10 +100,28 @@ class HasUniqueValues(Validation):
         return "unique=True"
 
 
+@dataclass
+class IsGreaterThan(Validation):
+    threshold: float
+    template: str = "ge={threshold}"
+
+    @staticmethod
+    def is_matched(validation_name: str) -> bool:
+        return validation_name == "is_greater_than"
+
+    @classmethod
+    def parse_from_dict(cls, candidate: dict[str, Any]) -> "IsGreaterThan":
+        return cls(threshold=candidate["options"]["threshold"])
+
+    def render_own_template(self) -> str:
+        return self.template.format(threshold=self.threshold)
+
+
 _supported_validations = [
     HasNoNulls,
     IsIn,
     HasUniqueValues,
+    IsGreaterThan,
 ]
 
 
