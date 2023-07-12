@@ -182,4 +182,4 @@ def confirm_migration_actions(
         loc = write_file.target_content.count("\n")
         rich_print(f"[bold blue] - [/bold blue]{write_file.target_file} - ({loc} lines of code.)")
 
-    typer.confirm("\nProceed writing?")
+    typer.confirm("\nProceed writing?", abort=True)
