@@ -28,6 +28,7 @@ class JsonResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):
         """Inject variables into path. Immutable."""
         clone = deepcopy(self)
         clone.path = inject(clone.path, **kwargs)
+        clone.test_path = inject(clone.test_path, **kwargs)
         return clone
 
     def check_injections(self) -> None:
@@ -36,12 +37,14 @@ class JsonResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):
 
     def read(self) -> pd.DataFrame:
         """Read the JSON file."""
+        self.check_injections()
         df = pd.read_json(self.path, **self.read_kwargs)
         df = self.validate(df)
         return df
 
     def write(self, df: pd.DataFrame) -> None:
         """Write the JSON file."""
+        self.check_injections()
         df = self.validate(df)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         df.to_json(self.path, **self.write_kwargs)

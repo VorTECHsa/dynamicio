@@ -33,6 +33,7 @@ class HdfResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):
         """Inject variables into path. Immutable."""
         clone = deepcopy(self)
         clone.path = inject(clone.path, **kwargs)
+        clone.test_path = inject(clone.test_path, **kwargs)
         return clone
 
     def check_injections(self) -> None:
@@ -41,6 +42,7 @@ class HdfResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):
 
     def read(self) -> pd.DataFrame:
         """Read the HDF file."""
+        self.check_injections()
         with hdf_lock:
             df = pd.read_hdf(self.path, **self.read_kwargs)
         df = self.validate(df)
@@ -48,6 +50,7 @@ class HdfResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):
 
     def write(self, df: pd.DataFrame) -> None:
         """Write the HDF file."""
+        self.check_injections()
         df = self.validate(df)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with utils.pickle_protocol(protocol=self.pickle_protocol), hdf_lock:

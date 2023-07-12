@@ -43,6 +43,7 @@ class S3HdfResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):
         clone = deepcopy(self)
         clone.bucket = inject(clone.bucket, **kwargs)
         clone.path = inject(clone.path, **kwargs)
+        clone.test_path = inject(clone.test_path, **kwargs)
         return clone
 
     def check_injections(self) -> None:
@@ -57,6 +58,7 @@ class S3HdfResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):
 
     def read(self) -> pd.DataFrame:
         """Read HDF from S3."""
+        self.check_injections()
         df = None
         if self.force_read_to_memory:
             with s3_reader(boto3.client("s3"), s3_bucket=self.bucket, s3_key=str(self.path)) as fobj:  # type: ignore
@@ -71,6 +73,7 @@ class S3HdfResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):
 
     def write(self, df: pd.DataFrame) -> None:
         """Write HDF to s3."""
+        self.check_injections()
         df = self.validate(df)
 
         with s3_writer(boto3.client("s3"), s3_bucket=self.bucket, s3_key=str(self.path)) as fobj, utils.pickle_protocol(

@@ -28,6 +28,7 @@ class ParquetResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame])
         """Inject variables into path. Immutable."""
         clone = deepcopy(self)
         clone.path = inject(clone.path, **kwargs)
+        clone.test_path = inject(clone.test_path, **kwargs)
         return clone
 
     def check_injections(self) -> None:

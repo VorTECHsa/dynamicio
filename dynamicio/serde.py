@@ -7,6 +7,7 @@ import pandas as pd
 from uhura.serde import Serde
 
 from dynamicio import utils
+from dynamicio.inject import check_injections
 
 
 class ParquetSerde(Serde[pd.DataFrame]):
@@ -26,10 +27,12 @@ class ParquetSerde(Serde[pd.DataFrame]):
         self.write_kwargs = write_kwargs
 
     def read_from_file(self, file: str) -> pd.DataFrame:
+        check_injections(file)
         df = pd.read_parquet(file, **self.read_kwargs)
         return self.validation_callback(df)
 
     def write_to_file(self, file: str, obj: pd.DataFrame):
+        check_injections(file)
         obj = self.validation_callback(obj)
         return obj.to_parquet(file, **self.write_kwargs)
 
@@ -51,10 +54,12 @@ class JsonSerde(Serde[pd.DataFrame]):
         self.write_kwargs = write_kwargs
 
     def read_from_file(self, file: str) -> pd.DataFrame:
+        check_injections(file)
         df = pd.read_json(file, **self.read_kwargs)
         return self.validation_callback(df)
 
     def write_to_file(self, file: str, obj: pd.DataFrame):
+        check_injections(file)
         obj = self.validation_callback(obj)
         return obj.to_json(file, **self.write_kwargs)
 
@@ -76,10 +81,12 @@ class CsvSerde(Serde[pd.DataFrame]):
         self.write_kwargs = write_kwargs
 
     def read_from_file(self, file: str) -> pd.DataFrame:
+        check_injections(file)
         df = pd.read_csv(file, **self.read_kwargs)
         return self.validation_callback(df)
 
     def write_to_file(self, file: str, obj: pd.DataFrame):
+        check_injections(file)
         obj = self.validation_callback(obj)
         return obj.to_csv(file, **self.write_kwargs)
 
@@ -107,11 +114,13 @@ class HdfSerde(Serde[pd.DataFrame]):
         self.pickle_protocol = pickle_protocol
 
     def read_from_file(self, file: str) -> pd.DataFrame:
+        check_injections(file)
         with hdf_lock:
             df = pd.read_hdf(file, **self.read_kwargs)
         return self.validation_callback(df)
 
     def write_to_file(self, file: str, df: pd.DataFrame):
+        check_injections(file)
         df = self.validation_callback(df)
         with utils.pickle_protocol(protocol=self.pickle_protocol), hdf_lock:
             return df.to_hdf(file, key="df", mode="w", **self.write_kwargs)

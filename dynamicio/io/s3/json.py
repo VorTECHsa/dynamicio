@@ -33,6 +33,7 @@ class S3JsonResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):
         clone = deepcopy(self)
         clone.bucket = inject(clone.bucket, **kwargs)
         clone.path = inject(clone.path, **kwargs)
+        clone.test_path = inject(clone.test_path, **kwargs)
         return clone
 
     def check_injections(self) -> None:
@@ -47,6 +48,7 @@ class S3JsonResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):
 
     def read(self) -> pd.DataFrame:
         """Read JSON from S3."""
+        self.check_injections()
         df = None
 
         if self.force_read_to_memory:
@@ -61,6 +63,7 @@ class S3JsonResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):
 
     def write(self, df: pd.DataFrame) -> None:
         """Write JSON to S3."""
+        self.check_injections()
         df = self.validate(df)
         df.to_json(self.full_path, **self.write_kwargs)
 
