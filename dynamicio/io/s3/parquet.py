@@ -46,11 +46,6 @@ class S3ParquetResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame
         """Full path to the resource, including the bucket name."""
         return f"s3://{self.bucket}/{self.path}"
 
-    def cache_key(self):
-        if self.test_path:
-            return str(self.test_path)
-        return f"s3/{self.bucket}/{self.bucket}/{self.path}"
-
     def read(self) -> pd.DataFrame:
         """Read PARQUET from S3."""
         self.check_injections()
