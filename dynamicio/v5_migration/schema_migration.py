@@ -134,12 +134,43 @@ class IsGreaterThanOrEquals(Validation):
         return self.template.format(threshold=self.threshold)
 
 
+@dataclass
+class IsBetween(Validation):
+    min_value: float
+    max_value: float
+    include_min: bool
+    include_max: bool
+    template: str = 'in_range={{"min_value":{min_value}, "max_value":{max_value}, "include_min":{include_min}, "include_max":{include_max}}}'
+
+    @staticmethod
+    def is_matched(validation_name: str) -> bool:
+        return validation_name == "is_between"
+
+    @classmethod
+    def parse_from_dict(cls, candidate: dict[str, Any]) -> "IsBetween":
+        return cls(
+            min_value=candidate["options"]["lower"],
+            max_value=candidate["options"]["upper"],
+            include_min=candidate["options"]["include_left"] if "include_left" in candidate["options"] else False,
+            include_max=candidate["options"]["include_right"] if "include_right" in candidate["options"] else False,
+        )
+
+    def render_own_template(self) -> str:
+        return self.template.format(
+            min_value=self.min_value,
+            max_value=self.max_value,
+            include_min=self.include_min,
+            include_max=self.include_max,
+        )
+
+
 _supported_validations = [
     HasNoNulls,
     IsIn,
     HasUniqueValues,
     IsGreaterThan,
     IsGreaterThanOrEquals,
+    IsBetween,
 ]
 
 
