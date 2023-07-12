@@ -8,6 +8,7 @@ from dynamicio import (
     CsvResource,
     HdfResource,
     JsonResource,
+    KafkaResource,
     ParquetResource,
     PostgresResource,
     S3CsvResource,
@@ -96,3 +97,12 @@ def test_postgres_uhura(tmpdir, test_df):
         postgres_resource.write(test_df)
         with pytest.raises(AssertionError):
             postgres_resource.write(test_df.drop("a", axis=1))
+
+
+def test_kafka_uhura(tmpdir, test_df):
+    kafka_resource = KafkaResource(topic="tropico", server="asdf")
+    ParquetResource(path=tmpdir / "uhura" / "output" / "kafka" / "tropico").write(test_df)
+    with task_test_mode(input_path=tmpdir / "uhura" / "input", known_good_path=tmpdir / "uhura" / "output"):
+        kafka_resource.write(test_df)
+        with pytest.raises(AssertionError):
+            kafka_resource.write(test_df.drop("a", axis=1))

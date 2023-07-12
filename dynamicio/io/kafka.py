@@ -11,8 +11,10 @@ from kafka import KafkaProducer  # type: ignore
 from magic_logger import logger
 from pandera import SchemaModel
 from pydantic import BaseModel, Field
+from uhura import Writable
 
 from dynamicio.inject import check_injections, inject
+from dynamicio.serde import ParquetSerde
 
 
 class CompressionType(str, Enum):
@@ -24,7 +26,7 @@ class CompressionType(str, Enum):
     ZSTD = "zstd"
 
 
-class KafkaResource(BaseModel):
+class KafkaResource(BaseModel, Writable[pd.DataFrame]):
     """Kafka Resource.
 
     This class is used to write to Kafka topics. Reading is not yet supported.
@@ -47,12 +49,14 @@ class KafkaResource(BaseModel):
     compression_type: CompressionType = "snappy"  # type: ignore
     producer_kwargs: Dict[str, Any] = {}
     pa_schema: Optional[Type[SchemaModel]] = None
+    test_path: Optional[str] = None
 
     def inject(self, **kwargs) -> "KafkaResource":
         """Inject variables into topic and server. Immutable."""
         clone = deepcopy(self)
         clone.topic = inject(clone.topic, **kwargs)
         clone.server = inject(clone.server, **kwargs)
+        clone.test_path = inject(clone.test_path, **kwargs)
         return clone
 
     def check_injections(self) -> None:
@@ -80,6 +84,9 @@ class KafkaResource(BaseModel):
 
     def write(self, df: pd.DataFrame) -> None:
         """Handles Write operations for Kafka."""
+        self.check_injections()
+        df = self.validate(df)
+
         kafka_producer = self.get_kafka_producer()
 
         logger.info(f"Sending {len(df)} messages to Kafka topic:{self.topic}")
@@ -98,3 +105,16 @@ class KafkaResource(BaseModel):
     def read(self) -> pd.DataFrame:
         """Not yet implemented."""
         raise NotImplementedError("No kafka reader implemented")
+
+    def validate(self, df: pd.DataFrame) -> pd.DataFrame:
+        if schema := self.pa_schema:
+            df = schema.validate(df)  # type: ignore
+        return df
+
+    def cache_key(self):
+        if self.test_path:
+            return str(self.test_path)
+        return f"kafka/{self.topic}"
+
+    def get_serde(self):
+        return ParquetSerde({}, {}, self.validate)
