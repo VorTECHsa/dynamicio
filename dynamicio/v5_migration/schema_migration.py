@@ -4,9 +4,13 @@
 
 from __future__ import annotations
 
+import abc
 import re
 from dataclasses import dataclass
 from string import ascii_lowercase, digits
+from typing import Any
+
+import yaml
 
 schema_import_str = """from datetime import datetime
 
@@ -45,17 +49,38 @@ def convert_single_schema_file(yaml_contents: dict) -> str:
     return schema_class.render_template()
 
 
+class Validation(abc.ABC):
+    @abc.abstractmethod
+    def render_own_template(self) -> str:
+        raise NotImplementedError()
+
+
+@dataclass
+class HasNoNulls(Validation):
+    template: str = "{condition}"
+
+    @staticmethod
+    def is_matched(validation_name: str) -> bool:
+        return validation_name == "has_no_null_values"
+
+    @classmethod
+    def parse_from_dict(cls, candidate: dict[str, Any]) -> "HasNoNulls":
+        return cls()
+
+    def render_own_template(self) -> str:
+        return self.template.format(condition="nullable=False")
+
+
+_supported_validations = [HasNoNulls]
+
+
 @dataclass
 class Column:
     name: str
     data_type: str
-
+    validations: list[Validation]
+    template_python_compatible = "{name}: Series[{data_type}] = pa.Field({options})"
     _allowed_chars: list[str] = ascii_lowercase + digits + "_"
-
-    template_python_compatible = "{name}: Series[{data_type}] = pa.Field(nullable=True)"
-    template_python_incompatible = (
-        '{python_normalized_name}: Series[{data_type}] = pa.Field(alias="{name}", nullable=True)'
-    )
 
     @property
     def is_python_normalized(self) -> bool:
@@ -91,12 +116,30 @@ class Column:
         return normalized_name
 
     def render_template(self) -> str:
+        options = self._render_options()
+
         if self.is_python_normalized:
-            return self.template_python_compatible.format(name=self.name, data_type=self.data_type)
-        else:
-            return self.template_python_incompatible.format(
-                python_normalized_name=self._python_normalize(), name=self.name, data_type=self.data_type
+            return self.template_python_compatible.format(
+                name=self.name, data_type=self.data_type, options=",".join(options)
             )
+        else:
+            options.append(f'alias="{self.name}"')
+
+            return self.template_python_compatible.format(
+                name=self._python_normalize(), data_type=self.data_type, options=",".join(options)
+            )
+
+    def _render_options(self) -> list[str]:
+        options = []
+
+        for v in self.validations:
+            options.append(v.render_own_template())
+
+        # We default to all fields being nullable unless otherwise specified by the validations
+        if "nullable=False" not in options:
+            options.append("nullable=True")
+
+        return options
 
 
 @dataclass
@@ -134,10 +177,16 @@ def _collect_columns(yaml_schema) -> list[Column]:
     columns = []
     for col_name, col_info in yaml_schema["columns"].items():
         parsed_numpy_dtype = col_info["type"]
+        parsed_validations = []
 
         for candidate_type in _numpy_type_to_pandera_mapping:
             if re.search(candidate_type, parsed_numpy_dtype) is not None:
                 derived_pandera_type = _numpy_type_to_pandera_mapping[candidate_type]
+
+        for validation_name, validation_body in col_info["validations"].items():
+            for candidate_validation in _supported_validations:
+                if candidate_validation.is_matched(validation_name):
+                    parsed_validations.append(candidate_validation.parse_from_dict(validation_body))
 
         assert derived_pandera_type is not None, "Could not match the numpy dtype to pandera type"
 
@@ -145,7 +194,15 @@ def _collect_columns(yaml_schema) -> list[Column]:
             Column(
                 name=col_name,
                 data_type=derived_pandera_type,
+                validations=parsed_validations,
             )
         )
 
     return columns
+
+
+# DEBUG
+if __name__ == "__main__":
+    with open("/Users/arturkrochin/Projects/dynamicio/dynamicio/v5_migration/example.yaml", "r") as f:
+        schema = yaml.safe_load(f)
+    print(convert_single_schema_file(schema))
