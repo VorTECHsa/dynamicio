@@ -164,6 +164,12 @@ class Column:
         if normalized_name[0] in digits:
             normalized_name = normalized_name[1:]
 
+        # Accounts for the edge case when the unnormalized column name is just a single number,
+        # which results in an empty normalized name
+        
+        if not normalized_name:
+            return f"_{self.name}"
+
         return normalized_name
 
     def render_template(self) -> str:
