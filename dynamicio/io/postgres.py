@@ -189,7 +189,7 @@ class PostgresResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]
     def cache_key(self):
         if self.test_path:
             return str(self.test_path)
-        return f"postgres/{self.table_name}"
+        return f"postgres/{self.table_name}.parquet"
 
     def get_serde(self):
         return ParquetSerde({}, {}, self.validate)

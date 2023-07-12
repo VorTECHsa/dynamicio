@@ -89,8 +89,8 @@ def test_uhura_file_and_s3(test_df, file_resource, s3_resource, tmpdir):
 
 def test_postgres_uhura(tmpdir, test_df):
     postgres_resource = PostgresResource(db_user="asdf", db_host="asdf", db_name="asdf", table_name="tabular_table")
-    ParquetResource(path=tmpdir / "uhura" / "input" / "postgres" / "tabular_table" / "some_file").write(test_df)
-    ParquetResource(path=tmpdir / "uhura" / "output" / "postgres" / "tabular_table" / "some_file").write(test_df)
+    ParquetResource(path=tmpdir / "uhura" / "input" / "postgres" / "tabular_table.parquet").write(test_df)
+    ParquetResource(path=tmpdir / "uhura" / "output" / "postgres" / "tabular_table.parquet").write(test_df)
     with task_test_mode(input_path=tmpdir / "uhura" / "input", known_good_path=tmpdir / "uhura" / "output"):
         postgres_resource.read()
         postgres_resource.write(test_df)
