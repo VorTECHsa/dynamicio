@@ -111,6 +111,7 @@ class PostgresResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]
 
     def read(self) -> pd.DataFrame:
         """Handles Read operations for Postgres."""
+        self.check_injections()
         if not bool(self.sql_query) ^ bool(self.table_name):  # Xor
             raise ConfigurationError("PostgresResource must define EITHER sql_query OR table_name.")
 
@@ -143,6 +144,7 @@ class PostgresResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]
         if not self.table_name:
             raise ConfigurationError("PostgresResource must specify table_name for writing.")
 
+        self.check_injections()
         df = self.validate(df)
 
         with session_scope(self.connection_string) as session:
