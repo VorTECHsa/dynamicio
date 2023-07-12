@@ -57,8 +57,6 @@ class Validation(abc.ABC):
 
 @dataclass
 class HasNoNulls(Validation):
-    template: str = "{condition}"
-
     @staticmethod
     def is_matched(validation_name: str) -> bool:
         return validation_name == "has_no_null_values"
@@ -68,7 +66,7 @@ class HasNoNulls(Validation):
         return cls()
 
     def render_own_template(self) -> str:
-        return self.template.format(condition="nullable=False")
+        return "nullable=False"
 
 
 @dataclass
@@ -88,9 +86,24 @@ class IsIn(Validation):
         return self.template.format(categories=",".join(f'"{cat}"' for cat in self.categories))
 
 
+@dataclass
+class HasUniqueValues(Validation):
+    @staticmethod
+    def is_matched(validation_name: str) -> bool:
+        return validation_name == "has_unique_values"
+
+    @classmethod
+    def parse_from_dict(cls, candidate: dict[str, Any]) -> "HasUniqueValues":
+        return cls()
+
+    def render_own_template(self) -> str:
+        return "unique=True"
+
+
 _supported_validations = [
     HasNoNulls,
     IsIn,
+    HasUniqueValues,
 ]
 
 
