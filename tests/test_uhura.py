@@ -17,20 +17,6 @@ from dynamicio import (
     S3ParquetResource,
 )
 
-# get test df
-
-# get temp dir
-# write to df to temp dir
-# read from temp dir
-# assert df is the same
-
-# with fixture builder mode
-# read from temp dir
-# write to temp dir
-# with test mode read from temp dir
-# with test mode write to temp dir
-# with test mode write to temp dir but wrong data
-
 
 @pytest.fixture
 def test_df():
