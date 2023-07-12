@@ -103,7 +103,7 @@ class HasUniqueValues(Validation):
 @dataclass
 class IsGreaterThan(Validation):
     threshold: float
-    template: str = "ge={threshold}"
+    template: str = "gt={threshold}"
 
     @staticmethod
     def is_matched(validation_name: str) -> bool:
@@ -117,11 +117,29 @@ class IsGreaterThan(Validation):
         return self.template.format(threshold=self.threshold)
 
 
+@dataclass
+class IsGreaterThanOrEquals(Validation):
+    threshold: float
+    template: str = "ge={threshold}"
+
+    @staticmethod
+    def is_matched(validation_name: str) -> bool:
+        return validation_name == "is_greater_than_or_equal"
+
+    @classmethod
+    def parse_from_dict(cls, candidate: dict[str, Any]) -> "IsGreaterThanOrEquals":
+        return cls(threshold=candidate["options"]["threshold"])
+
+    def render_own_template(self) -> str:
+        return self.template.format(threshold=self.threshold)
+
+
 _supported_validations = [
     HasNoNulls,
     IsIn,
     HasUniqueValues,
     IsGreaterThan,
+    IsGreaterThanOrEquals,
 ]
 
 
@@ -166,7 +184,7 @@ class Column:
 
         # Accounts for the edge case when the unnormalized column name is just a single number,
         # which results in an empty normalized name
-        
+
         if not normalized_name:
             return f"_{self.name}"
 
