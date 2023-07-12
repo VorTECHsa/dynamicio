@@ -9,6 +9,7 @@ from dynamicio import (
     HdfResource,
     JsonResource,
     ParquetResource,
+    PostgresResource,
     S3CsvResource,
     S3HdfResource,
     S3JsonResource,
@@ -44,8 +45,8 @@ def test_df():
     ]
 )
 def resources(request, tmpdir):
-    file_resource = request.param[0](path=tmpdir / "actual" / "randomfilename.withextension")
-    s3_resource = request.param[1](bucket="bucket", path="randomfilename.withextension")
+    file_resource = request.param[0](path=tmpdir / "actual" / "some_file.extension")
+    s3_resource = request.param[1](bucket="bucket", path="some_file.extension")
     return file_resource, s3_resource
 
 
@@ -59,7 +60,7 @@ def s3_resource(resources):
     return resources[1]
 
 
-def test_can_write_and_read(test_df, file_resource, s3_resource, tmpdir):
+def test_uhura_file_and_s3(test_df, file_resource, s3_resource, tmpdir):
     file_resource.write(test_df)
     pd.testing.assert_frame_equal(file_resource.read(), test_df)
 
@@ -74,9 +75,9 @@ def test_can_write_and_read(test_df, file_resource, s3_resource, tmpdir):
             file_resource.write(df.drop("a", axis=1))
 
     # Write for s3 test
-    file_resource.path = Path(tmpdir / "uhura" / "input" / "s3" / "bucket" / "randomfilename.withextension")
+    file_resource.path = Path(tmpdir / "uhura" / "input" / "s3" / "bucket" / "some_file.extension")
     file_resource.write(test_df)
-    file_resource.path = Path(tmpdir / "uhura" / "output" / "s3" / "bucket" / "randomfilename.withextension")
+    file_resource.path = Path(tmpdir / "uhura" / "output" / "s3" / "bucket" / "some_file.extension")
     file_resource.write(test_df)
 
     with task_test_mode(input_path=tmpdir / "uhura" / "input", known_good_path=tmpdir / "uhura" / "output"):
@@ -84,3 +85,14 @@ def test_can_write_and_read(test_df, file_resource, s3_resource, tmpdir):
         s3_resource.write(df)
         with pytest.raises(AssertionError):
             s3_resource.write(df.drop("a", axis=1))
+
+
+def test_postgres_uhura(tmpdir, test_df):
+    postgres_resource = PostgresResource(db_user="asdf", db_host="asdf", db_name="asdf", table_name="tabular_table")
+    ParquetResource(path=tmpdir / "uhura" / "input" / "postgres" / "tabular_table" / "some_file").write(test_df)
+    ParquetResource(path=tmpdir / "uhura" / "output" / "postgres" / "tabular_table" / "some_file").write(test_df)
+    with task_test_mode(input_path=tmpdir / "uhura" / "input", known_good_path=tmpdir / "uhura" / "output"):
+        postgres_resource.read()
+        postgres_resource.write(test_df)
+        with pytest.raises(AssertionError):
+            postgres_resource.write(test_df.drop("a", axis=1))
