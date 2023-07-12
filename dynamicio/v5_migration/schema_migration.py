@@ -71,7 +71,27 @@ class HasNoNulls(Validation):
         return self.template.format(condition="nullable=False")
 
 
-_supported_validations = [HasNoNulls]
+@dataclass
+class IsIn(Validation):
+    categories: list[str]
+    template: str = "isin=[{categories}]"
+
+    @staticmethod
+    def is_matched(validation_name: str) -> bool:
+        return validation_name == "is_in"
+
+    @classmethod
+    def parse_from_dict(cls, candidate: dict[str, Any]) -> "IsIn":
+        return cls(categories=candidate["options"]["categorical_values"])
+
+    def render_own_template(self) -> str:
+        return self.template.format(categories=",".join(f'"{cat}"' for cat in self.categories))
+
+
+_supported_validations = [
+    HasNoNulls,
+    IsIn,
+]
 
 
 @dataclass
