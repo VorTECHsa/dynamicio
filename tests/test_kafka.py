@@ -20,8 +20,8 @@ def kafka_resource() -> KafkaResource:
     return KafkaResource(topic="test_topic", server="test_server")
 
 
-def test_kafka_resource_write(sample_df, kafka_resource, mocked_kafka_producer):
-    kafka_resource.write(sample_df)
+def test_kafka_resource_write(test_df, kafka_resource, mocked_kafka_producer):
+    kafka_resource.write(test_df)
     mocked_kafka_producer.send.assert_has_calls(
         [
             call("test_topic", key=0, value={"a": 1, "b": 4}),

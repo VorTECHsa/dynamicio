@@ -19,5 +19,20 @@ def output_dir_path() -> Generator[Path, None, None]:
 
 
 @pytest.fixture
-def sample_df():
+def test_df():
     return pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+
+
+@pytest.fixture
+def injectable_string():
+    return "{var1}/[[var2]]"
+
+
+@pytest.fixture
+def failing_injections():
+    return {"var1": "hello"}
+
+
+@pytest.fixture
+def passing_injections():
+    return {"var1": "hello", "var2": "there"}

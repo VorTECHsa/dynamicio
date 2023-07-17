@@ -6,7 +6,7 @@ import pytest
 from dynamicio import KeyedResource
 from tests.resources.schemas import SampleSchema
 
-sample_df = pd.DataFrame([{"id": 1, "value": "foo"}])
+test_df = pd.DataFrame([{"id": 1, "value": "foo"}])
 
 
 @pytest.fixture
@@ -35,11 +35,11 @@ def test_resource_read(mock_resources):
 
 def test_resource_write(mock_resources):
     keyed_resource = KeyedResource(mock_resources)
-    sample_df = pd.DataFrame([{"id": 4, "value": "qux"}])
-    keyed_resource.write(sample_df)
+    test_df = pd.DataFrame([{"id": 4, "value": "qux"}])
+    keyed_resource.write(test_df)
 
     resource = keyed_resource.keyed_build_configs[keyed_resource.key]
-    resource.write.assert_called_once_with(sample_df)
+    resource.write.assert_called_once_with(test_df)
 
 
 def test_resource_read_with_schema(mock_resources):
@@ -52,8 +52,8 @@ def test_resource_read_with_schema(mock_resources):
 
 def test_resource_write_with_schema(mock_resources):
     keyed_resource = KeyedResource(mock_resources, SampleSchema)
-    sample_df = pd.DataFrame([{"id": 4, "value": "qux"}])
-    keyed_resource.write(sample_df)
+    test_df = pd.DataFrame([{"id": 4, "value": "qux"}])
+    keyed_resource.write(test_df)
 
     resource = keyed_resource.keyed_build_configs[keyed_resource.key]
-    resource.write.assert_called_once_with(sample_df)
+    resource.write.assert_called_once_with(test_df)
