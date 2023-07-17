@@ -4,133 +4,219 @@
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import Optional
+
+
+# @dataclass
+# class KeyedResourceTemplate:
+#     resources: list
+#     resource_name: str
+#     template: str = """
+# {resource_name} = KeyedResource(
+#     {{
+#         {resources}
+#     }}
+# )
+# """
+#
+#     def render_template(self) -> str:
+#         return self.template.format(
+#             resource_name=self.resource_name,
+#             resources="\n".join([resource.render_own_resource() for resource in self.resources]),
+#         )
+
+
+class ReadyTemplate(ABC):
+    @abstractmethod
+    def render_template(self) -> str:
+        raise NotImplementedError
+
+
+s3_file_type_class_map = {
+    "parquet": "S3ParquetResource",
+    "csv": "S3CsvResource",
+    "json": "S3JsonResource",
+    "hdf": "S3HdfResource",
+}
 
 
 @dataclass
-class KeyedResourceTemplate:
-    resources: list
+class S3Template(ReadyTemplate):
     resource_name: str
+    bucket: str
+    file_path: str
+    test_path: Optional[str]
+    class_name: str
     template: str = """
-{resource_name} = KeyedResource(
-    {{
-        {resources}
-    }}
+{resource_name} = {class_name}(
+    bucket="{bucket}",
+    path="{file_path}"{test_path_str}
 )
 """
 
+    @classmethod
+    def from_dict(cls, resource_dict: dict[str, ...], resource_name: str) -> "S3Template":
+        file_type = resource_dict["cloud"]["s3"]["file_type"]
+        test_path = resource_dict.get("local", {}).get("local", {}).get("file_path", None)
+        # Warning: if local filetype does not match cloud filetype. This will not work.
+        return cls(
+            resource_name=resource_name,
+            bucket=resource_dict["cloud"]["s3"]["bucket"],
+            file_path=resource_dict["cloud"]["s3"]["file_path"],
+            class_name=s3_file_type_class_map[file_type],
+            test_path=test_path,
+        )
+
+    @staticmethod
+    def is_dict_parseable(resource_dict: dict[str, ...]):
+        return resource_dict["cloud"]["type"] == "s3_file" and resource_dict["cloud"]["s3"]["file_type"] in list(
+            s3_file_type_class_map.keys()
+        )
+
     def render_template(self) -> str:
+        test_path_str = f',\n    test_path="{self.test_path}"' if self.test_path else ""
         return self.template.format(
             resource_name=self.resource_name,
-            resources="\n".join([resource.render_own_resource() for resource in self.resources]),
+            class_name=self.class_name,
+            bucket=self.bucket,
+            file_path=self.file_path,
+            test_path_str=test_path_str,
         )
 
 
+file_type_class_map = {
+    "parquet": "ParquetResource",
+    "csv": "CsvResource",
+    "json": "JsonResource",
+    "hdf": "HdfResource",
+}
+
+
 @dataclass
-class S3ParquetFileType:
-    environment: str
+class LocalTemplate(ReadyTemplate):
+    resource_name: str
     file_path: str
-    bucket: str
-    class_name: str = "S3ParquetResource"
+    class_name: str
+    test_path: Optional[str]
+    template: str = """
+{resource_name} = {class_name}(
+    path="{file_path}"{test_path_str}
+)
+"""
 
     @classmethod
-    def from_dict(cls, candidate_dict: dict[str, str], environment: str) -> "S3ParquetFileType":
+    def from_dict(cls, resource_dict: dict[str, ...], resource_name: str) -> "LocalTemplate":
+        test_path = resource_dict.get("local", {}).get("local", {}).get("file_path", None)
         return cls(
-            environment=environment,
-            file_path=candidate_dict["s3"]["file_path"],
-            bucket=candidate_dict["s3"]["bucket"],
+            resource_name=resource_name,
+            file_path=resource_dict["cloud"]["local"]["file_path"],
+            class_name=file_type_class_map[resource_dict["cloud"]["local"]["file_type"]],
+            test_path=test_path,
         )
 
     @staticmethod
-    def is_dict_parseable(candidate_dict: dict[str, ...]):
-        return candidate_dict["type"] == "s3_file" and candidate_dict["s3"]["file_type"] == "parquet"
-
-    def render_own_resource(self) -> str:
-        return f'"{self.environment}": {self.class_name}(path="{self.file_path}", bucket="{self.bucket}"),'
-
-
-@dataclass
-class LocalParquetFileType:
-    environment: str
-    file_path: str
-    class_name: str = "ParquetResource"
-
-    @classmethod
-    def from_dict(cls, candidate_dict: dict[str, str], environment: str) -> "LocalParquetFileType":
-        return cls(
-            environment=environment,
-            file_path=candidate_dict["local"]["file_path"],
+    def is_dict_parseable(resource_dict: dict[str, ...]) -> bool:
+        return resource_dict["cloud"]["type"] == "local" and resource_dict["cloud"]["local"]["file_type"] in list(
+            file_type_class_map.keys()
         )
 
-    @staticmethod
-    def is_dict_parseable(candidate_dict: dict[str, ...]):
-        return candidate_dict["type"] == "local" and candidate_dict["local"]["file_type"] == "parquet"
-
-    def render_own_resource(self) -> str:
-        return f'"{self.environment}": {self.class_name}(path="{self.file_path}"),'
+    def render_template(self) -> str:
+        test_path_str = f',\n    test_path="{self.test_path}"' if self.test_path else ""
+        return self.template.format(
+            resource_name=self.resource_name,
+            class_name=self.class_name,
+            file_path=self.file_path,
+            test_path_str=test_path_str,
+        )
 
 
 @dataclass
-class Kafka:
-    environment: str
+class KafkaTemplate(ReadyTemplate):
+    resource_name: str
     topic: str
     server: str
-    class_name: str = "KafkaResource"
+    test_path: Optional[str]
+    template: str = """
+{resource_name} = KafkaResource(
+    server="{server}",
+    topic="{topic}"{test_path_str}
+)
+"""
 
     @classmethod
-    def from_dict(cls, candidate_dict: dict[str, dict[str, str]], environment: str) -> "Kafka":
+    def from_dict(cls, resource_dict: dict[str, ...], resource_name: str) -> "KafkaTemplate":
+        test_path = resource_dict.get("local", {}).get("local", {}).get("file_path", None)
         return cls(
-            environment=environment,
-            topic=candidate_dict["kafka"]["kafka_topic"],
-            server=candidate_dict["kafka"]["kafka_server"],
+            resource_name=resource_name,
+            topic=resource_dict["cloud"]["kafka"]["kafka_topic"],
+            server=resource_dict["cloud"]["kafka"]["kafka_server"],
+            test_path=test_path,
         )
 
     @staticmethod
-    def is_dict_parseable(candidate_dict: dict[str, ...]):
-        return candidate_dict["type"] == "kafka"
+    def is_dict_parseable(resource_dict: dict[str, ...]):
+        return resource_dict["cloud"]["type"] == "kafka"
 
-    def render_own_resource(self) -> str:
-        return f'"{self.environment}": {self.class_name}(topic="{self.topic}", server="{self.server}"),'
+    def render_template(self) -> str:
+        test_path_str = f',\n    test_path="{self.test_path}"' if self.test_path else ""
+        return self.template.format(
+            resource_name=self.resource_name,
+            server=self.server,
+            topic=self.topic,
+            test_path_str=test_path_str,
+        )
 
 
 @dataclass
-class Postgres:
-    environment: str
+class PostgresTemplate(ReadyTemplate):
+    resource_name: str
     db_host: str
     db_port: str
     db_name: str
     db_user: str
     db_password: str
     class_name: str = "PostgresResource"
+    test_path: Optional[str] = None
+    template: str = """
+{resource_name} = {class_name}(
+    db_host="{db_host}",
+    db_port="{db_port}",
+    db_name="{db_name}",
+    db_user="{db_user}",
+    db_password="{db_password}",
+    table_name=None,
+    sql_query=...{test_path_str}
+)
+"""
 
     @classmethod
-    def from_dict(cls, candidate_dict: dict[str, dict[str, str]], environment: str) -> "Postgres":
+    def from_dict(cls, resource_dict: dict[str, dict[str, str]], resource_name: str) -> "PostgresTemplate":
+        test_path = resource_dict.get("local", {}).get("local", {}).get("file_path", None)
         return cls(
-            environment=environment,
-            db_host=candidate_dict["postgres"]["db_host"],
-            db_port=candidate_dict["postgres"]["db_port"],
-            db_name=candidate_dict["postgres"]["db_name"],
-            db_user=candidate_dict["postgres"]["db_user"],
-            db_password=candidate_dict["postgres"]["db_password"],
+            resource_name=resource_name,
+            db_host=resource_dict["cloud"]["postgres"]["db_host"],
+            db_port=resource_dict["cloud"]["postgres"]["db_port"],
+            db_name=resource_dict["cloud"]["postgres"]["db_name"],
+            db_user=resource_dict["cloud"]["postgres"]["db_user"],
+            db_password=resource_dict["cloud"]["postgres"]["db_password"],
+            test_path=test_path,
         )
 
     @staticmethod
-    def is_dict_parseable(candidate_dict: dict[str, ...]):
-        return candidate_dict["type"] == "postgres"
+    def is_dict_parseable(resource_dict: dict[str, ...]):
+        return resource_dict["cloud"]["type"] == "postgres"
 
-    def render_own_resource(self) -> str:
-        return (
-            f'"{self.environment}": {self.class_name}( \n'
-            f'\t\t\tdb_user="{self.db_user}", \n'
-            f'\t\t\tdb_password="{self.db_password}", \n'
-            f'\t\t\tdb_host="{self.db_host}", \n'
-            f'\t\t\tdb_port="{self.db_port}", \n'
-            f'\t\t\tdb_name="{self.db_name}", \n'
-            f'\t\t\tdb_schema="public", \n'
-            f"\t\t\ttable_name=None, \n"
-            f"\t\t\tsql_query=..., \n"
-            f"\t\t\ttruncate_and_append=False, \n"
-            f"\t\t\tkwargs={{}}, \n"
-            f"\t\t\tpa_schema=None, \n"
-            f"\t\t),"
+    def render_template(self) -> str:
+        test_path_str = f',\n    test_path="{self.test_path}"' if self.test_path else ""
+        return self.template.format(
+            resource_name=self.resource_name,
+            class_name=self.class_name,
+            db_host=self.db_host,
+            db_port=self.db_port,
+            db_name=self.db_name,
+            db_user=self.db_user,
+            db_password=self.db_password,
+            test_path_str=test_path_str,
         )
