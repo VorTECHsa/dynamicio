@@ -1,19 +1,12 @@
 from pathlib import Path
 
-import pandas as pd
 import pytest
 
 from dynamicio import (
     CsvResource,
     HdfResource,
     JsonResource,
-    KafkaResource,
     ParquetResource,
-    PostgresResource,
-    S3CsvResource,
-    S3HdfResource,
-    S3JsonResource,
-    S3ParquetResource,
 )
 from dynamicio.inject import InjectionError
 
