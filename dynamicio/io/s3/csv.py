@@ -78,4 +78,4 @@ class S3CsvResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):
         return f"s3/{self.bucket}/{self.path}"
 
     def get_serde(self):
-        return CsvSerde(self.read_kwargs, self.write_kwargs, self.validate)
+        return CsvSerde(self.validate, self.read_kwargs, self.write_kwargs)

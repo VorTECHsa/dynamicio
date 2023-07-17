@@ -192,4 +192,4 @@ class PostgresResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]
         return f"postgres/{self.table_name}.parquet"
 
     def get_serde(self):
-        return ParquetSerde({}, {}, self.validate)
+        return ParquetSerde(self.validate, {}, {})

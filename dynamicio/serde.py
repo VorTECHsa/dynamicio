@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from threading import Lock
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Optional
 
 import pandas as pd
 from uhura.serde import Serde
@@ -12,15 +12,12 @@ from dynamicio.inject import check_injections
 
 class ParquetSerde(Serde[pd.DataFrame]):
     file_extension = ".parquet"  # Used in cache key
-    read_kwargs: Dict[str, Any] = {}
-    write_kwargs: Dict[str, Any] = {}
-    validation_callback: Callable[[pd.DataFrame], pd.DataFrame]
 
     def __init__(
         self,
+        validation_callback: Callable[[pd.DataFrame], pd.DataFrame],
         read_kwargs: dict[str, Any],
         write_kwargs: dict[str, Any],
-        validation_callback: Callable[[pd.DataFrame], pd.DataFrame],
     ):
         self.validation_callback = validation_callback
         self.read_kwargs = read_kwargs
@@ -39,15 +36,12 @@ class ParquetSerde(Serde[pd.DataFrame]):
 
 class JsonSerde(Serde[pd.DataFrame]):
     file_extension = ".json"  # Used in cache key
-    read_kwargs: Dict[str, Any] = {}
-    write_kwargs: Dict[str, Any] = {}
-    validation_callback: Callable[[pd.DataFrame], pd.DataFrame]
 
     def __init__(
         self,
+        validation_callback: Callable[[pd.DataFrame], pd.DataFrame],
         read_kwargs: dict[str, Any],
         write_kwargs: dict[str, Any],
-        validation_callback: Callable[[pd.DataFrame], pd.DataFrame],
     ):
         self.validation_callback = validation_callback
         self.read_kwargs = read_kwargs
@@ -66,15 +60,12 @@ class JsonSerde(Serde[pd.DataFrame]):
 
 class CsvSerde(Serde[pd.DataFrame]):
     file_extension = ".csv"  # Used in cache key
-    read_kwargs: Dict[str, Any] = {}
-    write_kwargs: Dict[str, Any] = {}
-    validation_callback: Callable[[pd.DataFrame], pd.DataFrame]
 
     def __init__(
         self,
+        validation_callback: Callable[[pd.DataFrame], pd.DataFrame],
         read_kwargs: dict[str, Any],
         write_kwargs: dict[str, Any],
-        validation_callback: Callable[[pd.DataFrame], pd.DataFrame],
     ):
         self.validation_callback = validation_callback
         self.read_kwargs = read_kwargs
@@ -96,16 +87,12 @@ hdf_lock = Lock()
 
 class HdfSerde(Serde[pd.DataFrame]):
     file_extension = ".h5"  # Used in cache key
-    read_kwargs: Dict[str, Any] = {}
-    write_kwargs: Dict[str, Any] = {}
-    validation_callback: Callable[[pd.DataFrame], pd.DataFrame]
-    pickle_protocol: int
 
     def __init__(
         self,
+        validation_callback: Callable[[pd.DataFrame], pd.DataFrame],
         read_kwargs: dict[str, Any],
         write_kwargs: dict[str, Any],
-        validation_callback: Callable[[pd.DataFrame], pd.DataFrame],
         pickle_protocol: int = 4,
     ):
         self.validation_callback = validation_callback

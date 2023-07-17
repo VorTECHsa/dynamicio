@@ -92,7 +92,7 @@ class S3HdfResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):
         return f"s3/{self.bucket}/{self.path}"
 
     def get_serde(self):
-        return HdfSerde(self.read_kwargs, self.write_kwargs, self.validate, self.pickle_protocol)
+        return HdfSerde(self.validate, self.read_kwargs, self.write_kwargs, self.pickle_protocol)
 
 
 class InMemStore(pd.io.pytables.HDFStore):

@@ -60,4 +60,4 @@ class ParquetResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame])
         return f"file/{self.path}"
 
     def get_serde(self):
-        return ParquetSerde(self.read_kwargs, self.write_kwargs, self.validate)
+        return ParquetSerde(self.validate, self.read_kwargs, self.write_kwargs)

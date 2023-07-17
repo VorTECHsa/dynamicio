@@ -117,4 +117,4 @@ class KafkaResource(BaseModel, Writable[pd.DataFrame]):
         return f"kafka/{self.topic}"
 
     def get_serde(self):
-        return ParquetSerde({}, {}, self.validate)
+        return ParquetSerde(self.validate, {}, {})
