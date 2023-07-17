@@ -54,7 +54,7 @@ def mock_s3_writer(mock_reader, tmp_path):
         yield target
 
 
-@pytest.fixture()
+@pytest.fixture
 def hdf_s3_resource() -> S3HdfResource:
     return S3HdfResource(
         bucket="bucket",
@@ -62,7 +62,7 @@ def hdf_s3_resource() -> S3HdfResource:
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def hdf_s3_config() -> dict:
     return {
         "bucket": "bucket",
@@ -70,6 +70,6 @@ def hdf_s3_config() -> dict:
     }
 
 
-@pytest.fixture()
+@pytest.fixture
 def hdf_df(hdf_s3_resource) -> pd.DataFrame:
     return pd.read_hdf(sample_path)
