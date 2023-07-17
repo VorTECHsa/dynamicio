@@ -23,11 +23,16 @@ def file_resource(tmpdir, request):
     return request.param(path=tmpdir / "actual" / "some_file.extension")
 
 
-def test_file_resource_inject_fail(file_resource, injectable_string, failing_injections, test_df):
+def test_file_resource_inject_read_fail(file_resource, injectable_string, failing_injections, test_df):
     file_resource.path = Path(injectable_string)
     file_resource = file_resource.inject(**failing_injections)
     with pytest.raises(InjectionError):
         file_resource.read()
+
+
+def test_file_resource_inject_write_fail(file_resource, injectable_string, failing_injections, test_df):
+    file_resource.path = Path(injectable_string)
+    file_resource = file_resource.inject(**failing_injections)
     with pytest.raises(InjectionError):
         file_resource.write(test_df)
 
