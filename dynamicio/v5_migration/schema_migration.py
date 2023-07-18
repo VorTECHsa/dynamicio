@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from string import ascii_lowercase, digits
 from typing import Any
 
+from rich import print as rich_print
+
 schema_import_str = """from datetime import datetime
 
 import pandera as pa
@@ -162,6 +164,29 @@ class IsBetween(Validation):
         )
 
 
+@dataclass
+class HasAcceptablePercentageOfNulls(Validation):
+    @staticmethod
+    def is_matched(validation_name: str) -> bool:
+        template: str = """
+@pa.check("column_name")
+def has_acceptable_percentage_of_nulls_check(cls, series: Series[str]) -> Series[bool]:
+    # Implementation
+    return ...
+            """
+
+        if validation_name == "has_acceptable_percentage_of_nulls":
+            rich_print(f"[bold red]The migration of validation `has_acceptable_percentage_of_nulls` is not supported. "
+                       f"Please implement it manually by specifying the a custom check in your pandera schema "
+                       f"as follows: [/bold red]")
+            rich_print(template)
+
+        return False
+
+    def render_own_template(self) -> str:
+        return ""
+
+
 _supported_validations = [
     HasNoNulls,
     IsIn,
@@ -169,6 +194,7 @@ _supported_validations = [
     IsGreaterThan,
     IsGreaterThanOrEquals,
     IsBetween,
+    HasAcceptablePercentageOfNulls,
 ]
 
 
