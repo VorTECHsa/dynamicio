@@ -1,6 +1,6 @@
 ---
 ignore: |
-  charts/dynamicio/charts
+  .github/dependabot.yml
 
 yaml-files:
   - '*.yaml'
