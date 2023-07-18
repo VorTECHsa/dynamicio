@@ -305,10 +305,3 @@ def _collect_columns(yaml_schema) -> list[Column]:
         )
 
     return columns
-
-
-# DEBUG
-if __name__ == "__main__":
-    with open("/Users/arturkrochin/Projects/dynamicio/dynamicio/v5_migration/example.yaml", "r") as f:
-        schema = yaml.safe_load(f)
-    print(convert_single_schema_file(schema))
