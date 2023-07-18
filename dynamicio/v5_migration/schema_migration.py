@@ -10,8 +10,6 @@ from dataclasses import dataclass
 from string import ascii_lowercase, digits
 from typing import Any
 
-import yaml
-
 schema_import_str = """from datetime import datetime
 
 import pandera as pa
