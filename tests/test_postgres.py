@@ -8,6 +8,7 @@ from dynamicio.inject import InjectionError
 from dynamicio.io.postgres import ConfigurationError
 from tests import constants
 from tests.resources.schemas import PgSampleSchema
+from sqlalchemy.engine import create_engine
 
 sample_path = f"{constants.TEST_RESOURCES}/data/input/pg_parquet_sample.parquet"
 
@@ -93,6 +94,47 @@ def test_postgres_resource_read_with_schema(postgres_df, read_sql_mock, mocked_s
     read_sql_mock.assert_called_once_with(sql="SELECT * FROM republic.test_table", con=mock_binding)
     pd.testing.assert_frame_equal(df, postgres_df)
 
+
+def test_postgres_resource_read_without_application_name():
+    mocked_session_scope = MagicMock()
+    with patch("dynamicio.io.postgres.session_scope",mocked_session_scope):
+        resource = PostgresResource(
+        db_user="test_user",
+        db_host="test_host",
+        db_port=1234,
+        db_name="test_db",
+        db_schema="republic",
+        table_name="test_table",
+        pa_schema=PgSampleSchema)
+        try:
+            df = resource.read()
+        except Exception as e:
+            pass
+
+        mocked_session_scope.assert_called_once_with(
+            "postgresql://test_user@test_host:1234/test_db",
+            None)
+        
+def test_postgres_resource_read_with_application_name():
+    mocked_session_scope = MagicMock()
+    with patch("dynamicio.io.postgres.session_scope",mocked_session_scope):
+        resource = PostgresResource(
+        db_user="test_user",
+        db_host="test_host",
+        db_port=1234,
+        db_name="test_db",
+        db_schema="republic",
+        table_name="test_table",
+        pa_schema=PgSampleSchema,
+        application_name='test_app')
+        try:
+            df = resource.read()
+        except Exception as e:
+            pass
+
+        mocked_session_scope.assert_called_once_with(
+            "postgresql://test_user@test_host:1234/test_db",
+            'test_app')
 
 class PgFilterSampleSchema(PgSampleSchema):
     class Config:
