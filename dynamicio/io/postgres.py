@@ -23,16 +23,19 @@ Session = sessionmaker()
 
 
 @contextmanager
-def session_scope(connection_string: str) -> Generator[SqlAlchemySession, None, None]:
+def session_scope(connection_string: str, application_name: Optional[str]) -> Generator[SqlAlchemySession, None, None]:
     """Connect to a database using `connection_string` and returns an active session to that connection.
 
     Args:
         connection_string:
+        application_name [optional]: Name of the application that is connecting to the database (repo name).
+
 
     Yields:
         Active session
     """
-    engine = create_engine(connection_string)
+    application_name = application_name or "unknown-dynamicio-app"
+    engine = create_engine(connection_string, connect_args={"application_name": application_name})
     session = Session(bind=engine)
 
     try:
@@ -74,6 +77,7 @@ class PostgresResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]
     kwargs: Dict[str, Any] = {}
     pa_schema: Optional[Type[SchemaModel]] = None
     test_path: Optional[str] = None
+    application_name: Optional[str] = None
 
     @property
     def connection_string(self) -> str:
@@ -126,7 +130,7 @@ class PostgresResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]
             sql_query = self.sql_query
 
         logger.info(f"Downloading table: {self.final_table_name} from: {self.db_host}:{self.db_name}")
-        with session_scope(self.connection_string) as session:
+        with session_scope(self.connection_string, self.application_name) as session:
             df = pd.read_sql(sql=sql_query, con=session.get_bind(), **self.kwargs)
 
         df = self.validate(df)
@@ -147,7 +151,7 @@ class PostgresResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]
         self.check_injections()
         df = self.validate(df)
 
-        with session_scope(self.connection_string) as session:
+        with session_scope(self.connection_string, self.application_name) as session:
             session: SqlAlchemySession  # type: ignore # this is done for IDE purposes
             if self.truncate_and_append:
                 logger.info(f"Writing to table (csv-hack): {self.final_table_name} from: {self.db_host}:{self.db_name}")
