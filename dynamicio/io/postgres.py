@@ -14,8 +14,10 @@ from pydantic import BaseModel, Field  # pylint: disable=no-name-in-module
 from sqlalchemy import create_engine  # type: ignore
 from sqlalchemy.orm import Session as SqlAlchemySession  # type: ignore
 from sqlalchemy.orm import sessionmaker  # type: ignore
+from uhura import Readable, Writable
 
 from dynamicio.inject import check_injections, inject
+from dynamicio.serde import ParquetSerde
 
 Session = sessionmaker()
 
@@ -47,7 +49,7 @@ class ConfigurationError(Exception):
     """Raised when configuration is wrong."""
 
 
-class PostgresResource(BaseModel):
+class PostgresResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):
     """Postgres Resource class.
 
     This resource handles reading and writing to postgres databases. If a pa_schema has been given, it will
@@ -61,7 +63,7 @@ class PostgresResource(BaseModel):
     db_user: str
     db_password: Optional[str]
     db_host: str
-    db_port: int
+    db_port: int = 5432
     db_name: str
     db_schema: str = "public"
     table_name: Optional[str] = Field(None, description="SQL table name. Needs to be given if no sql_query is given")
@@ -71,6 +73,7 @@ class PostgresResource(BaseModel):
     truncate_and_append: bool = False
     kwargs: Dict[str, Any] = {}
     pa_schema: Optional[Type[SchemaModel]] = None
+    test_path: Optional[str] = None
 
     @property
     def connection_string(self) -> str:
@@ -93,6 +96,7 @@ class PostgresResource(BaseModel):
         clone.table_name = inject(clone.table_name, **kwargs)
         clone.sql_query = inject(clone.sql_query, **kwargs)
         clone.db_schema = inject(clone.db_schema, **kwargs)
+        clone.test_path = inject(clone.test_path, **kwargs)
         return clone
 
     def check_injections(self) -> None:
@@ -107,7 +111,8 @@ class PostgresResource(BaseModel):
 
     def read(self) -> pd.DataFrame:
         """Handles Read operations for Postgres."""
-        if not bool(self.sql_query) ^ bool(self.table_name):  # Xor
+        self.check_injections()
+        if not (bool(self.sql_query) ^ bool(self.table_name)):  # Xor
             raise ConfigurationError("PostgresResource must define EITHER sql_query OR table_name.")
 
         if self.pa_schema is not None and (not self.sql_query and self.pa_schema.Config.strict):
@@ -124,8 +129,7 @@ class PostgresResource(BaseModel):
         with session_scope(self.connection_string) as session:
             df = pd.read_sql(sql=sql_query, con=session.get_bind(), **self.kwargs)
 
-        if self.pa_schema is not None:
-            df = self.pa_schema.validate(df)
+        df = self.validate(df)
 
         return df
 
@@ -140,8 +144,8 @@ class PostgresResource(BaseModel):
         if not self.table_name:
             raise ConfigurationError("PostgresResource must specify table_name for writing.")
 
-        if schema := self.pa_schema:
-            df = schema.validate(df)  # type: ignore
+        self.check_injections()
+        df = self.validate(df)
 
         with session_scope(self.connection_string) as session:
             session: SqlAlchemySession  # type: ignore # this is done for IDE purposes
@@ -176,3 +180,16 @@ class PostgresResource(BaseModel):
                     index=False,
                     schema=self.db_schema,
                 )
+
+    def validate(self, df: pd.DataFrame) -> pd.DataFrame:
+        if schema := self.pa_schema:
+            df = schema.validate(df)  # type: ignore
+        return df
+
+    def cache_key(self):
+        if self.test_path:
+            return str(self.test_path)
+        return f"postgres/{self.table_name}.parquet"
+
+    def get_serde(self):
+        return ParquetSerde(self.validate, {}, {})

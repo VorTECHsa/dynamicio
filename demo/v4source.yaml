@@ -1,0 +1,68 @@
+---
+RESOURCE_B:
+  local:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES_PATH ]]/data/evaluation/test_predictions_{route}_{outlook}d.parquet"
+      file_type: "parquet"
+  cloud:
+    type: "s3_file"
+    s3:
+      bucket: "[[ PROJECT_BUCKET]]"
+      file_path: "evaluation/test_predictions/[[ RUN_ID ]]/test_predictions_{route}_{outlook}d.parquet"
+      file_type: "parquet"
+  schema:
+    file_path: "[[ RESOURCES_PATH ]]/schemas/predictions.yaml"
+
+HYBRID_MODEL_CONFIGURATION:
+  local:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES_DIR_PATH ]]/data/modelling/hybrid_model_configuration.json"
+      file_type: "json"
+
+  cloud:
+    type: "local"
+    local:
+      file_path: "[[ RESOURCES_DIR_PATH ]]/hybrid_model_configurations/{days_in_advance}d.json"
+      file_type: "json"
+VOYAGE_MESSAGES:
+  LOCAL: &local_voyage_messages
+    type: "local"
+    local:
+      file_path: "[[ LOCAL_DATA ]]/sink/voyage_messages.json"
+      file_type: "json"
+    options:
+      orient: "records"
+  LOCAL_E2E: *local_voyage_messages
+  CLOUD:
+    type: "kafka"
+    kafka:
+      kafka_server: "[[ KAFKA_SERVER ]]"
+      kafka_topic: "[[ KAFKA_TOPIC ]]"
+    options:
+      compression_type: "gzip"
+      max_in_flight_requests_per_connection: 10
+      batch_size: 262144
+      request_timeout_ms: 60000  # 60s
+      buffer_memory: 134217728  # 128MB
+      linger_ms: 3000
+  schema:
+    file_path: "[[ RESOURCES ]]/schemas/sink/voyage_message.yaml"
+FREIGHT_RATES:
+  local:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES_PATH ]]/data/input/freight_rates.parquet"
+      file_type: "parquet"
+
+  cloud:
+    type: "postgres"
+    postgres:
+      db_user: "[[ DB_USER ]]"
+      db_password: "[[ DB_PASS ]]"
+      db_host: "[[ DB_HOST ]]"
+      db_port: "[[ DB_PORT ]]"
+      db_name: "[[ DB_NAME ]]"
+  schema:
+    file_path: "[[ RESOURCES_PATH ]]/schemas/freight_rates.yaml"

@@ -12,7 +12,7 @@ from tests.resources.schemas import PgSampleSchema
 sample_path = f"{constants.TEST_RESOURCES}/data/input/pg_parquet_sample.parquet"
 
 
-@pytest.fixture()
+@pytest.fixture
 def postgres_table_resource() -> PostgresResource:
     return PostgresResource(
         db_user="test_user",
@@ -24,7 +24,7 @@ def postgres_table_resource() -> PostgresResource:
     )
 
 
-@pytest.fixture()
+@pytest.fixture
 def postgres_query_resource() -> PostgresResource:
     return PostgresResource(
         db_user="test_user",
@@ -56,7 +56,7 @@ def mocked_session(mock_cursor, mock_binding):
         yield mock_session
 
 
-@pytest.fixture()
+@pytest.fixture
 def postgres_df(postgres_table_resource) -> pd.DataFrame:
     return pd.read_parquet(sample_path)
 

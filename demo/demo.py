@@ -56,3 +56,5 @@ print(df_with_schema)
 # 7      id8  Label_A      1008
 # 8      id9  Label_A      1009
 # 9     id10  Label_B      1010
+
+ParquetResource(path=path, test_path=local_test_path_without_testdir)  # <<- injectable??

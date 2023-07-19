@@ -50,7 +50,7 @@ class Column:
     name: str
     data_type: str
 
-    _allowed_chars: list[str] = ascii_lowercase + digits + "_"
+    _allowed_chars: str = ascii_lowercase + digits + "_"
 
     template_python_compatible = "{name}: Series[{data_type}] = pa.Field(nullable=True)"
     template_python_incompatible = (

@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -58,6 +59,15 @@ def convert_resources(source: Path, destination: Path):
 
 def gather_resource_migration_actions(source: Path, destination: Path):
     source_content, source_path = handle_source_path(source)
+    # make lower case 2 levels
+    source_content = {
+        source: {
+            k.lower(): {kk.lower(): vv for kk, vv in v.items()} if isinstance(v, dict) else v
+            for k, v in deepcopy(contents).items()
+        }
+        for source, contents in source_content.items()
+    }
+
     source_content = {source: contents for source, contents in source_content.items() if is_resource_dict(contents)}
     source_destination_pairs: list[SourceDestinationPair]
     files_to_be_written: list[FilesToBeWritten]
@@ -115,10 +125,13 @@ def generate_source_destination_actions(
     source_destination_pairs: list[SourceDestinationPair] = []
     files_to_be_written: list[FilesToBeWritten] = []
 
+    if not source_content:
+        return [], []
+
     if destination.suffix == ".py":
         python_str = import_str
-
         for _source, contents in source_content.items():
+            rich_print(f"Converting [green]{len(source_destination_pairs)}[/green]")
             python_str += contents_to_code_conversion_func(contents)
             source_destination_pairs.append(SourceDestinationPair(_source, destination))
 
@@ -157,6 +170,8 @@ def handle_source_path(source: Path) -> tuple[dict[Path, dict], Path]:
         raise ValueError(f"Source {source} is not a file or directory")
 
     source_content = {source: yaml.safe_load(source.open()) for source in sources}
+    # Make yaml keys lowercase
+    source_content = {sc_key: {k.lower(): v for k, v in sc_val.items()} for sc_key, sc_val in source_content.items()}
     return source_content, source_path
 
 
@@ -182,4 +197,4 @@ def confirm_migration_actions(
         loc = write_file.target_content.count("\n")
         rich_print(f"[bold blue] - [/bold blue]{write_file.target_file} - ({loc} lines of code.)")
 
-    typer.confirm("\nProceed writing?")
+    typer.confirm("\nProceed writing?", abort=True)

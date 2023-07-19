@@ -15,7 +15,7 @@ test_cases = [
 ]
 
 
-@pytest.fixture()
+@pytest.fixture
 def df() -> pd.DataFrame:
     return pd.read_parquet(input_path / "parquet_sample.parquet")
 
