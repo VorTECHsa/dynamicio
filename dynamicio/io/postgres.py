@@ -112,7 +112,7 @@ class PostgresResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]
     def read(self) -> pd.DataFrame:
         """Handles Read operations for Postgres."""
         self.check_injections()
-        if not bool(self.sql_query) ^ bool(self.table_name):  # Xor
+        if not (bool(self.sql_query) ^ bool(self.table_name)):  # Xor
             raise ConfigurationError("PostgresResource must define EITHER sql_query OR table_name.")
 
         if self.pa_schema is not None and (not self.sql_query and self.pa_schema.Config.strict):
