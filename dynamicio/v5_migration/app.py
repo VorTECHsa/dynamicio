@@ -180,6 +180,9 @@ def write_files(files_to_be_written: list[FilesToBeWritten]):
     for write_file in files_to_be_written:
         write_file.target_file.parent.mkdir(parents=True, exist_ok=True)
         write_file.target_file.write_text(write_file.target_content)
+    rich_print(
+        f"[red]WARNING [/red][blue]Fix warnings emitted above (if any), some validations may need manual edits.[/blue]"
+    )
 
 
 def confirm_migration_actions(

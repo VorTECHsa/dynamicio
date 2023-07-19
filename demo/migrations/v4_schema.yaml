@@ -1,0 +1,107 @@
+---
+name: cargo_movements_coloads_mapping
+columns:
+ id:
+  type: "object"
+  validations: {}
+  metrics: []
+ col_0:
+  type: "int64"
+  validations:
+   is_in:
+    apply: true
+    options:
+     categorical_values:
+      - class_a
+      - class_b
+      - class_c
+     match_all: true
+  metrics: []
+ col_1:
+  type: "int64"
+  validations:
+   is_in:
+    apply: true
+    options:
+     categorical_values:
+      - class_a
+      - class_b
+      - class_c
+     match_all: false
+  metrics: []
+ col_2:
+  type: "int64"
+  validations:
+   is_greater_than:
+    apply: true
+    options:
+     threshold: 1000
+  metrics: []
+ col_3:
+  type: "int64"
+  validations:
+    is_between:
+      apply: true
+      options:
+        lower: 0
+        upper: 1000
+        include_left: false
+        include_right: true
+  metrics: []
+ col_4:
+  type: "int64"
+  validations:
+   has_unique_values:
+    apply: true
+    options: {}
+   has_no_null_values:
+    apply: true
+    options: {}
+  metrics: []
+ col_5:
+  type: "datetime64[ns]"
+  validations: {}
+  metrics: []
+ col_6:
+  type: "int64"
+  validations:
+   has_acceptable_percentage_of_nulls:
+    apply: false
+    options:
+     threshold: 0.015
+  metrics: []
+ col_7:
+  type: "float64"
+  validations:
+   is_greater_than_or_equal:
+    apply: true
+    options:
+     threshold: 0
+ col_8:
+  type: "float64"
+  validations:
+   is_lower_than_or_equal:
+    apply: true
+    options:
+     threshold: 0
+ col_9:
+  type: "float64"
+  validations:
+   is_greater_than:
+    apply: true
+    options:
+     threshold: 0
+ col_10:
+  type: "float64"
+  validations:
+   is_lower_than:
+    apply: true
+    options:
+     threshold: 0
+ col_11:
+  type: "float64"
+  validations:
+   is_greater_than:
+    apply: false
+    options:
+     threshold: 0

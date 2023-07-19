@@ -4,9 +4,13 @@
 
 from __future__ import annotations
 
+import abc
 import re
 from dataclasses import dataclass
 from string import ascii_lowercase, digits
+from typing import Any
+
+from rich import print as rich_print
 
 schema_import_str = """from datetime import datetime
 
@@ -45,17 +49,219 @@ def convert_single_schema_file(yaml_contents: dict) -> str:
     return schema_class.render_template()
 
 
+class Validation(abc.ABC):
+    @abc.abstractmethod
+    def render_own_template(self) -> str:
+        raise NotImplementedError()
+
+
+@dataclass
+class HasNoNulls(Validation):
+    @staticmethod
+    def is_matched(validation_name: str) -> bool:
+        return validation_name == "has_no_null_values"
+
+    @classmethod
+    def parse_from_dict(cls, candidate: dict[str, Any]) -> "HasNoNulls":
+        return cls()
+
+    def render_own_template(self) -> str:
+        return "nullable=False"
+
+
+@dataclass
+class IsIn(Validation):
+    categories: list[str]
+    match_all: bool
+    template: str = "isin=[{categories}]"
+
+    @staticmethod
+    def is_matched(validation_name: str) -> bool:
+        return validation_name == "is_in"
+
+    @classmethod
+    def parse_from_dict(cls, candidate: dict[str, Any]) -> "IsIn":
+        match_all = candidate["options"].get("match_all", True)
+        if not match_all:
+            rich_print(
+                f"[bold red]The migration of validation `is_in` with `match_all = False` is not supported. "
+                f"`match_all: false` actually means that unique values of column should be equal to given categories, "
+                f"without any missing (yes that sounds the wrong way round). "
+                f"Please implement it manually by specifying the a custom check in your pandera schema "
+                f"as follows: [/bold red]"
+            )
+            rich_print(
+                f"\n"
+                f'@pa.check("column_name")\n'
+                f"def is_in_check(cls, series: Series[str]) -> Series[bool]:\n"
+                f"    # Implementation\n"
+                f"    return ...\n\n"
+            )
+        return cls(categories=candidate["options"]["categorical_values"], match_all=match_all)
+
+    def render_own_template(self) -> str:
+        if not self.match_all:
+            return ""
+        return self.template.format(categories=",".join(f'"{cat}"' for cat in self.categories))
+
+
+@dataclass
+class HasUniqueValues(Validation):
+    @staticmethod
+    def is_matched(validation_name: str) -> bool:
+        return validation_name == "has_unique_values"
+
+    @classmethod
+    def parse_from_dict(cls, candidate: dict[str, Any]) -> "HasUniqueValues":
+        return cls()
+
+    def render_own_template(self) -> str:
+        return "unique=True"
+
+
+@dataclass
+class IsGreaterThan(Validation):
+    threshold: float
+    template: str = "gt={threshold}"
+
+    @staticmethod
+    def is_matched(validation_name: str) -> bool:
+        return validation_name == "is_greater_than"
+
+    @classmethod
+    def parse_from_dict(cls, candidate: dict[str, Any]) -> "IsGreaterThan":
+        return cls(threshold=candidate["options"]["threshold"])
+
+    def render_own_template(self) -> str:
+        return self.template.format(threshold=self.threshold)
+
+
+@dataclass
+class IsGreaterThanOrEquals(Validation):
+    threshold: float
+    template: str = "ge={threshold}"
+
+    @staticmethod
+    def is_matched(validation_name: str) -> bool:
+        return validation_name == "is_greater_than_or_equal"
+
+    @classmethod
+    def parse_from_dict(cls, candidate: dict[str, Any]) -> "IsGreaterThanOrEquals":
+        return cls(threshold=candidate["options"]["threshold"])
+
+    def render_own_template(self) -> str:
+        return self.template.format(threshold=self.threshold)
+
+
+@dataclass
+class IsLessThan(Validation):
+    threshold: float
+    template: str = "lt={threshold}"
+
+    @staticmethod
+    def is_matched(validation_name: str) -> bool:
+        return validation_name == "is_lower_than"
+
+    @classmethod
+    def parse_from_dict(cls, candidate: dict[str, Any]) -> "IsLessThan":
+        return cls(threshold=candidate["options"]["threshold"])
+
+    def render_own_template(self) -> str:
+        return self.template.format(threshold=self.threshold)
+
+
+@dataclass
+class IsLessThanOrEquals(Validation):
+    threshold: float
+    template: str = "le={threshold}"
+
+    @staticmethod
+    def is_matched(validation_name: str) -> bool:
+        return validation_name == "is_lower_than_or_equal"
+
+    @classmethod
+    def parse_from_dict(cls, candidate: dict[str, Any]) -> "IsLessThanOrEquals":
+        return cls(threshold=candidate["options"]["threshold"])
+
+    def render_own_template(self) -> str:
+        return self.template.format(threshold=self.threshold)
+
+
+@dataclass
+class IsBetween(Validation):
+    min_value: float
+    max_value: float
+    include_min: bool
+    include_max: bool
+    template: str = 'in_range={{"min_value":{min_value}, "max_value":{max_value}, "include_min":{include_min}, "include_max":{include_max}}}'
+
+    @staticmethod
+    def is_matched(validation_name: str) -> bool:
+        return validation_name == "is_between"
+
+    @classmethod
+    def parse_from_dict(cls, candidate: dict[str, Any]) -> "IsBetween":
+        return cls(
+            min_value=candidate["options"]["lower"],
+            max_value=candidate["options"]["upper"],
+            include_min=candidate["options"]["include_left"] if "include_left" in candidate["options"] else False,
+            include_max=candidate["options"]["include_right"] if "include_right" in candidate["options"] else False,
+        )
+
+    def render_own_template(self) -> str:
+        return self.template.format(
+            min_value=self.min_value,
+            max_value=self.max_value,
+            include_min=self.include_min,
+            include_max=self.include_max,
+        )
+
+
+@dataclass
+class HasAcceptablePercentageOfNulls(Validation):
+    @staticmethod
+    def is_matched(validation_name: str) -> bool:
+        template: str = """
+@pa.check("column_name")
+def has_acceptable_percentage_of_nulls_check(cls, series: Series[str]) -> Series[bool]:
+    # Implementation
+    return ...
+            """
+
+        if validation_name == "has_acceptable_percentage_of_nulls":
+            rich_print(
+                f"[bold red]The migration of validation `has_acceptable_percentage_of_nulls` is not supported. "
+                f"Please implement it manually by specifying the a custom check in your pandera schema "
+                f"as follows: [/bold red]"
+            )
+            rich_print(template)
+
+        return False
+
+    def render_own_template(self) -> str:
+        return ""
+
+
+_supported_validations = [
+    HasNoNulls,
+    IsIn,
+    HasUniqueValues,
+    IsGreaterThan,
+    IsGreaterThanOrEquals,
+    IsLessThan,
+    IsLessThanOrEquals,
+    IsBetween,
+    HasAcceptablePercentageOfNulls,
+]
+
+
 @dataclass
 class Column:
     name: str
     data_type: str
-
-    _allowed_chars: str = ascii_lowercase + digits + "_"
-
-    template_python_compatible = "{name}: Series[{data_type}] = pa.Field(nullable=True)"
-    template_python_incompatible = (
-        '{python_normalized_name}: Series[{data_type}] = pa.Field(alias="{name}", nullable=True)'
-    )
+    validations: list[Validation]
+    template_python_compatible = "{name}: Series[{data_type}] = pa.Field({options})"
+    _allowed_chars: list[str] = ascii_lowercase + digits + "_"
 
     @property
     def is_python_normalized(self) -> bool:
@@ -88,15 +294,39 @@ class Column:
         if normalized_name[0] in digits:
             normalized_name = normalized_name[1:]
 
+        # Accounts for the edge case when the unnormalized column name is just a single number,
+        # which results in an empty normalized name
+
+        if not normalized_name:
+            return f"_{self.name}"
+
         return normalized_name
 
     def render_template(self) -> str:
+        options = [option for option in self._render_options() if option]  # Remove empty options
+
         if self.is_python_normalized:
-            return self.template_python_compatible.format(name=self.name, data_type=self.data_type)
-        else:
-            return self.template_python_incompatible.format(
-                python_normalized_name=self._python_normalize(), name=self.name, data_type=self.data_type
+            return self.template_python_compatible.format(
+                name=self.name, data_type=self.data_type, options=",".join(options)
             )
+        else:
+            options.append(f'alias="{self.name}"')
+
+            return self.template_python_compatible.format(
+                name=self._python_normalize(), data_type=self.data_type, options=",".join(options)
+            )
+
+    def _render_options(self) -> list[str]:
+        options = []
+
+        for v in self.validations:
+            options.append(v.render_own_template())
+
+        # We default to all fields being nullable unless otherwise specified by the validations
+        if "nullable=False" not in options:
+            options.append("nullable=True")
+
+        return options
 
 
 @dataclass
@@ -134,10 +364,16 @@ def _collect_columns(yaml_schema) -> list[Column]:
     columns = []
     for col_name, col_info in yaml_schema["columns"].items():
         parsed_numpy_dtype = col_info["type"]
+        parsed_validations = []
 
         for candidate_type in _numpy_type_to_pandera_mapping:
             if re.search(candidate_type, parsed_numpy_dtype) is not None:
                 derived_pandera_type = _numpy_type_to_pandera_mapping[candidate_type]
+
+        for validation_name, validation_body in col_info["validations"].items():
+            for candidate_validation in _supported_validations:
+                if candidate_validation.is_matched(validation_name):
+                    parsed_validations.append(candidate_validation.parse_from_dict(validation_body))
 
         assert derived_pandera_type is not None, "Could not match the numpy dtype to pandera type"
 
@@ -145,6 +381,7 @@ def _collect_columns(yaml_schema) -> list[Column]:
             Column(
                 name=col_name,
                 data_type=derived_pandera_type,
+                validations=parsed_validations,
             )
         )
 
