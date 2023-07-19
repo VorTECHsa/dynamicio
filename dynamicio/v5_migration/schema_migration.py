@@ -135,6 +135,40 @@ class IsGreaterThanOrEquals(Validation):
 
 
 @dataclass
+class IsLessThan(Validation):
+    threshold: float
+    template: str = "lt={threshold}"
+
+    @staticmethod
+    def is_matched(validation_name: str) -> bool:
+        return validation_name == "is_lower_than"
+
+    @classmethod
+    def parse_from_dict(cls, candidate: dict[str, Any]) -> "IsLessThan":
+        return cls(threshold=candidate["options"]["threshold"])
+
+    def render_own_template(self) -> str:
+        return self.template.format(threshold=self.threshold)
+
+
+@dataclass
+class IsLessThanOrEquals(Validation):
+    threshold: float
+    template: str = "le={threshold}"
+
+    @staticmethod
+    def is_matched(validation_name: str) -> bool:
+        return validation_name == "is_lower_than_or_equal"
+
+    @classmethod
+    def parse_from_dict(cls, candidate: dict[str, Any]) -> "IsLessThanOrEquals":
+        return cls(threshold=candidate["options"]["threshold"])
+
+    def render_own_template(self) -> str:
+        return self.template.format(threshold=self.threshold)
+
+
+@dataclass
 class IsBetween(Validation):
     min_value: float
     max_value: float
@@ -176,9 +210,11 @@ def has_acceptable_percentage_of_nulls_check(cls, series: Series[str]) -> Series
             """
 
         if validation_name == "has_acceptable_percentage_of_nulls":
-            rich_print(f"[bold red]The migration of validation `has_acceptable_percentage_of_nulls` is not supported. "
-                       f"Please implement it manually by specifying the a custom check in your pandera schema "
-                       f"as follows: [/bold red]")
+            rich_print(
+                f"[bold red]The migration of validation `has_acceptable_percentage_of_nulls` is not supported. "
+                f"Please implement it manually by specifying the a custom check in your pandera schema "
+                f"as follows: [/bold red]"
+            )
             rich_print(template)
 
         return False
@@ -193,6 +229,8 @@ _supported_validations = [
     HasUniqueValues,
     IsGreaterThan,
     IsGreaterThanOrEquals,
+    IsLessThan,
+    IsLessThanOrEquals,
     IsBetween,
     HasAcceptablePercentageOfNulls,
 ]

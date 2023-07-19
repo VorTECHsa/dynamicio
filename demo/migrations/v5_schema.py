@@ -16,9 +16,9 @@ class CargoMovementsColoadsMappingSchema(SchemaModel):
     col_5: Series[datetime] = pa.Field(nullable=True)
     col_6: Series[int] = pa.Field(nullable=True)
     col_7: Series[float] = pa.Field(ge=0,nullable=True)
-    col_8: Series[float] = pa.Field(nullable=True)
+    col_8: Series[float] = pa.Field(le=0,nullable=True)
     col_9: Series[float] = pa.Field(gt=0,nullable=True)
-    col_10: Series[float] = pa.Field(nullable=True)
+    col_10: Series[float] = pa.Field(lt=0,nullable=True)
     col_11: Series[float] = pa.Field(gt=0,nullable=True)
 
     class Config:
