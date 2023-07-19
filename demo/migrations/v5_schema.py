@@ -7,9 +7,8 @@ from pandera.typing import Series
 
 class CargoMovementsColoadsMappingSchema(SchemaModel):
     id: Series[str] = pa.Field(nullable=True)
-    tonnes: Series[float] = pa.Field(nullable=True)
-    ratio: Series[float] = pa.Field(nullable=True)
-    col_1: Series[int] = pa.Field(isin=["class_a","class_b","class_c"],nullable=True)
+    col_0: Series[int] = pa.Field(isin=["class_a","class_b","class_c"],nullable=True)
+    col_1: Series[int] = pa.Field(nullable=True)
     col_2: Series[int] = pa.Field(gt=1000,nullable=True)
     col_3: Series[int] = pa.Field(in_range={"min_value":0, "max_value":1000, "include_min":False, "include_max":True},nullable=True)
     col_4: Series[int] = pa.Field(unique=True,nullable=False)

@@ -5,22 +5,18 @@ columns:
   type: "object"
   validations: {}
   metrics: []
- tonnes:
-  type: "float64"
-  validations: {}
-  metrics:
-   - Mean
-   - Min
-   - Max
-   - Std
- ratio:
-  type: "float64"
-  validations: {}
-  metrics:
-   - Mean
-   - Min
-   - Max
-   - Std
+ col_0:
+  type: "int64"
+  validations:
+   is_in:
+    apply: true
+    options:
+     categorical_values:
+      - class_a
+      - class_b
+      - class_c
+     match_all: true
+  metrics: []
  col_1:
   type: "int64"
   validations:

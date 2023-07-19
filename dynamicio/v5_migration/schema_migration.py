@@ -72,6 +72,7 @@ class HasNoNulls(Validation):
 @dataclass
 class IsIn(Validation):
     categories: list[str]
+    match_all: bool
     template: str = "isin=[{categories}]"
 
     @staticmethod
@@ -80,9 +81,27 @@ class IsIn(Validation):
 
     @classmethod
     def parse_from_dict(cls, candidate: dict[str, Any]) -> "IsIn":
-        return cls(categories=candidate["options"]["categorical_values"])
+        match_all = candidate["options"].get("match_all", True)
+        if not match_all:
+            rich_print(
+                f"[bold red]The migration of validation `is_in` with `match_all = False` is not supported. "
+                f"`match_all: false` actually means that unique values of column should be equal to given categories, "
+                f"without any missing (yes that sounds the wrong way round). "
+                f"Please implement it manually by specifying the a custom check in your pandera schema "
+                f"as follows: [/bold red]"
+            )
+            rich_print(
+                f"\n"
+                f'@pa.check("column_name")\n'
+                f"def is_in_check(cls, series: Series[str]) -> Series[bool]:\n"
+                f"    # Implementation\n"
+                f"    return ...\n\n"
+            )
+        return cls(categories=candidate["options"]["categorical_values"], match_all=match_all)
 
     def render_own_template(self) -> str:
+        if not self.match_all:
+            return ""
         return self.template.format(categories=",".join(f'"{cat}"' for cat in self.categories))
 
 
@@ -284,7 +303,7 @@ class Column:
         return normalized_name
 
     def render_template(self) -> str:
-        options = self._render_options()
+        options = [option for option in self._render_options() if option]  # Remove empty options
 
         if self.is_python_normalized:
             return self.template_python_compatible.format(
