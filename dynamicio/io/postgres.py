@@ -2,13 +2,13 @@
 from __future__ import annotations
 
 import csv
+import logging
 import tempfile
 from contextlib import contextmanager
 from copy import deepcopy
 from typing import Any, Dict, Generator, List, Optional, Type
 
 import pandas as pd  # type: ignore
-from magic_logger import logger
 from pandera import SchemaModel
 from pydantic import BaseModel, Field  # pylint: disable=no-name-in-module
 from sqlalchemy import create_engine  # type: ignore
@@ -19,6 +19,7 @@ from uhura import Readable, Writable
 from dynamicio.inject import check_injections, inject
 from dynamicio.serde import ParquetSerde
 
+logger = logging.getLogger(__name__)
 Session = sessionmaker()
 
 
