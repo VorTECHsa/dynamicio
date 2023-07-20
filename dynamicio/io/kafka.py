@@ -1,6 +1,7 @@
 """I/O functions and Resource class for kafka targeted operations."""
 from __future__ import annotations
 
+import logging
 from copy import deepcopy
 from enum import Enum
 from typing import Any, Callable, Dict, Mapping, Optional, Type
@@ -8,13 +9,14 @@ from typing import Any, Callable, Dict, Mapping, Optional, Type
 import pandas as pd  # type: ignore
 import simplejson
 from kafka import KafkaProducer  # type: ignore
-from magic_logger import logger
 from pandera import SchemaModel
 from pydantic import BaseModel, Field
 from uhura import Writable
 
 from dynamicio.inject import check_injections, inject
 from dynamicio.serde import ParquetSerde
+
+logger = logging.getLogger(__name__)
 
 
 class CompressionType(str, Enum):
