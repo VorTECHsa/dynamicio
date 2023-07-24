@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 from copy import deepcopy
 from enum import Enum
+from pathlib import Path
 from typing import Any, Callable, Dict, Mapping, Optional, Type
 
 import pandas as pd  # type: ignore
@@ -14,7 +15,7 @@ from pydantic import BaseModel, Field
 from uhura import Writable
 
 from dynamicio.inject import check_injections, inject
-from dynamicio.serde import ParquetSerde
+from dynamicio.serde import JsonSerde, ParquetSerde
 
 logger = logging.getLogger(__name__)
 
@@ -28,13 +29,7 @@ class CompressionType(str, Enum):
     ZSTD = "zstd"
 
 
-class KafkaResource(BaseModel, Writable[pd.DataFrame]):
-    """Kafka Resource.
-
-    This class is used to write to Kafka topics. Reading is not yet supported.
-    Only requires a `topic` and `server` to be initialized.
-    """
-
+class KafkaConfig(BaseModel):
     topic: str
     server: str
     key_generator: Callable[[Any, Mapping[Any, Any]], Optional[str]] = Field(
@@ -52,19 +47,6 @@ class KafkaResource(BaseModel, Writable[pd.DataFrame]):
     producer_kwargs: Dict[str, Any] = {}
     pa_schema: Optional[Type[SchemaModel]] = None
     test_path: Optional[str] = None
-
-    def inject(self, **kwargs) -> "KafkaResource":
-        """Inject variables into topic and server. Immutable."""
-        clone = deepcopy(self)
-        clone.topic = inject(clone.topic, **kwargs)
-        clone.server = inject(clone.server, **kwargs)
-        clone.test_path = inject(clone.test_path, **kwargs)
-        return clone
-
-    def check_injections(self) -> None:
-        """Check that all injections have been completed."""
-        check_injections(self.topic)
-        check_injections(self.server)
 
     def get_kafka_producer(self) -> KafkaProducer:
         """Get a KafkaProducer instance."""
@@ -84,9 +66,43 @@ class KafkaResource(BaseModel, Writable[pd.DataFrame]):
         arbitrary_types_allowed = True
         validate_assignment = True
 
+
+class KafkaResource(KafkaConfig):
+    """Kafka Resource.
+
+    This class is used to write to Kafka topics. Reading is not yet supported.
+    Only requires a `topic` and `server` to be initialized.
+    """
+
+    def inject(self, **kwargs) -> "KafkaResource":
+        """Inject variables into topic and server. Immutable."""
+        clone = deepcopy(self)
+        clone.topic = str(clone.topic).format(**kwargs)
+        clone.server = str(clone.server).format(**kwargs)
+        if clone.test_path is not None:
+            clone.test_path = str(clone.test_path).format(**kwargs)
+        return clone
+
+    def write(self, df: pd.DataFrame) -> None:
+        """Write the dataframe to Kafka."""
+        df = self.validate(df)
+        KafkaWriter(fixture_path=self.fixture_path, **self.dict()).write(df)
+
+    def read(self) -> pd.DataFrame:
+        """Read from Kafka."""
+        raise NotImplementedError("Reading from Kafka is not yet supported.")
+
+    @property
+    def fixture_path(self) -> Path:
+        """Return the path to the fixture file."""
+        return self.test_path or Path(f"kafka/{self.topic}")
+
+
+class KafkaWriter(KafkaConfig, Writable[pd.DataFrame]):
+    fixture_path: Path
+
     def write(self, df: pd.DataFrame) -> None:
         """Handles Write operations for Kafka."""
-        self.check_injections()
         df = self.validate(df)
 
         kafka_producer = self.get_kafka_producer()
@@ -104,19 +120,13 @@ class KafkaResource(BaseModel, Writable[pd.DataFrame]):
 
         kafka_producer.flush()  # type: ignore
 
-    def read(self) -> pd.DataFrame:
-        """Not yet implemented."""
-        raise NotImplementedError("No kafka reader implemented")
-
     def validate(self, df: pd.DataFrame) -> pd.DataFrame:
         if schema := self.pa_schema:
             df = schema.validate(df)  # type: ignore
         return df
 
     def cache_key(self):
-        if self.test_path:
-            return str(self.test_path)
-        return f"kafka/{self.topic}"
+        return self.fixture_path
 
     def get_serde(self):
-        return ParquetSerde(self.validate, {}, {})
+        return JsonSerde()
