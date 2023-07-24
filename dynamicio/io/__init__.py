@@ -4,6 +4,5 @@
 
 from dynamicio.io.file import FileResource
 from dynamicio.io.kafka import KafkaResource
-from dynamicio.io.keyed import KeyedResource
 from dynamicio.io.postgres import PostgresResource
-from dynamicio.io.s3 import *
+from dynamicio.io.s3 import S3Resource
