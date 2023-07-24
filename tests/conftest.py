@@ -20,7 +20,7 @@ def output_dir_path() -> Generator[Path, None, None]:
 
 @pytest.fixture
 def test_df():
-    return pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    return pd.DataFrame({"a": [1, 2, 3], "b": ["x", "y", "z"], "c": [True, False, True]})
 
 
 @pytest.fixture

@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from dynamicio.io.file import CsvResource, HdfResource, JsonResource, ParquetResource
+from dynamicio.io.file import CsvResource, HdfResource, JsonResource, FileResource
 from tests import constants
 from tests.resources.schemas import SampleSchema
 

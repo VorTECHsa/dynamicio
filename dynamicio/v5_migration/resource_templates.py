@@ -85,47 +85,56 @@ class S3Template(ReadyTemplate):
         )
 
 
-file_type_class_map = {
-    "parquet": "ParquetResource",
-    "csv": "CsvResource",
-    "json": "JsonResource",
-    "hdf": "HdfResource",
-}
+file_types = ["parquet", "csv", "json", "hdf"]
+
+
+def replace_double_brackets(string: Optional[str]) -> Optional[str]:
+    if not string:
+        return None
+    return string.replace("[[", "{").replace("]]", "}")
 
 
 @dataclass
 class LocalTemplate(ReadyTemplate):
     resource_name: str
     file_path: str
-    class_name: str
+    file_type: Optional[str]
     test_path: Optional[str]
     template: str = """
-{resource_name} = {class_name}(
-    path="{file_path}"{test_path_str}
+{resource_name} = FileResource(
+    path="{file_path}"{test_path_str}{file_type_str}
 )
 """
 
     @classmethod
     def from_dict(cls, resource_dict: dict[str, ...], resource_name: str) -> "LocalTemplate":
         test_path = resource_dict.get("local", {}).get("local", {}).get("file_path", None)
+        file_path = resource_dict["cloud"]["local"]["file_path"]
+        file_type = resource_dict["cloud"]["local"]["file_type"]
+
+        test_path = replace_double_brackets(test_path)
+        file_path = replace_double_brackets(file_path)
+        # these can be inferred from the file_path
+        if any([file_path.endswith("." + ext) for ext in file_types]):
+            file_type = None
         return cls(
             resource_name=resource_name,
-            file_path=resource_dict["cloud"]["local"]["file_path"],
-            class_name=file_type_class_map[resource_dict["cloud"]["local"]["file_type"]],
+            file_path=file_path,
+            file_type=file_type,
             test_path=test_path,
         )
 
     @staticmethod
     def is_dict_parseable(resource_dict: dict[str, ...]) -> bool:
-        return resource_dict["cloud"]["type"] == "local" and resource_dict["cloud"]["local"]["file_type"] in list(
-            file_type_class_map.keys()
-        )
+        file_type = resource_dict["cloud"]["local"]["file_type"]
+        return resource_dict["cloud"]["type"] == "local" and file_type in file_types
 
     def render_template(self) -> str:
         test_path_str = f',\n    test_path="{self.test_path}"' if self.test_path else ""
+        file_type_str = f',\n    file_type="{self.file_type}"' if self.file_type else ""
         return self.template.format(
             resource_name=self.resource_name,
-            class_name=self.class_name,
+            file_type_str=file_type_str,
             file_path=self.file_path,
             test_path_str=test_path_str,
         )

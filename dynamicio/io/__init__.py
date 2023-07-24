@@ -2,7 +2,7 @@
 
 """Functional io pydantic models for supported I/O targets."""
 
-from dynamicio.io.file import *
+from dynamicio.io.file import FileResource
 from dynamicio.io.kafka import KafkaResource
 from dynamicio.io.keyed import KeyedResource
 from dynamicio.io.postgres import PostgresResource
