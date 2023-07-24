@@ -10,30 +10,32 @@ import pandas as pd
 from pandera import SchemaModel
 from pydantic import BaseModel, Field  # type: ignore
 
-from dynamicio.io.file.csv import CsvReaderWriter
-from dynamicio.io.file.hdf import HdfReaderWriter
-from dynamicio.io.file.json import JsonReaderWriter
-from dynamicio.io.file.parquet import ParquetReaderWriter
+from dynamicio.io.s3.csv import S3CsvReaderWriter
+from dynamicio.io.s3.hdf import S3HdfReaderWriter
+from dynamicio.io.s3.json import S3JsonReaderWriter
+from dynamicio.io.s3.parquet import S3ParquetReaderWriter
 
 
-class FileType(Enum):
-    PARQUET = ParquetReaderWriter
-    CSV = CsvReaderWriter
-    JSON = JsonReaderWriter
-    HDF = HdfReaderWriter
+class S3FileType(Enum):
+    PARQUET = S3ParquetReaderWriter
+    CSV = S3CsvReaderWriter
+    JSON = S3JsonReaderWriter
+    HDF = S3HdfReaderWriter
 
 
-class FileResource(BaseModel):
+class S3Resource(BaseModel):
+    bucket: str
     path: Path
     read_kwargs: Dict[str, Any] = {}
     write_kwargs: Dict[str, Any] = {}
     pa_schema: Optional[Type[SchemaModel]] = None
     test_path: Optional[Path] = None
-    file_type: Union[FileType, str, None] = None
+    file_type: Union[S3FileType, str, None] = None
 
-    def inject(self, **kwargs) -> "FileResource":
+    def inject(self, **kwargs) -> "S3Resource":
         """Inject variables into path. Immutable function."""
         clone = deepcopy(self)
+        clone.bucket = str(clone.bucket).format(**kwargs)
         clone.path = str(clone.path).format(**kwargs)
         if clone.test_path is not None:
             clone.test_path = str(clone.test_path).format(**kwargs)
@@ -55,13 +57,8 @@ class FileResource(BaseModel):
             df = schema.validate(df)  # type: ignore
         return df
 
-    @property
-    def fixture_path(self) -> Path:
-        """Return test path."""
-        return self.test_path or self.path
-
-    def _get_reader_writer_class(self) -> FileType:
-        if isinstance(self.file_type, FileType):
+    def _get_reader_writer_class(self) -> S3FileType:
+        if isinstance(self.file_type, S3FileType):
             return self.file_type
         if self.file_type is None:
             suffix = self.path.suffix
@@ -69,21 +66,27 @@ class FileResource(BaseModel):
         elif isinstance(self.file_type, str):
             suffix = self.file_type
         else:
-            raise ValueError("file_type must be FileType, str or None.")
+            raise ValueError("file_type must be S3FileType, str or None.")
 
         reader_writer = {
-            "parquet": FileType.PARQUET,
-            "csv": FileType.CSV,
-            "json": FileType.JSON,
-            "hdf": FileType.HDF,
+            "parquet": S3FileType.PARQUET,
+            "csv": S3FileType.CSV,
+            "json": S3FileType.JSON,
+            "hdf": S3FileType.HDF,
         }.get(suffix, None)
         if reader_writer is None:
             raise ValueError(f"Unknown file type {suffix}")
         return reader_writer
 
+    @property
+    def fixture_path(self) -> Path:
+        """Return test path."""
+        return self.test_path or Path("s3") / self.bucket / self.path
+
     def _build_reader_writer(self):
-        reader_writer_class: FileType = self._get_reader_writer_class()
+        reader_writer_class: S3FileType = self._get_reader_writer_class()
         return reader_writer_class.value(
+            bucket=self.bucket,
             path=self.path,
             read_kwargs=self.read_kwargs,
             write_kwargs=self.write_kwargs,

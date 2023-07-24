@@ -1,98 +1,63 @@
-# pylint: disable=no-member, protected-access, too-few-public-methods
-# flake8: noqa: I101
-"""S3 HDF specific hacks."""
+"""Hdf ReaderWriter."""
 from __future__ import annotations
 
 import uuid
 from contextlib import contextmanager
-from copy import deepcopy
 from pathlib import Path
 from threading import Lock
-from typing import IO, Any, Dict, Generator, Optional, Type
+from typing import Any, Dict, Generator, IO, Optional
 
 import boto3  # type: ignore
 import pandas as pd  # type: ignore
 import tables  # type: ignore
-from pandera import SchemaModel
-from pydantic import BaseModel
-from pydantic.fields import Field
+from pydantic import BaseModel  # type: ignore
 from uhura.modes import Readable, Writable
 
 from dynamicio import utils
-from dynamicio.inject import check_injections, inject
 from dynamicio.io.s3.contexts import s3_named_file_reader, s3_reader, s3_writer
 from dynamicio.serde import HdfSerde
 
 hdf_lock = Lock()
 
 
-class S3HdfResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):
-    """HDF Resource."""
-
+class S3HdfReaderWriter(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):
     bucket: str
     path: Path
-    pickle_protocol: int = Field(4, ge=0, le=5)  # Default covers python 3.4+
-    force_read_to_memory: bool = False
     read_kwargs: Dict[str, Any] = {}
     write_kwargs: Dict[str, Any] = {}
-    pa_schema: Optional[Type[SchemaModel]] = None
-    test_path: Optional[Path] = None
+    fixture_path: Path
 
-    def inject(self, **kwargs) -> "S3HdfResource":
-        """Inject variables into path. Immutable."""
-        clone = deepcopy(self)
-        clone.bucket = inject(clone.bucket, **kwargs)
-        clone.path = inject(clone.path, **kwargs)
-        clone.test_path = inject(clone.test_path, **kwargs)
-        return clone
-
-    def check_injections(self) -> None:
-        """Check that all injections have been completed."""
-        check_injections(self.bucket)
-        check_injections(self.path)
+    force_read_to_memory: bool = False
 
     @property
-    def full_path(self) -> str:
-        """Full path to the resource, including the bucket name."""
+    def _s3_path(self) -> str:
         return f"s3://{self.bucket}/{self.path}"
 
     def read(self) -> pd.DataFrame:
         """Read HDF from S3."""
-        self.check_injections()
-        df = None
         if self.force_read_to_memory:
             with s3_reader(boto3.client("s3"), s3_bucket=self.bucket, s3_key=str(self.path)) as fobj:  # type: ignore
                 df = HdfIO().load(fobj)
-        if df is None:
-            with s3_named_file_reader(boto3.client("s3"), s3_bucket=self.bucket, s3_key=str(self.path)) as target_file:
-                with hdf_lock:
-                    df = pd.read_hdf(target_file.name, **self.read_kwargs)  # type: ignore
+            if df is not None:
+                return df
+        with s3_named_file_reader(boto3.client("s3"), s3_bucket=self.bucket, s3_key=str(self.path)) as target_file:
+            with hdf_lock:
+                df = pd.read_hdf(target_file.name, **self.read_kwargs)  # type: ignore
 
-        df = self.validate(df)
         return df
 
     def write(self, df: pd.DataFrame) -> None:
         """Write HDF to s3."""
-        self.check_injections()
-        df = self.validate(df)
-
         with s3_writer(boto3.client("s3"), s3_bucket=self.bucket, s3_key=str(self.path)) as fobj, utils.pickle_protocol(
-            protocol=self.pickle_protocol
+            protocol=4
         ):
             HdfIO().save(df, fobj, **self.write_kwargs)
 
-    def validate(self, df: pd.DataFrame) -> pd.DataFrame:
-        if schema := self.pa_schema:
-            df = schema.validate(df)
-        return df
-
     def cache_key(self):
-        if self.test_path:
-            return str(self.test_path)
-        return f"s3/{self.bucket}/{self.path}"
+        return self.fixture_path
 
     def get_serde(self):
-        return HdfSerde(self.validate, self.read_kwargs, self.write_kwargs, self.pickle_protocol)
+        return HdfSerde(read_kwargs=self.read_kwargs, write_kwargs=self.write_kwargs)
 
 
 class InMemStore(pd.io.pytables.HDFStore):

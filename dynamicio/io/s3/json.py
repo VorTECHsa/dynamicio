@@ -1,81 +1,49 @@
-# pylint: disable=protected-access
-"""Json Resource and resource."""
+"""Json ReaderWriter."""
 from __future__ import annotations
 
-from copy import deepcopy
 from pathlib import Path
-from typing import Any, Dict, Optional, Type
+from typing import Any, Dict
 
 import boto3  # type: ignore
 import pandas as pd
-from pandera import SchemaModel
 from pydantic import BaseModel  # type: ignore
 from uhura.modes import Readable, Writable
 
-from dynamicio.inject import check_injections, inject
 from dynamicio.io.s3.contexts import s3_named_file_reader
 from dynamicio.serde import JsonSerde
 
 
-class S3JsonResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):
-    """JSON Resource."""
-
+class S3JsonReaderWriter(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):
     bucket: str
     path: Path
-    force_read_to_memory: bool = False
     read_kwargs: Dict[str, Any] = {}
     write_kwargs: Dict[str, Any] = {}
-    pa_schema: Optional[Type[SchemaModel]] = None
-    test_path: Optional[Path] = None
+    fixture_path: Path
 
-    def inject(self, **kwargs) -> "S3JsonResource":
-        """Inject variables into path. Immutable."""
-        clone = deepcopy(self)
-        clone.bucket = inject(clone.bucket, **kwargs)
-        clone.path = inject(clone.path, **kwargs)
-        clone.test_path = inject(clone.test_path, **kwargs)
-        return clone
-
-    def check_injections(self) -> None:
-        """Check that all injections have been completed."""
-        check_injections(self.bucket)
-        check_injections(self.path)
+    force_read_to_memory: bool = False
 
     @property
-    def full_path(self) -> str:
-        """Full path to the resource, including the bucket name."""
+    def _s3_path(self) -> str:
         return f"s3://{self.bucket}/{self.path}"
 
     def read(self) -> pd.DataFrame:
         """Read JSON from S3."""
-        self.check_injections()
-        df = None
-
         if self.force_read_to_memory:
-            df = pd.read_json(self.full_path, **self.read_kwargs)  # type: ignore
+            df = pd.read_json(self._s3_path, **self.read_kwargs)  # type: ignore
+            if df is not None:
+                return df
 
-        if df is None:
-            with s3_named_file_reader(boto3.client("s3"), s3_bucket=self.bucket, s3_key=str(self.path)) as target_file:
-                df = pd.read_json(target_file.name, **self.read_kwargs)  # type: ignore
+        with s3_named_file_reader(boto3.client("s3"), s3_bucket=self.bucket, s3_key=str(self.path)) as target_file:
+            df = pd.read_json(target_file.name, **self.read_kwargs)  # type: ignore
 
-        df = self.validate(df)
         return df
 
     def write(self, df: pd.DataFrame) -> None:
         """Write JSON to S3."""
-        self.check_injections()
-        df = self.validate(df)
-        df.to_json(self.full_path, **self.write_kwargs)
-
-    def validate(self, df: pd.DataFrame) -> pd.DataFrame:
-        if schema := self.pa_schema:
-            df = schema.validate(df)
-        return df
+        df.to_json(self._s3_path, **self.write_kwargs)
 
     def cache_key(self):
-        if self.test_path:
-            return str(self.test_path)
-        return f"s3/{self.bucket}/{self.path}"
+        return self.fixture_path
 
     def get_serde(self):
-        return JsonSerde(self.validate, self.read_kwargs, self.write_kwargs)
+        return JsonSerde(read_kwargs=self.read_kwargs, write_kwargs=self.write_kwargs)
