@@ -14,8 +14,7 @@ from pandera import SchemaModel
 from pydantic import BaseModel, Field
 from uhura import Writable
 
-from dynamicio.inject import check_injections, inject
-from dynamicio.serde import JsonSerde, ParquetSerde
+from dynamicio.serde import JsonSerde
 
 logger = logging.getLogger(__name__)
 
@@ -86,21 +85,14 @@ class KafkaResource(KafkaConfig):
     def write(self, df: pd.DataFrame) -> None:
         """Write the dataframe to Kafka."""
         df = self.validate(df)
-        KafkaWriter(fixture_path=self.fixture_path, **self.dict()).write(df)
+        KafkaWriter(**self.dict()).write(df)
 
     def read(self) -> pd.DataFrame:
         """Read from Kafka."""
         raise NotImplementedError("Reading from Kafka is not yet supported.")
 
-    @property
-    def fixture_path(self) -> Path:
-        """Return the path to the fixture file."""
-        return self.test_path or Path(f"kafka/{self.topic}")
-
 
 class KafkaWriter(KafkaConfig, Writable[pd.DataFrame]):
-    fixture_path: Path
-
     def write(self, df: pd.DataFrame) -> None:
         """Handles Write operations for Kafka."""
         df = self.validate(df)
@@ -126,7 +118,8 @@ class KafkaWriter(KafkaConfig, Writable[pd.DataFrame]):
         return df
 
     def cache_key(self):
-        return self.fixture_path
+        """Return the path to the fixture file."""
+        return self.test_path or Path(f"kafka/{self.topic}")
 
     def get_serde(self):
         return JsonSerde()
