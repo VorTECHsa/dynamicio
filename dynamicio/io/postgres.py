@@ -6,6 +6,7 @@ import logging
 import tempfile
 from contextlib import contextmanager
 from copy import deepcopy
+from pathlib import Path
 from typing import Any, Dict, Generator, List, Optional, Type
 
 import pandas as pd  # type: ignore
@@ -16,7 +17,6 @@ from sqlalchemy.orm import Session as SqlAlchemySession  # type: ignore
 from sqlalchemy.orm import sessionmaker  # type: ignore
 from uhura import Readable, Writable
 
-from dynamicio.inject import check_injections, inject
 from dynamicio.serde import ParquetSerde
 
 logger = logging.getLogger(__name__)
@@ -53,17 +53,7 @@ class ConfigurationError(Exception):
     """Raised when configuration is wrong."""
 
 
-class PostgresResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):
-    """Postgres Resource class.
-
-    This resource handles reading and writing to postgres databases. If a pa_schema has been given, it will
-    construct a sql query that only fetches the columns specified in the schema, this pushes down
-    the filtering to the database, prevents us from unnecessarily loading data.
-
-    Warning: Special case, where even if you explicitly don't validate, but give a pa_schema with strict="filter",
-    the generated sql query will only query specified columns.
-    """
-
+class PostgresConfig(BaseModel):
     db_user: str
     db_password: Optional[str]
     db_host: str
@@ -80,6 +70,54 @@ class PostgresResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]
     test_path: Optional[str] = None
     application_name: Optional[str] = None
 
+
+class PostgresResource(PostgresConfig):
+    """Postgres Resource class.
+
+    This resource handles reading and writing to postgres databases. If a pa_schema has been given, it will
+    construct a sql query that only fetches the columns specified in the schema, this pushes down
+    the filtering to the database, prevents us from unnecessarily loading data.
+
+    Warning: Special case, where even if you explicitly don't validate, but give a pa_schema with strict="filter",
+    the generated sql query will only query specified columns.
+    """
+
+    def inject(self, **kwargs) -> "PostgresResource":
+        """Inject variables into stuff. Not in place."""
+        clone = deepcopy(self)
+
+        clone.db_user = clone.db_user.format(**kwargs)
+        clone.db_password = clone.db_password.format(**kwargs)
+        clone.db_host = clone.db_host.format(**kwargs)
+        clone.db_name = clone.db_name.format(**kwargs)
+        clone.db_schema = clone.db_schema.format(**kwargs)
+
+        if self.sql_query:
+            clone.sql_query = clone.sql_query.format(**kwargs)
+        if clone.test_path:
+            clone.test_path = clone.test_path.format(**kwargs)
+
+        if self.table_name:
+            clone.table_name = clone.table_name.format(**kwargs)
+        return clone
+
+    def read(self) -> pd.DataFrame:
+        df = PostgresResourceReaderWriter(**self.dict()).read()
+        df = self.validate(df)
+        return df
+
+    def write(self, df: pd.DataFrame) -> None:
+        df = self.validate(df)
+        PostgresResourceReaderWriter(**self.dict()).write(df)
+
+
+    def validate(self, df: pd.DataFrame) -> pd.DataFrame:
+        if schema := self.pa_schema:
+            df = schema.validate(df)  # type: ignore
+        return df
+
+
+class PostgresResourceReaderWriter(PostgresConfig, Readable[pd.DataFrame], Writable[pd.DataFrame]):
     @property
     def connection_string(self) -> str:
         """Build connection string out of components."""
@@ -91,32 +129,8 @@ class PostgresResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]
         """Return schema and table name in a format of schema.table_name."""
         return f"{self.db_schema}.{self.table_name}"
 
-    def inject(self, **kwargs) -> "PostgresResource":
-        """Inject variables into stuff. Not in place."""
-        clone = deepcopy(self)
-        clone.db_user = inject(clone.db_user, **kwargs)
-        clone.db_password = inject(clone.db_password, **kwargs)
-        clone.db_host = inject(clone.db_host, **kwargs)
-        clone.db_name = inject(clone.db_name, **kwargs)
-        clone.table_name = inject(clone.table_name, **kwargs)
-        clone.sql_query = inject(clone.sql_query, **kwargs)
-        clone.db_schema = inject(clone.db_schema, **kwargs)
-        clone.test_path = inject(clone.test_path, **kwargs)
-        return clone
-
-    def check_injections(self) -> None:
-        """Check that all injections have been completed."""
-        check_injections(self.db_user)
-        check_injections(self.db_password)
-        check_injections(self.db_host)
-        check_injections(self.db_name)
-        check_injections(self.table_name)
-        check_injections(self.sql_query)
-        check_injections(self.db_schema)
-
     def read(self) -> pd.DataFrame:
         """Handles Read operations for Postgres."""
-        self.check_injections()
         if not (bool(self.sql_query) ^ bool(self.table_name)):  # Xor
             raise ConfigurationError("PostgresResource must define EITHER sql_query OR table_name.")
 
@@ -134,8 +148,6 @@ class PostgresResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]
         with session_scope(self.connection_string, self.application_name) as session:
             df = pd.read_sql(sql=sql_query, con=session.get_bind(), **self.kwargs)
 
-        df = self.validate(df)
-
         return df
 
         # TODO: sqlalchemy 2.0 breaks here
@@ -144,13 +156,10 @@ class PostgresResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]
         #       For example objects -> String(64)s
         #       For example date goes to Date and datetime64[ns] -> DateTime
 
-    def write(self, df: pd.DataFrame):
+    def write(self, df: pd.DataFrame) -> None:
         """Handles Write operations for Postgres."""
         if not self.table_name:
             raise ConfigurationError("PostgresResource must specify table_name for writing.")
-
-        self.check_injections()
-        df = self.validate(df)
 
         with session_scope(self.connection_string, self.application_name) as session:
             session: SqlAlchemySession  # type: ignore # this is done for IDE purposes
@@ -186,15 +195,12 @@ class PostgresResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]
                     schema=self.db_schema,
                 )
 
-    def validate(self, df: pd.DataFrame) -> pd.DataFrame:
-        if schema := self.pa_schema:
-            df = schema.validate(df)  # type: ignore
-        return df
-
-    def cache_key(self):
+    def cache_key(self) -> Path:
         if self.test_path:
             return str(self.test_path)
-        return f"postgres/{self.table_name}.parquet"
+        if self.table_name:
+            return Path(f"postgres/{self.table_name}")
+        raise ValueError("Cannot create cache key for PostgresResource, give test_path or table_name.")
 
     def get_serde(self):
-        return ParquetSerde(self.validate, {}, {})
+        return ParquetSerde()
