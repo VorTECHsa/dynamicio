@@ -89,6 +89,7 @@ class FileResource(BaseModel):
             write_kwargs=self.write_kwargs,
             test_path=self.test_path,
             fixture_path=self.fixture_path,
+            validate=self.validate,
         )
 
     class Config:

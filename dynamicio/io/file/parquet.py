@@ -2,13 +2,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Callable, Dict
 
 import pandas as pd
 from pydantic import BaseModel
 from uhura import Readable, Writable
 
-from dynamicio.serde import ParquetSerde
+from dynamicio.serde import ParquetSerde, ValidatedSerde
 
 
 class ParquetReaderWriter(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):
@@ -16,6 +16,7 @@ class ParquetReaderWriter(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFra
     read_kwargs: Dict[str, Any] = {}
     write_kwargs: Dict[str, Any] = {}
     fixture_path: Path
+    validate: Callable[[pd.DataFrame], pd.DataFrame]
 
     def read(self) -> pd.DataFrame:
         """Read the PARQUET file."""
@@ -31,4 +32,4 @@ class ParquetReaderWriter(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFra
         return self.fixture_path
 
     def get_serde(self):
-        return ParquetSerde(read_kwargs=self.read_kwargs, write_kwargs=self.write_kwargs)
+        return ValidatedSerde(self.validate, ParquetSerde(read_kwargs=self.read_kwargs, write_kwargs=self.write_kwargs))
