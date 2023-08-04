@@ -12,11 +12,14 @@ from typing import Any
 
 from rich import print as rich_print
 
+from dynamicio.metrics import Metric
+
 schema_import_str = """from datetime import datetime
 
 import pandera as pa
 from pandera import SchemaModel
 from pandera.typing import Series
+from dynamicio.metrics import Metric
 
 """
 
@@ -255,11 +258,102 @@ _supported_validations = [
 ]
 
 
+class MetricLogger(abc.ABC):
+    @abc.abstractmethod
+    def render_own_template(self) -> str:
+        raise NotImplementedError()
+
+
+class Min(MetricLogger):
+    @staticmethod
+    def is_matched(metric_name: str) -> bool:
+        return metric_name == Metric.MIN.value
+
+    def render_own_template(self) -> str:
+        return "Metric.MIN"
+
+
+class Max(MetricLogger):
+    @staticmethod
+    def is_matched(metric_name: str) -> bool:
+        return metric_name == Metric.MAX.value
+
+    def render_own_template(self) -> str:
+        return "Metric.MAX"
+
+
+class Mean(MetricLogger):
+    @staticmethod
+    def is_matched(metric_name: str) -> bool:
+        return metric_name == Metric.MEAN.value
+
+    def render_own_template(self) -> str:
+        return "Metric.MEAN"
+
+
+class Std(MetricLogger):
+    @staticmethod
+    def is_matched(metric_name: str) -> bool:
+        return metric_name == Metric.STD.value
+
+    def render_own_template(self) -> str:
+        return "Metric.STD"
+
+
+class Variance(MetricLogger):
+    @staticmethod
+    def is_matched(metric_name: str) -> bool:
+        return metric_name == Metric.VARIANCE.value
+
+    def render_own_template(self) -> str:
+        return "Metric.VARIANCE"
+
+
+class Counts(MetricLogger):
+    @staticmethod
+    def is_matched(metric_name: str) -> bool:
+        return metric_name == Metric.COUNTS.value
+
+    def render_own_template(self) -> str:
+        return "Metric.COUNTS"
+
+
+class UniqueCounts(MetricLogger):
+    @staticmethod
+    def is_matched(metric_name: str) -> bool:
+        return metric_name == Metric.UNIQUE_COUNTS.value
+
+    def render_own_template(self) -> str:
+        return "Metric.UNIQUE_COUNTS"
+
+
+class CountsPerLabel(MetricLogger):
+    @staticmethod
+    def is_matched(metric_name: str) -> bool:
+        return metric_name == Metric.COUNTS_PER_LABEL.value
+
+    def render_own_template(self) -> str:
+        return "Metric.COUNTS_PER_LABEL"
+
+
+_supported_metrics = [
+    Min,
+    Max,
+    Mean,
+    Std,
+    Variance,
+    Counts,
+    UniqueCounts,
+    CountsPerLabel,
+]
+
+
 @dataclass
 class Column:
     name: str
     data_type: str
     validations: list[Validation]
+    metrics: list[MetricLogger]
     template_python_compatible = "{name}: Series[{data_type}] = pa.Field({options})"
     _allowed_chars: list[str] = ascii_lowercase + digits + "_"
 
@@ -326,6 +420,14 @@ class Column:
         if "nullable=False" not in options:
             options.append("nullable=True")
 
+        # Optionally parse and append the metrics
+        if self.metrics:
+            metrics_template = 'log_statistics={{"metrics": [{metrics}]}}'.format(
+                metrics=",".join([m.render_own_template() for m in self.metrics])
+            )
+
+            options.append(metrics_template)
+
         return options
 
 
@@ -365,6 +467,7 @@ def _collect_columns(yaml_schema) -> list[Column]:
     for col_name, col_info in yaml_schema["columns"].items():
         parsed_numpy_dtype = col_info["type"]
         parsed_validations = []
+        parsed_metrics = []
 
         for candidate_type in _numpy_type_to_pandera_mapping:
             if re.search(candidate_type, parsed_numpy_dtype) is not None:
@@ -375,6 +478,11 @@ def _collect_columns(yaml_schema) -> list[Column]:
                 if candidate_validation.is_matched(validation_name):
                     parsed_validations.append(candidate_validation.parse_from_dict(validation_body))
 
+        for metric_name in col_info["metrics"]:
+            for metric_candidate in _supported_metrics:
+                if metric_candidate.is_matched(metric_name):
+                    parsed_metrics.append(metric_candidate())
+
         assert derived_pandera_type is not None, "Could not match the numpy dtype to pandera type"
 
         columns.append(
@@ -382,6 +490,7 @@ def _collect_columns(yaml_schema) -> list[Column]:
                 name=col_name,
                 data_type=derived_pandera_type,
                 validations=parsed_validations,
+                metrics=parsed_metrics,
             )
         )
 

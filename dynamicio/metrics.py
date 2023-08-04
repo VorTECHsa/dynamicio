@@ -1,12 +1,27 @@
+import json
+import logging
 from enum import Enum
+from typing import Mapping
 
 import pandas as pd
-import pandera as pa
-from pandera import SchemaModel, extensions
-from pandera.typing import Series
+from pandera import extensions
+
+logger = logging.getLogger(__name__)
 
 
-# TODO: use legacy names only for migration? Does it even matter?
+def log_metric(column: str, metric: str, value: float):
+    """Logs a metric in a structured way for a given dataset column.
+
+    Args:
+        column: Column for which the metric is logged
+        metric: name fo the metric, e.g. "unique_vals"
+        value: The metric's value, e.g. "10000"
+    """
+    logger.info(
+        json.dumps({"message": "METRIC", "column": column, "metric": metric, "value": float(value)})
+    )
+
+
 class Metric(str, Enum):
     MIN = "Min"
     MAX = "Max"
@@ -18,17 +33,15 @@ class Metric(str, Enum):
     COUNTS_PER_LABEL = "CountsPerLabel"
 
 
-# TODO: figure out how to import this into consumer code
 @extensions.register_check_method(statistics=["metrics"])
 def log_statistics(pandas_obj, *, metrics):
     """
     Implements column-level data metrics as a workaround through custom metrics
     """
 
-    for metric in metrics:
-        # TODO: replace with logging
-        print(f"Computing {metric} for {pandas_obj.name}")
+    col_name = str(pandas_obj.name)
 
+    for metric in metrics:
         computed_metric = None
 
         if metric == Metric.MIN:
@@ -48,7 +61,12 @@ def log_statistics(pandas_obj, *, metrics):
         elif metric == Metric.COUNTS_PER_LABEL:
             computed_metric = calculate_counts_per_label(pandas_obj)
 
-        print(f"{metric} for {pandas_obj.name} is {computed_metric}")
+        if isinstance(computed_metric, Mapping):
+            for entity in sorted(computed_metric.keys()):  # pylint: disable=no-member
+                value = computed_metric[entity]  # pylint: disable=unsubscriptable-object
+                log_metric(column=col_name, metric=metric, value=value)
+        else:
+            log_metric(column=col_name, metric=metric, value=computed_metric)
 
     return True
 
@@ -116,7 +134,6 @@ def calculate_unique_counts(series: pd.Series) -> int:
     return len(series.unique())
 
 
-# TODO: doesn't actually work
 def calculate_counts_per_label(series: pd.Series) -> dict:
     """Generate and return the counts per label in a categorical column.
 
@@ -129,16 +146,3 @@ def calculate_counts_per_label(series: pd.Series) -> dict:
         new_key = str(series.name) + "-" + key
         label_vs_metric_value_with_column_prefix[new_key] = column_vs_metric_value[key]
     return label_vs_metric_value_with_column_prefix
-
-
-class Schema(SchemaModel):
-    col1: Series[str] = pa.Field()
-    col2: Series[int] = pa.Field(
-        log_statistics={"metrics": [Metric.MIN, Metric.MEAN, Metric.STD, Metric.UNIQUE_COUNTS]}
-    )
-
-
-if __name__ == "__main__":
-    data = pd.DataFrame({"col1": ["value"] * 5, "col2": range(5)})
-
-    Schema.validate(data)
