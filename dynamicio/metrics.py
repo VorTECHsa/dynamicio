@@ -9,19 +9,6 @@ from pandera import extensions
 logger = logging.getLogger(__name__)
 
 
-def log_metric(column: str, metric: str, value: float):
-    """Logs a metric in a structured way for a given dataset column.
-
-    Args:
-        column: Column for which the metric is logged
-        metric: name fo the metric, e.g. "unique_vals"
-        value: The metric's value, e.g. "10000"
-    """
-    logger.info(
-        json.dumps({"message": "METRIC", "column": column, "metric": metric, "value": float(value)})
-    )
-
-
 class Metric(str, Enum):
     MIN = "Min"
     MAX = "Max"
@@ -31,6 +18,17 @@ class Metric(str, Enum):
     COUNTS = "Counts"
     UNIQUE_COUNTS = "UniqueCounts"
     COUNTS_PER_LABEL = "CountsPerLabel"
+
+
+def log_metric(column: str, metric: str, value: float):
+    """Logs a metric in a structured way for a given dataset column.
+
+    Args:
+        column: Column for which the metric is logged
+        metric: name fo the metric, e.g. "unique_vals"
+        value: The metric's value, e.g. "10000"
+    """
+    logger.info(json.dumps({"message": "METRIC", "column": column, "metric": metric, "value": float(value)}))
 
 
 @extensions.register_check_method(statistics=["metrics"])
