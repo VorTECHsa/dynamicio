@@ -30,9 +30,10 @@ def log_metric(column: str, metric: str, value: float):
     """
     logger.info(json.dumps({"message": "METRIC", "column": column, "metric": metric, "value": float(value)}))
 
-# This function needs to be specifically in this file. Pandera needs a chance to initialise this custom validation,
-# before the user can specify metrics in their Pandera classes. The money they import a metric such as `Metric.MIN`,
-# this whole module gets executed, and this custom validation is simultaneously executed, so it's available on demand.
+# This function needs to be specifically in this file. Pandera needs a chance to initialise this custom validation
+# before the user can specify metrics in their Pandera classes. The moment they import any metric
+# (such as `Metric.MIN`), this whole module gets executed, and this custom validation is simultaneously executed,
+# so it's available on demand
 @extensions.register_check_method(statistics=["metrics"])
 def log_statistics(pandas_obj, *, metrics):
     """
