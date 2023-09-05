@@ -23,7 +23,10 @@ class LocalFileResource(BaseResource):
         return self.get_serde()._write(self.path, df)
 
     def cache_key(self) -> Path:
-        return self.test_path or self.path
+        if self.test_path is not None:
+            return self.test_path
+        else:
+            return self.path
 
     @property
     def serde_class(self):

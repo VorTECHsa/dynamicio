@@ -8,4 +8,4 @@ class SampleSchema(SchemaModel):
     a: Series[int]
     b: Series[str]
     c: Series[bool]
-    d: Series[float]
+    # d: Series[float]

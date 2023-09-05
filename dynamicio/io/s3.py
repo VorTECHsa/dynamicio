@@ -60,8 +60,11 @@ class S3Resource(BaseResource):
         return serde_class
 
     # TODO: hdf serde .... lock.
-    def cache_key(self) -> str:
-        return str(self.test_path) or self.bucket + "/" + self.path
+    def cache_key(self) -> Path:
+        if self.test_path is not None:
+            return self.test_path
+        else:
+            return Path("s3") / self.bucket / self.path
 
 
 if __name__ == "__main__":

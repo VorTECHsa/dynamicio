@@ -5,7 +5,7 @@ import pytest
 
 from dynamicio import PostgresResource
 from dynamicio.inject import InjectionError
-from dynamicio.io.postgres import ConfigurationError
+from dynamicio.io_old.postgres import ConfigurationError
 from tests import constants
 from tests.resources.schemas import PgSampleSchema
 from sqlalchemy.engine import create_engine

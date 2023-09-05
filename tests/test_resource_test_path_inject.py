@@ -1,49 +1,12 @@
 # import all resources
-from typing import List
-
 import pytest
 
-from dynamicio import (
-    CsvResource,
-    HdfResource,
-    JsonResource,
-    KafkaResource,
-    ParquetResource,
-    PostgresResource,
-    S3CsvResource,
-    S3HdfResource,
-    S3JsonResource,
-    S3ParquetResource,
-)
+from dynamicio import LocalFileResource, S3Resource
 
 
-def get_every_resource_instance_with_injectable_test_path() -> List:
-    resources = []
-    for resource in [
-        CsvResource,
-        HdfResource,
-        ParquetResource,
-        JsonResource,
-    ]:
-        resources.append(resource(path="some_file.extension", test_path="{var1}"))
-    for resource in [
-        S3CsvResource,
-        S3HdfResource,
-        S3JsonResource,
-        S3ParquetResource,
-    ]:
-        resources.append(resource(bucket="bucket", path="some_file.extension", test_path="{var1}"))
-
-    resources.append(KafkaResource(topic="topic", server="server", test_path="{var1}"))
-    resources.append(
-        PostgresResource(db_user="user", db_host="host", db_name="name", table_name="table", test_path="{var1}")
-    )
-    return resources
-
-
-@pytest.fixture(params=get_every_resource_instance_with_injectable_test_path())
-def resource_instance(request):
-    return request.param
+@pytest.fixture(params=[LocalFileResource, S3Resource])
+def resource_instance(request, file_name):
+    return request.param(bucket="bucket", path="some_file.extension", test_path="{var1}")
 
 
 def test_resource_test_path_inject(resource_instance):

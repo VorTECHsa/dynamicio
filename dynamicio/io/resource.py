@@ -8,6 +8,7 @@ from pandera import SchemaModel
 from pydantic import BaseModel
 from uhura import Readable, Writable
 
+from dynamicio.inject import InjectionError, inject
 from dynamicio.io.serde import BaseSerde, PickleSerde
 
 
@@ -37,14 +38,15 @@ class BaseResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):  
             # inject attributes
             value = getattr(clone, injectable)
             if isinstance(value, str) or isinstance(value, Path):
-                formatted_str = str(value).format(**kwargs)
+                formatted_str = inject(value, **kwargs)
                 setattr(clone, injectable, formatted_str)
+
             else:
-                raise ValueError(f"Cannot inject {injectable} of type {type(value)}")
+                raise InjectionError(f"Cannot inject {injectable} of type {type(value)}")
 
             # inject test path
             if self.test_path is not None:
-                clone.test_path = str(clone.test_path).format(**kwargs)
+                clone.test_path = inject(self.test_path, **kwargs)
         return clone
 
     @abstractmethod
