@@ -40,9 +40,9 @@ class PickleSerde(BaseSerde):
         with open(file, "rb") as infile:
             return pickle.load(infile)
 
-    def _write(self, file, obj: SerdeType):
+    def _write(self, file, obj: SerdeType) -> None:
         with open(file, "wb") as outfile:
-            return pickle.dump(obj, outfile)
+            pickle.dump(obj, outfile)
 
 
 class ParquetSerde(BaseSerde):
@@ -56,8 +56,8 @@ class ParquetSerde(BaseSerde):
     def _read(self, file: str) -> pd.DataFrame:
         return pd.read_parquet(file, **self._read_kwargs)
 
-    def _write(self, file: str, obj: pd.DataFrame):
-        return obj.to_parquet(file, **self._write_kwargs)
+    def _write(self, file: str, obj: pd.DataFrame) -> None:
+        obj.to_parquet(file, **self._write_kwargs)
 
 
 class HdfSerde(BaseSerde):
@@ -71,7 +71,7 @@ class HdfSerde(BaseSerde):
     def _read(self, file: str) -> pd.DataFrame:
         raise NotImplementedError
 
-    def _write(self, file: str, obj: pd.DataFrame):
+    def _write(self, file: str, obj: pd.DataFrame) -> None:
         raise NotImplementedError
 
 
@@ -86,8 +86,8 @@ class CsvSerde(BaseSerde):
     def _read(self, file: str) -> pd.DataFrame:
         return pd.read_csv(file, **self._read_kwargs)
 
-    def _write(self, file: str, obj: pd.DataFrame):
-        raise obj.to_csv(file, **self._write_kwargs)
+    def _write(self, file: str, obj: pd.DataFrame) -> None:
+        obj.to_csv(file, **self._write_kwargs)
 
 
 class JsonSerde(BaseSerde):
@@ -101,5 +101,5 @@ class JsonSerde(BaseSerde):
     def _read(self, file: str) -> pd.DataFrame:
         return pd.read_json(file, **self._read_kwargs)
 
-    def _write(self, file: str, obj: pd.DataFrame):
-        raise obj.to_json(file, **self._write_kwargs)
+    def _write(self, file: str, obj: pd.DataFrame) -> None:
+        obj.to_json(file, **self._write_kwargs)
