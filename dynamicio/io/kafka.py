@@ -1,7 +1,7 @@
 """I/O functions and Resource class for kafka targeted operations."""
 import logging
 from pathlib import Path
-from typing import Any, Callable, Dict, Mapping, Optional, Type
+from typing import Any, Callable, Dict, List, Mapping, Optional, Type, Literal
 
 import pandas as pd  # type: ignore
 import simplejson
@@ -34,7 +34,7 @@ class KafkaResource(BaseResource):
     producer_kwargs: Dict[str, Any] = {}
 
     # Resource
-    injectables = ["topic", "server"]
+    injectables: List[str] = ["topic", "server"]
     pa_schema: Optional[Type[SchemaModel]] = None
     test_path: Optional[str] = None
 
@@ -67,12 +67,16 @@ class KafkaResource(BaseResource):
 
         kafka_producer.flush()  # type: ignore
 
+    def _read(self) -> pd.DataFrame:
+        raise NotImplementedError
+
     def cache_key(self):
         """Return the path to the fixture file."""
         if self.test_path is not None:
             return Path(self.test_path)
         return Path(f"kafka/{self.topic}")  # Should server be added here?
 
+    @property
     def serde_class(self) -> Type[BaseSerde]:
         return JsonSerde
 
