@@ -33,21 +33,32 @@ class LocalFileResource(BaseResource):
         file_type = self.file_type or (self.path.suffix[1:] if self.path.suffix else None)
 
         if file_type == "parquet":
-            serde_class = partial(ParquetSerde, read_kwargs=self.read_kwargs, write_kwargs=self.write_kwargs)
+            serde_class = ParquetSerde
         elif file_type == "hdf" or file_type == "h5":
-            serde_class = partial(HdfSerde, read_kwargs=self.read_kwargs, write_kwargs=self.write_kwargs)
+            serde_class = HdfSerde
         elif file_type == "csv":
-            serde_class = partial(CsvSerde, read_kwargs=self.read_kwargs, write_kwargs=self.write_kwargs)
+            serde_class = CsvSerde
         elif file_type == "json":
-            serde_class = partial(JsonSerde, read_kwargs=self.read_kwargs, write_kwargs=self.write_kwargs)
+            serde_class = JsonSerde
         elif file_type == "pickle":
-            serde_class = partial(PickleSerde, read_kwargs=self.read_kwargs, write_kwargs=self.write_kwargs)
+            serde_class = PickleSerde
         elif file_type is None:
             raise ValueError(f"File type not specified for {self.path}")
         else:
             raise ValueError(f"Unknown file type {file_type}")
 
-        return serde_class
+        serde_class_with_kwargs = partial(serde_class, read_kwargs=self.read_kwargs, write_kwargs=self.write_kwargs)
+
+        return serde_class_with_kwargs
+
+    def get_serde(self):
+        """Return the serde instance, with baked-in validation."""
+        validations = []
+        if self.pa_schema is not None:
+            # validations.append(create_schema_validator(self.pa_schema))
+            validations.append(self.pa_schema.validate)
+
+        return self.serde_class(validations=validations)
 
 
 if __name__ == "__main__":

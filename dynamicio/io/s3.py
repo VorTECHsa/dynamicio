@@ -39,25 +39,27 @@ class S3Resource(BaseResource):
             return self.get_serde()._write(fobj, df)
 
     @property
-    def serde_class(self) -> Type[BaseSerde]:
+    def serde_class(self):
         file_type = self.file_type or (self.path.suffix[1:] if self.path.suffix else None)
 
         if file_type == "parquet":
-            serde_class = partial(ParquetSerde, read_kwargs=self.read_kwargs, write_kwargs=self.write_kwargs)
+            serde_class = ParquetSerde
         elif file_type == "hdf" or file_type == "h5":
-            serde_class = partial(HdfSerde, read_kwargs=self.read_kwargs, write_kwargs=self.write_kwargs)
+            serde_class = HdfSerde
         elif file_type == "csv":
-            serde_class = partial(CsvSerde, read_kwargs=self.read_kwargs, write_kwargs=self.write_kwargs)
+            serde_class = CsvSerde
         elif file_type == "json":
-            serde_class = partial(JsonSerde, read_kwargs=self.read_kwargs, write_kwargs=self.write_kwargs)
+            serde_class = JsonSerde
         elif file_type == "pickle":
-            serde_class = partial(PickleSerde, read_kwargs=self.read_kwargs, write_kwargs=self.write_kwargs)
+            serde_class = PickleSerde
         elif file_type is None:
             raise ValueError(f"File type not specified for {self.path}")
         else:
             raise ValueError(f"Unknown file type {file_type}")
 
-        return serde_class
+        serde_class_with_kwargs = partial(serde_class, read_kwargs=self.read_kwargs, write_kwargs=self.write_kwargs)
+
+        return serde_class_with_kwargs
 
     # TODO: hdf serde .... lock.
     def cache_key(self) -> Path:
@@ -68,22 +70,13 @@ class S3Resource(BaseResource):
 
 
 if __name__ == "__main__":
-    # df = S3Resource(path=Path("tests/fixtures/sample.parquet"), file_type="parquet").read()
-    # print(df)
-    # foo = io.BytesIO()
-    # boto3.client("s3").download_fileobj(
-    #     "vortexa-develop-pmmt-freight-pricing",
-    #     str("reference_data/routes/00b1edbed41feeaccb638b3c6ed906eddec9f9cc0a954e42e7ad7f89ead926da.parquet"),
-    #     foo,
-    # )
-    # foo.seek(0)
-    # df = pd.read_parquet(foo)
-
+    example_bucket = "bucket"
+    example_path = "test/sample.parquet"
     df = S3Resource(
-        bucket="vortexa-develop-pmmt-freight-pricing",
-        path=Path("reference_data/routes/00b1edbed41feeaccb638b3c6ed906eddec9f9cc0a954e42e7ad7f89ead926da.parquet"),
-        file_type="parquet",
+        bucket=example_bucket,
+        path=example_path,
+        force_read_to_memory=True,
     ).read()
     print(df)
-    S3Resource(bucket="vortexa-develop-pmmt-freight-pricing", path="test.parquet").write(df)
-    print("yay")
+    S3Resource(bucket=example_bucket, path=example_path).write(df)
+    print("written!")
