@@ -4,7 +4,7 @@ import io
 import tempfile
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Generator, IO
+from typing import IO, Generator
 
 
 @contextmanager
