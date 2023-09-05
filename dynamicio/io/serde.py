@@ -1,10 +1,13 @@
 """These are the base serde classes, used for testing & when appropriate for actual IO."""
 import pickle
 from abc import ABC, abstractmethod
+from threading import Lock
 from typing import Callable, Optional, TypeVar
 
 import pandas as pd
 from uhura.serde import Serde
+
+from dynamicio import utils
 
 SerdeType = TypeVar("SerdeType")
 
@@ -60,6 +63,9 @@ class ParquetSerde(BaseSerde):
         obj.to_parquet(file, **self._write_kwargs)
 
 
+hdf_lock = Lock()
+
+
 class HdfSerde(BaseSerde):
     file_extension = "_"
 
@@ -69,10 +75,13 @@ class HdfSerde(BaseSerde):
         super().__init__(**kwargs)
 
     def _read(self, file: str) -> pd.DataFrame:
-        raise NotImplementedError
+        with hdf_lock:
+            df = pd.read_hdf(file, **self._read_kwargs)
+        return df
 
     def _write(self, file: str, obj: pd.DataFrame) -> None:
-        raise NotImplementedError
+        with utils.pickle_protocol(protocol=4), hdf_lock:
+            obj.to_hdf(file, key="df", mode="w", **self._write_kwargs)
 
 
 class CsvSerde(BaseSerde):

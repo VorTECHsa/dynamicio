@@ -13,7 +13,7 @@ class LocalFileResource(BaseResource):
     read_kwargs: Dict[str, Any] = {}
     write_kwargs: Dict[str, Any] = {}
     injectables: List[str] = ["path"]
-    file_type: Optional[Literal["parquet", "hdf", "csv", "json", "pickle"]] = None
+    file_type: Optional[Literal["parquet", "hdf", "csv", "json", "pickle", "h5"]] = None
 
     def _read(self) -> pd.DataFrame:
         return self.get_serde()._read(self.path)
