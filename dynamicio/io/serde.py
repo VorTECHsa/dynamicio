@@ -1,18 +1,22 @@
 """These are the base serde classes, used for testing & when appropriate for actual IO."""
 import pickle
 from abc import ABC, abstractmethod
+from io import BytesIO
 from threading import Lock
-from typing import Callable, Optional, TypeVar
+from typing import Callable, Optional, TypeVar, Union
 
 import pandas as pd
 from uhura.serde import Serde
 
 from dynamicio import utils
+from dynamicio.io.hdf import HdfIO
 
 SerdeType = TypeVar("SerdeType")
 
 
 class BaseSerde(ABC, Serde[pd.DataFrame]):
+    file_extension = "_"
+
     def __init__(self, validations: Optional[Callable] = None, **kwargs):
         self.validations = validations or []
 
@@ -49,8 +53,6 @@ class PickleSerde(BaseSerde):
 
 
 class ParquetSerde(BaseSerde):
-    file_extension = "_"
-
     def __init__(self, read_kwargs=None, write_kwargs=None, **kwargs):
         self._read_kwargs = read_kwargs or {}
         self._write_kwargs = write_kwargs or {}
@@ -67,26 +69,26 @@ hdf_lock = Lock()
 
 
 class HdfSerde(BaseSerde):
-    file_extension = "_"
-
     def __init__(self, read_kwargs=None, write_kwargs=None, **kwargs):
         self._read_kwargs = read_kwargs or {}
         self._write_kwargs = write_kwargs or {}
         super().__init__(**kwargs)
 
-    def _read(self, file: str) -> pd.DataFrame:
+    def _read(self, file: Union[str, BytesIO]) -> pd.DataFrame:
+        if isinstance(file, BytesIO):
+            return HdfIO().load(file)
         with hdf_lock:
-            df = pd.read_hdf(file, **self._read_kwargs)
-        return df
+            return pd.read_hdf(file, **self._read_kwargs)
 
-    def _write(self, file: str, obj: pd.DataFrame) -> None:
+    def _write(self, file: Union[str, BytesIO], obj: pd.DataFrame) -> None:
+        if isinstance(file, BytesIO):
+            with utils.pickle_protocol(protocol=4), hdf_lock:
+                HdfIO().save(obj, file, **self._write_kwargs)
         with utils.pickle_protocol(protocol=4), hdf_lock:
             obj.to_hdf(file, key="df", mode="w", **self._write_kwargs)
 
 
 class CsvSerde(BaseSerde):
-    file_extension = "_"
-
     def __init__(self, read_kwargs=None, write_kwargs=None, **kwargs):
         self._read_kwargs = read_kwargs or {}
         self._write_kwargs = write_kwargs or {"index": False}
@@ -100,8 +102,6 @@ class CsvSerde(BaseSerde):
 
 
 class JsonSerde(BaseSerde):
-    file_extension = "_"
-
     def __init__(self, read_kwargs=None, write_kwargs=None, **kwargs):
         self._read_kwargs = read_kwargs or {}
         self._write_kwargs = write_kwargs or {}
