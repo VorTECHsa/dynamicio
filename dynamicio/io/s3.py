@@ -21,6 +21,7 @@ class S3Resource(BaseResource):
 
     @property
     def _s3_path(self) -> str:
+        """For logging purposes only."""
         return f"s3://{self.bucket}/{self.path}"
 
     def _read(self) -> pd.DataFrame:
@@ -39,11 +40,11 @@ class S3Resource(BaseResource):
 
     @property
     def serde_class(self) -> Type[BaseSerde]:
-        file_type = self.file_type or self.path.suffix[1:]
+        file_type = self.file_type or (self.path.suffix[1:] if self.path.suffix else None)
 
         if file_type == "parquet":
             serde_class = partial(ParquetSerde, read_kwargs=self.read_kwargs, write_kwargs=self.write_kwargs)
-        elif file_type == "hdf":
+        elif file_type == "hdf" or file_type == "h5":
             serde_class = partial(HdfSerde, read_kwargs=self.read_kwargs, write_kwargs=self.write_kwargs)
         elif file_type == "csv":
             serde_class = partial(CsvSerde, read_kwargs=self.read_kwargs, write_kwargs=self.write_kwargs)
@@ -51,12 +52,14 @@ class S3Resource(BaseResource):
             serde_class = partial(JsonSerde, read_kwargs=self.read_kwargs, write_kwargs=self.write_kwargs)
         elif file_type == "pickle":
             serde_class = partial(PickleSerde, read_kwargs=self.read_kwargs, write_kwargs=self.write_kwargs)
+        elif file_type is None:
+            raise ValueError(f"File type not specified for {self.path}")
         else:
             raise ValueError(f"Unknown file type {file_type}")
 
         return serde_class
 
-    # TODO: hdf serde ....
+    # TODO: hdf serde .... lock.
     def cache_key(self) -> str:
         return str(self.test_path) or self.bucket + "/" + self.path
 
