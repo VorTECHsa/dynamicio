@@ -37,7 +37,7 @@ class BaseResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):  
         for injectable in self.injectables:
             # inject attributes
             value = getattr(clone, injectable)
-            if isinstance(value, str) or isinstance(value, Path):
+            if isinstance(value, str) or isinstance(value, Path) or value is None:
                 formatted_str = inject(value, **kwargs)
                 setattr(clone, injectable, formatted_str)
 

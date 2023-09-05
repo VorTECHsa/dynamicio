@@ -2,6 +2,6 @@
 
 import logging
 
-from dynamicio.io import LocalFileResource, S3Resource
+from dynamicio.io import LocalFileResource, S3Resource, PostgresResource
 
 logging.getLogger(__name__).addHandler(logging.NullHandler())
