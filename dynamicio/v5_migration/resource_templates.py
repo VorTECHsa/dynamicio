@@ -86,7 +86,7 @@ class S3Template(ReadyTemplate):
         )
 
 
-file_types = ["parquet", "csv", "json", "hdf"]
+FILE_TYPES = ["parquet", "csv", "json", "hdf"]
 
 
 def replace_double_brackets(string: Optional[str]) -> Optional[str]:
@@ -116,7 +116,7 @@ class LocalTemplate(ReadyTemplate):
         test_path = replace_double_brackets(test_path)
         file_path = replace_double_brackets(file_path)
         # these can be inferred from the file_path
-        if any([file_path.endswith("." + ext) for ext in file_types]):
+        if any([file_path.endswith("." + ext) for ext in FILE_TYPES]):
             file_type = None
         return cls(
             resource_name=resource_name,
@@ -128,7 +128,7 @@ class LocalTemplate(ReadyTemplate):
     @staticmethod
     def is_dict_parseable(resource_dict: dict[str, ...]) -> bool:
         file_type = resource_dict["cloud"]["local"]["file_type"]
-        return resource_dict["cloud"]["type"] == "local" and file_type in file_types
+        return resource_dict["cloud"]["type"] == "local" and file_type in FILE_TYPES
 
     def render_template(self) -> str:
         test_path_str = f',\n    test_path="{self.test_path}"' if self.test_path else ""

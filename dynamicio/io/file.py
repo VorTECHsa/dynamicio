@@ -30,7 +30,7 @@ class LocalFileResource(BaseResource):
 
     @property
     def serde_class(self):
-        file_type = self.file_type or (self.path.suffix[1:] if self.path.suffix else None)
+        file_type = self.file_type or (self.path.suffix.replace(".", "") if self.path.suffix else None)
 
         if file_type == "parquet":
             serde_class = ParquetSerde
@@ -55,12 +55,6 @@ class LocalFileResource(BaseResource):
         """Return the serde instance, with baked-in validation."""
         validations = []
         if self.pa_schema is not None:
-            # validations.append(create_schema_validator(self.pa_schema))
             validations.append(self.pa_schema.validate)
 
         return self.serde_class(validations=validations)
-
-
-if __name__ == "__main__":
-    df = LocalFileResource(path="tests/fixtures/sample.parquet").read()
-    print(df)

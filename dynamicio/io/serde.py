@@ -65,7 +65,7 @@ class ParquetSerde(BaseSerde):
         obj.to_parquet(file, **self._write_kwargs)
 
 
-hdf_lock = Lock()
+HDF_LOCK = Lock()
 
 
 class HdfSerde(BaseSerde):
@@ -77,15 +77,16 @@ class HdfSerde(BaseSerde):
     def _read(self, file: Union[str, BytesIO]) -> pd.DataFrame:
         if isinstance(file, BytesIO):
             return HdfIO().load(file)
-        with hdf_lock:
+        with HDF_LOCK:
             return pd.read_hdf(file, **self._read_kwargs)
 
     def _write(self, file: Union[str, BytesIO], obj: pd.DataFrame) -> None:
         if isinstance(file, BytesIO):
-            with utils.pickle_protocol(protocol=4), hdf_lock:
+            with utils.pickle_protocol(protocol=4), HDF_LOCK:
                 HdfIO().save(obj, file, **self._write_kwargs)
-        with utils.pickle_protocol(protocol=4), hdf_lock:
-            obj.to_hdf(file, key="df", mode="w", **self._write_kwargs)
+        else:
+            with utils.pickle_protocol(protocol=4), HDF_LOCK:
+                obj.to_hdf(file, key="df", mode="w", **self._write_kwargs)
 
 
 class CsvSerde(BaseSerde):

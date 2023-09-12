@@ -5,7 +5,6 @@ import re
 from pathlib import Path
 from typing import Any, Dict, overload
 
-# double_bracket_matcher = re.compile(r"""(.*)(\[\[\s*(\S+)\s*]])(.*)""")
 curly_braces_matcher = re.compile(r"(.*)(\{\s*(\S+)\s*\})(.*)")
 
 

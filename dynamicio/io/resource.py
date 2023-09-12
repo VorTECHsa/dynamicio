@@ -1,4 +1,4 @@
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from copy import deepcopy
 from pathlib import Path
 from typing import Callable, List, Optional, Type
@@ -19,7 +19,7 @@ def create_schema_validator(schema) -> Callable[[pd.DataFrame], pd.DataFrame]:
     return validate_schema
 
 
-class BaseResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):  # Cacheable kaputt, ABC kaputt
+class BaseResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame], ABC):
     """Base class for all resources.
 
     :injectables: List of attributes that can be injected with format strings.
@@ -32,6 +32,9 @@ class BaseResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):  
     pa_schema: Optional[Type[SchemaModel]] = None
 
     def inject(self, **kwargs) -> "BaseResource":
+        """Inject any attributes that are marked as injectable with format strings.
+
+        This includes the test_path and any other relevant attributes."""
         # copy object
         clone = deepcopy(self)
         for injectable in self.injectables:
@@ -42,7 +45,7 @@ class BaseResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):  
                 setattr(clone, injectable, formatted_str)
 
             else:
-                raise InjectionError(f"Cannot inject {injectable} of type {type(value)}")
+                raise InjectionError(f"Cannot inject {injectable} of type {type(value)} in {self.__class__.__name__}")
 
             # inject test path
             if self.test_path is not None:
@@ -55,7 +58,7 @@ class BaseResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):  
 
         Overwrite this method to implement custom read logic.
         The main read() method is replaced when in uhura testing mode."""
-        ...
+        raise NotImplementedError()
 
     @abstractmethod
     def _write(self, df: pd.DataFrame) -> None:
@@ -63,7 +66,7 @@ class BaseResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):  
 
         Overwrite this method to implement custom write logic.
         The main write() method is replaced when in uhura testing mode."""
-        ...
+        raise NotImplementedError()
 
     def read(self) -> pd.DataFrame:
         """Read the resource."""
@@ -79,7 +82,7 @@ class BaseResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):  
     def cache_key(self):
         """Return the test path."""
         if self.test_path is None:
-            raise ValueError("No test path set. Please implement fixture_path property or set test_path.")
+            raise ValueError("No test path set.")
         return str(self.test_path)
 
     @property
@@ -91,7 +94,6 @@ class BaseResource(BaseModel, Readable[pd.DataFrame], Writable[pd.DataFrame]):  
         """Return the serde instance, with baked-in validation."""
         validations = []
         if self.pa_schema is not None:
-            # validations.append(create_schema_validator(self.pa_schema))
             validations.append(self.pa_schema.validate)
 
         return self.serde_class(validations=validations)

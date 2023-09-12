@@ -153,23 +153,3 @@ class PostgresResource(BaseResource):
     def serde_class(self):
         """Postgres uses a plain ParquetSerde for testing."""
         return ParquetSerde
-
-
-if __name__ == "__main__":
-    import os
-    import pwd
-
-    username = pwd.getpwuid(os.getuid())[0]
-    presource = PostgresResource(
-        db_user=username,
-        db_host="localhost",
-        db_name=username,
-        table_name="newtable",
-    )
-    df = presource.read()
-    print(df)
-
-    new_df = pd.DataFrame({"column1": ["a", "b", "c"]})
-    presource.write(new_df)
-    df = presource.read()
-    print(df)

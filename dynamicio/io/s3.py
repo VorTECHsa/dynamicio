@@ -30,6 +30,8 @@ class S3Resource(BaseResource):
                 df = self.get_serde()._read(fobj, **self.read_kwargs)  # type: ignore
                 if df is not None:
                     return df
+                else:
+                    raise ValueError(f"Could not read {self._s3_path}")
 
         with s3_named_file_reader(boto3.client("s3"), s3_bucket=self.bucket, s3_key=str(self.path)) as target_file:
             return self.get_serde()._read(target_file.name, **self.read_kwargs)  # type: ignore
@@ -61,22 +63,8 @@ class S3Resource(BaseResource):
 
         return serde_class_with_kwargs
 
-    # TODO: hdf serde .... lock.
     def cache_key(self) -> Path:
         if self.test_path is not None:
             return self.test_path
         else:
             return Path("s3") / self.bucket / self.path
-
-
-if __name__ == "__main__":
-    example_bucket = "bucket"
-    example_path = "test/sample.parquet"
-    df = S3Resource(
-        bucket=example_bucket,
-        path=example_path,
-        force_read_to_memory=True,
-    ).read()
-    print(df)
-    S3Resource(bucket=example_bucket, path=example_path).write(df)
-    print("written!")
