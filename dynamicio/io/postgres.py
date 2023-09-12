@@ -145,7 +145,7 @@ class PostgresResource(BaseResource):
         if self.test_path is not None:
             return self.test_path
         elif self.table_name:
-            return Path("postgres") / self.final_table_name
+            return Path("postgres") / (self.final_table_name + ".parquet")
         elif self.sql_query:
             raise ValueError("test_path must be set if using custom sql query.")
 

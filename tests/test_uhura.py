@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 from uhura.modes import fixture_builder_mode, task_test_mode
 
-from dynamicio import LocalFileResource, S3Resource
+from dynamicio import KafkaResource, LocalFileResource, PostgresResource, S3Resource
 
 
 @pytest.fixture()
@@ -62,21 +62,21 @@ def test_uhura_s3(test_df, tmpdir, file_name, s3_fixtures):
             s3_resource.write(df.drop("a", axis=1))
 
 
-# def test_postgres_uhura(tmpdir, test_df):
-#     postgres_resource = PostgresResource(db_user="asdf", db_host="asdf", db_name="asdf", table_name="tabular_table")
-#     ParquetResource(path=tmpdir / "uhura" / "input" / "postgres" / "tabular_table.parquet").write(test_df)
-#     ParquetResource(path=tmpdir / "uhura" / "output" / "postgres" / "tabular_table.parquet").write(test_df)
-#     with task_test_mode(input_path=tmpdir / "uhura" / "input", known_good_path=tmpdir / "uhura" / "output"):
-#         postgres_resource.read()
-#         postgres_resource.write(test_df)
-#         with pytest.raises(AssertionError):
-#             postgres_resource.write(test_df.drop("a", axis=1))
-#
-#
-# def test_kafka_uhura(tmpdir, test_df):
-#     kafka_resource = KafkaResource(topic="tropico", server="asdf")
-#     ParquetResource(path=tmpdir / "uhura" / "output" / "kafka" / "tropico").write(test_df)
-#     with task_test_mode(input_path=tmpdir / "uhura" / "input", known_good_path=tmpdir / "uhura" / "output"):
-#         kafka_resource.write(test_df)
-#         with pytest.raises(AssertionError):
-#             kafka_resource.write(test_df.drop("a", axis=1))
+def test_postgres_uhura(tmpdir, test_df):
+    postgres_resource = PostgresResource(db_user="asdf", db_host="asdf", db_name="asdf", table_name="tabular_table")
+    LocalFileResource(path=tmpdir / "uhura" / "input" / "postgres" / "public.tabular_table.parquet").write(test_df)
+    LocalFileResource(path=tmpdir / "uhura" / "output" / "postgres" / "public.tabular_table.parquet").write(test_df)
+    with task_test_mode(input_path=tmpdir / "uhura" / "input", known_good_path=tmpdir / "uhura" / "output"):
+        postgres_resource.read()
+        postgres_resource.write(test_df)
+        with pytest.raises(AssertionError):
+            postgres_resource.write(test_df.drop("a", axis=1))
+
+
+def test_kafka_uhura(tmpdir, test_df):
+    kafka_resource = KafkaResource(topic="tropico", server="asdf")
+    LocalFileResource(path=tmpdir / "uhura" / "output" / "kafka" / "tropico.json").write(test_df)
+    with task_test_mode(input_path=tmpdir / "uhura" / "input", known_good_path=tmpdir / "uhura" / "output"):
+        kafka_resource.write(test_df)
+        with pytest.raises(AssertionError):
+            kafka_resource.write(test_df.drop("a", axis=1))

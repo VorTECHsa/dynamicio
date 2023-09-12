@@ -74,7 +74,7 @@ class KafkaResource(BaseResource):
         """Return the path to the fixture file."""
         if self.test_path is not None:
             return Path(self.test_path)
-        return Path(f"kafka/{self.topic}")  # Should server be added here?
+        return Path(f"kafka/{self.topic}.json")  # Should server be added here?
 
     @property
     def serde_class(self) -> Type[BaseSerde]:
