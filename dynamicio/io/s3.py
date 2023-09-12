@@ -42,7 +42,7 @@ class S3Resource(BaseResource):
 
     @property
     def serde_class(self):
-        file_type = self.file_type or (self.path.suffix[1:] if self.path.suffix else None)
+        file_type = self.file_type or (self.path.suffix.replace(".", "") if self.path.suffix else None)
 
         if file_type == "parquet":
             serde_class = ParquetSerde
