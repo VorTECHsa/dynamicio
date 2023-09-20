@@ -1,42 +1,24 @@
 """I/O functions and Resource class for kafka targeted operations."""
-from __future__ import annotations
-
 import logging
-from copy import deepcopy
-from enum import Enum
-from typing import Any, Callable, Dict, Mapping, Optional, Type
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Mapping, Optional, Type, Literal
 
 import pandas as pd  # type: ignore
 import simplejson
 from kafka import KafkaProducer  # type: ignore
 from pandera import SchemaModel
-from pydantic import BaseModel, Field
-from uhura import Writable
+from pydantic import Field
 
-from dynamicio.inject import check_injections, inject
-from dynamicio.serde import ParquetSerde
-
-logger = logging.getLogger(__name__)
+from dynamicio.io.resource import BaseResource
+from dynamicio.io.serde import BaseSerde, JsonSerde
 
 
-class CompressionType(str, Enum):
-    """Compression types for Kafka."""
-
-    GZIP = "gzip"
-    SNAPPY = "snappy"
-    LZ4 = "lz4"
-    ZSTD = "zstd"
-
-
-class KafkaResource(BaseModel, Writable[pd.DataFrame]):
-    """Kafka Resource.
-
-    This class is used to write to Kafka topics. Reading is not yet supported.
-    Only requires a `topic` and `server` to be initialized.
-    """
-
+class KafkaResource(BaseResource):
+    # Required
     topic: str
     server: str
+
+    # Defaults
     key_generator: Callable[[Any, Mapping[Any, Any]], Optional[str]] = Field(
         lambda idx, _: idx,
         description="""Gets called with dataframe's (idx, row). Defaults to `idx`.""",
@@ -46,25 +28,15 @@ class KafkaResource(BaseModel, Writable[pd.DataFrame]):
     document_transformer: Callable[[Mapping[Any, Any]], Mapping[Any, Any]] = lambda value: value
     # TODO: Give descriptions to all these callables that describe what they're being called with
 
-    kafka_producer: Optional[KafkaProducer] = None
-
-    compression_type: CompressionType = "snappy"  # type: ignore
+    # Options
+    kafka_producer: Optional[KafkaProducer] = None  # gets instantiated in get_kafka_producer
+    compression_type: Literal["gzip", "snappy", "lz4", "zstd"] = "snappy"  # type: ignore
     producer_kwargs: Dict[str, Any] = {}
+
+    # Resource
+    injectables: List[str] = ["topic", "server"]
     pa_schema: Optional[Type[SchemaModel]] = None
     test_path: Optional[str] = None
-
-    def inject(self, **kwargs) -> "KafkaResource":
-        """Inject variables into topic and server. Immutable."""
-        clone = deepcopy(self)
-        clone.topic = inject(clone.topic, **kwargs)
-        clone.server = inject(clone.server, **kwargs)
-        clone.test_path = inject(clone.test_path, **kwargs)
-        return clone
-
-    def check_injections(self) -> None:
-        """Check that all injections have been completed."""
-        check_injections(self.topic)
-        check_injections(self.server)
 
     def get_kafka_producer(self) -> KafkaProducer:
         """Get a KafkaProducer instance."""
@@ -78,20 +50,11 @@ class KafkaResource(BaseModel, Writable[pd.DataFrame]):
             )
         return self.kafka_producer
 
-    class Config:
-        """Pydantic Config class."""
-
-        arbitrary_types_allowed = True
-        validate_assignment = True
-
-    def write(self, df: pd.DataFrame) -> None:
+    def _write(self, df: pd.DataFrame) -> None:
         """Handles Write operations for Kafka."""
-        self.check_injections()
-        df = self.validate(df)
-
         kafka_producer = self.get_kafka_producer()
 
-        logger.info(f"Sending {len(df)} messages to Kafka topic:{self.topic}")
+        logging.info(f"Sending {len(df)} messages to Kafka topic:{self.topic}")
 
         messages = df.reset_index(drop=True).to_dict("records")
 
@@ -104,19 +67,21 @@ class KafkaResource(BaseModel, Writable[pd.DataFrame]):
 
         kafka_producer.flush()  # type: ignore
 
-    def read(self) -> pd.DataFrame:
-        """Not yet implemented."""
-        raise NotImplementedError("No kafka reader implemented")
-
-    def validate(self, df: pd.DataFrame) -> pd.DataFrame:
-        if schema := self.pa_schema:
-            df = schema.validate(df)  # type: ignore
-        return df
+    def _read(self) -> pd.DataFrame:
+        raise NotImplementedError
 
     def cache_key(self):
-        if self.test_path:
-            return str(self.test_path)
-        return f"kafka/{self.topic}"
+        """Return the path to the fixture file."""
+        if self.test_path is not None:
+            return Path(self.test_path)
+        return Path(f"kafka/{self.topic}.json")  # Should server be added here?
 
-    def get_serde(self):
-        return ParquetSerde(self.validate, {}, {})
+    @property
+    def serde_class(self) -> Type[BaseSerde]:
+        return JsonSerde
+
+    class Config:
+        """Pydantic Config class."""
+
+        arbitrary_types_allowed = True
+        validate_assignment = True

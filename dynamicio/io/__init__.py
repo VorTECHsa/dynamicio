@@ -1,9 +1,4 @@
-# flake8: noqa: I101
-
-"""Functional io pydantic models for supported I/O targets."""
-
-from dynamicio.io.file import *
-from dynamicio.io.kafka import KafkaResource
-from dynamicio.io.keyed import KeyedResource
-from dynamicio.io.postgres import PostgresResource
-from dynamicio.io.s3 import *
+from .file import LocalFileResource
+from .s3 import S3Resource
+from .postgres import PostgresResource
+from .kafka import KafkaResource

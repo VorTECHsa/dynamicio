@@ -5,11 +5,10 @@ import re
 from pathlib import Path
 from typing import Any, Dict, overload
 
-double_bracket_matcher = re.compile(r"""(.*)(\[\[\s*(\S+)\s*]])(.*)""")
 curly_braces_matcher = re.compile(r"(.*)(\{\s*(\S+)\s*\})(.*)")
 
 
-class InjectionError(Exception):
+class InjectionError(ValueError):
     """Raised when a string has any dynamic values in the form of "{DYNAMIC_VAR}" or "[[ DYNAMIC_VAR ]]"."""
 
 
@@ -42,8 +41,7 @@ def inject(value: str | Path | None, **kwargs: dict[str, Any]) -> str | Path | N
     if value is None:
         return value
     to_inject = str(value)
-    injected = _inject_with_matcher(to_inject, double_bracket_matcher, **kwargs)
-    injected = _inject_with_matcher(injected, curly_braces_matcher, **kwargs)
+    injected = _inject_with_matcher(to_inject, curly_braces_matcher, **kwargs)
     return type(value)(injected)
 
 
@@ -52,8 +50,6 @@ def check_injections(value: str | Path | None) -> None:
     if value is None:
         return value
     to_check: str = str(value)
-    while _ := double_bracket_matcher.search(to_check):
-        raise InjectionError(f'Path is not fully injected: "{to_check!r}"')
     while _ := curly_braces_matcher.search(to_check):
         raise InjectionError(f'Path is not fully injected: "{to_check!r}"')
 
