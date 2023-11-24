@@ -4,6 +4,7 @@ import os
 
 import pytest
 import yaml
+import json
 
 from dynamicio.config.io_config import IOConfig, SafeDynamicResourceLoader, SafeDynamicSchemaLoader
 from tests import constants
@@ -20,7 +21,7 @@ class TestIOConfig:
         )
 
         # When
-        yaml_dict = input_config.config.dict()
+        yaml_dict = json.loads(input_config.config.model_dump_json())
         # Then
         assert yaml_dict == expected_input_yaml_dict
 
