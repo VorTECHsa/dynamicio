@@ -41,7 +41,10 @@ class IOBinding(pydantic.BaseModel):
     """A binding for a single i/o object"""
 
     name: str = pydantic.Field(alias="__binding_name__")
-    environments: Mapping[str, "IOEnvironment"]
+    environments: Mapping[
+        str,
+        Union["IOEnvironment", "LocalDataEnvironment", "LocalBatchDataEnvironment", "S3DataEnvironment", "S3PathPrefixEnvironment", "KafkaDataEnvironment", "PostgresDataEnvironment"],
+    ]
     dynamicio_schema: Union[table_spec.DataframeSchema, None] = pydantic.Field(default=None, alias="schema")
 
     def get_binding_for_environment(self, environment: str) -> "IOEnvironment":
@@ -217,4 +220,4 @@ class PostgresDataEnvironment(IOEnvironment):
     postgres: PostgresDataSubSection
 
 
-IOBinding.update_forward_refs()
+IOBinding.model_rebuild()

@@ -43,7 +43,10 @@ class SchemaColumn(pydantic.BaseModel):
     @pydantic.validator("data_type")
     def is_valid_pandas_type(cls, info):
         """Checks that the data_type is understood by pandas."""
-        pandas_dtype(info)
+        try:
+            pandas_dtype(info)
+        except TypeError:
+            raise ValueError(f"Unexpected data type {info}") from None
         return info
 
     @pydantic.validator("validations", pre=True)
@@ -79,7 +82,7 @@ class DataframeSchema(pydantic.BaseModel):
         """Tell each column its name (the key it is listed under)"""
         if not isinstance(info, Mapping):
             raise ValueError(f"{info!r} shoudl be a dict.")
-        
+
         return {str(col_name): {**{"name": str(col_name)}, **col_data} for (col_name, col_data) in info.items()}
 
     @property
