@@ -17,7 +17,7 @@ def test_missing_validations_and_metrics(regressions_resources_dir, regressions_
         env_identifier="LOCAL",
         dynamic_vars=regressions_constants_module,
     )
-    io_instance = IO(source_config=input_config.get(source_key="PRODUCTS"), apply_schema_validations=True, log_schema_metrics=True)
+    io_instance = IO(resource_definition=input_config.get(source_key="PRODUCTS"), apply_schema_validations=True, log_schema_metrics=True)
 
     # When
     data = io_instance.read()

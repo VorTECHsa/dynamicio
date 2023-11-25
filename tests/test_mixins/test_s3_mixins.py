@@ -53,7 +53,7 @@ class TestS3FileIO:
         ) as mock_s3_reader:
             with open(file_path, "r") as file:  # pylint: disable=unspecified-encoding
                 mock_s3_reader.return_value = file
-                io_obj = TemplatedFile(source_config=config, file_name_to_replace="some_csv_to_read")
+                io_obj = TemplatedFile(resource_definition=config, file_name_to_replace="some_csv_to_read")
                 final_schema = io_obj.schema
                 io_obj.read()
 
@@ -72,7 +72,7 @@ class TestS3FileIO:
         # When
         with patch.object(dynamicio.mixins.with_local.WithLocal, "_write_csv_file") as mock__write_csv_file:
             df = pd.read_csv(os.path.join(TEST_RESOURCES, "data/input/some_csv_to_read.csv"))
-            TemplatedFile(source_config=config, file_name_to_replace="some_csv_to_read").write(df)
+            TemplatedFile(resource_definition=config, file_name_to_replace="some_csv_to_read").write(df)
 
         # Then
         args, _ = mock__write_csv_file.call_args
@@ -90,7 +90,7 @@ class TestS3FileIO:
         ).get(source_key="READ_FROM_S3_CSV")
 
         # When
-        ReadS3CsvIO(source_config=s3_csv_cloud_config).read()
+        ReadS3CsvIO(resource_definition=s3_csv_cloud_config).read()
 
         # Then
         mock__read_from_s3_file.assert_called()
@@ -112,7 +112,7 @@ class TestS3FileIO:
         ) as mock_read_parquet_file:
             with open(file_path, "r") as file:  # pylint: disable=unspecified-encoding
                 mock_s3_reader.return_value = file
-                ReadS3ParquetIO(source_config=s3_parquet_cloud_config, no_disk_space=True).read()
+                ReadS3ParquetIO(resource_definition=s3_parquet_cloud_config, no_disk_space=True).read()
 
         # Then
         mock_s3_reader.assert_not_called()
@@ -135,7 +135,7 @@ class TestS3FileIO:
                     shutil.copyfileobj(fin, target_file)
 
             mock__boto3_client.download_fileobj.side_effect = mock_download_fobj
-            loaded_hdf_pd = ReadS3HdfIO(source_config=s3_hdf_cloud_config, no_disk_space=True).read()
+            loaded_hdf_pd = ReadS3HdfIO(resource_definition=s3_hdf_cloud_config, no_disk_space=True).read()
 
         # Then
         pd.testing.assert_frame_equal(loaded_hdf_pd, expected_s3_hdf_df)
@@ -153,7 +153,7 @@ class TestS3FileIO:
         with patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_reader") as mock__s3_reader, patch.object(
             dynamicio.mixins.with_s3.WithS3File, "_read_json_file"
         ) as mock__read_json_file:
-            ReadS3JsonIO(source_config=s3_json_cloud_config, no_disk_space=True).read()
+            ReadS3JsonIO(resource_definition=s3_json_cloud_config, no_disk_space=True).read()
 
         # Then
         mock__s3_reader.assert_not_called()
@@ -172,7 +172,7 @@ class TestS3FileIO:
         with patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_reader") as mock__s3_reader, patch.object(
             dynamicio.mixins.with_s3.WithS3File, "_read_csv_file"
         ) as mock__read_csv_file:
-            ReadS3CsvIO(source_config=s3_csv_cloud_config, no_disk_space=True).read()
+            ReadS3CsvIO(resource_definition=s3_csv_cloud_config, no_disk_space=True).read()
 
         # Then
         mock__s3_reader.assert_not_called()
@@ -232,7 +232,7 @@ class TestS3FileIO:
         ) as mock__write_parquet_file:
             with NamedTemporaryFile(delete=False) as temp_file:
                 mock__s3_writer.return_value = temp_file
-                WriteS3ParquetIO(source_config=s3_parquet_cloud_config).write(input_df)
+                WriteS3ParquetIO(resource_definition=s3_parquet_cloud_config).write(input_df)
 
         # Then
         mock__apply_schema.assert_called()
@@ -252,7 +252,7 @@ class TestS3FileIO:
             dynamicio.mixins.with_s3.WithS3File, "_s3_named_file_reader"
         ):
             mock__read_parquet_file.return_value = expected_s3_parquet_df
-            ReadS3ParquetWithDifferentCastableDTypeIO(source_config=s3_parquet_cloud_config).read()
+            ReadS3ParquetWithDifferentCastableDTypeIO(resource_definition=s3_parquet_cloud_config).read()
 
         assert True, "No exception was raised"
 
@@ -286,7 +286,7 @@ class TestS3FileIO:
 
         # When/Then
         with pytest.raises(ColumnsDataTypeError):
-            ReadS3ParquetWithDifferentNonCastableDTypeIO(source_config=s3_parquet_cloud_config).read()
+            ReadS3ParquetWithDifferentNonCastableDTypeIO(resource_definition=s3_parquet_cloud_config).read()
             moc__read_parquet_file.assert_called()
 
     @pytest.mark.unit
@@ -304,7 +304,7 @@ class TestS3FileIO:
         with patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_reader") as mock__s3_reader, patch.object(
             dynamicio.mixins.with_local.WithLocal, "_read_parquet_file"
         ) as mock__read_parquet_file:
-            ReadS3ParquetIO(source_config=s3_parquet_cloud_config, no_disk_space=True).read()
+            ReadS3ParquetIO(resource_definition=s3_parquet_cloud_config, no_disk_space=True).read()
 
         # Then
         mock__s3_reader.assert_not_called()
@@ -323,7 +323,7 @@ class TestS3FileIO:
         ).get(source_key="WRITE_TO_S3_JSON")
 
         # When
-        ReadS3HdfIO(source_config=s3_json_local_config).write(df)
+        ReadS3HdfIO(resource_definition=s3_json_local_config).write(df)
 
         # Then
         mock__write_to_s3_file.assert_called()
@@ -345,7 +345,7 @@ class TestS3FileIO:
         ) as mock__write_parquet_file:
             with NamedTemporaryFile(delete=False) as temp_file:
                 mock__s3_writer.return_value = temp_file
-                WriteS3ParquetIO(source_config=s3_parquet_local_config).write(df)
+                WriteS3ParquetIO(resource_definition=s3_parquet_local_config).write(df)
 
         # Then
         mock__write_parquet_file.assert_called()
@@ -367,7 +367,7 @@ class TestS3FileIO:
         ) as mock__write_csv_file:
             with NamedTemporaryFile(delete=False) as temp_file:
                 mock__s3_writer.return_value = temp_file
-                WriteS3CsvIO(source_config=s3_csv_local_config).write(df)
+                WriteS3CsvIO(resource_definition=s3_csv_local_config).write(df)
 
         # Then
         mock__write_csv_file.assert_called()
@@ -389,7 +389,7 @@ class TestS3FileIO:
         ) as mock__write_json_file:
             with NamedTemporaryFile(delete=False) as temp_file:
                 mock__s3_writer.return_value = temp_file
-                WriteS3JsonIO(source_config=s3_json_local_config).write(df)
+                WriteS3JsonIO(resource_definition=s3_json_local_config).write(df)
 
         # Then
         mock__write_json_file.assert_called()
@@ -408,7 +408,7 @@ class TestS3FileIO:
         with patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_writer") as mock__s3_writer:
             with NamedTemporaryFile(delete=False) as temp_file:
                 mock__s3_writer.return_value = temp_file
-                WriteS3HdfIO(source_config=s3_hdf_local_config).write(df)
+                WriteS3HdfIO(resource_definition=s3_hdf_local_config).write(df)
 
         # Then
         assert os.stat(temp_file.name).st_size == 1064192, "Confirm that the output file size did not change"
@@ -459,7 +459,7 @@ class TestS3PathPrefixIO:
 
         # When / Then
         with pytest.raises(ValueError):
-            WriteS3ParquetIO(source_config=s3_parquet_cloud_config).write(input_df)
+            WriteS3ParquetIO(resource_definition=s3_parquet_cloud_config).write(input_df)
 
     @pytest.mark.unit
     def test_error_is_raised_if_file_type_not_parquet_when_uploading(self, tmp_path):
@@ -501,7 +501,7 @@ class TestS3PathPrefixIO:
         ).get(source_key="READ_FROM_S3_PATH_PREFIX_CSV")
 
         # When
-        ReadS3CsvIO(source_config=s3_csv_cloud_config).read()
+        ReadS3CsvIO(resource_definition=s3_csv_cloud_config).read()
 
         # Then
         mock__read_from_s3_path_prefix.assert_called()
@@ -519,7 +519,7 @@ class TestS3PathPrefixIO:
         ).get(source_key="WRITE_TO_S3_PATH_PREFIX_PARQUET")
 
         # When
-        WriteS3ParquetIO(source_config=s3_parquet_cloud_config).write(input_df)
+        WriteS3ParquetIO(resource_definition=s3_parquet_cloud_config).write(input_df)
 
         # Then
         mock__write_to_s3_path_prefix.assert_called()
@@ -538,7 +538,7 @@ class TestS3PathPrefixIO:
 
         # When
         with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mocked__awscli_runner:
-            WriteS3ParquetIO(source_config=s3_parquet_cloud_config, partition_cols="col_2").write(input_df)
+            WriteS3ParquetIO(resource_definition=s3_parquet_cloud_config, partition_cols="col_2").write(input_df)
 
         # Then
         mocked__awscli_runner.assert_called_with("s3", "sync", "temp", "s3://mock-bucket/mock-key", "--acl", "bucket-owner-full-control", "--only-show-errors", "--exact-timestamps")
@@ -557,7 +557,7 @@ class TestS3PathPrefixIO:
 
         # When
         with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mocked__awscli_runner:
-            ReadS3HdfIO(source_config=s3_hdf_cloud_config).read()
+            ReadS3HdfIO(resource_definition=s3_hdf_cloud_config).read()
 
         # Then
         mocked__awscli_runner.assert_called_with("s3", "sync", "s3://mock-bucket/mock-key", "temp", "--acl", "bucket-owner-full-control", "--only-show-errors", "--exact-timestamps")
@@ -577,7 +577,7 @@ class TestS3PathPrefixIO:
         # When
         with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mocked__awscli_runner:
             mocked__awscli_runner.return_value = True
-            read_obj = ReadS3HdfIO(source_config=s3_hdf_cloud_config)
+            read_obj = ReadS3HdfIO(resource_definition=s3_hdf_cloud_config)
             actual_schema = read_obj.schema
             read_obj.read()
 
@@ -606,7 +606,7 @@ class TestS3PathPrefixIO:
         # When
         with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mocked__awscli_runner:
             mocked__awscli_runner.return_value = True
-            read_obj = ReadS3ParquetIO(source_config=s3_parquet_cloud_config)
+            read_obj = ReadS3ParquetIO(resource_definition=s3_parquet_cloud_config)
             actual_schema = read_obj.schema
             read_obj.read()
 
@@ -635,7 +635,7 @@ class TestS3PathPrefixIO:
         with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mock__awscli_runner, patch.object(
             dynamicio.mixins.with_local.WithLocal, "_read_parquet_file"
         ) as mock__read_parquet_file:
-            ReadS3ParquetIO(source_config=s3_parquet_cloud_config, no_disk_space=True).read()
+            ReadS3ParquetIO(resource_definition=s3_parquet_cloud_config, no_disk_space=True).read()
 
         # Then
         mock__read_parquet_file.assert_called()
@@ -654,7 +654,7 @@ class TestS3PathPrefixIO:
         # When
         with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mocked__awscli_runner:
             mocked__awscli_runner.return_value = True
-            df = ReadS3ParquetWithLessColumnsIO(source_config=s3_parquet_cloud_config).read()
+            df = ReadS3ParquetWithLessColumnsIO(resource_definition=s3_parquet_cloud_config).read()
 
         # Then
         assert df.shape == (15, 2) and df.columns.tolist() == ["id", "foo_name"]
@@ -672,7 +672,7 @@ class TestS3PathPrefixIO:
         # When
         with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mocked__awscli_runner:
             mocked__awscli_runner.return_value = True
-            df = ReadS3ParquetIO(source_config=s3_parquet_cloud_config, filters=[[("foo_name", "==", "name_a")]]).read()
+            df = ReadS3ParquetIO(resource_definition=s3_parquet_cloud_config, filters=[[("foo_name", "==", "name_a")]]).read()
 
         # Then
         assert df.shape == (8, 3) and df.columns.tolist() == ["id", "foo_name", "bar"] and df.foo_name.unique() == ["name_a"]
@@ -695,7 +695,7 @@ class TestS3PathPrefixIO:
         # When
         with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mocked__awscli_runner:
             mocked__awscli_runner.return_value = True
-            read_obj = ReadS3ParquetIO(source_config=s3_csv_cloud_config)
+            read_obj = ReadS3ParquetIO(resource_definition=s3_csv_cloud_config)
             actual_schema = read_obj.schema
             read_obj.read()
 
@@ -727,7 +727,7 @@ class TestS3PathPrefixIO:
         # When
         with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mocked__awscli_runner:
             mocked__awscli_runner.return_value = True
-            read_obj = ReadS3ParquetIO(source_config=s3_csv_cloud_config)
+            read_obj = ReadS3ParquetIO(resource_definition=s3_csv_cloud_config)
             actual_schema = read_obj.schema
             read_obj.read()
 
@@ -759,7 +759,7 @@ class TestS3PathPrefixIO:
         # When
         with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mocked__awscli_runner:
             mocked__awscli_runner.return_Value = True
-            h5_df = ReadS3HdfIO(source_config=s3_hdf_cloud_config).read()
+            h5_df = ReadS3HdfIO(resource_definition=s3_hdf_cloud_config).read()
 
         # Then
         pd.testing.assert_frame_equal(
@@ -825,7 +825,7 @@ class TestS3PathPrefixIO:
         # When
         with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mocked__awscli_runner:
             mocked__awscli_runner.return_value = True
-            df = ReadS3ParquetWEmptyFilesIO(source_config=s3_parquet_cloud_config).read()
+            df = ReadS3ParquetWEmptyFilesIO(resource_definition=s3_parquet_cloud_config).read()
 
         # Then
         assert df.shape == (10, 2) and df.columns.tolist() == ["id", "bar"]

@@ -53,7 +53,7 @@ class TestCoreIO:
 
         # When/Then
         with pytest.raises(TypeError):
-            DynamicDataIO(source_config=s3_csv_local_config)
+            DynamicDataIO(resource_definition=s3_csv_local_config)
 
     @pytest.mark.unit
     def test_objects_of_dynamic_data_io_subclasses_cant_be_instantiated_in_the_absence_of_a_non_empty_schema(
@@ -72,7 +72,7 @@ class TestCoreIO:
             class AbsentSchemaIO(DynamicDataIO):
                 pass
 
-            AbsentSchemaIO(source_config=s3_csv_local_config)
+            AbsentSchemaIO(resource_definition=s3_csv_local_config)
 
     @pytest.mark.unit
     def test_objects_of_s3io_subclasses_cant_be_instantiated_in_the_presence_of_a_empty_dict_schema(
@@ -92,7 +92,7 @@ class TestCoreIO:
                 dataset_name = "EmptySchema"
                 schema = {}
 
-            EmptySchemaIO(source_config=s3_csv_local_config)
+            EmptySchemaIO(resource_definition=s3_csv_local_config)
 
     @pytest.mark.unit
     def test_objects_of_dynamic_data_io_subclasses_cant_be_instantiated_in_the_presence_of_a_schema_eq_to_none(
@@ -112,7 +112,7 @@ class TestCoreIO:
                 dataset_name = "NoneSchema"
                 schema = None
 
-            NoneSchemaIO(source_config=s3_csv_local_config)
+            NoneSchemaIO(resource_definition=s3_csv_local_config)
 
     @pytest.mark.unit
     def test_dynamic_data_io_object_instantiation_is_only_possible_for_subclasses(self):
@@ -124,7 +124,7 @@ class TestCoreIO:
         ).get(source_key="READ_FROM_S3_CSV")
 
         # When
-        s3_csv_io = ReadS3CsvIO(source_config=s3_csv_local_config)
+        s3_csv_io = ReadS3CsvIO(resource_definition=s3_csv_local_config)
 
         # Then
         assert isinstance(s3_csv_io, ReadS3CsvIO) and isinstance(s3_csv_io, DynamicDataIO)
@@ -152,7 +152,7 @@ class TestCoreIO:
             class CMVolumesIONoValidationFunction(DynamicDataIO):
                 schema = {"foo": "int64"}
 
-            CMVolumesIONoValidationFunction(source_config=s3_csv_local_config)
+            CMVolumesIONoValidationFunction(resource_definition=s3_csv_local_config)
 
     @pytest.mark.unit
     def test_subclasses_of_dynamic_data_io_need_to_implement_private_reader_for_new_source_types(
@@ -167,7 +167,7 @@ class TestCoreIO:
 
         # When
         with pytest.raises(AssertionError):
-            ReadS3IO(source_config=athena_cloud_config)
+            ReadS3IO(resource_definition=athena_cloud_config)
 
     @pytest.mark.unit
     def test_key_error_is_thrown_for_missing_schema_if_unified_io_subclass_assigns_schema_from_file_but_file_is_missing(
@@ -182,7 +182,7 @@ class TestCoreIO:
 
         # When
         with pytest.raises(SchemaNotFoundError):
-            ReadMockS3CsvIO(source_config=read_mock_s3_cloud_config)
+            ReadMockS3CsvIO(resource_definition=read_mock_s3_cloud_config)
 
     @pytest.mark.integration
     def test_schema_validations_are_applied_for_an_io_class_with_a_schema_definition(self, valid_dataframe):
@@ -193,7 +193,7 @@ class TestCoreIO:
             env_identifier="CLOUD",
             dynamic_vars=constants,
         ).get(source_key="READ_FROM_S3_CSV")
-        io_instance = ReadS3CsvIO(source_config=s3_csv_cloud_config)
+        io_instance = ReadS3CsvIO(resource_definition=s3_csv_cloud_config)
 
         # When
         return_value = io_instance.validate_from_schema(df)
@@ -210,7 +210,7 @@ class TestCoreIO:
             env_identifier="CLOUD",
             dynamic_vars=constants,
         ).get(source_key="READ_FROM_S3_CSV")
-        io_instance = ReadS3CsvIO(source_config=s3_csv_cloud_config)
+        io_instance = ReadS3CsvIO(resource_definition=s3_csv_cloud_config)
 
         # When
         with caplog.at_level(logging.INFO):
@@ -245,7 +245,7 @@ class TestCoreIO:
 
         # When
         with pytest.raises(SchemaValidationError):
-            ReadS3CsvIO(source_config=s3_csv_cloud_config).validate_from_schema(df)
+            ReadS3CsvIO(resource_definition=s3_csv_cloud_config).validate_from_schema(df)
 
     @pytest.mark.integration
     def test_schema_validations_exception_message_is_a_dict_with_all_violated_validations(self, invalid_dataframe, expected_messages):
@@ -259,7 +259,7 @@ class TestCoreIO:
 
         # When
         try:
-            ReadS3CsvIO(source_config=s3_csv_cloud_config).validate_from_schema(df)
+            ReadS3CsvIO(resource_definition=s3_csv_cloud_config).validate_from_schema(df)
         except SchemaValidationError as _exception:
             # Then
             assert _exception.message.keys() == expected_messages  # pylint: disable=no-member
@@ -286,7 +286,7 @@ class TestCoreIO:
         #         'end_odometer': 'int64',
         #         'foo_name': 'object',
         #     }
-        write_s3_io = WriteS3ParquetExternalIO(source_config=s3_parquet_local_config)
+        write_s3_io = WriteS3ParquetExternalIO(resource_definition=s3_parquet_local_config)
         write_s3_io.write(input_df)
 
         # # Then
@@ -314,7 +314,7 @@ class TestCoreIO:
 
         # When
         # ReadS3CsvIO(source_config=s3_csv_cloud_config, apply_schema_validations=False).read()
-        ReadS3CsvIO(source_config=s3_csv_local_config).read()  # False is the default value
+        ReadS3CsvIO(resource_definition=s3_csv_local_config).read()  # False is the default value
 
         # Then
         mock_validate_from_schema.assert_not_called()
@@ -330,7 +330,7 @@ class TestCoreIO:
         ).get(source_key="READ_FROM_S3_CSV")
 
         # When
-        ReadS3CsvIO(source_config=s3_csv_local_config, apply_schema_validations=True).read()
+        ReadS3CsvIO(resource_definition=s3_csv_local_config, apply_schema_validations=True).read()
 
         # Then
         mock_validate_from_schema.assert_called()
@@ -347,7 +347,7 @@ class TestCoreIO:
         ).get(source_key="WRITE_TO_S3_CSV")
 
         # When
-        WriteS3CsvWithSchema(source_config=s3_csv_local_config, apply_schema_validations=True).write(df)
+        WriteS3CsvWithSchema(resource_definition=s3_csv_local_config, apply_schema_validations=True).write(df)
 
         # Then
         try:
@@ -368,7 +368,7 @@ class TestCoreIO:
 
         # When
         # WriteS3CsvWithSchema(source_config=s3_csv_cloud_config, apply_schema_validations=False).write(df)
-        WriteS3CsvWithSchema(source_config=s3_csv_local_config).write(df)  # False is the default value
+        WriteS3CsvWithSchema(resource_definition=s3_csv_local_config).write(df)  # False is the default value
 
         # Then
         try:
@@ -388,7 +388,7 @@ class TestCoreIO:
 
         # When
         # ReadS3CsvIO(source_config=s3_csv_cloud_config, log_schema_metrics=False).read()
-        ReadS3CsvIO(source_config=s3_csv_local_config).read()  # False is the default value
+        ReadS3CsvIO(resource_definition=s3_csv_local_config).read()  # False is the default value
 
         # Then
         mock_log_metrics_from_schema.assert_not_called()
@@ -404,7 +404,7 @@ class TestCoreIO:
         ).get(source_key="READ_FROM_S3_CSV")
 
         # When
-        ReadS3CsvIO(source_config=s3_csv_local_config, log_schema_metrics=True).read()
+        ReadS3CsvIO(resource_definition=s3_csv_local_config, log_schema_metrics=True).read()
 
         # Then
         mock_log_metrics_from_schema.assert_called()
@@ -421,7 +421,7 @@ class TestCoreIO:
         ).get(source_key="WRITE_TO_S3_CSV")
 
         # When
-        WriteS3CsvWithSchema(source_config=s3_csv_local_config, log_schema_metrics=True).write(df)
+        WriteS3CsvWithSchema(resource_definition=s3_csv_local_config, log_schema_metrics=True).write(df)
 
         # Then
         try:
@@ -442,7 +442,7 @@ class TestCoreIO:
 
         # When
         # WriteS3CsvWithSchema(source_config=s3_csv_cloud_config, log_schema_metrics=False).write(df)
-        WriteS3CsvWithSchema(source_config=s3_csv_local_config).write(df)  # False is the default value
+        WriteS3CsvWithSchema(resource_definition=s3_csv_local_config).write(df)  # False is the default value
 
         # Then
         try:
@@ -491,7 +491,7 @@ class TestCoreIO:
             dynamic_vars=constants,
         ).get(source_key="S3_PARQUET_WITH_BOOL")
 
-        ParquetWithSomeBool(source_config=s3_parquet_with_some_bool_col_local_config).write(df)
+        ParquetWithSomeBool(resource_definition=s3_parquet_with_some_bool_col_local_config).write(df)
 
         # Then
         try:
@@ -553,7 +553,7 @@ class TestCoreIO:
             dynamic_vars=constants,
         ).get(source_key="S3_CSV_WITH_BOOL")
 
-        CsvWithSomeBool(source_config=s3_csv_with_some_bool_col_local_config).write(df)
+        CsvWithSomeBool(resource_definition=s3_csv_with_some_bool_col_local_config).write(df)
 
         # Then
         try:
@@ -615,7 +615,7 @@ class TestCoreIO:
             dynamic_vars=constants,
         ).get(source_key="S3_HDF_WITH_BOOL")
 
-        HdfWithSomeBool(source_config=s3_hdf_with_some_bool_col_local_config).write(df)
+        HdfWithSomeBool(resource_definition=s3_hdf_with_some_bool_col_local_config).write(df)
 
         # Then
         try:
@@ -680,7 +680,7 @@ class TestCoreIO:
             dynamic_vars=constants,
         ).get(source_key="S3_JSON_WITH_BOOL")
 
-        JsonWithSomeBool(source_config=s3_json_with_some_bool_col_local_config).write(df)
+        JsonWithSomeBool(resource_definition=s3_json_with_some_bool_col_local_config).write(df)
 
         # Then
         try:
@@ -719,7 +719,7 @@ class TestCoreIO:
 
         # Then
         with pytest.raises(ColumnsDataTypeError):
-            ParquetWithSomeBool(source_config=s3_parquet_with_some_bool_col_local_config).write(df)
+            ParquetWithSomeBool(resource_definition=s3_parquet_with_some_bool_col_local_config).write(df)
 
     @pytest.mark.unit
     def test_a_custom_validate_method_can_be_used_to_override_the_default_abstract_one(self):
@@ -733,7 +733,7 @@ class TestCoreIO:
         ).get(source_key="S3_PARQUET_WITH_CUSTOM_VALIDATE")
 
         # When
-        ParquetWithCustomValidate(source_config=s3_parquet_with_some_bool_col_local_config).write(df)
+        ParquetWithCustomValidate(resource_definition=s3_parquet_with_some_bool_col_local_config).write(df)
 
         # Then
         try:
@@ -749,7 +749,7 @@ class TestCoreIO:
             env_identifier="LOCAL",
             dynamic_vars=constants,
         ).get(source_key="READ_FROM_S3_CSV")
-        io_instance = ReadS3DataWithFalseTypes(source_config=s3_csv_cloud_config)  # i.e.show_casting_warnings=False
+        io_instance = ReadS3DataWithFalseTypes(resource_definition=s3_csv_cloud_config)  # i.e.show_casting_warnings=False
 
         # When
         with caplog.at_level(logging.INFO):
@@ -766,7 +766,7 @@ class TestCoreIO:
             env_identifier="LOCAL",
             dynamic_vars=constants,
         ).get(source_key="READ_FROM_S3_CSV")
-        io_instance = ReadS3DataWithFalseTypes(source_config=s3_csv_cloud_config, show_casting_warnings=True)
+        io_instance = ReadS3DataWithFalseTypes(resource_definition=s3_csv_cloud_config, show_casting_warnings=True)
 
         # When
         with caplog.at_level(logging.INFO):
@@ -778,7 +778,7 @@ class TestCoreIO:
     @pytest.mark.unit
     def test_options_are_read_from_code(self, s3_parquet_local_config):
         # When
-        config_io = ReadS3ParquetIO(source_config=s3_parquet_local_config, option_1=False, option_2=True)
+        config_io = ReadS3ParquetIO(resource_definition=s3_parquet_local_config, option_1=False, option_2=True)
 
         # Then
         assert config_io.options == {"option_1": False, "option_2": True}
@@ -834,7 +834,7 @@ class TestCoreIO:
         ).get(source_key="S3_PARQUET_WITH_OPTIONS_IN_DEFINITION")
 
         # When
-        config_io = ReadS3ParquetIO(source_config=s3_parquet_local_config)
+        config_io = ReadS3ParquetIO(resource_definition=s3_parquet_local_config)
 
         # Then
         assert config_io.options == {"option_3": False, "option_4": True}
@@ -849,7 +849,7 @@ class TestCoreIO:
         ).get(source_key="S3_PARQUET_WITH_OPTIONS_IN_DEFINITION")
 
         # When
-        config_io = ReadS3ParquetIO(source_config=s3_parquet_local_config, option_1=False, option_2=True)
+        config_io = ReadS3ParquetIO(resource_definition=s3_parquet_local_config, option_1=False, option_2=True)
 
         # Then
         assert config_io.options == {"option_1": False, "option_2": True, "option_3": False, "option_4": True}
@@ -864,7 +864,7 @@ class TestCoreIO:
         ).get(source_key="S3_PARQUET_WITH_OPTIONS_IN_DEFINITION")
 
         # When
-        config_io = ReadS3ParquetIO(source_config=s3_parquet_local_config, option_1=False, option_2=True, option_3=True)  # option_3 is conflicting
+        config_io = ReadS3ParquetIO(resource_definition=s3_parquet_local_config, option_1=False, option_2=True, option_3=True)  # option_3 is conflicting
 
         # Then
         assert config_io.options == {"option_1": False, "option_2": True, "option_3": True, "option_4": True}
@@ -897,7 +897,7 @@ class TestCoreIO:
         ).get(source_key="S3_PARQUET_WITH_OPTIONS_IN_CODE")
 
         # When
-        config_io = ReadS3ParquetIO(source_config=s3_parquet_local_config)
+        config_io = ReadS3ParquetIO(resource_definition=s3_parquet_local_config)
 
         # Then
         assert config_io.options == {}
@@ -913,7 +913,7 @@ class TestCoreIO:
         ).get(source_key="READ_FROM_S3_PARQUET")
 
         # When
-        config_io = ReadS3ParquetIO(source_config=s3_parquet_local_config)
+        config_io = ReadS3ParquetIO(resource_definition=s3_parquet_local_config)
 
         # Then
         assert config_io.name == "READ_S3_PARQUET_IO"
@@ -929,7 +929,7 @@ class TestCoreIO:
         ).get(source_key="READ_FROM_S3_CSV")
 
         # When
-        config_io = ReadS3CsvIO(source_config=s3_read_from_csv_config)
+        config_io = ReadS3CsvIO(resource_definition=s3_read_from_csv_config)
 
         # Then
         assert config_io.name == "READ_FROM_S3_CSV"
@@ -948,7 +948,7 @@ class TestAsyncCoreIO:
         # When
         with patch.object(dynamicio.core.DynamicDataIO, "read") as mock_read:
             mock_read.return_value = pd.DataFrame.from_records([[1, "name_a"]], columns=["id", "foo_name"])
-            asyncio.run(ReadS3CsvIO(source_config=s3_csv_local_config).async_read())
+            asyncio.run(ReadS3CsvIO(resource_definition=s3_csv_local_config).async_read())
 
         # Then
         mock_read.assert_called()
@@ -967,7 +967,7 @@ class TestAsyncCoreIO:
 
         # When
         with patch.object(dynamicio.core.DynamicDataIO, "write") as mock_write:
-            await asyncio.gather(WriteS3CsvIO(source_config=s3_csv_local_config).async_write(df))
+            await asyncio.gather(WriteS3CsvIO(resource_definition=s3_csv_local_config).async_write(df))
 
         # Then
         mock_write.assert_called()
@@ -987,10 +987,10 @@ class TestAsyncCoreIO:
 
         async def multi_read(config: Mapping[str, str]) -> Tuple:
             return await asyncio.gather(
-                ReadS3CsvIO(source_config=config).async_read(),
-                ReadS3CsvIO(source_config=config).async_read(),
-                ReadS3CsvIO(source_config=config).async_read(),
-                ReadS3CsvIO(source_config=config).async_read(),
+                ReadS3CsvIO(resource_definition=config).async_read(),
+                ReadS3CsvIO(resource_definition=config).async_read(),
+                ReadS3CsvIO(resource_definition=config).async_read(),
+                ReadS3CsvIO(resource_definition=config).async_read(),
             )
 
         # When
@@ -1019,10 +1019,10 @@ class TestAsyncCoreIO:
 
         async def multi_write(config: Mapping[str, str], _df: pd.DataFrame) -> Tuple:
             return await asyncio.gather(
-                WriteS3CsvIO(source_config=config).async_write(_df),
-                WriteS3CsvIO(source_config=config).async_write(_df),
-                WriteS3CsvIO(source_config=config).async_write(_df),
-                WriteS3CsvIO(source_config=config).async_write(_df),
+                WriteS3CsvIO(resource_definition=config).async_write(_df),
+                WriteS3CsvIO(resource_definition=config).async_write(_df),
+                WriteS3CsvIO(resource_definition=config).async_write(_df),
+                WriteS3CsvIO(resource_definition=config).async_write(_df),
             )
 
         # When

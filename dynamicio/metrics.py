@@ -8,6 +8,7 @@ from typing import Any, Dict, Mapping, Type
 
 import pandas as pd  # type: ignore
 from magic_logger import logger
+from pandera import extensions
 from pythonjsonlogger import jsonlogger  # type: ignore
 
 logHandler = logging.StreamHandler(sys.stdout)
@@ -34,6 +35,12 @@ def log_metric(dataset: str, column: str, metric: str, value: float):
     """
     logger.info(json.dumps({"message": "METRIC", "dataset": dataset, "column": column, "metric": metric, "value": float(value)}))
 
+
+@extensions.register_check_method(statistics=["metric_options"])
+def logging(df: pd.DataFrame, **metric_options: Mapping[str, Any]):
+    for metric in metric_options["metrics"]:
+        get_metric(metric)(metric_options["dataset_name"], df, metric_options["column"])()
+    return True
 
 class Metric:
     """A base class for implementing metrics classes."""
@@ -86,7 +93,7 @@ class Min(Metric):
         Returns:
              The minimum value of a column.
         """
-        return self.df[self.column].min()
+        return self.df.min()
 
 
 class Max(Metric):
@@ -98,7 +105,7 @@ class Max(Metric):
         Returns:
             The maximum value of a column.
         """
-        return self.df[self.column].max()
+        return self.df.max()
 
 
 class Mean(Metric):
@@ -110,7 +117,7 @@ class Mean(Metric):
         Returns:
             The mean value of a column.
         """
-        return self.df[self.column].mean()
+        return self.df.mean()
 
 
 class Std(Metric):
@@ -122,7 +129,7 @@ class Std(Metric):
         Returns:
             The standard deviation of a column.
         """
-        return self.df[self.column].std()
+        return self.df.std()
 
 
 class Variance(Metric):
@@ -134,7 +141,7 @@ class Variance(Metric):
         Returns:
             The variance of a column.
         """
-        return self.df[self.column].var()
+        return self.df.var()
 
 
 class Counts(Metric):
@@ -146,7 +153,7 @@ class Counts(Metric):
         Returns:
             The length of a column.
         """
-        return len(self.df[self.column])
+        return len(self.df)
 
 
 class UniqueCounts(Metric):
@@ -158,7 +165,7 @@ class UniqueCounts(Metric):
         Returns:
             The unique values of a column.
         """
-        return len(self.df[self.column].unique())
+        return len(self.df.unique())
 
 
 class CountsPerLabel(Metric):
@@ -170,7 +177,7 @@ class CountsPerLabel(Metric):
         Returns:
             The counts per label in a categorical column
         """
-        column_vs_metric_value = self.df[self.column].value_counts().to_dict()
+        column_vs_metric_value = self.df.value_counts().to_dict()
         label_vs_metric_value_with_column_prefix = {}
         for key in column_vs_metric_value.keys():
             new_key = self.column + "-" + key

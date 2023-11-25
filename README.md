@@ -965,37 +965,38 @@ logger = logging.getLogger(__name__)
 
 
 def main() -> None:
-    """The entry point for the Airflow Staging task.
+  """The entry point for the Airflow Staging task.
 
-    Returns:
-        Void function.
-    """
-    # LOAD DATA
-    logger.info("Loading data from live sources...")
+  Returns:
+      Void function.
+  """
+  # LOAD DATA
+  logger.info("Loading data from live sources...")
 
-    bar_df = InputIO(source_config=input_config.get(source_key="BAR"), apply_schema_validations=True, log_schema_metrics=True).read()
-    foo_df = InputIO(source_config=input_config.get(source_key="FOO"), apply_schema_validations=True, log_schema_metrics=True).read()
+  bar_df = InputIO(resource_definition=input_config.get(source_key="BAR"), apply_schema_validations=True, log_schema_metrics=True).read()
+  foo_df = InputIO(resource_definition=input_config.get(source_key="FOO"), apply_schema_validations=True, log_schema_metrics=True).read()
 
-    logger.info("Data successfully loaded from live sources...")
+  logger.info("Data successfully loaded from live sources...")
 
-    # TRANSFORM  DATA
-    logger.info("Apply transformations...")
+  # TRANSFORM  DATA
+  logger.info("Apply transformations...")
 
-    # TODO: Apply your transformations
+  # TODO: Apply your transformations
 
-    logger.info("Transformations applied successfully...")
+  logger.info("Transformations applied successfully...")
 
-    # SINK DATA
-    logger.info("Begin sinking data to staging area:")
-    StagedFoo(source_config=raw_config.get(source_key="STAGED_FOO"), **constants.TO_PARQUET_KWARGS).write(foo_df)
-    StagedBar(source_config=raw_config.get(source_key="STAGED_BAR")).write(bar_df)
-    logger.info("Data staging is complete...")
+  # SINK DATA
+  logger.info("Begin sinking data to staging area:")
+  StagedFoo(resource_definition=raw_config.get(source_key="STAGED_FOO"), **constants.TO_PARQUET_KWARGS).write(foo_df)
+  StagedBar(resource_definition=raw_config.get(source_key="STAGED_BAR")).write(bar_df)
+  logger.info("Data staging is complete...")
 
 ```
 ### Utilising `asyncio`
 `Dynamic(i/o)` supports use of `asyncio` to speed up `I/O bound` operations through leveraging multithreading. 
 
 An example can be found in the second of the two demo tasks, namely, the `transform.py` task.
+
 ```python
 """Add module docstring...."""
 import asyncio
@@ -1009,35 +1010,35 @@ logger = logging.getLogger(__name__)
 
 
 async def main() -> None:
-    """The entry point for the Airflow Staging task.
+  """The entry point for the Airflow Staging task.
 
-    Returns:
-        Void function.
-    """
-    # LOAD DATA
-    logger.info("Loading data from live sources...")
+  Returns:
+      Void function.
+  """
+  # LOAD DATA
+  logger.info("Loading data from live sources...")
 
-    [bar_df, foo_df] = await asyncio.gather(
-        StagedBar(source_config=raw_config.get(source_key="STAGED_BAR")).async_read(),
-        StagedFoo(source_config=raw_config.get(source_key="STAGED_FOO")).async_read()
-    )
+  [bar_df, foo_df] = await asyncio.gather(
+    StagedBar(resource_definition=raw_config.get(source_key="STAGED_BAR")).async_read(),
+    StagedFoo(resource_definition=raw_config.get(source_key="STAGED_FOO")).async_read()
+  )
 
-    logger.info("Data successfully loaded from live sources...")
+  logger.info("Data successfully loaded from live sources...")
 
-    # TRANSFORM  DATA
-    logger.info("Apply transformations...")
+  # TRANSFORM  DATA
+  logger.info("Apply transformations...")
 
-    # TODO: Apply your transformations
+  # TODO: Apply your transformations
 
-    logger.info("Transformations applied successfully...")
+  logger.info("Transformations applied successfully...")
 
-    # SINK DATA
-    logger.info(f"Begin sinking data to staging area: S3:{demo.src.environment.S3_YOUR_OUTPUT_BUCKET}:live/data/raw")
-    await asyncio.gather(
-        InputIO(source_config=processed_config.get(source_key="FINAL_FOO"), apply_schema_validations=True, log_schema_metrics=True).async_write(foo_df),
-        InputIO(source_config=processed_config.get(source_key="FINAL_BAR"), apply_schema_validations=True, log_schema_metrics=True).async_write(bar_df),
-    )
-    logger.info("Data staging is complete...")
+  # SINK DATA
+  logger.info(f"Begin sinking data to staging area: S3:{demo.src.environment.S3_YOUR_OUTPUT_BUCKET}:live/data/raw")
+  await asyncio.gather(
+    InputIO(resource_definition=processed_config.get(source_key="FINAL_FOO"), apply_schema_validations=True, log_schema_metrics=True).async_write(foo_df),
+    InputIO(resource_definition=processed_config.get(source_key="FINAL_BAR"), apply_schema_validations=True, log_schema_metrics=True).async_write(bar_df),
+  )
+  logger.info("Data staging is complete...")
 
 ```
 In short, you simply need to utilise the `async_read()` or the `async_write()` methods instead, plus await and gather your calls.  

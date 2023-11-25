@@ -11,6 +11,7 @@ from typing import Any, List, Mapping, MutableMapping, Optional, Tuple
 import pandas as pd  # type: ignore
 import pydantic
 from magic_logger import logger
+from pandera import SchemaModel
 
 from dynamicio import validations
 from dynamicio.config.pydantic import DataframeSchema, IOEnvironment, SchemaColumn
@@ -32,19 +33,19 @@ class DynamicDataIO:
        >>> )
        >>>
        >>> class IO(WithS3File, WithLocal, DynamicDataIO):
-       >>>     schema = S
        >>>
        >>> my_dataset_local_mapping = input_config.get(source_key="MY_DATASET")
        >>> my_dataset_io = IO(my_dataset_local_mapping)
        >>> my_dataset_df = my_dataset_io.read()
     """
 
-    schema: DataframeSchema
-    sources_config: IOEnvironment
+    schema: SchemaModel
+    resource_definition: IOEnvironment
 
     def __init__(
         self,
-        source_config: IOEnvironment,
+        resource_definition: IOEnvironment,
+        schema: SchemaModel,
         apply_schema_validations: bool = False,
         log_schema_metrics: bool = False,
         show_casting_warnings: bool = False,
@@ -53,7 +54,8 @@ class DynamicDataIO:
         """Class constructor.
 
         Args:
-            source_config: Configuration to use when reading/writing data from/to a source
+            resource_definition: Configuration to use when reading/writing data from/to a source
+            schema: A pandera schema model (includes validations and metrics logging)
             apply_schema_validations: Applies schema validations on either read() or write()
             log_schema_metrics: Logs schema metrics on either read() or write()
             show_casting_warnings: Logs casting warnings on either read() or write() if set to True
@@ -62,24 +64,15 @@ class DynamicDataIO:
         if type(self) is DynamicDataIO:  # pylint: disable=unidiomatic-typecheck
             raise TypeError("Abstract class DynamicDataIO cannot be used to instantiate an object...")
 
-        self.sources_config = source_config
+        self.resource_definition = resource_definition
         self.name = self._transform_class_name_to_dataset_name(self.__class__.__name__)
+        self.schema = schema
         self.apply_schema_validations = apply_schema_validations
         self.log_schema_metrics = log_schema_metrics
         self.show_casting_warnings = show_casting_warnings
-        self.options = self._get_options(options, source_config.options)
-        source_name = self.sources_config.data_backend_type
-        if self.schema is SCHEMA_FROM_FILE:
-            active_schema = self.sources_config.dynamicio_schema
-        else:
-            active_schema = self._schema_from_obj(self)
-
-        if not active_schema:
-            raise SchemaNotFoundError()
-
-        assert isinstance(active_schema, DataframeSchema)
-        self.schema = active_schema
-        self.name = self.schema.name.upper()
+        self.options = self._get_options(options, resource_definition.options)
+        source_name = self.resource_definition.data_backend_type
+        self.name = self.schema.__class__.__name__.upper()
         self.schema_validations = self.schema.validations
         self.schema_metrics = self.schema.metrics
 
@@ -146,7 +139,7 @@ class DynamicDataIO:
         Returns:
             A pandas dataframe or an iterable.
         """
-        source_name = self.sources_config.data_backend_type
+        source_name = self.resource_definition.data_backend_type
         df = getattr(self, f"_read_from_{source_name}")()
 
         df = self._apply_schema(df)
@@ -172,7 +165,7 @@ class DynamicDataIO:
         Args:
             df: The data to be written
         """
-        source_name = self.sources_config.data_backend_type
+        source_name = self.resource_definition.data_backend_type
         if set(df.columns) != self.schema.column_names:  # pylint: disable=E1101
             columns = [column for column in df.columns.to_list() if column in self.schema.column_names]
             df = df[columns]

@@ -28,7 +28,7 @@ class TestPostgresIO:
         ).get(source_key="READ_FROM_POSTGRES")
 
         # When
-        columns = ReadPostgresIO(source_config=pg_cloud_config)._get_table_columns(ERModel)  # pylint: disable=protected-access
+        columns = ReadPostgresIO(resource_definition=pg_cloud_config)._get_table_columns(ERModel)  # pylint: disable=protected-access
         # Then
         assert columns == expected_columns
 
@@ -44,7 +44,7 @@ class TestPostgresIO:
         ).get(source_key="READ_FROM_POSTGRES")
 
         # When
-        ReadPostgresIO(source_config=postgres_cloud_config).read()
+        ReadPostgresIO(resource_definition=postgres_cloud_config).read()
 
         # Then
         mock__read_from_postgres.assert_called()
@@ -61,7 +61,7 @@ class TestPostgresIO:
         ).get(source_key="WRITE_TO_PG_PARQUET")
 
         # When
-        WritePostgresIO(source_config=postgres_cloud_config).write(df)
+        WritePostgresIO(resource_definition=postgres_cloud_config).write(df)
 
         # Then
         mock__write_to_postgres.assert_called()
@@ -80,7 +80,7 @@ class TestPostgresIO:
         )
 
         # When
-        write_config = WritePostgresIO(source_config=postgres_cloud_config, truncate_and_append=True)
+        write_config = WritePostgresIO(resource_definition=postgres_cloud_config, truncate_and_append=True)
 
         write_config.write(df)
 
@@ -102,7 +102,7 @@ class TestPostgresIO:
         ).get(source_key="READ_FROM_POSTGRES")
 
         # When / Then
-        ReadPostgresIO(source_config=postgres_cloud_config).read()
+        ReadPostgresIO(resource_definition=postgres_cloud_config).read()
         mock__read_from_postgres.assert_called()
 
     @pytest.mark.unit
@@ -116,7 +116,7 @@ class TestPostgresIO:
         ).get(source_key="READ_FROM_POSTGRES")
 
         # When
-        ReadPostgresIO(source_config=postgres_cloud_config, sql_query="SELECT * FROM example").read()
+        ReadPostgresIO(resource_definition=postgres_cloud_config, sql_query="SELECT * FROM example").read()
 
         # Then
         mock__read_database.assert_called_with(ANY, "SELECT * FROM example")
@@ -132,7 +132,7 @@ class TestPostgresIO:
         ).get(source_key="READ_FROM_POSTGRES_WITH_QUERY_IN_OPTIONS")
 
         # When
-        ReadPostgresIO(source_config=postgres_cloud_config).read()
+        ReadPostgresIO(resource_definition=postgres_cloud_config).read()
 
         # Then
         mock__read_database.assert_called_with(ANY, "SELECT * FROM table_name_from_yaml_options")
@@ -148,7 +148,7 @@ class TestPostgresIO:
         ).get(source_key="READ_FROM_POSTGRES")
 
         # When
-        ReadPostgresIO(source_config=postgres_cloud_config, sql_query="SELECT * FROM example", parse_dates=["date"], wrong_arg="whatever").read()
+        ReadPostgresIO(resource_definition=postgres_cloud_config, sql_query="SELECT * FROM example", parse_dates=["date"], wrong_arg="whatever").read()
 
         # Then
         mock__read_sql.assert_called_with(sql="SELECT * FROM example", con=ANY, parse_dates=["date"])
@@ -165,7 +165,7 @@ class TestPostgresIO:
         # When
         schema = postgres_cloud_config.dynamicio_schema
         schema_name = postgres_cloud_config.dynamicio_schema.name
-        model = ReadPostgresIO(source_config=postgres_cloud_config)._generate_model_from_schema(schema)
+        model = ReadPostgresIO(resource_definition=postgres_cloud_config)._generate_model_from_schema(schema)
 
         # Then
         assert len(model.__table__.columns) == len(schema.columns) and model.__tablename__ == schema_name
@@ -181,8 +181,8 @@ class TestPostgresIO:
 
         # When
         schema = pg_cloud_config.dynamicio_schema
-        model = ReadPostgresIO(source_config=pg_cloud_config)._generate_model_from_schema(schema)  # pylint: disable=protected-access
-        columns = ReadPostgresIO(source_config=pg_cloud_config)._get_table_columns(model)  # pylint: disable=protected-access
+        model = ReadPostgresIO(resource_definition=pg_cloud_config)._generate_model_from_schema(schema)  # pylint: disable=protected-access
+        columns = ReadPostgresIO(resource_definition=pg_cloud_config)._get_table_columns(model)  # pylint: disable=protected-access
 
         # Then
         assert isinstance(model.__table__.columns, ImmutableColumnCollection)
@@ -208,7 +208,7 @@ class TestPostgresIO:
         )
 
         # When
-        is_valid = WriteExtendedPostgresIO(source_config=postgres_cloud_config, show_casting_warnings=True)._has_valid_dtypes(df)
+        is_valid = WriteExtendedPostgresIO(resource_definition=postgres_cloud_config, show_casting_warnings=True)._has_valid_dtypes(df)
 
         # Then
         assert is_valid is True

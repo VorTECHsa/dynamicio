@@ -137,7 +137,7 @@ class TestAllowedOptions:
         ).get(source_key="READ_FROM_S3_CSV")
 
         # When
-        s3_csv_df = ReadS3CsvIO(source_config=s3_csv_local_config, foo=invalid_option).read()
+        s3_csv_df = ReadS3CsvIO(resource_definition=s3_csv_local_config, foo=invalid_option).read()
 
         # Then
         assert expected_s3_csv_df.equals(s3_csv_df)
@@ -153,7 +153,7 @@ class TestAllowedOptions:
         ).get(source_key="READ_FROM_S3_CSV")
 
         # When
-        s3_csv_df = ReadS3CsvIO(source_config=s3_csv_local_config, dtype=None).read()
+        s3_csv_df = ReadS3CsvIO(resource_definition=s3_csv_local_config, dtype=None).read()
 
         # Then
         assert expected_s3_csv_df.equals(s3_csv_df)
