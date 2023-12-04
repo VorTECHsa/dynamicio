@@ -473,15 +473,16 @@ def _collect_columns(yaml_schema) -> list[Column]:
             if re.search(candidate_type, parsed_numpy_dtype) is not None:
                 derived_pandera_type = _numpy_type_to_pandera_mapping[candidate_type]
 
-        for validation_name, validation_body in col_info["validations"].items():
-            for candidate_validation in _supported_validations:
-                if candidate_validation.is_matched(validation_name):
-                    parsed_validations.append(candidate_validation.parse_from_dict(validation_body))
-
-        for metric_name in col_info["metrics"]:
-            for metric_candidate in _supported_metrics:
-                if metric_candidate.is_matched(metric_name):
-                    parsed_metrics.append(metric_candidate())
+        if col_info.get("validations"):
+            for validation_name, validation_body in col_info.get("validations").items():
+                for candidate_validation in _supported_validations:
+                    if candidate_validation.is_matched(validation_name):
+                        parsed_validations.append(candidate_validation.parse_from_dict(validation_body))
+        if col_info.get("metrics"):
+            for metric_name in col_info["metrics"]:
+                for metric_candidate in _supported_metrics:
+                    if metric_candidate.is_matched(metric_name):
+                        parsed_metrics.append(metric_candidate())
 
         assert derived_pandera_type is not None, "Could not match the numpy dtype to pandera type"
 
