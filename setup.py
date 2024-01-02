@@ -1,5 +1,6 @@
 """Packaging and distribution configuration."""
 import os
+import warnings
 
 import setuptools
 
@@ -35,7 +36,8 @@ def get_version():
         with open(VERSION_FILE, "r") as f:
             return f.read().strip()
 
-    raise ValueError("Could not determine build version")
+    warnings.warn("Could not determine build version")
+    return '0.0.0dev0'
 
 
 def read_requirements(file_path):

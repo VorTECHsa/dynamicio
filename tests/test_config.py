@@ -1,5 +1,6 @@
 # pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring, R0801
 import io
+import json
 import os
 
 import pytest
@@ -20,7 +21,7 @@ class TestIOConfig:
         )
 
         # When
-        yaml_dict = input_config.config.dict()
+        yaml_dict = json.loads(input_config.config.model_dump_json())
         # Then
         assert yaml_dict == expected_input_yaml_dict
 

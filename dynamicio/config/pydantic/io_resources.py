@@ -41,7 +41,10 @@ class IOBinding(pydantic.BaseModel):
     """A binding for a single i/o object"""
 
     name: str = pydantic.Field(alias="__binding_name__")
-    environments: Mapping[str, "IOEnvironment"]
+    environments: Mapping[
+        str,
+        Union["IOEnvironment", "LocalDataEnvironment", "LocalBatchDataEnvironment", "S3DataEnvironment", "S3PathPrefixEnvironment", "KafkaDataEnvironment", "PostgresDataEnvironment"],
+    ]
     dynamicio_schema: Union[table_spec.DataframeSchema, None] = pydantic.Field(default=None, alias="schema")
 
     def get_binding_for_environment(self, environment: str) -> "IOEnvironment":
@@ -49,10 +52,10 @@ class IOBinding(pydantic.BaseModel):
         return self.environments[environment]
 
     @pydantic.validator("environments", pre=True, always=True)
-    def pick_correct_env_cls(cls, value, values, config, field):
+    def pick_correct_env_cls(cls, info):
         """This pre-validator picks an appropriate IOEnvironment subclass for the `data_backend_type`"""
-        if not isinstance(value, Mapping):
-            raise ValueError(f"Environments input should be a dict. Got {value!r} instead.")
+        if not isinstance(info, Mapping):
+            raise ValueError(f"Environments input should be a dict. Got {info!r} instead.")
         config_cls_overrides = {
             DataBackendType.local: LocalDataEnvironment,
             DataBackendType.local_batch: LocalBatchDataEnvironment,
@@ -63,8 +66,8 @@ class IOBinding(pydantic.BaseModel):
             DataBackendType.postgres: PostgresDataEnvironment,
         }
         out_dict = {}
-        for (env_name, env_data) in value.items():
-            base_obj: IOEnvironment = field.type_(**env_data)
+        for (env_name, env_data) in info.items():
+            base_obj: IOEnvironment = IOEnvironment(**env_data)
             override_cls = config_cls_overrides.get(base_obj.data_backend_type)
             if override_cls:
                 use_obj = override_cls(**env_data)
@@ -217,4 +220,4 @@ class PostgresDataEnvironment(IOEnvironment):
     postgres: PostgresDataSubSection
 
 
-IOBinding.update_forward_refs()
+IOBinding.model_rebuild()
