@@ -50,4 +50,5 @@ logging_config = {
     },
 }
 
-logger.dict_config(logging_config)
+if os.environ.get("DYNAMICIO_DO_NOT_CONFIGURE_LOGGING", "") != "1":
+    logger.dict_config(logging_config)
