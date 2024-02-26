@@ -1,19 +1,20 @@
 # pylint: disable=no-member, no-self-argument, unused-argument
 
-"""This module contains pylint models for physical data sources (places the bytes are being read from)"""
+"""This module contains pylint models for physical data sources (places the bytes are being read from)."""
 
 import enum
 import posixpath
 from typing import Mapping, Optional, Union
 
 import pydantic
+from pydantic import BaseModel, model_validator
 
 import dynamicio.config.pydantic.table_schema as table_spec
 
 
 @enum.unique
 class DataBackendType(str, enum.Enum):
-    """Input file types"""
+    """Input file types."""
 
     # pylint: disable=invalid-name
     local = "local"
@@ -37,8 +38,8 @@ class FileType(str, enum.Enum):
     hdf = "hdf"
 
 
-class IOBinding(pydantic.BaseModel):
-    """A binding for a single i/o object"""
+class IOBinding(BaseModel):
+    """A binding for a single i/o object."""
 
     name: str = pydantic.Field(alias="__binding_name__")
     environments: Mapping[
@@ -53,7 +54,7 @@ class IOBinding(pydantic.BaseModel):
 
     @pydantic.validator("environments", pre=True, always=True)
     def pick_correct_env_cls(cls, info):
-        """This pre-validator picks an appropriate IOEnvironment subclass for the `data_backend_type`"""
+        """This pre-validator picks an appropriate IOEnvironment subclass for the `data_backend_type`."""
         if not isinstance(info, Mapping):
             raise ValueError(f"Environments input should be a dict. Got {info!r} instead.")
         config_cls_overrides = {
@@ -91,8 +92,8 @@ class IOBinding(pydantic.BaseModel):
         return remapped_value
 
 
-class IOEnvironment(pydantic.BaseModel):
-    """A section specifiing an data source backed by a particular data backend"""
+class IOEnvironment(BaseModel):
+    """A section specifiing an data source backed by a particular data backend."""
 
     _parent: Optional[IOBinding] = None  # noqa: F821
     options: Mapping = pydantic.Field(default_factory=dict)
@@ -105,7 +106,7 @@ class IOEnvironment(pydantic.BaseModel):
 
     @property
     def dynamicio_schema(self) -> Union[table_spec.DataframeSchema, None]:
-        """Returns tabular data structure definition for the data source (if available)"""
+        """Returns tabular data structure definition for the data source (if available)."""
         if not self._parent:
             raise Exception("Parent field is not set.")
         return self._parent.dynamicio_schema
@@ -116,24 +117,34 @@ class IOEnvironment(pydantic.BaseModel):
         self._parent = parent
 
 
-class LocalDataSubSection(pydantic.BaseModel):
-    """Config section for local data provider"""
+class LocalDataSubSection(BaseModel):
+    """Config section for local data provider."""
 
     file_path: str
     file_type: FileType
 
 
 class LocalDataEnvironment(IOEnvironment):
-    """The data is provided by local storage"""
+    """The data is provided by local storage."""
 
     local: LocalDataSubSection
 
 
-class LocalBatchDataSubSection(pydantic.BaseModel):
-    """Config section for local batch data (multiple input files)"""
+class LocalBatchDataSubSection(BaseModel):
+    """Config section for local batch data (multiple input files)."""
 
-    path_prefix: str
+    path_prefix: Optional[str] = None
+    dynamic_file_path: Optional[str] = None
     file_type: FileType
+
+    @model_validator(mode="before")
+    def check_path_fields(cls, values):
+        """Check that only one of path_prefix or dynamic_file_path is provided."""
+        if not values.get("path_prefix") and not values.get("dynamic_file_path"):
+            raise ValueError("Either path_prefix or dynamic_file_path must be provided")
+        if values.get("path_prefix") and values.get("dynamic_file_path"):
+            raise ValueError("Only one of path_prefix or dynamic_file_path should be provided")
+        return values
 
 
 class LocalBatchDataEnvironment(IOEnvironment):
@@ -142,8 +153,8 @@ class LocalBatchDataEnvironment(IOEnvironment):
     local: LocalBatchDataSubSection
 
 
-class S3DataSubSection(pydantic.BaseModel):
-    """Config section for S3 data source"""
+class S3DataSubSection(BaseModel):
+    """Config section for S3 data source."""
 
     file_path: str
     file_type: FileType
@@ -151,13 +162,13 @@ class S3DataSubSection(pydantic.BaseModel):
 
 
 class S3DataEnvironment(IOEnvironment):
-    """Parent section for s3 data source config"""
+    """Parent section for s3 data source config."""
 
     s3: S3DataSubSection
 
 
-class S3PathPrefixSubSection(pydantic.BaseModel):
-    """Config section for s3 prefix data source (multiple s3 objects)"""
+class S3PathPrefixSubSection(BaseModel):
+    """Config section for s3 prefix data source (multiple s3 objects)."""
 
     path_prefix: str
     file_type: FileType
@@ -165,9 +176,7 @@ class S3PathPrefixSubSection(pydantic.BaseModel):
 
     @pydantic.root_validator(pre=True)
     def support_legacy_config_path_prefix(cls, values):
-        """
-        This validator implements support for legacy config format where the
-        bucket & path_prefix path could've been passed as a single param in 'bucket' field.
+        """This validator implements support for legacy config format where the bucket & path_prefix path could've been passed as a single param in 'bucket' field.
 
         E.g.
             bucket: "[[ MOCK_BUCKET ]]/data/input/{file_name_to_replace}.hdf"
@@ -186,12 +195,12 @@ class S3PathPrefixSubSection(pydantic.BaseModel):
 
 
 class S3PathPrefixEnvironment(IOEnvironment):
-    """Parent section for the multi-object s3 data source"""
+    """Parent section for the multi-object s3 data source."""
 
     s3: S3PathPrefixSubSection
 
 
-class KafkaDataSubSection(pydantic.BaseModel):
+class KafkaDataSubSection(BaseModel):
     """Kafka configuration section."""
 
     kafka_server: str
@@ -199,12 +208,12 @@ class KafkaDataSubSection(pydantic.BaseModel):
 
 
 class KafkaDataEnvironment(IOEnvironment):
-    """Parent section for kafka data source config"""
+    """Parent section for kafka data source config."""
 
     kafka: KafkaDataSubSection
 
 
-class PostgresDataSubSection(pydantic.BaseModel):
+class PostgresDataSubSection(BaseModel):
     """Postgres data source configuration."""
 
     db_host: str

@@ -9,49 +9,50 @@ import tempfile
 import urllib.parse
 import uuid
 from contextlib import contextmanager
-from typing import Generator, IO, Optional
+from typing import IO, Generator, Optional, Union  # noqa: I101
 
 import boto3  # type: ignore
-import pandas as pd  # type: ignore
+import pandas as pd
 import s3transfer.futures  # type: ignore
 import tables  # type: ignore
 from awscli.clidriver import create_clidriver  # type: ignore
 from magic_logger import logger
+from pandas import DataFrame, Series
 
 from dynamicio.config.pydantic import DataframeSchema, S3DataEnvironment, S3PathPrefixEnvironment
-from dynamicio.mixins import (
-    utils,
-    with_local,
-)
+from dynamicio.mixins import utils, with_local
 
 
 class InMemStore(pd.io.pytables.HDFStore):
-    """A subclass of pandas HDFStore that does not manage the pytables File object"""
+    """A subclass of pandas HDFStore that does not manage the pytables File object."""
 
     _in_mem_table = None
 
     def __init__(self, path: str, table: tables.File, mode: str = "r"):
+        """Create a new HDFStore object."""
         self._in_mem_table = table
         super().__init__(path=path, mode=mode)
 
     def open(self, *_args, **_kwargs):
+        """Open the in-memory table."""
         pd.io.pytables._tables()
         self._handle = self._in_mem_table
 
     def close(self, *_args, **_kwargs):
-        pass
+        """Close the in-memory table."""
 
     @property
     def is_open(self):
+        """Check if the in-memory table is open."""
         return self._handle is not None
 
 
 class HdfIO:
-    """Class providing stream support for HDF tables"""
+    """Class providing stream support for HDF tables."""
 
     @contextmanager
-    def create_file(self, label: str, mode: str, data: bytes = None) -> Generator[tables.File, None, None]:
-        """Create an in-memory pytables table"""
+    def create_file(self, label: str, mode: str, data: Optional[bytes] = None) -> Generator[tables.File, None, None]:
+        """Create an in-memory pytables table."""
         extra_kw = {}
         if data:
             extra_kw["driver_core_image"] = data
@@ -61,13 +62,13 @@ class HdfIO:
         finally:
             file_handle.close()
 
-    def load(self, fobj: IO[bytes], label: str = "unknown_file.h5") -> pd.DataFrame:
-        """Load the dataframe from an file-like object"""
+    def load(self, fobj: IO[bytes], label: str = "unknown_file.h5") -> Union[DataFrame, Series]:
+        """Load the dataframe from an file-like object."""
         with self.create_file(label, mode="r", data=fobj.read()) as file_handle:
             return pd.read_hdf(InMemStore(label, file_handle))
 
-    def save(self, df: pd.DataFrame, fobj: IO[bytes], label: str = "unknown_file.h5", options: Optional[dict] = None):
-        """Load the dataframe to a file-like object"""
+    def save(self, df: DataFrame, fobj: IO[bytes], label: str = "unknown_file.h5", options: Optional[dict] = None):
+        """Load the dataframe to a file-like object."""
         if not options:
             options = {}
         with self.create_file(label, mode="w", data=fobj.read()) as file_handle:
@@ -98,7 +99,7 @@ def awscli_runner(*cmd: str):
 
 @dataclasses.dataclass
 class S3TransferHandle:
-    """A dataclass used to track an ongoing data download from the s3"""
+    """A dataclass used to track an ongoing data download from the s3."""
 
     s3_object: object  # boto3.resource('s3').ObjectSummary
     fobj: IO[bytes]  # file-like object the data is being downloaded to
@@ -222,7 +223,7 @@ class WithS3PathPrefix(with_local.WithLocal):
     def _iter_s3_files(self, s3_prefix: str, file_ext: Optional[str] = None, max_memory_use: int = -1) -> Generator[IO[bytes], None, None]:  # pylint: disable=too-many-locals
         """Download sways of S3 objects.
 
-        Parameters:
+        Args:
             s3_prefix: s3 url to fetch objects with
             file_ext: extension of s3 objects to allow through
             max_memory_use: The approximate number of bytes to allocate on each yield of Generator

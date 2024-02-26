@@ -104,7 +104,7 @@ class TestHasAcceptablePercentageOfNulls:
         assert validation.valid is True and validation.value == 0.1 and validation.message == "Percentage of nulls of for TEST[duration_a] is 0.1"
 
     @pytest.mark.unit
-    def test_returns_true_if_inpu_df_is_empty(self, empty_df):
+    def test_returns_true_if_input_df_is_empty(self, empty_df):
         # Given
         df = empty_df
 
@@ -112,7 +112,7 @@ class TestHasAcceptablePercentageOfNulls:
         validation = has_acceptable_percentage_of_nulls("TEST", df, column="duration_a", threshold=0.11)
 
         # Then
-        assert validation.valid is True and validation.value == 0 and validation.message == "Percentage of nulls of for TEST[duration_a] is 0"
+        assert validation.valid is True and validation.value == 0.0 and validation.message == "Percentage of nulls of for TEST[duration_a] is 0.0"
 
     @pytest.mark.unit
     def test_returns_true_if_threshold_is_not_exceeded_for_any_null_type_value(self, input_df):

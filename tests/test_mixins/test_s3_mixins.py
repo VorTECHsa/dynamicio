@@ -10,10 +10,8 @@ import pydantic
 import pytest
 import yaml
 
-
 import dynamicio.mixins.with_local
 import dynamicio.mixins.with_s3
-
 from dynamicio.config import IOConfig
 from dynamicio.errors import ColumnsDataTypeError
 from tests import constants
@@ -130,7 +128,7 @@ class TestS3FileIO:
         # When
         with patch.object(dynamicio.mixins.with_s3.WithS3File, "boto3_client") as mock__boto3_client:
 
-            def mock_download_fobj(s3_bucket, s3_key, target_file):
+            def mock_download_fobj(s3_bucket, s3_key, target_file):  # pylint: disable=unused-argument
                 with open(expected_s3_hdf_file_path, "rb") as fin:
                     shutil.copyfileobj(fin, target_file)
 
@@ -181,7 +179,7 @@ class TestS3FileIO:
     @pytest.mark.unit
     def test_ValueError_is_raised_if_file_path_missing_from_config(self, tmp_path):
         tmp_yaml = tmp_path / "test.yaml"
-        with open(tmp_yaml, "w") as fout:
+        with open(tmp_yaml, encoding="utf-8", mode="w") as f_out:
             yaml.safe_dump(
                 {
                     "READ_FROM_S3_MISSING_FILE_PATH": {
@@ -199,7 +197,7 @@ class TestS3FileIO:
                         "schema": {"file_path": "[[ TEST_RESOURCES ]]/schemas/read_from_s3_csv.yaml"},
                     }
                 },
-                fout,
+                f_out,
             )
 
         with pytest.raises(pydantic.ValidationError):
@@ -417,9 +415,8 @@ class TestS3FileIO:
 class TestS3PathPrefixIO:
     @pytest.mark.unit
     def test_error_is_raised_if_path_prefix_missing_from_config(self, tmp_path):
-
         tmp_yaml = tmp_path / "test.yaml"
-        with open(tmp_yaml, "w") as fout:
+        with open(tmp_yaml, encoding="utf-8", mode="w") as f_out:
             yaml.safe_dump(
                 {
                     "READ_FROM_S3_MISSING_PATH_PREFIX": {
@@ -437,7 +434,7 @@ class TestS3PathPrefixIO:
                         "schema": {"file_path": "[[ TEST_RESOURCES ]]/schemas/read_from_s3_csv.yaml"},
                     }
                 },
-                fout,
+                f_out,
             )
 
         with pytest.raises(pydantic.ValidationError):
@@ -463,9 +460,8 @@ class TestS3PathPrefixIO:
 
     @pytest.mark.unit
     def test_error_is_raised_if_file_type_not_parquet_when_uploading(self, tmp_path):
-
         tmp_yaml = tmp_path / "test.yaml"
-        with open(tmp_yaml, "w") as fout:
+        with open(tmp_yaml, encoding="utf-8", mode="w") as f_out:
             yaml.safe_dump(
                 {
                     "WRITE_TO_S3_PATH_PREFIX_NOT_PARQUET": {
@@ -479,7 +475,7 @@ class TestS3PathPrefixIO:
                         }
                     }
                 },
-                fout,
+                f_out,
             )
 
         with pytest.raises(pydantic.ValidationError):
@@ -657,7 +653,7 @@ class TestS3PathPrefixIO:
             df = ReadS3ParquetWithLessColumnsIO(source_config=s3_parquet_cloud_config).read()
 
         # Then
-        assert df.shape == (15, 2) and df.columns.tolist() == ["id", "foo_name"]
+        assert df.shape == (45, 2) and df.columns.tolist() == ["id", "foo_name"]
 
     @pytest.mark.unit
     # pylint: disable=unused-argument
@@ -675,7 +671,7 @@ class TestS3PathPrefixIO:
             df = ReadS3ParquetIO(source_config=s3_parquet_cloud_config, filters=[[("foo_name", "==", "name_a")]]).read()
 
         # Then
-        assert df.shape == (8, 3) and df.columns.tolist() == ["id", "foo_name", "bar"] and df.foo_name.unique() == ["name_a"]
+        assert df.shape == (24, 3) and df.columns.tolist() == ["id", "foo_name", "bar"] and df.foo_name.unique() == ["name_a"]
 
     @pytest.mark.unit
     # pylint: disable=unused-argument
@@ -784,7 +780,7 @@ class TestS3PathPrefixIO:
     ):
         # Given
         test_yaml_file = tmp_path / "mytest.yml"
-        with open(test_yaml_file, "w") as fout:
+        with open(test_yaml_file, encoding="utf-8", mode="w") as f_out:
             yaml.dump(
                 {
                     "READ_FROM_S3_PATH_PREFIX_TXT": {
@@ -798,13 +794,13 @@ class TestS3PathPrefixIO:
                         }
                     }
                 },
-                fout,
+                f_out,
             )
 
         # When & Then
         with pytest.raises(pydantic.ValidationError):
             IOConfig(
-                path_to_source_yaml=test_yaml_file,
+                path_to_source_yaml=str(test_yaml_file),
                 env_identifier="CLOUD",
                 dynamic_vars=constants,
             )

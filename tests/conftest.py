@@ -545,6 +545,26 @@ def expected_s3_parquet_df():
     return pd.read_parquet(f"{constants.TEST_RESOURCES}/data/input/some_parquet_to_read.parquet")
 
 
+@pytest.fixture
+def expected_concatenated_01_df():
+    data = {
+        'id': [1, 2, 3, 4, 5, 6, 7, 1, 2, 3, 4, 5, 6, 7],
+        'foo_name': ['name_a', 'name_b', 'name_a', 'name_b', 'name_a', 'name_b', 'name_a', 'name_a', 'name_b', 'name_a', 'name_b', 'name_a', 'name_b', 'name_a'],
+        'bar': [1, 2, 3, 4, 5, 6, 7, 1, 2, 3, 4, 5, 6, 7]
+    }
+    return pd.DataFrame(data)
+
+
+@pytest.fixture
+def expected_concatenated_02_df():
+    data = {
+        'id': [8, 9, 10, 11, 12, 13, 14, 15, 8, 9, 10, 11, 12, 13, 14, 15],
+        'foo_name': ['name_b', 'name_a', 'name_b', 'name_a', 'name_b', 'name_a', 'name_b', 'name_a', 'name_b', 'name_a', 'name_b', 'name_a', 'name_b', 'name_a', 'name_b', 'name_a'],
+        'bar': [8, 9, 10, 11, 12, 13, 14, 15, 8, 9, 10, 11, 12, 13, 14, 15]
+    }
+    return pd.DataFrame(data)
+
+
 @pytest.fixture(scope="class")
 def expected_s3_hdf_file_path():
     return f"{constants.TEST_RESOURCES}/data/input/some_hdf_to_read.h5"
@@ -815,7 +835,8 @@ def input_df():
             ["event_8", None, np.nan, "discharge", 10.01234, 10.01234, pd.Timestamp("2021-03-30"), 100.01234, 5, 5, ],
             ["event_9", "A", "A", "discharge", 10.01234, 10.01234, pd.Timestamp("2021-03-30"), 100.01234, 5, None, ],
         ],
-        columns=["id", "category_a", "category_b", "activity", "duration_a", "duration_b", "start_time", "load", "weight_a", "weight_b", ],
+        columns=["id", "category_a", "category_b", "activity", "duration_a", "duration_b", "start_time", "load",
+                 "weight_a", "weight_b", ],
     )
 
 
@@ -823,7 +844,8 @@ def input_df():
 def empty_df():
     return pd.DataFrame.from_records(
         [],
-        columns=["id", "category_a", "category_b", "activity", "duration_a", "duration_b", "start_time", "load", "weight_a", "weight_b", ],
+        columns=["id", "category_a", "category_b", "activity", "duration_a", "duration_b", "start_time", "load",
+                 "weight_a", "weight_b", ],
     )
 
 

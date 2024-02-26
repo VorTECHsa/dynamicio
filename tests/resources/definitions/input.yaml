@@ -201,6 +201,13 @@ READ_FROM_BATCH_LOCAL_PARQUET:
       bucket: "[[ MOCK_BUCKET ]]/data/input/{file_name_to_replace}.parquet"
       file_type: "parquet"
 
+READ_DYNAMIC_FROM_BATCH_LOCAL_PARQUET:
+  LOCAL:
+    type: "local_batch"
+    local:
+      dynamic_file_path: "[[ TEST_RESOURCES ]]/data/input/batch/parquet/dynamic/**/part_{runner_id}.parquet"
+      file_type: "parquet"
+
 READ_FROM_BATCH_LOCAL_NOT_JUST_PARQUET:
   LOCAL:
     type: "local_batch"
@@ -284,4 +291,3 @@ WRITE_TO_S3_PATH_PREFIX_PARQUET:
       bucket: "[[ MOCK_BUCKET ]]"
       path_prefix: "[[ MOCK_KEY ]]"
       file_type: "parquet"
-
