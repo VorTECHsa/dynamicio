@@ -9,7 +9,7 @@ import tempfile
 import urllib.parse
 import uuid
 from contextlib import contextmanager
-from typing import IO, Generator, Optional, Union  # noqa: I101
+from typing import IO, Generator, List, Optional, Union  # noqa: I101
 
 import boto3  # type: ignore
 import pandas as pd
@@ -186,12 +186,8 @@ class WithS3PathPrefix(with_local.WithLocal):
             if file_type == "parquet":
                 return self._read_parquet_file(full_path_prefix, self.schema, **self.options)
             if file_type == "hdf":
-                dfs = []
-                for fobj in self._iter_s3_files(
-                    full_path_prefix,
-                    file_ext=".h5",
-                    max_memory_use=1024**3,  # 1 gib
-                ):
+                dfs: List[DataFrame] = []
+                for fobj in self._iter_s3_files(full_path_prefix, file_ext=".h5", max_memory_use=1024**3):  # 1 gib
                     dfs.append(HdfIO().load(fobj))
                 df = pd.concat(dfs, ignore_index=True)
                 columns = [column for column in df.columns.to_list() if column in self.schema.columns.keys()]
@@ -212,7 +208,7 @@ class WithS3PathPrefix(with_local.WithLocal):
                 "--exact-timestamps",
             )
 
-            dfs = []
+            dfs: List[DataFrame] = []
             for file in os.listdir(temp_dir):
                 df = getattr(self, f"_read_{file_type}_file")(os.path.join(temp_dir, file), self.schema, **self.options)  # type: ignore
                 if len(df) > 0:
