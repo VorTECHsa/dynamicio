@@ -33,43 +33,24 @@
 
 import glob
 import os
-from contextlib import contextmanager
 from threading import Lock
-from typing import Any, Mapping, MutableMapping, Optional
+from typing import Any, MutableMapping
 
 import pandas as pd  # type: ignore
 from fastparquet import ParquetFile, write  # type: ignore
 from pyarrow.parquet import read_table, write_table  # type: ignore # pylint: disable=no-name-in-module
 
-from . import utils
+from dynamicio.config.pydantic import DataframeSchema, LocalBatchDataEnvironment, LocalDataEnvironment
+from dynamicio.mixins import utils
 
 hdf_lock = Lock()
-
-
-@contextmanager
-def pickle_protocol(protocol: Optional[int]):
-    &#34;&#34;&#34;Downgrade to the provided pickle protocol within the context manager.
-
-    Args:
-        protocol: The number of the protocol HIGHEST_PROTOCOL to downgrade to. Defaults to 4, which covers python 3.4 and higher.
-    &#34;&#34;&#34;
-    import pickle  # pylint: disable=import-outside-toplevel
-
-    previous = pickle.HIGHEST_PROTOCOL
-    try:
-        pickle.HIGHEST_PROTOCOL = 4
-        if protocol:
-            pickle.HIGHEST_PROTOCOL = protocol
-        yield
-    finally:
-        pickle.HIGHEST_PROTOCOL = previous
 
 
 class WithLocal:
     &#34;&#34;&#34;Handles local I/O operations.&#34;&#34;&#34;
 
-    sources_config: Mapping
-    schema: Mapping
+    schema: DataframeSchema
+    sources_config: LocalDataEnvironment
     options: MutableMapping[str, Any]
 
     def _read_from_local(self) -&gt; pd.DataFrame:
@@ -85,9 +66,9 @@ class WithLocal:
         Returns:
             DataFrame
         &#34;&#34;&#34;
-        local_config = self.sources_config[&#34;local&#34;]
-        file_path = utils.resolve_template(local_config[&#34;file_path&#34;], self.options)
-        file_type = local_config[&#34;file_type&#34;]
+        local_config = self.sources_config.local
+        file_path = utils.resolve_template(local_config.file_path, self.options)
+        file_type = local_config.file_type
 
         return getattr(self, f&#34;_read_{file_type}_file&#34;)(file_path, self.schema, **self.options)
 
@@ -105,15 +86,15 @@ class WithLocal:
         Args:
             df: The dataframe to be written out.
         &#34;&#34;&#34;
-        local_config = self.sources_config[&#34;local&#34;]
-        file_path = utils.resolve_template(local_config[&#34;file_path&#34;], self.options)
-        file_type = local_config[&#34;file_type&#34;]
+        local_config = self.sources_config.local
+        file_path = utils.resolve_template(local_config.file_path, self.options)
+        file_type = local_config.file_type
 
         getattr(self, f&#34;_write_{file_type}_file&#34;)(df, file_path, **self.options)
 
     @staticmethod
     @utils.allow_options(pd.read_hdf)
-    def _read_hdf_file(file_path: str, schema: Mapping[str, str], **options: Any) -&gt; pd.DataFrame:
+    def _read_hdf_file(file_path: str, schema: DataframeSchema, **options: Any) -&gt; pd.DataFrame:
         &#34;&#34;&#34;Read a HDF file as a DataFrame using `pd.read_hdf`.
 
         All `options` are passed directly to `pd.read_hdf`.
@@ -132,13 +113,13 @@ class WithLocal:
         with hdf_lock:
             df = pd.read_hdf(file_path, **options)
 
-        columns = [column for column in df.columns.to_list() if column in schema.keys()]
+        columns = [column for column in df.columns.to_list() if column in schema.column_names]
         df = df[columns]
         return df
 
     @staticmethod
     @utils.allow_options(pd.read_csv)
-    def _read_csv_file(file_path: str, schema: Mapping[str, str], **options: Any) -&gt; pd.DataFrame:
+    def _read_csv_file(file_path: str, schema: DataframeSchema, **options: Any) -&gt; pd.DataFrame:
         &#34;&#34;&#34;Read a CSV file as a DataFrame using `pd.read_csv`.
 
         All `options` are passed directly to `pd.read_csv`.
@@ -150,12 +131,12 @@ class WithLocal:
         Returns:
             DataFrame: The dataframe read from the csv file.
         &#34;&#34;&#34;
-        options[&#34;usecols&#34;] = list(schema.keys())
+        options[&#34;usecols&#34;] = list(schema.column_names)
         return pd.read_csv(file_path, **options)
 
     @staticmethod
     @utils.allow_options(pd.read_json)
-    def _read_json_file(file_path: str, schema: Mapping[str, str], **options: Any) -&gt; pd.DataFrame:
+    def _read_json_file(file_path: str, schema: DataframeSchema, **options: Any) -&gt; pd.DataFrame:
         &#34;&#34;&#34;Read a json file as a DataFrame using `pd.read_hdf`.
 
         All `options` are passed directly to `pd.read_hdf`.
@@ -168,12 +149,12 @@ class WithLocal:
             DataFrame
         &#34;&#34;&#34;
         df = pd.read_json(file_path, **options)
-        columns = [column for column in df.columns.to_list() if column in schema.keys()]
+        columns = [column for column in df.columns.to_list() if column in schema.column_names]
         df = df[columns]
         return df
 
     @staticmethod
-    def _read_parquet_file(file_path: str, schema: Mapping[str, str], **options: Any) -&gt; pd.DataFrame:
+    def _read_parquet_file(file_path: str, schema: DataframeSchema, **options: Any) -&gt; pd.DataFrame:
         &#34;&#34;&#34;Read a Parquet file as a DataFrame using `pd.read_parquet`.
 
         All `options` are passed directly to `pd.read_parquet`.
@@ -185,7 +166,7 @@ class WithLocal:
         Returns:
             DataFrame: The dataframe read from the parquet file.
         &#34;&#34;&#34;
-        options[&#34;columns&#34;] = list(schema.keys())
+        options[&#34;columns&#34;] = options.get(&#34;columns&#34;, list(schema.column_names))
 
         if options.get(&#34;engine&#34;) == &#34;fastparquet&#34;:
             return WithLocal.__read_with_fastparquet(file_path, **options)
@@ -220,7 +201,7 @@ class WithLocal:
                 - The pandas `to_hdf` options, &amp;;
                 - protocol: The pickle protocol to use for writing the hdf file out; a value &lt;=5.
         &#34;&#34;&#34;
-        with pickle_protocol(protocol=options.pop(&#34;protocol&#34;, None)), hdf_lock:
+        with utils.pickle_protocol(protocol=options.pop(&#34;protocol&#34;, None)), hdf_lock:
             df.to_hdf(file_path, key=&#34;df&#34;, mode=&#34;w&#34;, **options)
 
     @staticmethod
@@ -268,17 +249,19 @@ class WithLocal:
 
     @classmethod
     @utils.allow_options([*utils.args_of(pd.DataFrame.to_parquet), *utils.args_of(write_table)])
-    def __write_with_pyarrow(cls, df: pd.DataFrame, filepath: str, **options: Any) -&gt; pd.DataFrame:
+    def __write_with_pyarrow(cls, df: pd.DataFrame, filepath: str, **options: Any):
         return df.to_parquet(filepath, **options)
 
     @classmethod
     @utils.allow_options([*utils.args_of(pd.DataFrame.to_parquet), *utils.args_of(write)])
-    def __write_with_fastparquet(cls, df: pd.DataFrame, filepath: str, **options: Any) -&gt; pd.DataFrame:
+    def __write_with_fastparquet(cls, df: pd.DataFrame, filepath: str, **options: Any):
         return df.to_parquet(filepath, **options)
 
 
 class WithLocalBatch(WithLocal):
     &#34;&#34;&#34;Responsible for batch reading local files.&#34;&#34;&#34;
+
+    sources_config: LocalBatchDataEnvironment  # type: ignore
 
     def _read_from_local_batch(self) -&gt; pd.DataFrame:
         &#34;&#34;&#34;Reads a set of files for a specified file type, concatenates them and returns a dataframe.
@@ -286,18 +269,28 @@ class WithLocalBatch(WithLocal):
         Returns:
             A concatenated dataframe composed of all files read through local_batch.
         &#34;&#34;&#34;
-        local_batch_config = self.sources_config[&#34;local&#34;]
+        local_batch_config = self.sources_config.local
 
-        file_type = local_batch_config[&#34;file_type&#34;]
-        filtering_file_type = file_type
+        file_type = local_batch_config.file_type
+        filtering_file_type = file_type.value
         if filtering_file_type == &#34;hdf&#34;:
             filtering_file_type = &#34;h5&#34;
 
-        files = glob.glob(f&#34;{local_batch_config[&#39;path_prefix&#39;]}/*.{filtering_file_type}&#34;)
+        # Determine if the path is dynamic or static
+        if local_batch_config.dynamic_file_path:
+            # Dynamic path: use it directly
+            file_path = utils.resolve_template(local_batch_config.dynamic_file_path, self.options)
+            files = glob.glob(file_path, recursive=True)
+        elif local_batch_config.path_prefix:
+            # Static path: append the file type
+            file_path = utils.resolve_template(local_batch_config.path_prefix, self.options)
+            files = glob.glob(os.path.join(file_path, f&#34;*.{filtering_file_type}&#34;), recursive=True)
+        else:
+            raise ValueError(&#34;Either path_prefix or dynamic_path must be provided in local_batch_config&#34;)
 
         dfs_to_concatenate = []
         for file in files:
-            file_to_load = os.path.join(local_batch_config[&#34;path_prefix&#34;], file)
+            file_to_load = os.path.join(file_path, file)
             dfs_to_concatenate.append(getattr(self, f&#34;_read_{file_type}_file&#34;)(file_to_load, self.schema, **self.options))  # type: ignore
 
         return pd.concat(dfs_to_concatenate).reset_index(drop=True)</code></pre>
@@ -308,42 +301,6 @@ class WithLocalBatch(WithLocal):
 <section>
 </section>
 <section>
-<h2 class="section-title" id="header-functions">Functions</h2>
-<dl>
-<dt id="dynamicio.mixins.with_local.pickle_protocol"><code class="name flex">
-<span>def <span class="ident">pickle_protocol</span></span>(<span>protocol: Optional[int])</span>
-</code></dt>
-<dd>
-<div class="desc"><p>Downgrade to the provided pickle protocol within the context manager.</p>
-<h2 id="args">Args</h2>
-<dl>
-<dt><strong><code>protocol</code></strong></dt>
-<dd>The number of the protocol HIGHEST_PROTOCOL to downgrade to. Defaults to 4, which covers python 3.4 and higher.</dd>
-</dl></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">@contextmanager
-def pickle_protocol(protocol: Optional[int]):
-    &#34;&#34;&#34;Downgrade to the provided pickle protocol within the context manager.
-
-    Args:
-        protocol: The number of the protocol HIGHEST_PROTOCOL to downgrade to. Defaults to 4, which covers python 3.4 and higher.
-    &#34;&#34;&#34;
-    import pickle  # pylint: disable=import-outside-toplevel
-
-    previous = pickle.HIGHEST_PROTOCOL
-    try:
-        pickle.HIGHEST_PROTOCOL = 4
-        if protocol:
-            pickle.HIGHEST_PROTOCOL = protocol
-        yield
-    finally:
-        pickle.HIGHEST_PROTOCOL = previous</code></pre>
-</details>
-</dd>
-</dl>
 </section>
 <section>
 <h2 class="section-title" id="header-classes">Classes</h2>
@@ -360,8 +317,8 @@ def pickle_protocol(protocol: Optional[int]):
 <pre><code class="python">class WithLocal:
     &#34;&#34;&#34;Handles local I/O operations.&#34;&#34;&#34;
 
-    sources_config: Mapping
-    schema: Mapping
+    schema: DataframeSchema
+    sources_config: LocalDataEnvironment
     options: MutableMapping[str, Any]
 
     def _read_from_local(self) -&gt; pd.DataFrame:
@@ -377,9 +334,9 @@ def pickle_protocol(protocol: Optional[int]):
         Returns:
             DataFrame
         &#34;&#34;&#34;
-        local_config = self.sources_config[&#34;local&#34;]
-        file_path = utils.resolve_template(local_config[&#34;file_path&#34;], self.options)
-        file_type = local_config[&#34;file_type&#34;]
+        local_config = self.sources_config.local
+        file_path = utils.resolve_template(local_config.file_path, self.options)
+        file_type = local_config.file_type
 
         return getattr(self, f&#34;_read_{file_type}_file&#34;)(file_path, self.schema, **self.options)
 
@@ -397,15 +354,15 @@ def pickle_protocol(protocol: Optional[int]):
         Args:
             df: The dataframe to be written out.
         &#34;&#34;&#34;
-        local_config = self.sources_config[&#34;local&#34;]
-        file_path = utils.resolve_template(local_config[&#34;file_path&#34;], self.options)
-        file_type = local_config[&#34;file_type&#34;]
+        local_config = self.sources_config.local
+        file_path = utils.resolve_template(local_config.file_path, self.options)
+        file_type = local_config.file_type
 
         getattr(self, f&#34;_write_{file_type}_file&#34;)(df, file_path, **self.options)
 
     @staticmethod
     @utils.allow_options(pd.read_hdf)
-    def _read_hdf_file(file_path: str, schema: Mapping[str, str], **options: Any) -&gt; pd.DataFrame:
+    def _read_hdf_file(file_path: str, schema: DataframeSchema, **options: Any) -&gt; pd.DataFrame:
         &#34;&#34;&#34;Read a HDF file as a DataFrame using `pd.read_hdf`.
 
         All `options` are passed directly to `pd.read_hdf`.
@@ -424,13 +381,13 @@ def pickle_protocol(protocol: Optional[int]):
         with hdf_lock:
             df = pd.read_hdf(file_path, **options)
 
-        columns = [column for column in df.columns.to_list() if column in schema.keys()]
+        columns = [column for column in df.columns.to_list() if column in schema.column_names]
         df = df[columns]
         return df
 
     @staticmethod
     @utils.allow_options(pd.read_csv)
-    def _read_csv_file(file_path: str, schema: Mapping[str, str], **options: Any) -&gt; pd.DataFrame:
+    def _read_csv_file(file_path: str, schema: DataframeSchema, **options: Any) -&gt; pd.DataFrame:
         &#34;&#34;&#34;Read a CSV file as a DataFrame using `pd.read_csv`.
 
         All `options` are passed directly to `pd.read_csv`.
@@ -442,12 +399,12 @@ def pickle_protocol(protocol: Optional[int]):
         Returns:
             DataFrame: The dataframe read from the csv file.
         &#34;&#34;&#34;
-        options[&#34;usecols&#34;] = list(schema.keys())
+        options[&#34;usecols&#34;] = list(schema.column_names)
         return pd.read_csv(file_path, **options)
 
     @staticmethod
     @utils.allow_options(pd.read_json)
-    def _read_json_file(file_path: str, schema: Mapping[str, str], **options: Any) -&gt; pd.DataFrame:
+    def _read_json_file(file_path: str, schema: DataframeSchema, **options: Any) -&gt; pd.DataFrame:
         &#34;&#34;&#34;Read a json file as a DataFrame using `pd.read_hdf`.
 
         All `options` are passed directly to `pd.read_hdf`.
@@ -460,12 +417,12 @@ def pickle_protocol(protocol: Optional[int]):
             DataFrame
         &#34;&#34;&#34;
         df = pd.read_json(file_path, **options)
-        columns = [column for column in df.columns.to_list() if column in schema.keys()]
+        columns = [column for column in df.columns.to_list() if column in schema.column_names]
         df = df[columns]
         return df
 
     @staticmethod
-    def _read_parquet_file(file_path: str, schema: Mapping[str, str], **options: Any) -&gt; pd.DataFrame:
+    def _read_parquet_file(file_path: str, schema: DataframeSchema, **options: Any) -&gt; pd.DataFrame:
         &#34;&#34;&#34;Read a Parquet file as a DataFrame using `pd.read_parquet`.
 
         All `options` are passed directly to `pd.read_parquet`.
@@ -477,7 +434,7 @@ def pickle_protocol(protocol: Optional[int]):
         Returns:
             DataFrame: The dataframe read from the parquet file.
         &#34;&#34;&#34;
-        options[&#34;columns&#34;] = list(schema.keys())
+        options[&#34;columns&#34;] = options.get(&#34;columns&#34;, list(schema.column_names))
 
         if options.get(&#34;engine&#34;) == &#34;fastparquet&#34;:
             return WithLocal.__read_with_fastparquet(file_path, **options)
@@ -512,7 +469,7 @@ def pickle_protocol(protocol: Optional[int]):
                 - The pandas `to_hdf` options, &amp;;
                 - protocol: The pickle protocol to use for writing the hdf file out; a value &lt;=5.
         &#34;&#34;&#34;
-        with pickle_protocol(protocol=options.pop(&#34;protocol&#34;, None)), hdf_lock:
+        with utils.pickle_protocol(protocol=options.pop(&#34;protocol&#34;, None)), hdf_lock:
             df.to_hdf(file_path, key=&#34;df&#34;, mode=&#34;w&#34;, **options)
 
     @staticmethod
@@ -560,12 +517,12 @@ def pickle_protocol(protocol: Optional[int]):
 
     @classmethod
     @utils.allow_options([*utils.args_of(pd.DataFrame.to_parquet), *utils.args_of(write_table)])
-    def __write_with_pyarrow(cls, df: pd.DataFrame, filepath: str, **options: Any) -&gt; pd.DataFrame:
+    def __write_with_pyarrow(cls, df: pd.DataFrame, filepath: str, **options: Any):
         return df.to_parquet(filepath, **options)
 
     @classmethod
     @utils.allow_options([*utils.args_of(pd.DataFrame.to_parquet), *utils.args_of(write)])
-    def __write_with_fastparquet(cls, df: pd.DataFrame, filepath: str, **options: Any) -&gt; pd.DataFrame:
+    def __write_with_fastparquet(cls, df: pd.DataFrame, filepath: str, **options: Any):
         return df.to_parquet(filepath, **options)</code></pre>
 </details>
 <h3>Subclasses</h3>
@@ -581,11 +538,11 @@ def pickle_protocol(protocol: Optional[int]):
 <dd>
 <div class="desc"></div>
 </dd>
-<dt id="dynamicio.mixins.with_local.WithLocal.schema"><code class="name">var <span class="ident">schema</span> : Mapping[~KT, +VT_co]</code></dt>
+<dt id="dynamicio.mixins.with_local.WithLocal.schema"><code class="name">var <span class="ident">schema</span> : <a title="dynamicio.config.pydantic.table_schema.DataframeSchema" href="../config/pydantic/table_schema.html#dynamicio.config.pydantic.table_schema.DataframeSchema">DataframeSchema</a></code></dt>
 <dd>
 <div class="desc"></div>
 </dd>
-<dt id="dynamicio.mixins.with_local.WithLocal.sources_config"><code class="name">var <span class="ident">sources_config</span> : Mapping[~KT, +VT_co]</code></dt>
+<dt id="dynamicio.mixins.with_local.WithLocal.sources_config"><code class="name">var <span class="ident">sources_config</span> : <a title="dynamicio.config.pydantic.io_resources.LocalDataEnvironment" href="../config/pydantic/io_resources.html#dynamicio.config.pydantic.io_resources.LocalDataEnvironment">LocalDataEnvironment</a></code></dt>
 <dd>
 <div class="desc"></div>
 </dd>
@@ -603,24 +560,36 @@ def pickle_protocol(protocol: Optional[int]):
 <pre><code class="python">class WithLocalBatch(WithLocal):
     &#34;&#34;&#34;Responsible for batch reading local files.&#34;&#34;&#34;
 
+    sources_config: LocalBatchDataEnvironment  # type: ignore
+
     def _read_from_local_batch(self) -&gt; pd.DataFrame:
         &#34;&#34;&#34;Reads a set of files for a specified file type, concatenates them and returns a dataframe.
 
         Returns:
             A concatenated dataframe composed of all files read through local_batch.
         &#34;&#34;&#34;
-        local_batch_config = self.sources_config[&#34;local&#34;]
+        local_batch_config = self.sources_config.local
 
-        file_type = local_batch_config[&#34;file_type&#34;]
-        filtering_file_type = file_type
+        file_type = local_batch_config.file_type
+        filtering_file_type = file_type.value
         if filtering_file_type == &#34;hdf&#34;:
             filtering_file_type = &#34;h5&#34;
 
-        files = glob.glob(f&#34;{local_batch_config[&#39;path_prefix&#39;]}/*.{filtering_file_type}&#34;)
+        # Determine if the path is dynamic or static
+        if local_batch_config.dynamic_file_path:
+            # Dynamic path: use it directly
+            file_path = utils.resolve_template(local_batch_config.dynamic_file_path, self.options)
+            files = glob.glob(file_path, recursive=True)
+        elif local_batch_config.path_prefix:
+            # Static path: append the file type
+            file_path = utils.resolve_template(local_batch_config.path_prefix, self.options)
+            files = glob.glob(os.path.join(file_path, f&#34;*.{filtering_file_type}&#34;), recursive=True)
+        else:
+            raise ValueError(&#34;Either path_prefix or dynamic_path must be provided in local_batch_config&#34;)
 
         dfs_to_concatenate = []
         for file in files:
-            file_to_load = os.path.join(local_batch_config[&#34;path_prefix&#34;], file)
+            file_to_load = os.path.join(file_path, file)
             dfs_to_concatenate.append(getattr(self, f&#34;_read_{file_type}_file&#34;)(file_to_load, self.schema, **self.options))  # type: ignore
 
         return pd.concat(dfs_to_concatenate).reset_index(drop=True)</code></pre>
@@ -635,15 +604,7 @@ def pickle_protocol(protocol: Optional[int]):
 </ul>
 <h3>Class variables</h3>
 <dl>
-<dt id="dynamicio.mixins.with_local.WithLocalBatch.options"><code class="name">var <span class="ident">options</span> : MutableMapping[str, Any]</code></dt>
-<dd>
-<div class="desc"></div>
-</dd>
-<dt id="dynamicio.mixins.with_local.WithLocalBatch.schema"><code class="name">var <span class="ident">schema</span> : Mapping[~KT, +VT_co]</code></dt>
-<dd>
-<div class="desc"></div>
-</dd>
-<dt id="dynamicio.mixins.with_local.WithLocalBatch.sources_config"><code class="name">var <span class="ident">sources_config</span> : Mapping[~KT, +VT_co]</code></dt>
+<dt id="dynamicio.mixins.with_local.WithLocalBatch.sources_config"><code class="name">var <span class="ident">sources_config</span> : <a title="dynamicio.config.pydantic.io_resources.LocalBatchDataEnvironment" href="../config/pydantic/io_resources.html#dynamicio.config.pydantic.io_resources.LocalBatchDataEnvironment">LocalBatchDataEnvironment</a></code></dt>
 <dd>
 <div class="desc"></div>
 </dd>
@@ -663,11 +624,6 @@ def pickle_protocol(protocol: Optional[int]):
 <li><code><a title="dynamicio.mixins" href="index.html">dynamicio.mixins</a></code></li>
 </ul>
 </li>
-<li><h3><a href="#header-functions">Functions</a></h3>
-<ul class="">
-<li><code><a title="dynamicio.mixins.with_local.pickle_protocol" href="#dynamicio.mixins.with_local.pickle_protocol">pickle_protocol</a></code></li>
-</ul>
-</li>
 <li><h3><a href="#header-classes">Classes</a></h3>
 <ul>
 <li>
@@ -681,8 +637,6 @@ def pickle_protocol(protocol: Optional[int]):
 <li>
 <h4><code><a title="dynamicio.mixins.with_local.WithLocalBatch" href="#dynamicio.mixins.with_local.WithLocalBatch">WithLocalBatch</a></code></h4>
 <ul class="">
-<li><code><a title="dynamicio.mixins.with_local.WithLocalBatch.options" href="#dynamicio.mixins.with_local.WithLocalBatch.options">options</a></code></li>
-<li><code><a title="dynamicio.mixins.with_local.WithLocalBatch.schema" href="#dynamicio.mixins.with_local.WithLocalBatch.schema">schema</a></code></li>
 <li><code><a title="dynamicio.mixins.with_local.WithLocalBatch.sources_config" href="#dynamicio.mixins.with_local.WithLocalBatch.sources_config">sources_config</a></code></li>
 </ul>
 </li>

@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
 <meta name="generator" content="pdoc 0.10.0" />
-<title>dynamicio.mixins API documentation</title>
-<meta name="description" content="Default dynamicio mixins module" />
+<title>dynamicio.config API documentation</title>
+<meta name="description" content="Dynamicio config file handling routines." />
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
 <link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/typography.min.css" integrity="sha256-7l/o7C8jubJiy74VsKTidCy1yBkRtiUGbVkYBylBqUg=" crossorigin>
 <link rel="stylesheet preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.1.1/styles/github.min.css" crossorigin>
@@ -19,54 +19,30 @@
 <main>
 <article id="content">
 <header>
-<h1 class="title">Module <code>dynamicio.mixins</code></h1>
+<h1 class="title">Module <code>dynamicio.config</code></h1>
 </header>
 <section id="section-intro">
-<p>Default dynamicio mixins module</p>
+<p>Dynamicio config file handling routines.</p>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">&#34;&#34;&#34;Default dynamicio mixins module&#34;&#34;&#34;
+<pre><code class="python">&#34;&#34;&#34;Dynamicio config file handling routines.&#34;&#34;&#34;
 
-from dynamicio.mixins.with_kafka import (
-    WithKafka,
-)
-from dynamicio.mixins.with_local import (
-    WithLocal,
-    WithLocalBatch,
-)
-from dynamicio.mixins.with_postgres import (
-    WithPostgres,
-)
-from dynamicio.mixins.with_s3 import (
-    WithS3File,
-    WithS3PathPrefix,
-)</code></pre>
+from dynamicio.config import pydantic
+from dynamicio.config.io_config import IOConfig</code></pre>
 </details>
 </section>
 <section>
 <h2 class="section-title" id="header-submodules">Sub-modules</h2>
 <dl>
-<dt><code class="name"><a title="dynamicio.mixins.utils" href="utils.html">dynamicio.mixins.utils</a></code></dt>
+<dt><code class="name"><a title="dynamicio.config.io_config" href="io_config.html">dynamicio.config.io_config</a></code></dt>
 <dd>
-<div class="desc"><p>Mixin utility functions</p></div>
+<div class="desc"><p>Implements the <code>IOConfig</code> class, generating objects used as a configuration parameter for the instantiation …</p></div>
 </dd>
-<dt><code class="name"><a title="dynamicio.mixins.with_kafka" href="with_kafka.html">dynamicio.mixins.with_kafka</a></code></dt>
+<dt><code class="name"><a title="dynamicio.config.pydantic" href="pydantic/index.html">dynamicio.config.pydantic</a></code></dt>
 <dd>
-<div class="desc"><p>This module provides mixins that are providing Kafka I/O support.</p></div>
-</dd>
-<dt><code class="name"><a title="dynamicio.mixins.with_local" href="with_local.html">dynamicio.mixins.with_local</a></code></dt>
-<dd>
-<div class="desc"><p>This module provides mixins that are providing Local FS I/O support.</p></div>
-</dd>
-<dt><code class="name"><a title="dynamicio.mixins.with_postgres" href="with_postgres.html">dynamicio.mixins.with_postgres</a></code></dt>
-<dd>
-<div class="desc"><p>This module provides mixins that are providing Postgres I/O support.</p></div>
-</dd>
-<dt><code class="name"><a title="dynamicio.mixins.with_s3" href="with_s3.html">dynamicio.mixins.with_s3</a></code></dt>
-<dd>
-<div class="desc"><p>This module provides mixins that are providing S3 I/O support.</p></div>
+<div class="desc"><p>Pydantic config models.</p></div>
 </dd>
 </dl>
 </section>
@@ -90,11 +66,8 @@ from dynamicio.mixins.with_s3 import (
 </li>
 <li><h3><a href="#header-submodules">Sub-modules</a></h3>
 <ul>
-<li><code><a title="dynamicio.mixins.utils" href="utils.html">dynamicio.mixins.utils</a></code></li>
-<li><code><a title="dynamicio.mixins.with_kafka" href="with_kafka.html">dynamicio.mixins.with_kafka</a></code></li>
-<li><code><a title="dynamicio.mixins.with_local" href="with_local.html">dynamicio.mixins.with_local</a></code></li>
-<li><code><a title="dynamicio.mixins.with_postgres" href="with_postgres.html">dynamicio.mixins.with_postgres</a></code></li>
-<li><code><a title="dynamicio.mixins.with_s3" href="with_s3.html">dynamicio.mixins.with_s3</a></code></li>
+<li><code><a title="dynamicio.config.io_config" href="io_config.html">dynamicio.config.io_config</a></code></li>
+<li><code><a title="dynamicio.config.pydantic" href="pydantic/index.html">dynamicio.config.pydantic</a></code></li>
 </ul>
 </li>
 </ul>

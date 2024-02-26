@@ -31,21 +31,79 @@
 
 &#34;&#34;&#34;This module provides mixins that are providing S3 I/O support.&#34;&#34;&#34;
 
+import dataclasses
+import io
 import os
 import tempfile
+import urllib.parse
+import uuid
 from contextlib import contextmanager
-from typing import Generator
+from typing import IO, Generator, List, Optional, Union  # noqa: I101
 
 import boto3  # type: ignore
-import pandas as pd  # type: ignore
+import pandas as pd
+import s3transfer.futures  # type: ignore
+import tables  # type: ignore
 from awscli.clidriver import create_clidriver  # type: ignore
 from magic_logger import logger
+from pandas import DataFrame, Series
+
+from dynamicio.config.pydantic import DataframeSchema, S3DataEnvironment, S3PathPrefixEnvironment
+from dynamicio.mixins import utils, with_local
 
 
-from . import (
-    utils,
-    with_local,
-)
+class InMemStore(pd.io.pytables.HDFStore):
+    &#34;&#34;&#34;A subclass of pandas HDFStore that does not manage the pytables File object.&#34;&#34;&#34;
+
+    _in_mem_table = None
+
+    def __init__(self, path: str, table: tables.File, mode: str = &#34;r&#34;):
+        &#34;&#34;&#34;Create a new HDFStore object.&#34;&#34;&#34;
+        self._in_mem_table = table
+        super().__init__(path=path, mode=mode)
+
+    def open(self, *_args, **_kwargs):
+        &#34;&#34;&#34;Open the in-memory table.&#34;&#34;&#34;
+        pd.io.pytables._tables()
+        self._handle = self._in_mem_table
+
+    def close(self, *_args, **_kwargs):
+        &#34;&#34;&#34;Close the in-memory table.&#34;&#34;&#34;
+
+    @property
+    def is_open(self):
+        &#34;&#34;&#34;Check if the in-memory table is open.&#34;&#34;&#34;
+        return self._handle is not None
+
+
+class HdfIO:
+    &#34;&#34;&#34;Class providing stream support for HDF tables.&#34;&#34;&#34;
+
+    @contextmanager
+    def create_file(self, label: str, mode: str, data: Optional[bytes] = None) -&gt; Generator[tables.File, None, None]:
+        &#34;&#34;&#34;Create an in-memory pytables table.&#34;&#34;&#34;
+        extra_kw = {}
+        if data:
+            extra_kw[&#34;driver_core_image&#34;] = data
+        file_handle = tables.File(f&#34;{label}_{uuid.uuid4()}.h5&#34;, mode, title=label, root_uep=&#34;/&#34;, filters=None, driver=&#34;H5FD_CORE&#34;, driver_core_backing_store=0, **extra_kw)
+        try:
+            yield file_handle
+        finally:
+            file_handle.close()
+
+    def load(self, fobj: IO[bytes], label: str = &#34;unknown_file.h5&#34;) -&gt; Union[DataFrame, Series]:
+        &#34;&#34;&#34;Load the dataframe from an file-like object.&#34;&#34;&#34;
+        with self.create_file(label, mode=&#34;r&#34;, data=fobj.read()) as file_handle:
+            return pd.read_hdf(InMemStore(label, file_handle))
+
+    def save(self, df: DataFrame, fobj: IO[bytes], label: str = &#34;unknown_file.h5&#34;, options: Optional[dict] = None):
+        &#34;&#34;&#34;Load the dataframe to a file-like object.&#34;&#34;&#34;
+        if not options:
+            options = {}
+        with self.create_file(label, mode=&#34;w&#34;, data=fobj.read()) as file_handle:
+            store = InMemStore(path=label, table=file_handle, mode=&#34;w&#34;)
+            store.put(key=&#34;df&#34;, value=df, **options)
+            fobj.write(file_handle.get_file_image())
 
 
 def awscli_runner(*cmd: str):
@@ -68,11 +126,26 @@ def awscli_runner(*cmd: str):
         raise RuntimeError(f&#34;AWS CLI exited with code {exit_code}&#34;)
 
 
+@dataclasses.dataclass
+class S3TransferHandle:
+    &#34;&#34;&#34;A dataclass used to track an ongoing data download from the s3.&#34;&#34;&#34;
+
+    s3_object: object  # boto3.resource(&#39;s3&#39;).ObjectSummary
+    fobj: IO[bytes]  # file-like object the data is being downloaded to
+    done_future: s3transfer.futures.BaseTransferFuture
+
+
 class WithS3PathPrefix(with_local.WithLocal):
     &#34;&#34;&#34;Handles I/O operations for AWS S3; implements read operations only.
 
     This mixin assumes that the directories it reads from will only contain a single file-type.
     &#34;&#34;&#34;
+
+    sources_config: S3PathPrefixEnvironment  # type: ignore
+    schema: DataframeSchema
+
+    boto3_resource = boto3.resource(&#34;s3&#34;)
+    boto3_client = boto3.client(&#34;s3&#34;)
 
     def _write_to_s3_path_prefix(self, df: pd.DataFrame):
         &#34;&#34;&#34;Write a DataFrame to an S3 path prefix.
@@ -89,18 +162,16 @@ class WithS3PathPrefix(with_local.WithLocal):
             ValueError: In case `path_prefix` is missing from config
             ValueError: In case the `partition_cols` arg is missing while trying to write a parquet file
         &#34;&#34;&#34;
-        s3_config = self.sources_config[&#34;s3&#34;]
-        if &#34;path_prefix&#34; not in s3_config:
-            raise ValueError(&#34;`path_prefix` is required to write multiple files to an S3 key&#34;)
+        s3_config = self.sources_config.s3
 
-        file_type = s3_config[&#34;file_type&#34;]
+        file_type = s3_config.file_type
         if file_type != &#34;parquet&#34;:
             raise ValueError(f&#34;File type not supported: {file_type}, only parquet files can be written to an S3 key&#34;)
         if &#34;partition_cols&#34; not in self.options:
             raise ValueError(&#34;`partition_cols` is required as an option to write partitioned parquet files to S3&#34;)
 
-        bucket = s3_config[&#34;bucket&#34;]
-        path_prefix = s3_config[&#34;path_prefix&#34;]
+        bucket = s3_config.bucket
+        path_prefix = s3_config.path_prefix
         full_path_prefix = utils.resolve_template(f&#34;s3://{bucket}/{path_prefix}&#34;, self.options)
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -130,21 +201,26 @@ class WithS3PathPrefix(with_local.WithLocal):
         Returns:
             DataFrame
         &#34;&#34;&#34;
-        s3_config = self.sources_config[&#34;s3&#34;]
-        if &#34;path_prefix&#34; not in s3_config:
-            raise ValueError(&#34;`path_prefix` is required to read multiple files from an S3 source&#34;)
-
-        file_type = s3_config[&#34;file_type&#34;]
+        s3_config = self.sources_config.s3
+        file_type = s3_config.file_type
         if file_type not in {&#34;parquet&#34;, &#34;csv&#34;, &#34;hdf&#34;, &#34;json&#34;}:
             raise ValueError(f&#34;File type not supported: {file_type}&#34;)
 
-        bucket = s3_config[&#34;bucket&#34;]
-        path_prefix = s3_config[&#34;path_prefix&#34;]
+        bucket = s3_config.bucket
+        path_prefix = s3_config.path_prefix
         full_path_prefix = utils.resolve_template(f&#34;s3://{bucket}/{path_prefix}&#34;, self.options)
 
         # The `no_disk_space` option should be used only when reading a subset of columns from S3
-        if self.options.pop(&#34;no_disk_space&#34;, False) and file_type == &#34;parquet&#34;:
-            return self._read_parquet_file(full_path_prefix, self.schema, **self.options)
+        if self.options.pop(&#34;no_disk_space&#34;, False):
+            if file_type == &#34;parquet&#34;:
+                return self._read_parquet_file(full_path_prefix, self.schema, **self.options)
+            if file_type == &#34;hdf&#34;:
+                dfs: List[DataFrame] = []
+                for fobj in self._iter_s3_files(full_path_prefix, file_ext=&#34;.h5&#34;, max_memory_use=1024**3):  # 1 gib
+                    dfs.append(HdfIO().load(fobj))
+                df = pd.concat(dfs, ignore_index=True)
+                columns = [column for column in df.columns.to_list() if column in self.schema.columns.keys()]
+                return df[columns]
 
         with tempfile.TemporaryDirectory() as temp_dir:
             # aws-cli is shown to be up to 6 times faster when downloading the complete dataset from S3 than using the boto3
@@ -161,13 +237,52 @@ class WithS3PathPrefix(with_local.WithLocal):
                 &#34;--exact-timestamps&#34;,
             )
 
-            dfs = []
+            dfs: List[DataFrame] = []
             for file in os.listdir(temp_dir):
                 df = getattr(self, f&#34;_read_{file_type}_file&#34;)(os.path.join(temp_dir, file), self.schema, **self.options)  # type: ignore
                 if len(df) &gt; 0:
                     dfs.append(df)
 
             return pd.concat(dfs, ignore_index=True)
+
+    def _iter_s3_files(self, s3_prefix: str, file_ext: Optional[str] = None, max_memory_use: int = -1) -&gt; Generator[IO[bytes], None, None]:  # pylint: disable=too-many-locals
+        &#34;&#34;&#34;Download sways of S3 objects.
+
+        Args:
+            s3_prefix: s3 url to fetch objects with
+            file_ext: extension of s3 objects to allow through
+            max_memory_use: The approximate number of bytes to allocate on each yield of Generator
+        &#34;&#34;&#34;
+        parsed_url = urllib.parse.urlparse(s3_prefix)
+        assert parsed_url.scheme == &#34;s3&#34;, f&#34;{s3_prefix!r} should be an s3 url&#34;
+        bucket_name = parsed_url.netloc
+        file_prefix = f&#34;{parsed_url.path.strip(&#39;/&#39;)}/&#34;
+        s3_objects_to_fetch = []
+        # Collect objects to be loaded
+        for s3_object in self.boto3_resource.Bucket(bucket_name).objects.filter(Prefix=file_prefix):
+            good_object = (not file_ext) or (s3_object.key.endswith(file_ext))
+            if good_object:
+                s3_objects_to_fetch.append(s3_object)
+
+        if max_memory_use &lt; 0:
+            # Unlimited memory use - fetch ALL
+            max_memory_use = sum(s3_obj.size for s3_obj in s3_objects_to_fetch) * 2
+        transfer_config = boto3.s3.transfer.TransferConfig(max_concurrency=20)
+        while s3_objects_to_fetch:
+            mem_use_left = max_memory_use
+            handles = []
+            with boto3.s3.transfer.create_transfer_manager(self.boto3_client, transfer_config) as transfer_manager:
+                while mem_use_left &gt; 0 and s3_objects_to_fetch:
+                    s3_object = s3_objects_to_fetch.pop()
+                    fobj = io.BytesIO()
+                    future = transfer_manager.download(bucket_name, s3_object.key, fobj)
+                    handles.append(S3TransferHandle(s3_object, fobj, future))
+                    mem_use_left -= s3_object.size
+                # Leaving the `transfer_manager` context implicitly waits for all downloads to complete
+            # Rewind and yield all fobjs
+            for handle in handles:
+                handle.fobj.seek(0)
+                yield handle.fobj
 
 
 class WithS3File(with_local.WithLocal):
@@ -181,11 +296,16 @@ class WithS3File(with_local.WithLocal):
         no_disk_space: If `True`, then s3fs + fsspec will be used to read data directly into memory.
     &#34;&#34;&#34;
 
+    sources_config: S3DataEnvironment  # type: ignore
+    schema: DataframeSchema
+
     boto3_client = boto3.client(&#34;s3&#34;)
 
     @contextmanager
-    def _s3_reader(self, s3_bucket: str, s3_key: str) -&gt; Generator:
+    def _s3_named_file_reader(self, s3_bucket: str, s3_key: str) -&gt; Generator:
         &#34;&#34;&#34;Contextmanager to abstract reading different file types in S3.
+
+        This implementation saves the downloaded data to a temporary file.
 
         Args:
             s3_bucket: The S3 bucket from where to read the file.
@@ -203,7 +323,28 @@ class WithS3File(with_local.WithLocal):
             yield target_file
 
     @contextmanager
-    def _s3_writer(self, s3_bucket: str, s3_key: str) -&gt; Generator:
+    def _s3_reader(self, s3_bucket: str, s3_key: str) -&gt; Generator[io.BytesIO, None, None]:
+        &#34;&#34;&#34;Contextmanager to abstract reading different file types in S3.
+
+         This implementation only retains data in-memory, avoiding creating any temp files.
+
+        Args:
+            s3_bucket: The S3 bucket from where to read the file.
+            s3_key: The file-path to the target file to be read.
+
+        Returns:
+            The local file path from where the file can be read, once it has been downloaded there by the boto3.client.
+
+        &#34;&#34;&#34;
+        fobj = io.BytesIO()
+        # Download the file from S3
+        self.boto3_client.download_fileobj(s3_bucket, s3_key, fobj)
+        # Yield the buffer
+        fobj.seek(0)
+        yield fobj
+
+    @contextmanager
+    def _s3_writer(self, s3_bucket: str, s3_key: str) -&gt; Generator[IO[bytes], None, None]:
         &#34;&#34;&#34;Contextmanager to abstract loading different file types to S3.
 
         Args:
@@ -213,13 +354,10 @@ class WithS3File(with_local.WithLocal):
         Returns:
             The local file path where to actually write the file, to be read and uploaded by boto3.client.
         &#34;&#34;&#34;
-        with tempfile.NamedTemporaryFile(&#34;wb&#34;) as target_file:
-            # Yield local file path to body of `with` statement
-            yield target_file
-            target_file.flush()
-
-            # Upload the file to S3
-            self.boto3_client.upload_file(target_file.name, s3_bucket, s3_key, ExtraArgs={&#34;ACL&#34;: &#34;bucket-owner-full-control&#34;})
+        fobj = io.BytesIO()
+        yield fobj
+        fobj.seek(0)
+        self.boto3_client.upload_fileobj(fobj, s3_bucket, s3_key, ExtraArgs={&#34;ACL&#34;: &#34;bucket-owner-full-control&#34;})
 
     def _read_from_s3_file(self) -&gt; pd.DataFrame:
         &#34;&#34;&#34;Read a file from an S3 bucket as a `DataFrame`.
@@ -234,18 +372,24 @@ class WithS3File(with_local.WithLocal):
         Returns:
             DataFrame
         &#34;&#34;&#34;
-        s3_config = self.sources_config[&#34;s3&#34;]
-        if &#34;file_path&#34; not in s3_config:
-            raise ValueError(&#34;`file_path` is required for reading a file from an S3 source&#34;)
+        s3_config = self.sources_config.s3
+        file_type = s3_config.file_type
+        file_path = utils.resolve_template(s3_config.file_path, self.options)
+        bucket = s3_config.bucket
 
-        file_type = s3_config[&#34;file_type&#34;]
-        file_path = utils.resolve_template(s3_config[&#34;file_path&#34;], self.options)
-        bucket = s3_config[&#34;bucket&#34;]
-
-        logger.info(f&#34;[s3] Started downloading: s3://{s3_config[&#39;bucket&#39;]}/{file_path}&#34;)
-        if file_type in [&#34;csv&#34;, &#34;json&#34;, &#34;parquet&#34;] and self.options.pop(&#34;no_disk_space&#34;, None):
-            return getattr(self, f&#34;_read_{file_type}_file&#34;)(f&#34;s3://{s3_config[&#39;bucket&#39;]}/{file_path}&#34;, self.schema, **self.options)  # type: ignore
-        with self._s3_reader(s3_bucket=bucket, s3_key=file_path) as target_file:  # type: ignore
+        logger.info(f&#34;[s3] Started downloading: s3://{s3_config.bucket}/{file_path}&#34;)
+        if self.options.pop(&#34;no_disk_space&#34;, None):
+            no_disk_space_rv = None
+            if file_type in [&#34;csv&#34;, &#34;json&#34;, &#34;parquet&#34;]:
+                no_disk_space_rv = getattr(self, f&#34;_read_{file_type}_file&#34;)(f&#34;s3://{s3_config.bucket}/{file_path}&#34;, self.schema, **self.options)  # type: ignore
+            elif file_type == &#34;hdf&#34;:
+                with self._s3_reader(s3_bucket=bucket, s3_key=file_path) as fobj:  # type: ignore
+                    no_disk_space_rv = HdfIO().load(fobj)  # type: ignore
+            else:
+                raise NotImplementedError(f&#34;Unsupported file type {file_type!r}.&#34;)
+            if no_disk_space_rv is not None:
+                return no_disk_space_rv
+        with self._s3_named_file_reader(s3_bucket=bucket, s3_key=file_path) as target_file:  # type: ignore
             return getattr(self, f&#34;_read_{file_type}_file&#34;)(target_file.name, self.schema, **self.options)  # type: ignore
 
     def _write_to_s3_file(self, df: pd.DataFrame):
@@ -261,19 +405,22 @@ class WithS3File(with_local.WithLocal):
         Args:
             df: The dataframe to be written out
         &#34;&#34;&#34;
-        s3_config = self.sources_config[&#34;s3&#34;]
-        file_path = utils.resolve_template(s3_config[&#34;file_path&#34;], self.options)
-        file_type = s3_config[&#34;file_type&#34;]
+        s3_config = self.sources_config.s3
+        bucket = s3_config.bucket
+        file_path = utils.resolve_template(s3_config.file_path, self.options)
+        file_type = s3_config.file_type
 
-        logger.info(f&#34;[s3] Started uploading: s3://{s3_config[&#39;bucket&#39;]}/{file_path}&#34;)
+        logger.info(f&#34;[s3] Started uploading: s3://{bucket}/{file_path}&#34;)
         if file_type in [&#34;csv&#34;, &#34;json&#34;, &#34;parquet&#34;]:
-            getattr(self, f&#34;_write_{file_type}_file&#34;)(df, f&#34;s3://{s3_config[&#39;bucket&#39;]}/{file_path}&#34;, **self.options)  # type: ignore
+            getattr(self, f&#34;_write_{file_type}_file&#34;)(df, f&#34;s3://{bucket}/{file_path}&#34;, **self.options)  # type: ignore
         elif file_type == &#34;hdf&#34;:
-            with self._s3_writer(s3_bucket=s3_config[&#34;bucket&#34;], s3_key=file_path) as target_file:  # type: ignore
-                self._write_hdf_file(df, target_file.name, **self.options)  # type: ignore
+            hdf_options = dict(self.options)
+            pickle_protocol = hdf_options.pop(&#34;pickle_protocol&#34;, None)
+            with self._s3_writer(s3_bucket=s3_config.bucket, s3_key=file_path) as target_file, utils.pickle_protocol(protocol=pickle_protocol):
+                HdfIO().save(df, target_file, hdf_options)  # type: ignore
         else:
             raise ValueError(f&#34;File type: {file_type} not supported!&#34;)
-        logger.info(f&#34;[s3] Finished uploading: s3://{s3_config[&#39;bucket&#39;]}/{file_path}&#34;)</code></pre>
+        logger.info(f&#34;[s3] Finished uploading: s3://{bucket}/{file_path}&#34;)</code></pre>
 </details>
 </section>
 <section>
@@ -327,6 +474,223 @@ class WithS3File(with_local.WithLocal):
 <section>
 <h2 class="section-title" id="header-classes">Classes</h2>
 <dl>
+<dt id="dynamicio.mixins.with_s3.HdfIO"><code class="flex name class">
+<span>class <span class="ident">HdfIO</span></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Class providing stream support for HDF tables.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class HdfIO:
+    &#34;&#34;&#34;Class providing stream support for HDF tables.&#34;&#34;&#34;
+
+    @contextmanager
+    def create_file(self, label: str, mode: str, data: Optional[bytes] = None) -&gt; Generator[tables.File, None, None]:
+        &#34;&#34;&#34;Create an in-memory pytables table.&#34;&#34;&#34;
+        extra_kw = {}
+        if data:
+            extra_kw[&#34;driver_core_image&#34;] = data
+        file_handle = tables.File(f&#34;{label}_{uuid.uuid4()}.h5&#34;, mode, title=label, root_uep=&#34;/&#34;, filters=None, driver=&#34;H5FD_CORE&#34;, driver_core_backing_store=0, **extra_kw)
+        try:
+            yield file_handle
+        finally:
+            file_handle.close()
+
+    def load(self, fobj: IO[bytes], label: str = &#34;unknown_file.h5&#34;) -&gt; Union[DataFrame, Series]:
+        &#34;&#34;&#34;Load the dataframe from an file-like object.&#34;&#34;&#34;
+        with self.create_file(label, mode=&#34;r&#34;, data=fobj.read()) as file_handle:
+            return pd.read_hdf(InMemStore(label, file_handle))
+
+    def save(self, df: DataFrame, fobj: IO[bytes], label: str = &#34;unknown_file.h5&#34;, options: Optional[dict] = None):
+        &#34;&#34;&#34;Load the dataframe to a file-like object.&#34;&#34;&#34;
+        if not options:
+            options = {}
+        with self.create_file(label, mode=&#34;w&#34;, data=fobj.read()) as file_handle:
+            store = InMemStore(path=label, table=file_handle, mode=&#34;w&#34;)
+            store.put(key=&#34;df&#34;, value=df, **options)
+            fobj.write(file_handle.get_file_image())</code></pre>
+</details>
+<h3>Methods</h3>
+<dl>
+<dt id="dynamicio.mixins.with_s3.HdfIO.create_file"><code class="name flex">
+<span>def <span class="ident">create_file</span></span>(<span>self, label: str, mode: str, data: Optional[bytes] = None) ‑> Generator[tables.file.File, None, None]</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Create an in-memory pytables table.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@contextmanager
+def create_file(self, label: str, mode: str, data: Optional[bytes] = None) -&gt; Generator[tables.File, None, None]:
+    &#34;&#34;&#34;Create an in-memory pytables table.&#34;&#34;&#34;
+    extra_kw = {}
+    if data:
+        extra_kw[&#34;driver_core_image&#34;] = data
+    file_handle = tables.File(f&#34;{label}_{uuid.uuid4()}.h5&#34;, mode, title=label, root_uep=&#34;/&#34;, filters=None, driver=&#34;H5FD_CORE&#34;, driver_core_backing_store=0, **extra_kw)
+    try:
+        yield file_handle
+    finally:
+        file_handle.close()</code></pre>
+</details>
+</dd>
+<dt id="dynamicio.mixins.with_s3.HdfIO.load"><code class="name flex">
+<span>def <span class="ident">load</span></span>(<span>self, fobj: IO[bytes], label: str = 'unknown_file.h5') ‑> Union[pandas.core.frame.DataFrame, pandas.core.series.Series]</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Load the dataframe from an file-like object.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def load(self, fobj: IO[bytes], label: str = &#34;unknown_file.h5&#34;) -&gt; Union[DataFrame, Series]:
+    &#34;&#34;&#34;Load the dataframe from an file-like object.&#34;&#34;&#34;
+    with self.create_file(label, mode=&#34;r&#34;, data=fobj.read()) as file_handle:
+        return pd.read_hdf(InMemStore(label, file_handle))</code></pre>
+</details>
+</dd>
+<dt id="dynamicio.mixins.with_s3.HdfIO.save"><code class="name flex">
+<span>def <span class="ident">save</span></span>(<span>self, df: pandas.core.frame.DataFrame, fobj: IO[bytes], label: str = 'unknown_file.h5', options: Optional[dict] = None)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Load the dataframe to a file-like object.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def save(self, df: DataFrame, fobj: IO[bytes], label: str = &#34;unknown_file.h5&#34;, options: Optional[dict] = None):
+    &#34;&#34;&#34;Load the dataframe to a file-like object.&#34;&#34;&#34;
+    if not options:
+        options = {}
+    with self.create_file(label, mode=&#34;w&#34;, data=fobj.read()) as file_handle:
+        store = InMemStore(path=label, table=file_handle, mode=&#34;w&#34;)
+        store.put(key=&#34;df&#34;, value=df, **options)
+        fobj.write(file_handle.get_file_image())</code></pre>
+</details>
+</dd>
+</dl>
+</dd>
+<dt id="dynamicio.mixins.with_s3.InMemStore"><code class="flex name class">
+<span>class <span class="ident">InMemStore</span></span>
+<span>(</span><span>path: str, table: tables.file.File, mode: str = 'r')</span>
+</code></dt>
+<dd>
+<div class="desc"><p>A subclass of pandas HDFStore that does not manage the pytables File object.</p>
+<p>Create a new HDFStore object.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class InMemStore(pd.io.pytables.HDFStore):
+    &#34;&#34;&#34;A subclass of pandas HDFStore that does not manage the pytables File object.&#34;&#34;&#34;
+
+    _in_mem_table = None
+
+    def __init__(self, path: str, table: tables.File, mode: str = &#34;r&#34;):
+        &#34;&#34;&#34;Create a new HDFStore object.&#34;&#34;&#34;
+        self._in_mem_table = table
+        super().__init__(path=path, mode=mode)
+
+    def open(self, *_args, **_kwargs):
+        &#34;&#34;&#34;Open the in-memory table.&#34;&#34;&#34;
+        pd.io.pytables._tables()
+        self._handle = self._in_mem_table
+
+    def close(self, *_args, **_kwargs):
+        &#34;&#34;&#34;Close the in-memory table.&#34;&#34;&#34;
+
+    @property
+    def is_open(self):
+        &#34;&#34;&#34;Check if the in-memory table is open.&#34;&#34;&#34;
+        return self._handle is not None</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>pandas.io.pytables.HDFStore</li>
+</ul>
+<h3>Instance variables</h3>
+<dl>
+<dt id="dynamicio.mixins.with_s3.InMemStore.is_open"><code class="name">var <span class="ident">is_open</span></code></dt>
+<dd>
+<div class="desc"><p>Check if the in-memory table is open.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@property
+def is_open(self):
+    &#34;&#34;&#34;Check if the in-memory table is open.&#34;&#34;&#34;
+    return self._handle is not None</code></pre>
+</details>
+</dd>
+</dl>
+<h3>Methods</h3>
+<dl>
+<dt id="dynamicio.mixins.with_s3.InMemStore.close"><code class="name flex">
+<span>def <span class="ident">close</span></span>(<span>self, *_args, **_kwargs)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Close the in-memory table.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def close(self, *_args, **_kwargs):
+    &#34;&#34;&#34;Close the in-memory table.&#34;&#34;&#34;</code></pre>
+</details>
+</dd>
+<dt id="dynamicio.mixins.with_s3.InMemStore.open"><code class="name flex">
+<span>def <span class="ident">open</span></span>(<span>self, *_args, **_kwargs)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Open the in-memory table.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def open(self, *_args, **_kwargs):
+    &#34;&#34;&#34;Open the in-memory table.&#34;&#34;&#34;
+    pd.io.pytables._tables()
+    self._handle = self._in_mem_table</code></pre>
+</details>
+</dd>
+</dl>
+</dd>
+<dt id="dynamicio.mixins.with_s3.S3TransferHandle"><code class="flex name class">
+<span>class <span class="ident">S3TransferHandle</span></span>
+<span>(</span><span>s3_object: object, fobj: IO[bytes], done_future: s3transfer.futures.BaseTransferFuture)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>A dataclass used to track an ongoing data download from the s3.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class S3TransferHandle:
+    &#34;&#34;&#34;A dataclass used to track an ongoing data download from the s3.&#34;&#34;&#34;
+
+    s3_object: object  # boto3.resource(&#39;s3&#39;).ObjectSummary
+    fobj: IO[bytes]  # file-like object the data is being downloaded to
+    done_future: s3transfer.futures.BaseTransferFuture</code></pre>
+</details>
+<h3>Class variables</h3>
+<dl>
+<dt id="dynamicio.mixins.with_s3.S3TransferHandle.done_future"><code class="name">var <span class="ident">done_future</span> : s3transfer.futures.BaseTransferFuture</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.mixins.with_s3.S3TransferHandle.fobj"><code class="name">var <span class="ident">fobj</span> : IO[bytes]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.mixins.with_s3.S3TransferHandle.s3_object"><code class="name">var <span class="ident">s3_object</span> : object</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+</dd>
 <dt id="dynamicio.mixins.with_s3.WithS3File"><code class="flex name class">
 <span>class <span class="ident">WithS3File</span></span>
 </code></dt>
@@ -352,11 +716,16 @@ for generic buffer is added to read_hdf, we need to download and persists the fi
         no_disk_space: If `True`, then s3fs + fsspec will be used to read data directly into memory.
     &#34;&#34;&#34;
 
+    sources_config: S3DataEnvironment  # type: ignore
+    schema: DataframeSchema
+
     boto3_client = boto3.client(&#34;s3&#34;)
 
     @contextmanager
-    def _s3_reader(self, s3_bucket: str, s3_key: str) -&gt; Generator:
+    def _s3_named_file_reader(self, s3_bucket: str, s3_key: str) -&gt; Generator:
         &#34;&#34;&#34;Contextmanager to abstract reading different file types in S3.
+
+        This implementation saves the downloaded data to a temporary file.
 
         Args:
             s3_bucket: The S3 bucket from where to read the file.
@@ -374,7 +743,28 @@ for generic buffer is added to read_hdf, we need to download and persists the fi
             yield target_file
 
     @contextmanager
-    def _s3_writer(self, s3_bucket: str, s3_key: str) -&gt; Generator:
+    def _s3_reader(self, s3_bucket: str, s3_key: str) -&gt; Generator[io.BytesIO, None, None]:
+        &#34;&#34;&#34;Contextmanager to abstract reading different file types in S3.
+
+         This implementation only retains data in-memory, avoiding creating any temp files.
+
+        Args:
+            s3_bucket: The S3 bucket from where to read the file.
+            s3_key: The file-path to the target file to be read.
+
+        Returns:
+            The local file path from where the file can be read, once it has been downloaded there by the boto3.client.
+
+        &#34;&#34;&#34;
+        fobj = io.BytesIO()
+        # Download the file from S3
+        self.boto3_client.download_fileobj(s3_bucket, s3_key, fobj)
+        # Yield the buffer
+        fobj.seek(0)
+        yield fobj
+
+    @contextmanager
+    def _s3_writer(self, s3_bucket: str, s3_key: str) -&gt; Generator[IO[bytes], None, None]:
         &#34;&#34;&#34;Contextmanager to abstract loading different file types to S3.
 
         Args:
@@ -384,13 +774,10 @@ for generic buffer is added to read_hdf, we need to download and persists the fi
         Returns:
             The local file path where to actually write the file, to be read and uploaded by boto3.client.
         &#34;&#34;&#34;
-        with tempfile.NamedTemporaryFile(&#34;wb&#34;) as target_file:
-            # Yield local file path to body of `with` statement
-            yield target_file
-            target_file.flush()
-
-            # Upload the file to S3
-            self.boto3_client.upload_file(target_file.name, s3_bucket, s3_key, ExtraArgs={&#34;ACL&#34;: &#34;bucket-owner-full-control&#34;})
+        fobj = io.BytesIO()
+        yield fobj
+        fobj.seek(0)
+        self.boto3_client.upload_fileobj(fobj, s3_bucket, s3_key, ExtraArgs={&#34;ACL&#34;: &#34;bucket-owner-full-control&#34;})
 
     def _read_from_s3_file(self) -&gt; pd.DataFrame:
         &#34;&#34;&#34;Read a file from an S3 bucket as a `DataFrame`.
@@ -405,18 +792,24 @@ for generic buffer is added to read_hdf, we need to download and persists the fi
         Returns:
             DataFrame
         &#34;&#34;&#34;
-        s3_config = self.sources_config[&#34;s3&#34;]
-        if &#34;file_path&#34; not in s3_config:
-            raise ValueError(&#34;`file_path` is required for reading a file from an S3 source&#34;)
+        s3_config = self.sources_config.s3
+        file_type = s3_config.file_type
+        file_path = utils.resolve_template(s3_config.file_path, self.options)
+        bucket = s3_config.bucket
 
-        file_type = s3_config[&#34;file_type&#34;]
-        file_path = utils.resolve_template(s3_config[&#34;file_path&#34;], self.options)
-        bucket = s3_config[&#34;bucket&#34;]
-
-        logger.info(f&#34;[s3] Started downloading: s3://{s3_config[&#39;bucket&#39;]}/{file_path}&#34;)
-        if file_type in [&#34;csv&#34;, &#34;json&#34;, &#34;parquet&#34;] and self.options.pop(&#34;no_disk_space&#34;, None):
-            return getattr(self, f&#34;_read_{file_type}_file&#34;)(f&#34;s3://{s3_config[&#39;bucket&#39;]}/{file_path}&#34;, self.schema, **self.options)  # type: ignore
-        with self._s3_reader(s3_bucket=bucket, s3_key=file_path) as target_file:  # type: ignore
+        logger.info(f&#34;[s3] Started downloading: s3://{s3_config.bucket}/{file_path}&#34;)
+        if self.options.pop(&#34;no_disk_space&#34;, None):
+            no_disk_space_rv = None
+            if file_type in [&#34;csv&#34;, &#34;json&#34;, &#34;parquet&#34;]:
+                no_disk_space_rv = getattr(self, f&#34;_read_{file_type}_file&#34;)(f&#34;s3://{s3_config.bucket}/{file_path}&#34;, self.schema, **self.options)  # type: ignore
+            elif file_type == &#34;hdf&#34;:
+                with self._s3_reader(s3_bucket=bucket, s3_key=file_path) as fobj:  # type: ignore
+                    no_disk_space_rv = HdfIO().load(fobj)  # type: ignore
+            else:
+                raise NotImplementedError(f&#34;Unsupported file type {file_type!r}.&#34;)
+            if no_disk_space_rv is not None:
+                return no_disk_space_rv
+        with self._s3_named_file_reader(s3_bucket=bucket, s3_key=file_path) as target_file:  # type: ignore
             return getattr(self, f&#34;_read_{file_type}_file&#34;)(target_file.name, self.schema, **self.options)  # type: ignore
 
     def _write_to_s3_file(self, df: pd.DataFrame):
@@ -432,19 +825,22 @@ for generic buffer is added to read_hdf, we need to download and persists the fi
         Args:
             df: The dataframe to be written out
         &#34;&#34;&#34;
-        s3_config = self.sources_config[&#34;s3&#34;]
-        file_path = utils.resolve_template(s3_config[&#34;file_path&#34;], self.options)
-        file_type = s3_config[&#34;file_type&#34;]
+        s3_config = self.sources_config.s3
+        bucket = s3_config.bucket
+        file_path = utils.resolve_template(s3_config.file_path, self.options)
+        file_type = s3_config.file_type
 
-        logger.info(f&#34;[s3] Started uploading: s3://{s3_config[&#39;bucket&#39;]}/{file_path}&#34;)
+        logger.info(f&#34;[s3] Started uploading: s3://{bucket}/{file_path}&#34;)
         if file_type in [&#34;csv&#34;, &#34;json&#34;, &#34;parquet&#34;]:
-            getattr(self, f&#34;_write_{file_type}_file&#34;)(df, f&#34;s3://{s3_config[&#39;bucket&#39;]}/{file_path}&#34;, **self.options)  # type: ignore
+            getattr(self, f&#34;_write_{file_type}_file&#34;)(df, f&#34;s3://{bucket}/{file_path}&#34;, **self.options)  # type: ignore
         elif file_type == &#34;hdf&#34;:
-            with self._s3_writer(s3_bucket=s3_config[&#34;bucket&#34;], s3_key=file_path) as target_file:  # type: ignore
-                self._write_hdf_file(df, target_file.name, **self.options)  # type: ignore
+            hdf_options = dict(self.options)
+            pickle_protocol = hdf_options.pop(&#34;pickle_protocol&#34;, None)
+            with self._s3_writer(s3_bucket=s3_config.bucket, s3_key=file_path) as target_file, utils.pickle_protocol(protocol=pickle_protocol):
+                HdfIO().save(df, target_file, hdf_options)  # type: ignore
         else:
             raise ValueError(f&#34;File type: {file_type} not supported!&#34;)
-        logger.info(f&#34;[s3] Finished uploading: s3://{s3_config[&#39;bucket&#39;]}/{file_path}&#34;)</code></pre>
+        logger.info(f&#34;[s3] Finished uploading: s3://{bucket}/{file_path}&#34;)</code></pre>
 </details>
 <h3>Ancestors</h3>
 <ul class="hlist">
@@ -460,15 +856,11 @@ for generic buffer is added to read_hdf, we need to download and persists the fi
 <dd>
 <div class="desc"></div>
 </dd>
-<dt id="dynamicio.mixins.with_s3.WithS3File.options"><code class="name">var <span class="ident">options</span> : MutableMapping[str, Any]</code></dt>
+<dt id="dynamicio.mixins.with_s3.WithS3File.schema"><code class="name">var <span class="ident">schema</span> : <a title="dynamicio.config.pydantic.table_schema.DataframeSchema" href="../config/pydantic/table_schema.html#dynamicio.config.pydantic.table_schema.DataframeSchema">DataframeSchema</a></code></dt>
 <dd>
 <div class="desc"></div>
 </dd>
-<dt id="dynamicio.mixins.with_s3.WithS3File.schema"><code class="name">var <span class="ident">schema</span> : Mapping[~KT, +VT_co]</code></dt>
-<dd>
-<div class="desc"></div>
-</dd>
-<dt id="dynamicio.mixins.with_s3.WithS3File.sources_config"><code class="name">var <span class="ident">sources_config</span> : Mapping[~KT, +VT_co]</code></dt>
+<dt id="dynamicio.mixins.with_s3.WithS3File.sources_config"><code class="name">var <span class="ident">sources_config</span> : <a title="dynamicio.config.pydantic.io_resources.S3DataEnvironment" href="../config/pydantic/io_resources.html#dynamicio.config.pydantic.io_resources.S3DataEnvironment">S3DataEnvironment</a></code></dt>
 <dd>
 <div class="desc"></div>
 </dd>
@@ -490,6 +882,12 @@ for generic buffer is added to read_hdf, we need to download and persists the fi
     This mixin assumes that the directories it reads from will only contain a single file-type.
     &#34;&#34;&#34;
 
+    sources_config: S3PathPrefixEnvironment  # type: ignore
+    schema: DataframeSchema
+
+    boto3_resource = boto3.resource(&#34;s3&#34;)
+    boto3_client = boto3.client(&#34;s3&#34;)
+
     def _write_to_s3_path_prefix(self, df: pd.DataFrame):
         &#34;&#34;&#34;Write a DataFrame to an S3 path prefix.
 
@@ -505,18 +903,16 @@ for generic buffer is added to read_hdf, we need to download and persists the fi
             ValueError: In case `path_prefix` is missing from config
             ValueError: In case the `partition_cols` arg is missing while trying to write a parquet file
         &#34;&#34;&#34;
-        s3_config = self.sources_config[&#34;s3&#34;]
-        if &#34;path_prefix&#34; not in s3_config:
-            raise ValueError(&#34;`path_prefix` is required to write multiple files to an S3 key&#34;)
+        s3_config = self.sources_config.s3
 
-        file_type = s3_config[&#34;file_type&#34;]
+        file_type = s3_config.file_type
         if file_type != &#34;parquet&#34;:
             raise ValueError(f&#34;File type not supported: {file_type}, only parquet files can be written to an S3 key&#34;)
         if &#34;partition_cols&#34; not in self.options:
             raise ValueError(&#34;`partition_cols` is required as an option to write partitioned parquet files to S3&#34;)
 
-        bucket = s3_config[&#34;bucket&#34;]
-        path_prefix = s3_config[&#34;path_prefix&#34;]
+        bucket = s3_config.bucket
+        path_prefix = s3_config.path_prefix
         full_path_prefix = utils.resolve_template(f&#34;s3://{bucket}/{path_prefix}&#34;, self.options)
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -546,21 +942,26 @@ for generic buffer is added to read_hdf, we need to download and persists the fi
         Returns:
             DataFrame
         &#34;&#34;&#34;
-        s3_config = self.sources_config[&#34;s3&#34;]
-        if &#34;path_prefix&#34; not in s3_config:
-            raise ValueError(&#34;`path_prefix` is required to read multiple files from an S3 source&#34;)
-
-        file_type = s3_config[&#34;file_type&#34;]
+        s3_config = self.sources_config.s3
+        file_type = s3_config.file_type
         if file_type not in {&#34;parquet&#34;, &#34;csv&#34;, &#34;hdf&#34;, &#34;json&#34;}:
             raise ValueError(f&#34;File type not supported: {file_type}&#34;)
 
-        bucket = s3_config[&#34;bucket&#34;]
-        path_prefix = s3_config[&#34;path_prefix&#34;]
+        bucket = s3_config.bucket
+        path_prefix = s3_config.path_prefix
         full_path_prefix = utils.resolve_template(f&#34;s3://{bucket}/{path_prefix}&#34;, self.options)
 
         # The `no_disk_space` option should be used only when reading a subset of columns from S3
-        if self.options.pop(&#34;no_disk_space&#34;, False) and file_type == &#34;parquet&#34;:
-            return self._read_parquet_file(full_path_prefix, self.schema, **self.options)
+        if self.options.pop(&#34;no_disk_space&#34;, False):
+            if file_type == &#34;parquet&#34;:
+                return self._read_parquet_file(full_path_prefix, self.schema, **self.options)
+            if file_type == &#34;hdf&#34;:
+                dfs: List[DataFrame] = []
+                for fobj in self._iter_s3_files(full_path_prefix, file_ext=&#34;.h5&#34;, max_memory_use=1024**3):  # 1 gib
+                    dfs.append(HdfIO().load(fobj))
+                df = pd.concat(dfs, ignore_index=True)
+                columns = [column for column in df.columns.to_list() if column in self.schema.columns.keys()]
+                return df[columns]
 
         with tempfile.TemporaryDirectory() as temp_dir:
             # aws-cli is shown to be up to 6 times faster when downloading the complete dataset from S3 than using the boto3
@@ -577,13 +978,52 @@ for generic buffer is added to read_hdf, we need to download and persists the fi
                 &#34;--exact-timestamps&#34;,
             )
 
-            dfs = []
+            dfs: List[DataFrame] = []
             for file in os.listdir(temp_dir):
                 df = getattr(self, f&#34;_read_{file_type}_file&#34;)(os.path.join(temp_dir, file), self.schema, **self.options)  # type: ignore
                 if len(df) &gt; 0:
                     dfs.append(df)
 
-            return pd.concat(dfs, ignore_index=True)</code></pre>
+            return pd.concat(dfs, ignore_index=True)
+
+    def _iter_s3_files(self, s3_prefix: str, file_ext: Optional[str] = None, max_memory_use: int = -1) -&gt; Generator[IO[bytes], None, None]:  # pylint: disable=too-many-locals
+        &#34;&#34;&#34;Download sways of S3 objects.
+
+        Args:
+            s3_prefix: s3 url to fetch objects with
+            file_ext: extension of s3 objects to allow through
+            max_memory_use: The approximate number of bytes to allocate on each yield of Generator
+        &#34;&#34;&#34;
+        parsed_url = urllib.parse.urlparse(s3_prefix)
+        assert parsed_url.scheme == &#34;s3&#34;, f&#34;{s3_prefix!r} should be an s3 url&#34;
+        bucket_name = parsed_url.netloc
+        file_prefix = f&#34;{parsed_url.path.strip(&#39;/&#39;)}/&#34;
+        s3_objects_to_fetch = []
+        # Collect objects to be loaded
+        for s3_object in self.boto3_resource.Bucket(bucket_name).objects.filter(Prefix=file_prefix):
+            good_object = (not file_ext) or (s3_object.key.endswith(file_ext))
+            if good_object:
+                s3_objects_to_fetch.append(s3_object)
+
+        if max_memory_use &lt; 0:
+            # Unlimited memory use - fetch ALL
+            max_memory_use = sum(s3_obj.size for s3_obj in s3_objects_to_fetch) * 2
+        transfer_config = boto3.s3.transfer.TransferConfig(max_concurrency=20)
+        while s3_objects_to_fetch:
+            mem_use_left = max_memory_use
+            handles = []
+            with boto3.s3.transfer.create_transfer_manager(self.boto3_client, transfer_config) as transfer_manager:
+                while mem_use_left &gt; 0 and s3_objects_to_fetch:
+                    s3_object = s3_objects_to_fetch.pop()
+                    fobj = io.BytesIO()
+                    future = transfer_manager.download(bucket_name, s3_object.key, fobj)
+                    handles.append(S3TransferHandle(s3_object, fobj, future))
+                    mem_use_left -= s3_object.size
+                # Leaving the `transfer_manager` context implicitly waits for all downloads to complete
+            # Rewind and yield all fobjs
+            for handle in handles:
+                handle.fobj.seek(0)
+                yield handle.fobj</code></pre>
 </details>
 <h3>Ancestors</h3>
 <ul class="hlist">
@@ -595,15 +1035,19 @@ for generic buffer is added to read_hdf, we need to download and persists the fi
 </ul>
 <h3>Class variables</h3>
 <dl>
-<dt id="dynamicio.mixins.with_s3.WithS3PathPrefix.options"><code class="name">var <span class="ident">options</span> : MutableMapping[str, Any]</code></dt>
+<dt id="dynamicio.mixins.with_s3.WithS3PathPrefix.boto3_client"><code class="name">var <span class="ident">boto3_client</span></code></dt>
 <dd>
 <div class="desc"></div>
 </dd>
-<dt id="dynamicio.mixins.with_s3.WithS3PathPrefix.schema"><code class="name">var <span class="ident">schema</span> : Mapping[~KT, +VT_co]</code></dt>
+<dt id="dynamicio.mixins.with_s3.WithS3PathPrefix.boto3_resource"><code class="name">var <span class="ident">boto3_resource</span></code></dt>
 <dd>
 <div class="desc"></div>
 </dd>
-<dt id="dynamicio.mixins.with_s3.WithS3PathPrefix.sources_config"><code class="name">var <span class="ident">sources_config</span> : Mapping[~KT, +VT_co]</code></dt>
+<dt id="dynamicio.mixins.with_s3.WithS3PathPrefix.schema"><code class="name">var <span class="ident">schema</span> : <a title="dynamicio.config.pydantic.table_schema.DataframeSchema" href="../config/pydantic/table_schema.html#dynamicio.config.pydantic.table_schema.DataframeSchema">DataframeSchema</a></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.mixins.with_s3.WithS3PathPrefix.sources_config"><code class="name">var <span class="ident">sources_config</span> : <a title="dynamicio.config.pydantic.io_resources.S3PathPrefixEnvironment" href="../config/pydantic/io_resources.html#dynamicio.config.pydantic.io_resources.S3PathPrefixEnvironment">S3PathPrefixEnvironment</a></code></dt>
 <dd>
 <div class="desc"></div>
 </dd>
@@ -631,10 +1075,33 @@ for generic buffer is added to read_hdf, we need to download and persists the fi
 <li><h3><a href="#header-classes">Classes</a></h3>
 <ul>
 <li>
+<h4><code><a title="dynamicio.mixins.with_s3.HdfIO" href="#dynamicio.mixins.with_s3.HdfIO">HdfIO</a></code></h4>
+<ul class="">
+<li><code><a title="dynamicio.mixins.with_s3.HdfIO.create_file" href="#dynamicio.mixins.with_s3.HdfIO.create_file">create_file</a></code></li>
+<li><code><a title="dynamicio.mixins.with_s3.HdfIO.load" href="#dynamicio.mixins.with_s3.HdfIO.load">load</a></code></li>
+<li><code><a title="dynamicio.mixins.with_s3.HdfIO.save" href="#dynamicio.mixins.with_s3.HdfIO.save">save</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="dynamicio.mixins.with_s3.InMemStore" href="#dynamicio.mixins.with_s3.InMemStore">InMemStore</a></code></h4>
+<ul class="">
+<li><code><a title="dynamicio.mixins.with_s3.InMemStore.close" href="#dynamicio.mixins.with_s3.InMemStore.close">close</a></code></li>
+<li><code><a title="dynamicio.mixins.with_s3.InMemStore.is_open" href="#dynamicio.mixins.with_s3.InMemStore.is_open">is_open</a></code></li>
+<li><code><a title="dynamicio.mixins.with_s3.InMemStore.open" href="#dynamicio.mixins.with_s3.InMemStore.open">open</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="dynamicio.mixins.with_s3.S3TransferHandle" href="#dynamicio.mixins.with_s3.S3TransferHandle">S3TransferHandle</a></code></h4>
+<ul class="">
+<li><code><a title="dynamicio.mixins.with_s3.S3TransferHandle.done_future" href="#dynamicio.mixins.with_s3.S3TransferHandle.done_future">done_future</a></code></li>
+<li><code><a title="dynamicio.mixins.with_s3.S3TransferHandle.fobj" href="#dynamicio.mixins.with_s3.S3TransferHandle.fobj">fobj</a></code></li>
+<li><code><a title="dynamicio.mixins.with_s3.S3TransferHandle.s3_object" href="#dynamicio.mixins.with_s3.S3TransferHandle.s3_object">s3_object</a></code></li>
+</ul>
+</li>
+<li>
 <h4><code><a title="dynamicio.mixins.with_s3.WithS3File" href="#dynamicio.mixins.with_s3.WithS3File">WithS3File</a></code></h4>
 <ul class="">
 <li><code><a title="dynamicio.mixins.with_s3.WithS3File.boto3_client" href="#dynamicio.mixins.with_s3.WithS3File.boto3_client">boto3_client</a></code></li>
-<li><code><a title="dynamicio.mixins.with_s3.WithS3File.options" href="#dynamicio.mixins.with_s3.WithS3File.options">options</a></code></li>
 <li><code><a title="dynamicio.mixins.with_s3.WithS3File.schema" href="#dynamicio.mixins.with_s3.WithS3File.schema">schema</a></code></li>
 <li><code><a title="dynamicio.mixins.with_s3.WithS3File.sources_config" href="#dynamicio.mixins.with_s3.WithS3File.sources_config">sources_config</a></code></li>
 </ul>
@@ -642,7 +1109,8 @@ for generic buffer is added to read_hdf, we need to download and persists the fi
 <li>
 <h4><code><a title="dynamicio.mixins.with_s3.WithS3PathPrefix" href="#dynamicio.mixins.with_s3.WithS3PathPrefix">WithS3PathPrefix</a></code></h4>
 <ul class="">
-<li><code><a title="dynamicio.mixins.with_s3.WithS3PathPrefix.options" href="#dynamicio.mixins.with_s3.WithS3PathPrefix.options">options</a></code></li>
+<li><code><a title="dynamicio.mixins.with_s3.WithS3PathPrefix.boto3_client" href="#dynamicio.mixins.with_s3.WithS3PathPrefix.boto3_client">boto3_client</a></code></li>
+<li><code><a title="dynamicio.mixins.with_s3.WithS3PathPrefix.boto3_resource" href="#dynamicio.mixins.with_s3.WithS3PathPrefix.boto3_resource">boto3_resource</a></code></li>
 <li><code><a title="dynamicio.mixins.with_s3.WithS3PathPrefix.schema" href="#dynamicio.mixins.with_s3.WithS3PathPrefix.schema">schema</a></code></li>
 <li><code><a title="dynamicio.mixins.with_s3.WithS3PathPrefix.sources_config" href="#dynamicio.mixins.with_s3.WithS3PathPrefix.sources_config">sources_config</a></code></li>
 </ul>

@@ -40,7 +40,8 @@ from kafka import KafkaProducer  # type: ignore
 from magic_logger import logger
 
 
-from . import utils
+from dynamicio.config.pydantic import DataframeSchema, KafkaDataEnvironment
+from dynamicio.mixins import utils
 
 
 class WithKafka:
@@ -100,8 +101,8 @@ class WithKafka:
         &gt;&gt;&gt; ]
     &#34;&#34;&#34;
 
-    sources_config: Mapping
-    schema: Mapping
+    sources_config: KafkaDataEnvironment
+    schema: DataframeSchema
     options: MutableMapping[str, Any]
     __kafka_config: Optional[Mapping] = None
     __producer: Optional[KafkaProducer] = None
@@ -128,9 +129,9 @@ class WithKafka:
                 self.__document_transformer = self.options.pop(&#34;document_transformer&#34;)
 
         if self.__producer is None:
-            self.__producer = self._get_producer(self.sources_config[&#34;kafka&#34;][&#34;kafka_server&#34;], **self.options)
+            self.__producer = self._get_producer(self.sources_config.kafka.kafka_server, **self.options)
 
-        self._send_messages(df=df, topic=self.sources_config[&#34;kafka&#34;][&#34;kafka_topic&#34;])
+        self._send_messages(df=df, topic=self.sources_config.kafka.kafka_topic)
 
     @utils.allow_options(KafkaProducer.DEFAULT_CONFIG.keys())
     def _get_producer(self, server: str, **options: MutableMapping[str, Any]) -&gt; KafkaProducer:
@@ -332,8 +333,8 @@ Kafka topic.</p>
         &gt;&gt;&gt; ]
     &#34;&#34;&#34;
 
-    sources_config: Mapping
-    schema: Mapping
+    sources_config: KafkaDataEnvironment
+    schema: DataframeSchema
     options: MutableMapping[str, Any]
     __kafka_config: Optional[Mapping] = None
     __producer: Optional[KafkaProducer] = None
@@ -360,9 +361,9 @@ Kafka topic.</p>
                 self.__document_transformer = self.options.pop(&#34;document_transformer&#34;)
 
         if self.__producer is None:
-            self.__producer = self._get_producer(self.sources_config[&#34;kafka&#34;][&#34;kafka_server&#34;], **self.options)
+            self.__producer = self._get_producer(self.sources_config.kafka.kafka_server, **self.options)
 
-        self._send_messages(df=df, topic=self.sources_config[&#34;kafka&#34;][&#34;kafka_topic&#34;])
+        self._send_messages(df=df, topic=self.sources_config.kafka.kafka_topic)
 
     @utils.allow_options(KafkaProducer.DEFAULT_CONFIG.keys())
     def _get_producer(self, server: str, **options: MutableMapping[str, Any]) -&gt; KafkaProducer:
@@ -431,11 +432,11 @@ Kafka topic.</p>
 <dd>
 <div class="desc"></div>
 </dd>
-<dt id="dynamicio.mixins.with_kafka.WithKafka.schema"><code class="name">var <span class="ident">schema</span> : Mapping[~KT, +VT_co]</code></dt>
+<dt id="dynamicio.mixins.with_kafka.WithKafka.schema"><code class="name">var <span class="ident">schema</span> : <a title="dynamicio.config.pydantic.table_schema.DataframeSchema" href="../config/pydantic/table_schema.html#dynamicio.config.pydantic.table_schema.DataframeSchema">DataframeSchema</a></code></dt>
 <dd>
 <div class="desc"></div>
 </dd>
-<dt id="dynamicio.mixins.with_kafka.WithKafka.sources_config"><code class="name">var <span class="ident">sources_config</span> : Mapping[~KT, +VT_co]</code></dt>
+<dt id="dynamicio.mixins.with_kafka.WithKafka.sources_config"><code class="name">var <span class="ident">sources_config</span> : <a title="dynamicio.config.pydantic.io_resources.KafkaDataEnvironment" href="../config/pydantic/io_resources.html#dynamicio.config.pydantic.io_resources.KafkaDataEnvironment">KafkaDataEnvironment</a></code></dt>
 <dd>
 <div class="desc"></div>
 </dd>

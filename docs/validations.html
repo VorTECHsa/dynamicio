@@ -28,22 +28,20 @@
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">&#34;&#34;&#34;Implements the Validator class responsible for various generic data validations and metrics generation.&#34;&#34;&#34;
-__all__ = [
-    &#34;has_unique_values&#34;,
-    &#34;has_no_null_values&#34;,
-    &#34;has_acceptable_percentage_of_nulls&#34;,
-    &#34;is_in&#34;,
-    &#34;is_greater_than&#34;,
-    &#34;is_greater_than_or_equal&#34;,
-    &#34;is_lower_than&#34;,
-    &#34;is_lower_than_or_equal&#34;,
-    &#34;is_between&#34;,
-]
-
 import operator
-from typing import NamedTuple, Set
+from typing import Callable, NamedTuple, Set
 
 import pandas as pd  # type: ignore
+
+ALL_VALIDATORS = {}  # name -&gt; function
+
+
+def validator(func: Callable):
+    &#34;&#34;&#34;A decorator to add the function to the ALL_VALIDATORS dict.&#34;&#34;&#34;
+    name = func.__name__
+    assert name not in ALL_VALIDATORS
+    ALL_VALIDATORS[name] = func
+    return func
 
 
 class ValidationResult(NamedTuple):
@@ -54,6 +52,7 @@ class ValidationResult(NamedTuple):
     value: float
 
 
+@validator
 def has_unique_values(dataset: str, df: pd.DataFrame, column: str) -&gt; ValidationResult:
     &#34;&#34;&#34;Checks if values in column are unique.
 
@@ -74,6 +73,7 @@ def has_unique_values(dataset: str, df: pd.DataFrame, column: str) -&gt; Validat
     return ValidationResult(valid=False, message=f&#34;Values {duplicates} for {dataset}[{column}] are duplicated!&#34;, value=len(duplicates))
 
 
+@validator
 def has_no_null_values(dataset: str, df: pd.DataFrame, column: str) -&gt; ValidationResult:
     &#34;&#34;&#34;Checks if column has any null values (including NaN and NaT values).
 
@@ -91,6 +91,7 @@ def has_no_null_values(dataset: str, df: pd.DataFrame, column: str) -&gt; Valida
     return ValidationResult(valid=not mask.any(), message=f&#34;{dataset}[{column}] has {no_of_nulls} nulls&#34;, value=no_of_nulls)
 
 
+@validator
 def has_acceptable_percentage_of_nulls(
     dataset: str,
     df: pd.DataFrame,
@@ -116,7 +117,7 @@ def has_acceptable_percentage_of_nulls(
 
     no_of_nulls = df[column].isnull().sum()
     if len(df) == 0:
-        percentage_of_nulls = 0
+        percentage_of_nulls = 0.0
     else:
         percentage_of_nulls = no_of_nulls / len(df)
 
@@ -133,6 +134,7 @@ def has_acceptable_percentage_of_nulls(
     )
 
 
+@validator
 def is_in(dataset: str, df: pd.DataFrame, column: str, categorical_values: Set[str], match_all: bool = True) -&gt; ValidationResult:
     &#34;&#34;&#34;Checks if the column only has allowed categorical values as per the set provided.
 
@@ -157,6 +159,7 @@ def is_in(dataset: str, df: pd.DataFrame, column: str, categorical_values: Set[s
     return _validate_all_acceptable_categoricals_are_present(categorical_values, unique_values, column, dataset, df)
 
 
+@validator
 def _validate_all_acceptable_categoricals_are_present(acceptable_categoricals: Set[str], unique_values: Set[str], column: str, dataset: str, df: pd.DataFrame) -&gt; ValidationResult:
     if unique_values == acceptable_categoricals:
         validation_result = ValidationResult(valid=True, message=f&#34;All acceptable categorical values for {dataset}[{column}] are present&#34;, value=0)
@@ -176,6 +179,7 @@ def _validate_all_acceptable_categoricals_are_present(acceptable_categoricals: S
     return validation_result
 
 
+@validator
 def _validate_categoricals_are_a_subset_of_the_acceptable(acceptable_categoricals: Set[str], unique_values: Set[str], column: str, dataset: str, df: pd.DataFrame) -&gt; ValidationResult:
     if unique_values.issubset(acceptable_categoricals):
         return ValidationResult(valid=True, message=f&#34;Categorical values for {dataset}[{column}] are acceptable&#34;, value=0)
@@ -187,6 +191,7 @@ def _validate_categoricals_are_a_subset_of_the_acceptable(acceptable_categorical
     )
 
 
+@validator
 def is_greater_than(
     dataset: str,
     df: pd.DataFrame,
@@ -220,6 +225,7 @@ def is_greater_than(
     )
 
 
+@validator
 def is_greater_than_or_equal(
     dataset: str,
     df: pd.DataFrame,
@@ -253,6 +259,7 @@ def is_greater_than_or_equal(
     )
 
 
+@validator
 def is_lower_than(
     dataset: str,
     df: pd.DataFrame,
@@ -288,6 +295,7 @@ def is_lower_than(
     )
 
 
+@validator
 def is_lower_than_or_equal(
     dataset: str,
     df: pd.DataFrame,
@@ -323,6 +331,7 @@ def is_lower_than_or_equal(
     )
 
 
+@validator
 def is_between(
     dataset: str,
     df: pd.DataFrame,
@@ -375,7 +384,7 @@ def is_between(
 <h2 class="section-title" id="header-functions">Functions</h2>
 <dl>
 <dt id="dynamicio.validations.has_acceptable_percentage_of_nulls"><code class="name flex">
-<span>def <span class="ident">has_acceptable_percentage_of_nulls</span></span>(<span>dataset: str, df: pandas.core.frame.DataFrame, column: str, threshold: float) ‑> dynamicio.validations.ValidationResult</span>
+<span>def <span class="ident">has_acceptable_percentage_of_nulls</span></span>(<span>dataset: str, df: pandas.core.frame.DataFrame, column: str, threshold: float) ‑> <a title="dynamicio.validations.ValidationResult" href="#dynamicio.validations.ValidationResult">ValidationResult</a></span>
 </code></dt>
 <dd>
 <div class="desc"><p>Checks if a provided threshold of max nulls has been exceeded.</p>
@@ -399,7 +408,8 @@ def is_between(
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def has_acceptable_percentage_of_nulls(
+<pre><code class="python">@validator
+def has_acceptable_percentage_of_nulls(
     dataset: str,
     df: pd.DataFrame,
     column: str,
@@ -424,7 +434,7 @@ def is_between(
 
     no_of_nulls = df[column].isnull().sum()
     if len(df) == 0:
-        percentage_of_nulls = 0
+        percentage_of_nulls = 0.0
     else:
         percentage_of_nulls = no_of_nulls / len(df)
 
@@ -442,7 +452,7 @@ def is_between(
 </details>
 </dd>
 <dt id="dynamicio.validations.has_no_null_values"><code class="name flex">
-<span>def <span class="ident">has_no_null_values</span></span>(<span>dataset: str, df: pandas.core.frame.DataFrame, column: str) ‑> dynamicio.validations.ValidationResult</span>
+<span>def <span class="ident">has_no_null_values</span></span>(<span>dataset: str, df: pandas.core.frame.DataFrame, column: str) ‑> <a title="dynamicio.validations.ValidationResult" href="#dynamicio.validations.ValidationResult">ValidationResult</a></span>
 </code></dt>
 <dd>
 <div class="desc"><p>Checks if column has any null values (including NaN and NaT values).</p>
@@ -464,7 +474,8 @@ ValidationResult where <code>Validation.Result.valid</code> is a bool indicate t
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def has_no_null_values(dataset: str, df: pd.DataFrame, column: str) -&gt; ValidationResult:
+<pre><code class="python">@validator
+def has_no_null_values(dataset: str, df: pd.DataFrame, column: str) -&gt; ValidationResult:
     &#34;&#34;&#34;Checks if column has any null values (including NaN and NaT values).
 
     Args:
@@ -482,7 +493,7 @@ ValidationResult where <code>Validation.Result.valid</code> is a bool indicate t
 </details>
 </dd>
 <dt id="dynamicio.validations.has_unique_values"><code class="name flex">
-<span>def <span class="ident">has_unique_values</span></span>(<span>dataset: str, df: pandas.core.frame.DataFrame, column: str) ‑> dynamicio.validations.ValidationResult</span>
+<span>def <span class="ident">has_unique_values</span></span>(<span>dataset: str, df: pandas.core.frame.DataFrame, column: str) ‑> <a title="dynamicio.validations.ValidationResult" href="#dynamicio.validations.ValidationResult">ValidationResult</a></span>
 </code></dt>
 <dd>
 <div class="desc"><p>Checks if values in column are unique.</p>
@@ -504,7 +515,8 @@ ValidationResult where <code>Validation.Result.valid</code> is a bool indicate t
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def has_unique_values(dataset: str, df: pd.DataFrame, column: str) -&gt; ValidationResult:
+<pre><code class="python">@validator
+def has_unique_values(dataset: str, df: pd.DataFrame, column: str) -&gt; ValidationResult:
     &#34;&#34;&#34;Checks if values in column are unique.
 
     Args:
@@ -525,7 +537,7 @@ ValidationResult where <code>Validation.Result.valid</code> is a bool indicate t
 </details>
 </dd>
 <dt id="dynamicio.validations.is_between"><code class="name flex">
-<span>def <span class="ident">is_between</span></span>(<span>dataset: str, df: pandas.core.frame.DataFrame, column: str, lower: float, upper: float, include_left: bool = False, include_right: bool = False) ‑> dynamicio.validations.ValidationResult</span>
+<span>def <span class="ident">is_between</span></span>(<span>dataset: str, df: pandas.core.frame.DataFrame, column: str, lower: float, upper: float, include_left: bool = False, include_right: bool = False) ‑> <a title="dynamicio.validations.ValidationResult" href="#dynamicio.validations.ValidationResult">ValidationResult</a></span>
 </code></dt>
 <dd>
 <div class="desc"><p>Confirms column values are between a lower bound and an upper bound thresholds.</p>
@@ -555,7 +567,8 @@ invalid values</p></div>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def is_between(
+<pre><code class="python">@validator
+def is_between(
     dataset: str,
     df: pd.DataFrame,
     column: str,
@@ -600,7 +613,7 @@ invalid values</p></div>
 </details>
 </dd>
 <dt id="dynamicio.validations.is_greater_than"><code class="name flex">
-<span>def <span class="ident">is_greater_than</span></span>(<span>dataset: str, df: pandas.core.frame.DataFrame, column: str, threshold: float) ‑> dynamicio.validations.ValidationResult</span>
+<span>def <span class="ident">is_greater_than</span></span>(<span>dataset: str, df: pandas.core.frame.DataFrame, column: str, threshold: float) ‑> <a title="dynamicio.validations.ValidationResult" href="#dynamicio.validations.ValidationResult">ValidationResult</a></span>
 </code></dt>
 <dd>
 <div class="desc"><p>Confirms column values are above a given threshold.</p>
@@ -623,7 +636,8 @@ percentage of invalid values</p></div>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def is_greater_than(
+<pre><code class="python">@validator
+def is_greater_than(
     dataset: str,
     df: pd.DataFrame,
     column: str,
@@ -657,7 +671,7 @@ percentage of invalid values</p></div>
 </details>
 </dd>
 <dt id="dynamicio.validations.is_greater_than_or_equal"><code class="name flex">
-<span>def <span class="ident">is_greater_than_or_equal</span></span>(<span>dataset: str, df: pandas.core.frame.DataFrame, column: str, threshold: float) ‑> dynamicio.validations.ValidationResult</span>
+<span>def <span class="ident">is_greater_than_or_equal</span></span>(<span>dataset: str, df: pandas.core.frame.DataFrame, column: str, threshold: float) ‑> <a title="dynamicio.validations.ValidationResult" href="#dynamicio.validations.ValidationResult">ValidationResult</a></span>
 </code></dt>
 <dd>
 <div class="desc"><p>Confirms column values are above a given threshold.</p>
@@ -680,7 +694,8 @@ percentage of invalid values</p></div>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def is_greater_than_or_equal(
+<pre><code class="python">@validator
+def is_greater_than_or_equal(
     dataset: str,
     df: pd.DataFrame,
     column: str,
@@ -714,7 +729,7 @@ percentage of invalid values</p></div>
 </details>
 </dd>
 <dt id="dynamicio.validations.is_in"><code class="name flex">
-<span>def <span class="ident">is_in</span></span>(<span>dataset: str, df: pandas.core.frame.DataFrame, column: str, categorical_values: Set[str], match_all: bool = True) ‑> dynamicio.validations.ValidationResult</span>
+<span>def <span class="ident">is_in</span></span>(<span>dataset: str, df: pandas.core.frame.DataFrame, column: str, categorical_values: Set[str], match_all: bool = True) ‑> <a title="dynamicio.validations.ValidationResult" href="#dynamicio.validations.ValidationResult">ValidationResult</a></span>
 </code></dt>
 <dd>
 <div class="desc"><p>Checks if the column only has allowed categorical values as per the set provided.</p>
@@ -740,7 +755,8 @@ percentage of invalid values</p></div>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def is_in(dataset: str, df: pd.DataFrame, column: str, categorical_values: Set[str], match_all: bool = True) -&gt; ValidationResult:
+<pre><code class="python">@validator
+def is_in(dataset: str, df: pd.DataFrame, column: str, categorical_values: Set[str], match_all: bool = True) -&gt; ValidationResult:
     &#34;&#34;&#34;Checks if the column only has allowed categorical values as per the set provided.
 
     Note:
@@ -765,7 +781,7 @@ percentage of invalid values</p></div>
 </details>
 </dd>
 <dt id="dynamicio.validations.is_lower_than"><code class="name flex">
-<span>def <span class="ident">is_lower_than</span></span>(<span>dataset: str, df: pandas.core.frame.DataFrame, column: str, threshold: float) ‑> dynamicio.validations.ValidationResult</span>
+<span>def <span class="ident">is_lower_than</span></span>(<span>dataset: str, df: pandas.core.frame.DataFrame, column: str, threshold: float) ‑> <a title="dynamicio.validations.ValidationResult" href="#dynamicio.validations.ValidationResult">ValidationResult</a></span>
 </code></dt>
 <dd>
 <div class="desc"><p>Confirms column values are below a given threshold.</p>
@@ -789,7 +805,8 @@ invalid values</p></div>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def is_lower_than(
+<pre><code class="python">@validator
+def is_lower_than(
     dataset: str,
     df: pd.DataFrame,
     column: str,
@@ -825,7 +842,7 @@ invalid values</p></div>
 </details>
 </dd>
 <dt id="dynamicio.validations.is_lower_than_or_equal"><code class="name flex">
-<span>def <span class="ident">is_lower_than_or_equal</span></span>(<span>dataset: str, df: pandas.core.frame.DataFrame, column: str, threshold: float) ‑> dynamicio.validations.ValidationResult</span>
+<span>def <span class="ident">is_lower_than_or_equal</span></span>(<span>dataset: str, df: pandas.core.frame.DataFrame, column: str, threshold: float) ‑> <a title="dynamicio.validations.ValidationResult" href="#dynamicio.validations.ValidationResult">ValidationResult</a></span>
 </code></dt>
 <dd>
 <div class="desc"><p>Confirms column values are below a given threshold.</p>
@@ -849,7 +866,8 @@ invalid values</p></div>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def is_lower_than_or_equal(
+<pre><code class="python">@validator
+def is_lower_than_or_equal(
     dataset: str,
     df: pd.DataFrame,
     column: str,
@@ -884,9 +902,66 @@ invalid values</p></div>
     )</code></pre>
 </details>
 </dd>
+<dt id="dynamicio.validations.validator"><code class="name flex">
+<span>def <span class="ident">validator</span></span>(<span>func: Callable)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>A decorator to add the function to the ALL_VALIDATORS dict.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def validator(func: Callable):
+    &#34;&#34;&#34;A decorator to add the function to the ALL_VALIDATORS dict.&#34;&#34;&#34;
+    name = func.__name__
+    assert name not in ALL_VALIDATORS
+    ALL_VALIDATORS[name] = func
+    return func</code></pre>
+</details>
+</dd>
 </dl>
 </section>
 <section>
+<h2 class="section-title" id="header-classes">Classes</h2>
+<dl>
+<dt id="dynamicio.validations.ValidationResult"><code class="flex name class">
+<span>class <span class="ident">ValidationResult</span></span>
+<span>(</span><span>valid: bool, message: str, value: float)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>A NamedTuple for capturing different outputs after a validation.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class ValidationResult(NamedTuple):
+    &#34;&#34;&#34;A NamedTuple for capturing different outputs after a validation.&#34;&#34;&#34;
+
+    valid: bool
+    message: str
+    value: float</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>builtins.tuple</li>
+</ul>
+<h3>Instance variables</h3>
+<dl>
+<dt id="dynamicio.validations.ValidationResult.message"><code class="name">var <span class="ident">message</span> : str</code></dt>
+<dd>
+<div class="desc"><p>Alias for field number 1</p></div>
+</dd>
+<dt id="dynamicio.validations.ValidationResult.valid"><code class="name">var <span class="ident">valid</span> : bool</code></dt>
+<dd>
+<div class="desc"><p>Alias for field number 0</p></div>
+</dd>
+<dt id="dynamicio.validations.ValidationResult.value"><code class="name">var <span class="ident">value</span> : float</code></dt>
+<dd>
+<div class="desc"><p>Alias for field number 2</p></div>
+</dd>
+</dl>
+</dd>
+</dl>
 </section>
 </article>
 <nav id="sidebar">
@@ -911,6 +986,19 @@ invalid values</p></div>
 <li><code><a title="dynamicio.validations.is_in" href="#dynamicio.validations.is_in">is_in</a></code></li>
 <li><code><a title="dynamicio.validations.is_lower_than" href="#dynamicio.validations.is_lower_than">is_lower_than</a></code></li>
 <li><code><a title="dynamicio.validations.is_lower_than_or_equal" href="#dynamicio.validations.is_lower_than_or_equal">is_lower_than_or_equal</a></code></li>
+<li><code><a title="dynamicio.validations.validator" href="#dynamicio.validations.validator">validator</a></code></li>
+</ul>
+</li>
+<li><h3><a href="#header-classes">Classes</a></h3>
+<ul>
+<li>
+<h4><code><a title="dynamicio.validations.ValidationResult" href="#dynamicio.validations.ValidationResult">ValidationResult</a></code></h4>
+<ul class="">
+<li><code><a title="dynamicio.validations.ValidationResult.message" href="#dynamicio.validations.ValidationResult.message">message</a></code></li>
+<li><code><a title="dynamicio.validations.ValidationResult.valid" href="#dynamicio.validations.ValidationResult.valid">valid</a></code></li>
+<li><code><a title="dynamicio.validations.ValidationResult.value" href="#dynamicio.validations.ValidationResult.value">value</a></code></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>
