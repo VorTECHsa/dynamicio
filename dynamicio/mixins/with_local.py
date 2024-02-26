@@ -230,7 +230,30 @@ class WithLocal:
 
 
 class WithLocalBatch(WithLocal):
-    """Responsible for batch reading local files."""
+    """Responsible for batch reading local files.
+
+    Examples:
+        >>> READ_FROM_BATCH_LOCAL_PARQUET:
+        >>>   LOCAL:
+        >>>     type: "local_batch"
+        >>>     local:
+        >>>       path_prefix: "[[ TEST_RESOURCES ]]/data/input/batch/parquet/"
+        >>>       file_type: "parquet"
+        >>>
+        >>> READ_FROM_BATCH_LOCAL_TEMPLATED_PARQUET:
+        >>>   LOCAL:
+        >>>     type: "local_batch"
+        >>>     local:
+        >>>       path_prefix: "[[ TEST_RESOURCES ]]/data/input/{templated}/parquet/"
+        >>>       file_type: "parquet"
+        >>>
+        >>> READ_DYNAMIC_FROM_BATCH_LOCAL_PARQUET:
+        >>>   LOCAL:
+        >>>     type: "local_batch"
+        >>>     local:
+        >>>       dynamic_file_path: "[[ TEST_RESOURCES ]]/data/input/batch/parquet/dynamic/**/part_{runner_id}.parquet"
+        >>>       file_type: "parquet"
+    """
 
     sources_config: LocalBatchDataEnvironment  # type: ignore
 

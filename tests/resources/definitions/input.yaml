@@ -198,7 +198,8 @@ READ_FROM_BATCH_LOCAL_PARQUET:
   CLOUD:
     type: "s3_path_prefix"
     s3:
-      bucket: "[[ MOCK_BUCKET ]]/data/input/{file_name_to_replace}.parquet"
+      bucket: "[[ MOCK_BUCKET ]]"
+      path_prefix: "/data/input/"
       file_type: "parquet"
 
 READ_FROM_BATCH_LOCAL_TEMPLATED_PARQUET:
@@ -210,7 +211,8 @@ READ_FROM_BATCH_LOCAL_TEMPLATED_PARQUET:
   CLOUD:
     type: "s3_path_prefix"
     s3:
-      bucket: "[[ MOCK_BUCKET ]]/data/input/{file_name_to_replace}.parquet"
+      bucket: "[[ MOCK_BUCKET ]]"
+      path_prefix: "/data/{dir_name_to_replace}/"
       file_type: "parquet"
 
 READ_DYNAMIC_FROM_BATCH_LOCAL_PARQUET:
@@ -229,7 +231,8 @@ READ_FROM_BATCH_LOCAL_NOT_JUST_PARQUET:
   CLOUD:
     type: "s3_path_prefix"
     s3:
-      bucket: "[[ MOCK_BUCKET ]]/data/input/{file_name_to_replace}.parquet"
+      bucket: "[[ MOCK_BUCKET ]]"
+      path_prefix: "/data/{dir_name_to_replace}/"
       file_type: "parquet"
 
 READ_FROM_BATCH_LOCAL_HDF:
@@ -241,7 +244,8 @@ READ_FROM_BATCH_LOCAL_HDF:
   CLOUD:
     type: "s3_path_prefix"
     s3:
-      bucket: "[[ MOCK_BUCKET ]]/data/input/{file_name_to_replace}.hdf"
+      bucket: "[[ MOCK_BUCKET ]]"
+      path_prefix: "/data/input/"
       file_type: "hdf"
 
 S3_PARQUET_WITH_BOOL:
