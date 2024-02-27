@@ -67,57 +67,37 @@ READ_FROM_S3_PARQUET:
       file_type: "parquet"
 
 READ_FROM_S3_PATH_PREFIX_CSV:
-  LOCAL:
-    type: "local"
-    local:
-      file_path: "[[ TEST_RESOURCES ]]/data/input/some_csv_to_read.csv"
-      file_type: "csv"
   CLOUD:
     type: "s3_path_prefix"
     s3:
       bucket: "[[ MOCK_BUCKET ]]"
-      path_prefix: "[[ MOCK_KEY ]]"
+      path_prefix: "[[ MOCK_PREFIX ]]"
       file_type: "csv"
   schema:
     file_path: "[[ TEST_RESOURCES ]]/schemas/read_from_s3_csv.yaml"
 
 READ_FROM_S3_PATH_PREFIX_PARQUET:
-  LOCAL:
-    type: "local"
-    local:
-      file_path: "[[ TEST_RESOURCES ]]/data/input/some_parquet_to_read.parquet"
-      file_type: "parquet"
   CLOUD:
     type: "s3_path_prefix"
     s3:
       bucket: "[[ MOCK_BUCKET ]]"
-      path_prefix: "[[ MOCK_KEY ]]"
+      path_prefix: "[[ MOCK_PREFIX ]]"
       file_type: "parquet"
 
 READ_FROM_S3_PATH_PREFIX_HDF:
-  LOCAL:
-    type: "local"
-    local:
-      file_path: "[[ TEST_RESOURCES ]]/data/input/some_hdf_to_read.h5"
-      file_type: "hdf"
   CLOUD:
     type: "s3_path_prefix"
     s3:
       bucket: "[[ MOCK_BUCKET ]]"
-      path_prefix: "[[ MOCK_KEY ]]"
+      path_prefix: "[[ MOCK_PREFIX ]]"
       file_type: "hdf"
 
 READ_FROM_S3_PATH_PREFIX_JSON:
-  LOCAL:
-    type: "local"
-    local:
-      file_path: "[[ TEST_RESOURCES ]]/data/input/some_json_to_read.json"
-      file_type: "hdf"
   CLOUD:
     type: "s3_path_prefix"
     s3:
       bucket: "[[ MOCK_BUCKET ]]"
-      path_prefix: "[[ MOCK_KEY ]]"
+      path_prefix: "[[ MOCK_PREFIX ]]"
       file_type: "json"
 
 READ_FROM_POSTGRES:
@@ -221,6 +201,12 @@ READ_DYNAMIC_FROM_BATCH_LOCAL_PARQUET:
     local:
       dynamic_file_path: "[[ TEST_RESOURCES ]]/data/input/batch/parquet/dynamic/**/part_{runner_id}.parquet"
       file_type: "parquet"
+  CLOUD:
+    type: "s3_path_prefix"
+    s3:
+      bucket: "[[ MOCK_BUCKET ]]"
+      dynamic_file_path: "/data/input/batch/parquet/dynamic/**/part_{runner_id}.parquet"
+      file_type: "parquet"
 
 READ_FROM_BATCH_LOCAL_NOT_JUST_PARQUET:
   LOCAL:
@@ -305,5 +291,5 @@ WRITE_TO_S3_PATH_PREFIX_PARQUET:
     type: "s3_path_prefix"
     s3:
       bucket: "[[ MOCK_BUCKET ]]"
-      path_prefix: "[[ MOCK_KEY ]]"
+      path_prefix: "[[ MOCK_PREFIX ]]"
       file_type: "parquet"

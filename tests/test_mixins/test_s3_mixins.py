@@ -537,7 +537,9 @@ class TestS3PathPrefixIO:
             WriteS3ParquetIO(source_config=s3_parquet_cloud_config, partition_cols="col_2").write(input_df)
 
         # Then
-        mocked__awscli_runner.assert_called_with("s3", "sync", "temp", "s3://mock-bucket/mock-key", "--acl", "bucket-owner-full-control", "--only-show-errors", "--exact-timestamps")
+        mocked__awscli_runner.assert_called_with(
+            "s3", "sync", "temp", "s3://mock-bucket/data/some_dir/", "--acl", "bucket-owner-full-control", "--only-show-errors", "--exact-timestamps"
+        )
 
     @pytest.mark.unit
     # pylint: disable=unused-argument
@@ -556,7 +558,9 @@ class TestS3PathPrefixIO:
             ReadS3HdfIO(source_config=s3_hdf_cloud_config).read()
 
         # Then
-        mocked__awscli_runner.assert_called_with("s3", "sync", "s3://mock-bucket/mock-key", "temp", "--acl", "bucket-owner-full-control", "--only-show-errors", "--exact-timestamps")
+        mocked__awscli_runner.assert_called_with(
+            "s3", "sync", "s3://mock-bucket/data/some_dir/", "temp", "--acl", "bucket-owner-full-control", "--only-show-errors", "--exact-timestamps"
+        )
 
     @pytest.mark.unit
     # pylint: disable=unused-argument

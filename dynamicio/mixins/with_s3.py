@@ -159,18 +159,44 @@ class WithS3PathPrefix(with_local.WithLocal):
             )
 
     def _read_from_s3_path_prefix(self) -> pd.DataFrame:
-        """Read all files under a path prefix from an S3 bucket as a `DataFrame`.
+        """Read files from an S3 bucket based on a path_prefix/dynamic_file_path and return a concatenated DataFrame.
 
-        The configuration object is expected to have the following keys:
-            - `bucket`
-            - `path_prefix`
-            - `file_type`
+        This function supports two types of file paths from the S3 configuration:
+        1. `path_prefix`: Used to specify a static path prefix in the S3 bucket for downloading files.
+        2. `dynamic_file_path`: Used for more dynamic path specifications, allowing pattern matching for selective file
+        downloads.
 
-        To actually read the file, a method is dynamically invoked by name, using
-        "_read_{file_type}_path_prefix".
+        The `dynamic_file_path` supports pattern matching and variables (e.g., `part_{runner_id}.parquet`). This
+        approach  enables the downloading of files that specifically match the given pattern, optimizing I/O for
+        scenarios involving large datasets or multiple runners.
+
+        The method dynamically invokes appropriate file reading functions based on the `file_type` specified in the
+        configuration, supporting formats such as 'parquet', 'csv', 'hdf', and 'json'.
+
+        The function also includes an option to minimize disk space usage (`no_disk_space`). This is particularly
+        useful when needing to read a subset of columns from large files, thereby reducing the overall disk footprint.
+
+        Parameters:
+        - None
 
         Returns:
-            DataFrame
+        - DataFrame: A pandas DataFrame concatenated from the read files.
+
+        Raises:
+        - ValueError: If the `file_type` specified in the configuration is not supported.
+
+        Configuration Keys:
+        - `bucket` (str): Name of the S3 bucket.
+        - `path_prefix` (str, optional): Static path prefix in the S3 bucket for file downloads.
+        - `dynamic_file_path` (str, optional): Dynamic file path with pattern matching for selective downloading of files.
+        - `file_type` (str): Type of the file to read ('parquet', 'csv', 'hdf', 'json').
+
+        Notes:
+        - Only one of `path_prefix` and `dynamic_file_path` can be provided.
+        - The function intelligently handles the download of files by synchronizing only those that match the specified
+        pattern in `dynamic_file_path`.
+        - e.g. a `runner_id` or any other variable used in `dynamic_file_path` for pattern matching should be specified
+        in the `options` of the configuration.
         """
         s3_config = self.sources_config.s3
         file_type = s3_config.file_type
@@ -178,16 +204,21 @@ class WithS3PathPrefix(with_local.WithLocal):
             raise ValueError(f"File type not supported: {file_type}")
 
         bucket = s3_config.bucket
+        dynamic_file_path = s3_config.dynamic_file_path
         path_prefix = s3_config.path_prefix
-        full_path_prefix = utils.resolve_template(f"s3://{bucket}/{path_prefix}", self.options)
+
+        if dynamic_file_path:
+            full_path = utils.resolve_template(f"s3://{bucket}/{dynamic_file_path}", self.options)
+        else:
+            full_path = utils.resolve_template(f"s3://{bucket}/{path_prefix}", self.options)
 
         # The `no_disk_space` option should be used only when reading a subset of columns from S3
-        if self.options.pop("no_disk_space", False):
+        if self.options.pop("no_disk_space", False) and path_prefix:
             if file_type == "parquet":
-                return self._read_parquet_file(full_path_prefix, self.schema, **self.options)
+                return self._read_parquet_file(full_path, self.schema, **self.options)
             if file_type == "hdf":
                 dfs: List[DataFrame] = []
-                for fobj in self._iter_s3_files(full_path_prefix, file_ext=".h5", max_memory_use=1024**3):  # 1 gib
+                for fobj in self._iter_s3_files(full_path, file_ext=".h5", max_memory_use=1024**3):  # 1 gib
                     dfs.append(HdfIO().load(fobj))
                 df = pd.concat(dfs, ignore_index=True)
                 columns = [column for column in df.columns.to_list() if column in self.schema.columns.keys()]
@@ -197,16 +228,33 @@ class WithS3PathPrefix(with_local.WithLocal):
             # aws-cli is shown to be up to 6 times faster when downloading the complete dataset from S3 than using the boto3
             # client or pandas directly. This is because aws-cli uses the parallel downloader, which is much faster than the
             # boto3 client.
-            awscli_runner(
-                "s3",
-                "sync",
-                full_path_prefix,
-                temp_dir,
-                "--acl",
-                "bucket-owner-full-control",
-                "--only-show-errors",
-                "--exact-timestamps",
-            )
+            if dynamic_file_path:
+                prefix, suffix = full_path.rsplit("/**/", 1)
+                awscli_runner(
+                    "s3",
+                    "sync",
+                    prefix,
+                    temp_dir,
+                    "--exclude",
+                    "*",
+                    "--include",
+                    f"**/{suffix}",
+                    "--acl",
+                    "bucket-owner-full-control",
+                    "--only-show-errors",
+                    "--exact-timestamps",
+                )
+            else:
+                awscli_runner(
+                    "s3",
+                    "sync",
+                    full_path,
+                    temp_dir,
+                    "--acl",
+                    "bucket-owner-full-control",
+                    "--only-show-errors",
+                    "--exact-timestamps",
+                )
 
             dfs: List[DataFrame] = []
             for file in os.listdir(temp_dir):

@@ -7,6 +7,7 @@ TEST_RESOURCES = os.path.join(os.path.dirname(os.path.realpath(__file__)), "reso
 # Dynamic Vars
 MOCK_BUCKET = "mock-bucket"
 MOCK_KEY = "mock-key"
+MOCK_PREFIX = "data/some_dir/"
 KAFKA_SERVER = "mock-kafka-server"
 KAFKA_TOPIC = "mock-kafka-topic"
 DB_HOST = "127.0.0.1"

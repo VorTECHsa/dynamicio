@@ -139,11 +139,24 @@ class LocalBatchDataSubSection(BaseModel):
 
     @model_validator(mode="before")
     def check_path_fields(cls, values):
-        """Check that only one of path_prefix or dynamic_file_path is provided."""
-        if not values.get("path_prefix") and not values.get("dynamic_file_path"):
-            raise ValueError("Either path_prefix or dynamic_file_path must be provided")
-        if values.get("path_prefix") and values.get("dynamic_file_path"):
+        """Check that only one of path_prefix or dynamic_file_path is provided & they meet format requirements."""
+        path_prefix = values.get("path_prefix")
+        dynamic_file_path = values.get("dynamic_file_path")
+
+        # Check for mutual exclusivity
+        if path_prefix and dynamic_file_path:
             raise ValueError("Only one of path_prefix or dynamic_file_path should be provided")
+
+        # Check for path_prefix format
+        if path_prefix and not path_prefix.endswith("/"):
+            raise ValueError("path_prefix must end with '/'")
+
+        # Check for dynamic_file_path format
+        if dynamic_file_path:
+            allowed_extensions = [".parquet", ".h5", ".json", ".csv"]
+            if not any(dynamic_file_path.endswith(ext) for ext in allowed_extensions):
+                raise ValueError("`dynamic_file_path` must end with one of: .parquet, .h5, .json, .csv")
+
         return values
 
 
@@ -170,14 +183,42 @@ class S3DataEnvironment(IOEnvironment):
 class S3PathPrefixSubSection(BaseModel):
     """Config section for s3 prefix data source (multiple s3 objects)."""
 
-    path_prefix: str
+    path_prefix: Optional[str] = None
+    dynamic_file_path: Optional[str] = None
     file_type: FileType
     bucket: str
 
+    @model_validator(mode="before")
+    def check_path_fields(cls, values):
+        """Check that only one of path_prefix or dynamic_file_path is provided & they meet format requirements."""
+        path_prefix = values.get("path_prefix")
+        dynamic_file_path = values.get("dynamic_file_path")
+
+        # Check for mutual exclusivity
+        if path_prefix and dynamic_file_path:
+            raise ValueError("Only one of path_prefix or dynamic_file_path should be provided")
+
+        # Check for at least one being provided
+        if not path_prefix and not dynamic_file_path:
+            raise ValueError("Either path_prefix or dynamic_file_path must be provided")
+
+        # Check for path_prefix format
+        if path_prefix and not path_prefix.endswith("/"):
+            raise ValueError("path_prefix must end with '/'")
+
+        # Check for dynamic_file_path format
+        if dynamic_file_path:
+            allowed_extensions = [".parquet", ".h5", ".json", ".csv"]
+            if not any(dynamic_file_path.endswith(ext) for ext in allowed_extensions):
+                raise ValueError("`dynamic_file_path` must end with one of: .parquet, .h5, .json, .csv")
+
+        return values
+
     @pydantic.root_validator(pre=True)
     def support_legacy_config_path_prefix(cls, values):
-        """This validator implements support for legacy config format where the bucket & path_prefix path could've been passed as a single param in 'bucket' field.
+        """This validator implements support for legacy config format.
 
+        I addresses a case where the bucket & path_prefix path could've been passed as a single param in 'bucket' field.
         E.g.
             bucket: "[[ MOCK_BUCKET ]]/data/input/{file_name_to_replace}.hdf"
         """
