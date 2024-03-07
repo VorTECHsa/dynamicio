@@ -9,7 +9,7 @@ from typing import Any, Dict, Generator, MutableMapping, Union
 
 import pandas as pd  # type: ignore
 from magic_logger import logger
-from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, Float, Integer, String, create_engine  # type: ignore
+from sqlalchemy import BigInteger, Boolean, Column, create_engine, Date, DateTime, Float, Integer, String  # type: ignore
 from sqlalchemy.ext.declarative import declarative_base  # type: ignore
 from sqlalchemy.orm import Query  # type: ignore
 from sqlalchemy.orm.decl_api import DeclarativeMeta  # type: ignore
