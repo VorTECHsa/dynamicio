@@ -9,49 +9,50 @@ import tempfile
 import urllib.parse
 import uuid
 from contextlib import contextmanager
-from typing import Generator, IO, Optional
+from typing import IO, Generator, List, Optional, Union  # noqa: I101
 
 import boto3  # type: ignore
-import pandas as pd  # type: ignore
+import pandas as pd
 import s3transfer.futures  # type: ignore
 import tables  # type: ignore
 from awscli.clidriver import create_clidriver  # type: ignore
 from magic_logger import logger
+from pandas import DataFrame, Series
 
 from dynamicio.config.pydantic import DataframeSchema, S3DataEnvironment, S3PathPrefixEnvironment
-from dynamicio.mixins import (
-    utils,
-    with_local,
-)
+from dynamicio.mixins import utils, with_local
 
 
 class InMemStore(pd.io.pytables.HDFStore):
-    """A subclass of pandas HDFStore that does not manage the pytables File object"""
+    """A subclass of pandas HDFStore that does not manage the pytables File object."""
 
     _in_mem_table = None
 
     def __init__(self, path: str, table: tables.File, mode: str = "r"):
+        """Create a new HDFStore object."""
         self._in_mem_table = table
         super().__init__(path=path, mode=mode)
 
     def open(self, *_args, **_kwargs):
+        """Open the in-memory table."""
         pd.io.pytables._tables()
         self._handle = self._in_mem_table
 
     def close(self, *_args, **_kwargs):
-        pass
+        """Close the in-memory table."""
 
     @property
     def is_open(self):
+        """Check if the in-memory table is open."""
         return self._handle is not None
 
 
 class HdfIO:
-    """Class providing stream support for HDF tables"""
+    """Class providing stream support for HDF tables."""
 
     @contextmanager
-    def create_file(self, label: str, mode: str, data: bytes = None) -> Generator[tables.File, None, None]:
-        """Create an in-memory pytables table"""
+    def create_file(self, label: str, mode: str, data: Optional[bytes] = None) -> Generator[tables.File, None, None]:
+        """Create an in-memory pytables table."""
         extra_kw = {}
         if data:
             extra_kw["driver_core_image"] = data
@@ -61,13 +62,13 @@ class HdfIO:
         finally:
             file_handle.close()
 
-    def load(self, fobj: IO[bytes], label: str = "unknown_file.h5") -> pd.DataFrame:
-        """Load the dataframe from an file-like object"""
+    def load(self, fobj: IO[bytes], label: str = "unknown_file.h5") -> Union[DataFrame, Series]:
+        """Load the dataframe from an file-like object."""
         with self.create_file(label, mode="r", data=fobj.read()) as file_handle:
             return pd.read_hdf(InMemStore(label, file_handle))
 
-    def save(self, df: pd.DataFrame, fobj: IO[bytes], label: str = "unknown_file.h5", options: Optional[dict] = None):
-        """Load the dataframe to a file-like object"""
+    def save(self, df: DataFrame, fobj: IO[bytes], label: str = "unknown_file.h5", options: Optional[dict] = None):
+        """Load the dataframe to a file-like object."""
         if not options:
             options = {}
         with self.create_file(label, mode="w", data=fobj.read()) as file_handle:
@@ -98,7 +99,7 @@ def awscli_runner(*cmd: str):
 
 @dataclasses.dataclass
 class S3TransferHandle:
-    """A dataclass used to track an ongoing data download from the s3"""
+    """A dataclass used to track an ongoing data download from the s3."""
 
     s3_object: object  # boto3.resource('s3').ObjectSummary
     fobj: IO[bytes]  # file-like object the data is being downloaded to
@@ -158,18 +159,44 @@ class WithS3PathPrefix(with_local.WithLocal):
             )
 
     def _read_from_s3_path_prefix(self) -> pd.DataFrame:
-        """Read all files under a path prefix from an S3 bucket as a `DataFrame`.
+        """Read files from an S3 bucket based on a path_prefix/dynamic_file_path and return a concatenated DataFrame.
 
-        The configuration object is expected to have the following keys:
-            - `bucket`
-            - `path_prefix`
-            - `file_type`
+        This function supports two types of file paths from the S3 configuration:
+        1. `path_prefix`: Used to specify a static path prefix in the S3 bucket for downloading files.
+        2. `dynamic_file_path`: Used for more dynamic path specifications, allowing pattern matching for selective file
+        downloads.
 
-        To actually read the file, a method is dynamically invoked by name, using
-        "_read_{file_type}_path_prefix".
+        The `dynamic_file_path` supports pattern matching and variables (e.g., `part_{runner_id}.parquet`). This
+        approach  enables the downloading of files that specifically match the given pattern, optimizing I/O for
+        scenarios involving large datasets or multiple runners.
+
+        The method dynamically invokes appropriate file reading functions based on the `file_type` specified in the
+        configuration, supporting formats such as 'parquet', 'csv', 'hdf', and 'json'.
+
+        The function also includes an option to minimize disk space usage (`no_disk_space`). This is particularly
+        useful when needing to read a subset of columns from large files, thereby reducing the overall disk footprint.
+
+        Parameters:
+        - None
 
         Returns:
-            DataFrame
+        - DataFrame: A pandas DataFrame concatenated from the read files.
+
+        Raises:
+        - ValueError: If the `file_type` specified in the configuration is not supported.
+
+        Configuration Keys:
+        - `bucket` (str): Name of the S3 bucket.
+        - `path_prefix` (str, optional): Static path prefix in the S3 bucket for file downloads.
+        - `dynamic_file_path` (str, optional): Dynamic file path with pattern matching for selective downloading of files.
+        - `file_type` (str): Type of the file to read ('parquet', 'csv', 'hdf', 'json').
+
+        Notes:
+        - Only one of `path_prefix` and `dynamic_file_path` can be provided.
+        - The function intelligently handles the download of files by synchronizing only those that match the specified
+        pattern in `dynamic_file_path`.
+        - e.g. a `runner_id` or any other variable used in `dynamic_file_path` for pattern matching should be specified
+        in the `options` of the configuration.
         """
         s3_config = self.sources_config.s3
         file_type = s3_config.file_type
@@ -177,20 +204,21 @@ class WithS3PathPrefix(with_local.WithLocal):
             raise ValueError(f"File type not supported: {file_type}")
 
         bucket = s3_config.bucket
+        dynamic_file_path = s3_config.dynamic_file_path
         path_prefix = s3_config.path_prefix
-        full_path_prefix = utils.resolve_template(f"s3://{bucket}/{path_prefix}", self.options)
+
+        if dynamic_file_path:
+            full_path = utils.resolve_template(f"s3://{bucket}/{dynamic_file_path}", self.options)
+        else:
+            full_path = utils.resolve_template(f"s3://{bucket}/{path_prefix}", self.options)
 
         # The `no_disk_space` option should be used only when reading a subset of columns from S3
-        if self.options.pop("no_disk_space", False):
+        if self.options.pop("no_disk_space", False) and path_prefix:
             if file_type == "parquet":
-                return self._read_parquet_file(full_path_prefix, self.schema, **self.options)
+                return self._read_parquet_file(full_path, self.schema, **self.options)
             if file_type == "hdf":
-                dfs = []
-                for fobj in self._iter_s3_files(
-                    full_path_prefix,
-                    file_ext=".h5",
-                    max_memory_use=1024**3,  # 1 gib
-                ):
+                dfs: List[DataFrame] = []
+                for fobj in self._iter_s3_files(full_path, file_ext=".h5", max_memory_use=1024**3):  # 1 gib
                     dfs.append(HdfIO().load(fobj))
                 df = pd.concat(dfs, ignore_index=True)
                 columns = [column for column in df.columns.to_list() if column in self.schema.columns.keys()]
@@ -200,18 +228,35 @@ class WithS3PathPrefix(with_local.WithLocal):
             # aws-cli is shown to be up to 6 times faster when downloading the complete dataset from S3 than using the boto3
             # client or pandas directly. This is because aws-cli uses the parallel downloader, which is much faster than the
             # boto3 client.
-            awscli_runner(
-                "s3",
-                "sync",
-                full_path_prefix,
-                temp_dir,
-                "--acl",
-                "bucket-owner-full-control",
-                "--only-show-errors",
-                "--exact-timestamps",
-            )
+            if dynamic_file_path:
+                prefix, suffix = full_path.rsplit("/**/", 1)
+                awscli_runner(
+                    "s3",
+                    "sync",
+                    prefix,
+                    temp_dir,
+                    "--exclude",
+                    "*",
+                    "--include",
+                    f"**/{suffix}",
+                    "--acl",
+                    "bucket-owner-full-control",
+                    "--only-show-errors",
+                    "--exact-timestamps",
+                )
+            else:
+                awscli_runner(
+                    "s3",
+                    "sync",
+                    full_path,
+                    temp_dir,
+                    "--acl",
+                    "bucket-owner-full-control",
+                    "--only-show-errors",
+                    "--exact-timestamps",
+                )
 
-            dfs = []
+            dfs: List[DataFrame] = []
             for file in os.listdir(temp_dir):
                 df = getattr(self, f"_read_{file_type}_file")(os.path.join(temp_dir, file), self.schema, **self.options)  # type: ignore
                 if len(df) > 0:
@@ -222,7 +267,7 @@ class WithS3PathPrefix(with_local.WithLocal):
     def _iter_s3_files(self, s3_prefix: str, file_ext: Optional[str] = None, max_memory_use: int = -1) -> Generator[IO[bytes], None, None]:  # pylint: disable=too-many-locals
         """Download sways of S3 objects.
 
-        Parameters:
+        Args:
             s3_prefix: s3 url to fetch objects with
             file_ext: extension of s3 objects to allow through
             max_memory_use: The approximate number of bytes to allocate on each yield of Generator

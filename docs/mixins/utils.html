@@ -32,9 +32,10 @@
 
 import inspect
 import string
+from contextlib import contextmanager
 from functools import wraps
 from types import FunctionType, MethodType
-from typing import Any, Collection, Iterable, Mapping, MutableMapping, Union
+from typing import Any, Collection, Iterable, Mapping, MutableMapping, Optional, Union
 
 from magic_logger import logger
 
@@ -147,7 +148,26 @@ def resolve_template(path: str, options: MutableMapping[str, Any]) -&gt; str:  #
     for field in fields:
         options.pop(field)
 
-    return path</code></pre>
+    return path
+
+
+@contextmanager
+def pickle_protocol(protocol: Optional[int]):
+    &#34;&#34;&#34;Downgrade to the provided pickle protocol within the context manager.
+
+    Args:
+        protocol: The number of the protocol HIGHEST_PROTOCOL to downgrade to. Defaults to 4, which covers python 3.4 and higher.
+    &#34;&#34;&#34;
+    import pickle  # pylint: disable=import-outside-toplevel
+
+    previous = pickle.HIGHEST_PROTOCOL
+    try:
+        pickle.HIGHEST_PROTOCOL = 4
+        if protocol:
+            pickle.HIGHEST_PROTOCOL = protocol
+        yield
+    finally:
+        pickle.HIGHEST_PROTOCOL = previous</code></pre>
 </details>
 </section>
 <section>
@@ -291,6 +311,39 @@ def resolve_template(path: str, options: MutableMapping[str, Any]) -&gt; str:  #
     return field_names</code></pre>
 </details>
 </dd>
+<dt id="dynamicio.mixins.utils.pickle_protocol"><code class="name flex">
+<span>def <span class="ident">pickle_protocol</span></span>(<span>protocol: Optional[int])</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Downgrade to the provided pickle protocol within the context manager.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>protocol</code></strong></dt>
+<dd>The number of the protocol HIGHEST_PROTOCOL to downgrade to. Defaults to 4, which covers python 3.4 and higher.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@contextmanager
+def pickle_protocol(protocol: Optional[int]):
+    &#34;&#34;&#34;Downgrade to the provided pickle protocol within the context manager.
+
+    Args:
+        protocol: The number of the protocol HIGHEST_PROTOCOL to downgrade to. Defaults to 4, which covers python 3.4 and higher.
+    &#34;&#34;&#34;
+    import pickle  # pylint: disable=import-outside-toplevel
+
+    previous = pickle.HIGHEST_PROTOCOL
+    try:
+        pickle.HIGHEST_PROTOCOL = 4
+        if protocol:
+            pickle.HIGHEST_PROTOCOL = protocol
+        yield
+    finally:
+        pickle.HIGHEST_PROTOCOL = previous</code></pre>
+</details>
+</dd>
 <dt id="dynamicio.mixins.utils.resolve_template"><code class="name flex">
 <span>def <span class="ident">resolve_template</span></span>(<span>path: str, options: MutableMapping[str, Any]) ‑> str</span>
 </code></dt>
@@ -375,6 +428,7 @@ def resolve_template(path: str, options: MutableMapping[str, Any]) -&gt; str:  #
 <li><code><a title="dynamicio.mixins.utils.allow_options" href="#dynamicio.mixins.utils.allow_options">allow_options</a></code></li>
 <li><code><a title="dynamicio.mixins.utils.args_of" href="#dynamicio.mixins.utils.args_of">args_of</a></code></li>
 <li><code><a title="dynamicio.mixins.utils.get_string_template_field_names" href="#dynamicio.mixins.utils.get_string_template_field_names">get_string_template_field_names</a></code></li>
+<li><code><a title="dynamicio.mixins.utils.pickle_protocol" href="#dynamicio.mixins.utils.pickle_protocol">pickle_protocol</a></code></li>
 <li><code><a title="dynamicio.mixins.utils.resolve_template" href="#dynamicio.mixins.utils.resolve_template">resolve_template</a></code></li>
 </ul>
 </li>

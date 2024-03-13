@@ -82,6 +82,7 @@ def generate_schema_for(dataset: str) -&gt; Mapping:
         InvalidDatasetTypeError: If the dataset type is not supported by dynamicio.
     &#34;&#34;&#34;
     dataset_name, file_type = os.path.splitext(os.path.basename(dataset))
+
     if file_type == &#34;.parquet&#34;:
         df = pd.read_parquet(dataset)
     elif file_type == &#34;.csv&#34;:
@@ -116,13 +117,15 @@ def main(args: argparse.Namespace):
             except InvalidDatasetTypeError as exception:
                 print(f&#34;Skipping {exception.message}! You may want to remove this file from the datasets directory&#34;)
             else:
-                with open(os.path.join(args.output, f&#34;{json_schema[&#39;name&#39;]}.yaml&#34;), &#34;w&#34;) as yml:  # pylint: disable=unspecified-encoding]
-                    yaml.safe_dump(json_schema, yml)
+                with open(os.path.join(args.output, f&#34;{json_schema[&#39;name&#39;]}.yaml&#34;), &#34;w&#34;) as file:  # pylint: disable=unspecified-encoding]
+                    file.write(&#34;---\n&#34;)
+                    yaml.safe_dump(json_schema, file)
 
     if args.single:
         json_schema = generate_schema_for(str(args.path))
-        with open(os.path.join(args.output, f&#34;{json_schema[&#39;name&#39;]}.yaml&#34;), &#34;w&#34;) as yml:  # pylint: disable=unspecified-encoding]
-            yaml.safe_dump(json_schema, yml)
+        with open(os.path.join(args.output, f&#34;{json_schema[&#39;name&#39;]}.yaml&#34;), &#34;w&#34;) as file:  # pylint: disable=unspecified-encoding]
+            file.write(&#34;---\n&#34;)
+            yaml.safe_dump(json_schema, file)
         pprint.pprint(json_schema)
 
 
@@ -173,6 +176,7 @@ def run():
         InvalidDatasetTypeError: If the dataset type is not supported by dynamicio.
     &#34;&#34;&#34;
     dataset_name, file_type = os.path.splitext(os.path.basename(dataset))
+
     if file_type == &#34;.parquet&#34;:
         df = pd.read_parquet(dataset)
     elif file_type == &#34;.csv&#34;:
@@ -221,13 +225,15 @@ def run():
             except InvalidDatasetTypeError as exception:
                 print(f&#34;Skipping {exception.message}! You may want to remove this file from the datasets directory&#34;)
             else:
-                with open(os.path.join(args.output, f&#34;{json_schema[&#39;name&#39;]}.yaml&#34;), &#34;w&#34;) as yml:  # pylint: disable=unspecified-encoding]
-                    yaml.safe_dump(json_schema, yml)
+                with open(os.path.join(args.output, f&#34;{json_schema[&#39;name&#39;]}.yaml&#34;), &#34;w&#34;) as file:  # pylint: disable=unspecified-encoding]
+                    file.write(&#34;---\n&#34;)
+                    yaml.safe_dump(json_schema, file)
 
     if args.single:
         json_schema = generate_schema_for(str(args.path))
-        with open(os.path.join(args.output, f&#34;{json_schema[&#39;name&#39;]}.yaml&#34;), &#34;w&#34;) as yml:  # pylint: disable=unspecified-encoding]
-            yaml.safe_dump(json_schema, yml)
+        with open(os.path.join(args.output, f&#34;{json_schema[&#39;name&#39;]}.yaml&#34;), &#34;w&#34;) as file:  # pylint: disable=unspecified-encoding]
+            file.write(&#34;---\n&#34;)
+            yaml.safe_dump(json_schema, file)
         pprint.pprint(json_schema)</code></pre>
 </details>
 </dd>

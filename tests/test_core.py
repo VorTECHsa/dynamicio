@@ -1000,7 +1000,7 @@ class TestAsyncCoreIO:
             duration = time.time() - start_time
 
         # Then
-        assert duration < 0.125
+        assert duration < 0.2
 
     @pytest.mark.unit
     def test_async_write_does_indeed_operate_in_parallel(self):

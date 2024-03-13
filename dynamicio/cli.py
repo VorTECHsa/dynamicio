@@ -53,6 +53,7 @@ def generate_schema_for(dataset: str) -> Mapping:
         InvalidDatasetTypeError: If the dataset type is not supported by dynamicio.
     """
     dataset_name, file_type = os.path.splitext(os.path.basename(dataset))
+
     if file_type == ".parquet":
         df = pd.read_parquet(dataset)
     elif file_type == ".csv":

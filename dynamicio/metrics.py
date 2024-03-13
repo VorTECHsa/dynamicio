@@ -3,18 +3,19 @@
 import json
 import logging
 import sys
+from datetime import date, timedelta
 from numbers import Number
-from typing import Any, Dict, Mapping, Type
+from typing import Any, Dict, Mapping, Type, Union
 
-import pandas as pd  # type: ignore
+import pandas as pd
 from magic_logger import logger
+from numpy import datetime64, timedelta64
 from pythonjsonlogger import jsonlogger  # type: ignore
 
 logHandler = logging.StreamHandler(sys.stdout)
 formatter = jsonlogger.JsonFormatter()
 logHandler.setFormatter(formatter)
 logger.addHandler(logHandler)
-
 
 __metrics__: Dict[str, Type["Metric"]] = {}
 
@@ -104,7 +105,7 @@ class Max(Metric):
 class Mean(Metric):
     """A metric instance that enables generating and returning the mean value of a column."""
 
-    def calculate_metric(self) -> Number:
+    def calculate_metric(self) -> float:
         """Generate and return the mean value of a column.
 
         Returns:
@@ -116,7 +117,7 @@ class Mean(Metric):
 class Std(Metric):
     """A metric instance that enables generating and returning the standard deviation of a column."""
 
-    def calculate_metric(self) -> Number:
+    def calculate_metric(self) -> float:
         """Generate and return the standard deviation of a column.
 
         Returns:
@@ -128,7 +129,7 @@ class Std(Metric):
 class Variance(Metric):
     """A metric instance that generated and returns the variance of a column."""
 
-    def calculate_metric(self) -> Number:
+    def calculate_metric(self) -> Union[str, bytes, date, timedelta, datetime64, timedelta64, int, float, complex]:
         """Generate and return the variance of a column.
 
         Returns:

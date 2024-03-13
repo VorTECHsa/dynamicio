@@ -220,17 +220,40 @@ class WithLocal:
 
     @classmethod
     @utils.allow_options([*utils.args_of(pd.DataFrame.to_parquet), *utils.args_of(write_table)])
-    def __write_with_pyarrow(cls, df: pd.DataFrame, filepath: str, **options: Any) -> pd.DataFrame:
+    def __write_with_pyarrow(cls, df: pd.DataFrame, filepath: str, **options: Any):
         return df.to_parquet(filepath, **options)
 
     @classmethod
     @utils.allow_options([*utils.args_of(pd.DataFrame.to_parquet), *utils.args_of(write)])
-    def __write_with_fastparquet(cls, df: pd.DataFrame, filepath: str, **options: Any) -> pd.DataFrame:
+    def __write_with_fastparquet(cls, df: pd.DataFrame, filepath: str, **options: Any):
         return df.to_parquet(filepath, **options)
 
 
 class WithLocalBatch(WithLocal):
-    """Responsible for batch reading local files."""
+    """Responsible for batch reading local files.
+
+    Examples:
+        >>> READ_FROM_BATCH_LOCAL_PARQUET:
+        >>>   LOCAL:
+        >>>     type: "local_batch"
+        >>>     local:
+        >>>       path_prefix: "[[ TEST_RESOURCES ]]/data/input/batch/parquet/"
+        >>>       file_type: "parquet"
+        >>>
+        >>> READ_FROM_BATCH_LOCAL_TEMPLATED_PARQUET:
+        >>>   LOCAL:
+        >>>     type: "local_batch"
+        >>>     local:
+        >>>       path_prefix: "[[ TEST_RESOURCES ]]/data/input/{templated}/parquet/"
+        >>>       file_type: "parquet"
+        >>>
+        >>> READ_DYNAMIC_FROM_BATCH_LOCAL_PARQUET:
+        >>>   LOCAL:
+        >>>     type: "local_batch"
+        >>>     local:
+        >>>       dynamic_file_path: "[[ TEST_RESOURCES ]]/data/input/batch/parquet/dynamic/**/part_{runner_id}.parquet"
+        >>>       file_type: "parquet"
+    """
 
     sources_config: LocalBatchDataEnvironment  # type: ignore
 
@@ -247,11 +270,21 @@ class WithLocalBatch(WithLocal):
         if filtering_file_type == "hdf":
             filtering_file_type = "h5"
 
-        files = glob.glob(os.path.join(local_batch_config.path_prefix, f"*.{filtering_file_type}"))
+        # Determine if the path is dynamic or static
+        if local_batch_config.dynamic_file_path:
+            # Dynamic path: use it directly
+            file_path = utils.resolve_template(local_batch_config.dynamic_file_path, self.options)
+            files = glob.glob(file_path, recursive=True)
+        elif local_batch_config.path_prefix:
+            # Static path: append the file type
+            file_path = utils.resolve_template(local_batch_config.path_prefix, self.options)
+            files = glob.glob(os.path.join(file_path, f"*.{filtering_file_type}"), recursive=True)
+        else:
+            raise ValueError("Either path_prefix or dynamic_path must be provided in local_batch_config")
 
         dfs_to_concatenate = []
         for file in files:
-            file_to_load = os.path.join(local_batch_config.path_prefix, file)
+            file_to_load = os.path.join(file_path, file)
             dfs_to_concatenate.append(getattr(self, f"_read_{file_type}_file")(file_to_load, self.schema, **self.options))  # type: ignore
 
         return pd.concat(dfs_to_concatenate).reset_index(drop=True)

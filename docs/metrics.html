@@ -32,18 +32,19 @@
 import json
 import logging
 import sys
+from datetime import date, timedelta
 from numbers import Number
-from typing import Any, Dict, Mapping, Type
+from typing import Any, Dict, Mapping, Type, Union
 
-import pandas as pd  # type: ignore
+import pandas as pd
 from magic_logger import logger
+from numpy import datetime64, timedelta64
 from pythonjsonlogger import jsonlogger  # type: ignore
 
 logHandler = logging.StreamHandler(sys.stdout)
 formatter = jsonlogger.JsonFormatter()
 logHandler.setFormatter(formatter)
 logger.addHandler(logHandler)
-
 
 __metrics__: Dict[str, Type[&#34;Metric&#34;]] = {}
 
@@ -133,7 +134,7 @@ class Max(Metric):
 class Mean(Metric):
     &#34;&#34;&#34;A metric instance that enables generating and returning the mean value of a column.&#34;&#34;&#34;
 
-    def calculate_metric(self) -&gt; Number:
+    def calculate_metric(self) -&gt; float:
         &#34;&#34;&#34;Generate and return the mean value of a column.
 
         Returns:
@@ -145,7 +146,7 @@ class Mean(Metric):
 class Std(Metric):
     &#34;&#34;&#34;A metric instance that enables generating and returning the standard deviation of a column.&#34;&#34;&#34;
 
-    def calculate_metric(self) -&gt; Number:
+    def calculate_metric(self) -&gt; float:
         &#34;&#34;&#34;Generate and return the standard deviation of a column.
 
         Returns:
@@ -157,7 +158,7 @@ class Std(Metric):
 class Variance(Metric):
     &#34;&#34;&#34;A metric instance that generated and returns the variance of a column.&#34;&#34;&#34;
 
-    def calculate_metric(self) -&gt; Number:
+    def calculate_metric(self) -&gt; Union[str, bytes, date, timedelta, datetime64, timedelta64, int, float, complex]:
         &#34;&#34;&#34;Generate and return the variance of a column.
 
         Returns:
@@ -458,7 +459,7 @@ class CountsPerLabel(Metric):
 <pre><code class="python">class Mean(Metric):
     &#34;&#34;&#34;A metric instance that enables generating and returning the mean value of a column.&#34;&#34;&#34;
 
-    def calculate_metric(self) -&gt; Number:
+    def calculate_metric(self) -&gt; float:
         &#34;&#34;&#34;Generate and return the mean value of a column.
 
         Returns:
@@ -473,7 +474,7 @@ class CountsPerLabel(Metric):
 <h3>Methods</h3>
 <dl>
 <dt id="dynamicio.metrics.Mean.calculate_metric"><code class="name flex">
-<span>def <span class="ident">calculate_metric</span></span>(<span>self) ‑> numbers.Number</span>
+<span>def <span class="ident">calculate_metric</span></span>(<span>self) ‑> float</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Generate and return the mean value of a column.</p>
@@ -483,7 +484,7 @@ class CountsPerLabel(Metric):
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def calculate_metric(self) -&gt; Number:
+<pre><code class="python">def calculate_metric(self) -&gt; float:
     &#34;&#34;&#34;Generate and return the mean value of a column.
 
     Returns:
@@ -682,7 +683,7 @@ inevitably pointing to the parent implementation.</p></div>
 <pre><code class="python">class Std(Metric):
     &#34;&#34;&#34;A metric instance that enables generating and returning the standard deviation of a column.&#34;&#34;&#34;
 
-    def calculate_metric(self) -&gt; Number:
+    def calculate_metric(self) -&gt; float:
         &#34;&#34;&#34;Generate and return the standard deviation of a column.
 
         Returns:
@@ -697,7 +698,7 @@ inevitably pointing to the parent implementation.</p></div>
 <h3>Methods</h3>
 <dl>
 <dt id="dynamicio.metrics.Std.calculate_metric"><code class="name flex">
-<span>def <span class="ident">calculate_metric</span></span>(<span>self) ‑> numbers.Number</span>
+<span>def <span class="ident">calculate_metric</span></span>(<span>self) ‑> float</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Generate and return the standard deviation of a column.</p>
@@ -707,7 +708,7 @@ inevitably pointing to the parent implementation.</p></div>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def calculate_metric(self) -&gt; Number:
+<pre><code class="python">def calculate_metric(self) -&gt; float:
     &#34;&#34;&#34;Generate and return the standard deviation of a column.
 
     Returns:
@@ -796,7 +797,7 @@ inevitably pointing to the parent implementation.</p></div>
 <pre><code class="python">class Variance(Metric):
     &#34;&#34;&#34;A metric instance that generated and returns the variance of a column.&#34;&#34;&#34;
 
-    def calculate_metric(self) -&gt; Number:
+    def calculate_metric(self) -&gt; Union[str, bytes, date, timedelta, datetime64, timedelta64, int, float, complex]:
         &#34;&#34;&#34;Generate and return the variance of a column.
 
         Returns:
@@ -811,7 +812,7 @@ inevitably pointing to the parent implementation.</p></div>
 <h3>Methods</h3>
 <dl>
 <dt id="dynamicio.metrics.Variance.calculate_metric"><code class="name flex">
-<span>def <span class="ident">calculate_metric</span></span>(<span>self) ‑> numbers.Number</span>
+<span>def <span class="ident">calculate_metric</span></span>(<span>self) ‑> Union[str, bytes, datetime.date, datetime.timedelta, numpy.datetime64, numpy.timedelta64, int, float, complex]</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Generate and return the variance of a column.</p>
@@ -821,7 +822,7 @@ inevitably pointing to the parent implementation.</p></div>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def calculate_metric(self) -&gt; Number:
+<pre><code class="python">def calculate_metric(self) -&gt; Union[str, bytes, date, timedelta, datetime64, timedelta64, int, float, complex]:
     &#34;&#34;&#34;Generate and return the variance of a column.
 
     Returns:

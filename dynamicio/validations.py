@@ -8,7 +8,7 @@ ALL_VALIDATORS = {}  # name -> function
 
 
 def validator(func: Callable):
-    """A decorator to add the function to the ALL_VALIDATORS dict"""
+    """A decorator to add the function to the ALL_VALIDATORS dict."""
     name = func.__name__
     assert name not in ALL_VALIDATORS
     ALL_VALIDATORS[name] = func
@@ -88,7 +88,7 @@ def has_acceptable_percentage_of_nulls(
 
     no_of_nulls = df[column].isnull().sum()
     if len(df) == 0:
-        percentage_of_nulls = 0
+        percentage_of_nulls = 0.0
     else:
         percentage_of_nulls = no_of_nulls / len(df)
 

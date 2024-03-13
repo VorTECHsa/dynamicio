@@ -9,9 +9,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import dynamicio.mixins.utils
-import dynamicio.mixins.with_local
-
+import dynamicio
 from dynamicio.config import IOConfig
 from tests import constants
 from tests.conftest import max_pklproto_hdf
@@ -747,6 +745,22 @@ class TestBatchLocal:
         pd.testing.assert_frame_equal(expected_concatenated_df, concatenated_df)
 
     @pytest.mark.unit
+    def test_multiple_files_are_loaded_when_batch_local_type_is_used_for_parquet_with_templated_string(self, expected_s3_parquet_df):
+        # Given
+        parquet_local_batch_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_BATCH_LOCAL_TEMPLATED_PARQUET")
+        expected_concatenated_df = expected_s3_parquet_df
+
+        # When
+        concatenated_df = ReadFromBatchLocalParquet(source_config=parquet_local_batch_config, templated="batch").read()
+
+        # Then
+        pd.testing.assert_frame_equal(expected_concatenated_df, concatenated_df)
+
+    @pytest.mark.unit
     def test_files_that_dont_comply_to_the_provided_file_type_are_ignored(self, expected_s3_parquet_df):
         # Given
         parquet_local_batch_config = IOConfig(
@@ -793,3 +807,20 @@ class TestBatchLocal:
 
         # Then
         pd.testing.assert_frame_equal(expected_concatenated_df, concatenated_df.sort_values(by="id").reset_index(drop=True))
+
+    @pytest.mark.unit
+    def test_multiple_files_are_loaded_when_batch_local_type_is_used_for_templated_parquet_paths(self, expected_concatenated_01_df, expected_concatenated_02_df):
+        # Given
+        parquet_local_batch_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="READ_DYNAMIC_FROM_BATCH_LOCAL_PARQUET")
+
+        # When
+        concatenated_01_df = ReadFromBatchLocalParquet(source_config=parquet_local_batch_config, runner_id="01").read()
+        concatenated_02_df = ReadFromBatchLocalParquet(source_config=parquet_local_batch_config, runner_id="02").read()
+
+        # Then
+        pd.testing.assert_frame_equal(expected_concatenated_01_df, concatenated_01_df)
+        pd.testing.assert_frame_equal(expected_concatenated_02_df, concatenated_02_df)

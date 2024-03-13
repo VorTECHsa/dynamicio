@@ -163,7 +163,7 @@ class WithPostgres:
 
         is_truncate_and_append = self.options.get("truncate_and_append", False)
 
-        logger.info(f"[postgres] Started downloading table: {self.sources_config.dynamicio_schema.name} from: {db_host}:{db_name}")
+        logger.info(f"[postgres] Started uploading table: {self.sources_config.dynamicio_schema.name} from: {db_host}:{db_name}")
         with session_for(connection_string) as session:
             self._write_to_database(session, model.__tablename__, df, is_truncate_and_append)  # type: ignore
 
