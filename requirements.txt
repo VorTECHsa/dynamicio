@@ -9,7 +9,7 @@ no_implicit_optional==1.4.0
 pandas>=1.2.4
 psycopg2-binary~=2.9.3
 pyarrow>=7.0.0
-pydantic>=2.0,<3
+pydantic>=1.9.2,<3
 python-json-logger~=2.0.1
 PyYAML>=5.4.1
 s3fs==0.4.2
