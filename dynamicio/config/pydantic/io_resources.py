@@ -7,7 +7,7 @@ import posixpath
 from typing import Mapping, Optional, Union
 
 import pydantic
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel
 
 import dynamicio.config.pydantic.table_schema as table_spec
 
@@ -93,7 +93,7 @@ class IOBinding(BaseModel):
 
 
 class IOEnvironment(BaseModel):
-    """A section specifiing an data source backed by a particular data backend."""
+    """A section specifying an data source backed by a particular data backend."""
 
     _parent: Optional[IOBinding] = None  # noqa: F821
     options: Mapping = pydantic.Field(default_factory=dict)
@@ -137,7 +137,7 @@ class LocalBatchDataSubSection(BaseModel):
     dynamic_file_path: Optional[str] = None
     file_type: FileType
 
-    @model_validator(mode="before")
+    @pydantic.root_validator(pre=True)
     def check_path_fields(cls, values):
         """Check that only one of path_prefix or dynamic_file_path is provided & they meet format requirements."""
         path_prefix = values.get("path_prefix")
@@ -188,7 +188,7 @@ class S3PathPrefixSubSection(BaseModel):
     file_type: FileType
     bucket: str
 
-    @model_validator(mode="before")
+    @pydantic.root_validator(pre=True)
     def check_path_fields(cls, values):
         """Check that only one of path_prefix or dynamic_file_path is provided & they meet format requirements."""
         path_prefix = values.get("path_prefix")
@@ -270,4 +270,4 @@ class PostgresDataEnvironment(IOEnvironment):
     postgres: PostgresDataSubSection
 
 
-IOBinding.model_rebuild()
+IOBinding.update_forward_refs()
