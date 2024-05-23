@@ -127,56 +127,102 @@ class TestKafkaIO:
         # Then (excuse me for resorting to private attributes, but it's the only way to test this)
         assert write_kafka_io._WithKafka__key_serializer == write_kafka_io._default_key_serializer
 
-    # @pytest.mark.unit
-    # @patch.object(MockKafkaProducer, "send")
-    # @patch.object(dynamicio.mixins.with_kafka, Producer)
-    # def test_kafka_producer_default_compression_type_is_snappy(self, mock__kafka_producer, mock__kafka_producer_send, test_df):
-    #     # Given
-    #     mock__kafka_producer.DEFAULT_CONFIG = WithKafka.VALID_CONFIG_KEYS
-    #     mock__kafka_producer.return_value = MockKafkaProducer()
-    #     mock__kafka_producer_send.return_value = MagicMock()
-    #     kafka_cloud_config = IOConfig(
-    #         path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
-    #         env_identifier="CLOUD",
-    #         dynamic_vars=constants,
-    #     ).get(source_key="WRITE_TO_KAFKA_JSON")
-    #     write_kafka_io = WriteKafkaIO(kafka_cloud_config)
-    #
-    #     # When
-    #     write_kafka_io.write(test_df)
-    #
-    #     # Then
-    #     write_kafka_io._WithKafka__kafka_config.pop("value_serializer")  # Removed as it returns a unique function identifier
-    #     write_kafka_io._WithKafka__kafka_config.pop("key_serializer")  # Removed as it returns a unique function identifier
-    #     assert write_kafka_io._WithKafka__kafka_config == {"bootstrap_servers": "mock-kafka-server", "compression_type": "snappy"}
-    #
-    # @pytest.mark.unit
-    # @patch.object(MockKafkaProducer, "send")
-    # @patch.object(dynamicio.mixins.with_kafka, Producer)
-    # def test_kafka_producer_options_are_replaced_by_the_user_options(self, mock__kafka_producer, mock__kafka_producer_send, test_df):
-    #     # Given
-    #     mock__kafka_producer.DEFAULT_CONFIG = WithKafka.VALID_CONFIG_KEYS
-    #     mock__kafka_producer.return_value = MockKafkaProducer()
-    #     mock__kafka_producer_send.return_value = MagicMock()
-    #     kafka_cloud_config = IOConfig(
-    #         path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
-    #         env_identifier="CLOUD",
-    #         dynamic_vars=constants,
-    #     ).get(source_key="WRITE_TO_KAFKA_JSON")
-    #     write_kafka_io = WriteKafkaIO(kafka_cloud_config, compression_type="lz4", acks=2)
-    #
-    #     # When
-    #     write_kafka_io.write(test_df)
-    #
-    #     # Then
-    #     value_serializer = write_kafka_io._WithKafka__kafka_config.pop("value_serializer")  # Removed as it returns a unique function identifier
-    #     write_kafka_io._WithKafka__kafka_config.pop("key_serializer")  # Removed as it returns a unique function identifier
-    #     assert write_kafka_io._WithKafka__kafka_config == {
-    #         "acks": 2,
-    #         "bootstrap_servers": "mock-kafka-server",
-    #         "compression_type": "lz4",
-    #     } and "WithKafka._default_value_serializer" in str(value_serializer)
-    #
+    @pytest.mark.unit
+    def test_kafka_producer_default_compression_type_is_snappy(self, test_df):
+        # Given
+        kafka_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="WRITE_TO_KAFKA_JSON")
+
+        # Create the MockKafkaProducer instance before patching
+        mock_kafka_producer_instance = MockKafkaProducer()
+
+        write_kafka_io = WriteKafkaIO(kafka_cloud_config)
+
+        # When
+        with patch('dynamicio.mixins.with_kafka.Producer', return_value=mock_kafka_producer_instance):
+            write_kafka_io.write(test_df)
+
+        # Then
+        # Remove serializers from config for assertion as they are function references
+        kafka_config = write_kafka_io._WithKafka__kafka_config.copy()
+        kafka_config.pop("value_serializer", None)  # Use .pop with default value to avoid KeyError
+        kafka_config.pop("key_serializer", None)  # Use .pop with default value to avoid KeyError
+
+        # Check that default options are correctly set
+        assert kafka_config == {"bootstrap.servers": "mock-kafka-server", "compression.type": "snappy"}
+
+    @pytest.mark.unit
+    def test_kafka_producer_options_are_replaced_by_the_user_options(self, test_df):
+        # Given
+        kafka_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="WRITE_TO_KAFKA_JSON")
+
+        # Create the MockKafkaProducer instance before patching
+        mock_kafka_producer_instance = MockKafkaProducer()
+
+        write_kafka_io = WriteKafkaIO(kafka_cloud_config, **{"compression.type": "lz4", "acks": 2})
+
+        # When
+        with patch('dynamicio.mixins.with_kafka.Producer', return_value=mock_kafka_producer_instance):
+            write_kafka_io.write(test_df)
+
+        # Then
+        # Remove serializers from config for assertion as they are function references
+        kafka_config = write_kafka_io._WithKafka__kafka_config.copy()
+        kafka_config.pop("value_serializer", None)  # Use .pop with default value to avoid KeyError
+        kafka_config.pop("key_serializer", None)  # Use .pop with default value to avoid KeyError
+
+        # Check that user options are correctly set
+        assert kafka_config == {
+            "acks": 2,
+            "bootstrap.servers": "mock-kafka-server",
+            "compression.type": "lz4",
+        }
+        assert write_kafka_io._WithKafka__kafka_config == kafka_config
+
+    @pytest.mark.unit
+    def test_kafka_producer_options_are_replaced_by_the_user_options_from_resource_definition(self, test_df):
+        # Given
+        kafka_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="WRITE_TO_KAFKA_JSON_WITH_OPTIONS")
+
+        # Create the MockKafkaProducer instance before patching
+        mock_kafka_producer_instance = MockKafkaProducer()
+
+        write_kafka_io = WriteKafkaIO(kafka_cloud_config)
+
+        # When
+        with patch('dynamicio.mixins.with_kafka.Producer', return_value=mock_kafka_producer_instance):
+            write_kafka_io.write(test_df)
+
+        # Then
+        # Remove serializers from config for assertion as they are function references
+        kafka_config = write_kafka_io._WithKafka__kafka_config.copy()
+        kafka_config.pop("value_serializer", None)  # Use .pop with default value to avoid KeyError
+        kafka_config.pop("key_serializer", None)  # Use .pop with default value to avoid KeyError
+
+        # Check that user options are correctly set
+        assert kafka_config =={
+            'bootstrap.servers': 'mock-kafka-server',
+            'buffer.memory': 134217728,
+            'compression.type': 'gzip',
+            'linger.ms': 3000,
+            'max.in.flight.requests.per.connection': 10,
+            'message.send.max.retries': 3,
+            'retry.backoff.ms': 100
+        }
+
+        assert write_kafka_io._WithKafka__kafka_config == kafka_config
+
     # @pytest.mark.unit
     # def test_producer_send_method_sends_messages_with_index_as_key_by_default_if_a_keygen_is_not_provided(self, test_df):
     #     # Given
@@ -200,7 +246,7 @@ class TestKafkaIO:
     #         {"key": 1, "value": {"bar": 1000, "baz": "ABC", "foo": "id_2", "id": "cm_2"}},
     #         {"key": 2, "value": {"bar": 1000, "baz": "ABC", "foo": "id_3", "id": "cm_3"}},
     #     ]
-    #
+
     # @pytest.mark.unit
     # def test_producer_send_method_can_send_keyed_messages_using_a_custom_key_generator(self, test_df):
     #     # Given
