@@ -108,7 +108,8 @@ class WithKafka:
         "connect_cb",
         "connections.max.idle.ms",
         "consume_cb",
-        "consume.callback.max.messages" "coordinator.query.interval.ms",
+        "consume.callback.max.messages",
+        "coordinator.query.interval.ms",
         "debug",
         "default_topic_conf",
         "delivery.report.only.error",
@@ -117,7 +118,6 @@ class WithKafka:
         "enable.auto.commit",
         "enable.auto.offset.store",
         "enable.gapless.guarantee",
-        "enable.idempotence",
         "enable.idempotence",
         "enable.partition.eof",
         "enable.random.seed",
@@ -238,8 +238,6 @@ class WithKafka:
         "topic.metadata.refresh.interval.ms",
         "topic.metadata.refresh.sparse",
         "transaction.timeout.ms",
-        "transaction.timeout.ms",
-        "transactional.id",
         "transactional.id",
     }
 

@@ -1,20 +1,15 @@
 # pylint: disable=no-member, missing-module-docstring, missing-class-docstring, missing-function-docstring, too-many-public-methods, too-few-public-methods, protected-access, C0103, C0302, R0801
 import os
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pandas as pd
 import pytest
 import simplejson
-from confluent_kafka import Producer
 
-import dynamicio.mixins.with_kafka
 from dynamicio.config import IOConfig
 from dynamicio.mixins import WithKafka
 from tests import constants
-from tests.mocking.io import (
-    MockKafkaProducer,
-    WriteKafkaIO,
-)
+from tests.mocking.io import MockKafkaProducer, WriteKafkaIO
 
 
 class TestKafkaIO:
@@ -104,7 +99,7 @@ class TestKafkaIO:
             write_kafka_io.write(test_df)
 
         # Then (excuse me for resorting to private attributes, but it's the only way to test this)
-        assert write_kafka_io._WithKafka__value_serializer == write_kafka_io._default_value_serializer
+        assert write_kafka_io._WithKafka__value_serializer == write_kafka_io._default_value_serializer  # pylint: disable=comparison-with-callable
 
     @pytest.mark.unit
     def test_kafka_producer_default_key_serialiser_is_used_unless_alternative_is_given(self, test_df):
@@ -125,7 +120,7 @@ class TestKafkaIO:
             write_kafka_io.write(test_df)
 
         # Then (excuse me for resorting to private attributes, but it's the only way to test this)
-        assert write_kafka_io._WithKafka__key_serializer == write_kafka_io._default_key_serializer
+        assert write_kafka_io._WithKafka__key_serializer == write_kafka_io._default_key_serializer  # pylint: disable=comparison-with-callable
 
     @pytest.mark.unit
     def test_kafka_producer_default_compression_type_is_snappy(self, test_df):
@@ -314,7 +309,7 @@ class TestKafkaIO:
         assert encoded_value == WithKafka._default_value_serializer(value)
 
     @pytest.mark.unit
-    def test_default_key_generator_and_transformer_are_used_if_none_are_provided_by_the_user():
+    def test_default_key_generator_and_transformer_are_used_if_none_are_provided_by_the_user(self):
         # Given
         keyed_test_df = pd.DataFrame.from_records(
             [
@@ -342,30 +337,31 @@ class TestKafkaIO:
         assert write_kafka_io._WithKafka__key_generator("idx", "value") == "idx"
         assert write_kafka_io._WithKafka__document_transformer({"value": "value"}) == {"value": "value"}
 
-    # @pytest.mark.unit
-    # def test_custom_key_generator_and_transformer_are_used_if_they_are_provided_by_the_user(self):
-    #     # Given
-    #     keyed_test_df = pd.DataFrame.from_records(
-    #         [
-    #             ["key-01", "cm_1", "id_1", 1000, "ABC"],
-    #             ["key-01", "cm_2", "id_2", 1000, "ABC"],
-    #             ["key-02", "cm_3", "id_3", 1000, "ABC"],
-    #         ],
-    #         columns=["key", "id", "foo", "bar", "baz"],
-    #     ).set_index("key")
-    #     kafka_cloud_config = IOConfig(
-    #         path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
-    #         env_identifier="CLOUD",
-    #         dynamic_vars=constants,
-    #     ).get(source_key="WRITE_TO_KAFKA_JSON")
-    #     write_kafka_io = WriteKafkaIO(kafka_cloud_config, key_generator=lambda idx, _: "xxx", document_transformer=lambda _: "xxx")
-    #
-    #     # When
-    #     with patch.object(dynamicio.mixins.with_kafka, Producer) as mock__kafka_producer:
-    #         mock__kafka_producer.DEFAULT_CONFIG = WithKafka.VALID_CONFIG_KEYS
-    #         mock_producer = MockKafkaProducer()
-    #         mock__kafka_producer.return_value = mock_producer
-    #
-    #         # When
-    #         write_kafka_io.write(keyed_test_df)
-    #         assert (write_kafka_io._WithKafka__key_generator("idx", "value") == "xxx") and (write_kafka_io._WithKafka__document_transformer("value") == "xxx")
+    @pytest.mark.unit
+    def test_custom_key_generator_and_transformer_are_used_if_they_are_provided_by_the_user(self):
+        # Given
+        keyed_test_df = pd.DataFrame.from_records(
+            [
+                ["key-01", "cm_1", "id_1", 1000, "ABC"],
+                ["key-01", "cm_2", "id_2", 1000, "ABC"],
+                ["key-02", "cm_3", "id_3", 1000, "ABC"],
+            ],
+            columns=["key", "id", "foo", "bar", "baz"],
+        ).set_index("key")
+        kafka_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="WRITE_TO_KAFKA_JSON")
+        write_kafka_io = WriteKafkaIO(kafka_cloud_config, key_generator=lambda idx, _: "xxx", document_transformer=lambda _: "xxx")
+
+        # Create the MockKafkaProducer instance before patching
+        mock_kafka_producer_instance = MockKafkaProducer()
+
+        # When
+        with patch("dynamicio.mixins.with_kafka.Producer", return_value=mock_kafka_producer_instance):
+            write_kafka_io.write(keyed_test_df)
+
+        # Then
+        assert write_kafka_io._WithKafka__key_generator("idx", "value") == "xxx"
+        assert write_kafka_io._WithKafka__document_transformer("value") == "xxx"
