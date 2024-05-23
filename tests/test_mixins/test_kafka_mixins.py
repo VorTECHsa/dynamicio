@@ -223,29 +223,38 @@ class TestKafkaIO:
 
         assert write_kafka_io._WithKafka__kafka_config == kafka_config
 
-    # @pytest.mark.unit
-    # def test_producer_send_method_sends_messages_with_index_as_key_by_default_if_a_keygen_is_not_provided(self, test_df):
-    #     # Given
-    #     kafka_cloud_config = IOConfig(
-    #         path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
-    #         env_identifier="CLOUD",
-    #         dynamic_vars=constants,
-    #     ).get(source_key="WRITE_TO_KAFKA_JSON")
-    #     write_kafka_io = WriteKafkaIO(kafka_cloud_config)
-    #
-    #     # When
-    #     with patch.object(dynamicio.mixins.with_kafka, Producer) as mock__kafka_producer:
-    #         mock__kafka_producer.DEFAULT_CONFIG = WithKafka.VALID_CONFIG_KEYS
-    #         mock_producer = MockKafkaProducer()
-    #         mock__kafka_producer.return_value = mock_producer
-    #         write_kafka_io.write(test_df)
-    #
-    #     # Then
-    #     assert mock_producer.my_stream == [
-    #         {"key": 0, "value": {"bar": 1000, "baz": "ABC", "foo": "id_1", "id": "cm_1"}},
-    #         {"key": 1, "value": {"bar": 1000, "baz": "ABC", "foo": "id_2", "id": "cm_2"}},
-    #         {"key": 2, "value": {"bar": 1000, "baz": "ABC", "foo": "id_3", "id": "cm_3"}},
-    #     ]
+    @pytest.mark.unit
+    def test_producer_send_method_sends_messages_with_index_as_key_by_default_if_a_keygen_is_not_provided(self, test_df):
+        # Given
+        kafka_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="WRITE_TO_KAFKA_JSON")
+
+        # Create the MockKafkaProducer instance before patching
+        mock_kafka_producer_instance = MockKafkaProducer()
+
+        write_kafka_io = WriteKafkaIO(kafka_cloud_config)
+
+        # When
+        with patch('dynamicio.mixins.with_kafka.Producer', return_value=mock_kafka_producer_instance):
+            write_kafka_io.write(test_df)
+
+        # Then
+        def sort_dict(d):
+            return {k: d[k] for k in sorted(d)}
+
+        expected_stream = [
+            {"key": b'0', "value": simplejson.dumps(sort_dict({"bar": 1000, "baz": "ABC", "foo": "id_1", "id": "cm_1"}), ignore_nan=True).encode("utf-8")},
+            {"key": b'1', "value": simplejson.dumps(sort_dict({"bar": 1000, "baz": "ABC", "foo": "id_2", "id": "cm_2"}), ignore_nan=True).encode("utf-8")},
+            {"key": b'2', "value": simplejson.dumps(sort_dict({"bar": 1000, "baz": "ABC", "foo": "id_3", "id": "cm_3"}), ignore_nan=True).encode("utf-8")}
+        ]
+        actual = []
+        for message in mock_kafka_producer_instance.my_stream:
+            actual.append({"key": message["key"], "value": simplejson.dumps(sort_dict(simplejson.loads(message["value"])), ignore_nan=True).encode("utf-8")})
+
+        assert actual == expected_stream
 
     # @pytest.mark.unit
     # def test_producer_send_method_can_send_keyed_messages_using_a_custom_key_generator(self, test_df):
