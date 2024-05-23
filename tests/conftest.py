@@ -663,7 +663,7 @@ def expected_value_serializer():
     return {'value_serializer': 'WithKafka._default_value_serializer'}
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture
 def input_messages_df():
     return pd.DataFrame.from_dict(
         [
