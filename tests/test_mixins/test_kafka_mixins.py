@@ -1,10 +1,11 @@
 # pylint: disable=no-member, missing-module-docstring, missing-class-docstring, missing-function-docstring, too-many-public-methods, too-few-public-methods, protected-access, C0103, C0302, R0801
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch, MagicMock
 
 import pandas as pd
 import pytest
 from confluent_kafka import Producer
+
 import dynamicio.mixins.with_kafka
 from dynamicio.config import IOConfig
 from dynamicio.mixins import WithKafka
@@ -17,13 +18,11 @@ from tests.mocking.io import (
 
 class TestKafkaIO:
     @pytest.mark.unit
-    @patch.object(dynamicio.mixins.with_kafka, Producer)
-    @patch.object(MockKafkaProducer, "send")
-    def test_write_to_kafka_is_called_for_writing_an_iterable_of_dicts_with_env_as_cloud_kafka(self, mock__kafka_producer, mock__kafka_producer_send, input_messages_df):
+    def test_write_to_kafka_is_called_for_writing_an_iterable_of_dicts_with_env_as_cloud_kafka(self, input_messages_df):
         # Given
         def rows_generator(_df, chunk_size):
             _chunk = []
-            for _, row in df.iterrows():
+            for _, row in _df.iterrows():
                 _chunk.append(row.to_dict())
                 if len(_chunk) == chunk_size:
                     yield pd.DataFrame(_chunk)
@@ -31,26 +30,29 @@ class TestKafkaIO:
 
         df = input_messages_df
 
-        mock__kafka_producer.return_value = MockKafkaProducer()
-        mock__kafka_producer_send.return_value = MagicMock()
-
         kafka_cloud_config = IOConfig(
             path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
             env_identifier="CLOUD",
             dynamic_vars=constants,
         ).get(source_key="WRITE_TO_KAFKA_JSON")
 
+        # Create the MockKafkaProducer instance before patching
+        mock_kafka_producer_instance = MockKafkaProducer()
+
         # When
-        for chunk in rows_generator(_df=df, chunk_size=2):
-            WriteKafkaIO(kafka_cloud_config).write(chunk)
+        with patch('dynamicio.mixins.with_kafka.Producer', return_value=mock_kafka_producer_instance):
+            write_kafka_io = WriteKafkaIO(kafka_cloud_config)
+            for chunk in rows_generator(_df=df, chunk_size=2):
+                write_kafka_io.write(chunk)
+
             # Then
-            assert mock__kafka_producer_send.call_count == 1
+            assert mock_kafka_producer_instance.produce_call_count == len(input_messages_df)
 
     @pytest.mark.unit
     @patch.object(dynamicio.mixins.with_kafka, Producer)
     @patch.object(MockKafkaProducer, "send")
     def test_write_to_kafka_is_called_with_document_transformer_if_provided_for_writing_an_iterable_of_dicts_with_env_as_cloud_kafka(
-        self, mock__kafka_producer, mock__kafka_producer_send, input_messages_df
+            self, mock__kafka_producer, mock__kafka_producer_send, input_messages_df
     ):
         # Given
         def rows_generator(_df, chunk_size):

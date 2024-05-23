@@ -206,9 +206,9 @@ class WithKafka:
         self.__producer.flush()
 
     @staticmethod
-    def _default_key_serializer(key: Optional[str]) -> Optional[bytes]:
-        if key:
-            return key.encode("utf-8")
+    def _default_key_serializer(key: Optional[Any]) -> Optional[bytes]:
+        if key is not None:
+            return str(key).encode("utf-8")
         return None
 
     @staticmethod
