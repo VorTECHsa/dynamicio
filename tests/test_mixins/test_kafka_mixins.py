@@ -106,28 +106,27 @@ class TestKafkaIO:
         # Then (excuse me for resorting to private attributes, but it's the only way to test this)
         assert write_kafka_io._WithKafka__value_serializer == write_kafka_io._default_value_serializer
 
-    #
-    # @pytest.mark.unit
-    # def test_kafka_producer_default_key_serialiser_is_used_unless_alternative_is_given(self, test_df):
-    #     # Given
-    #     kafka_cloud_config = IOConfig(
-    #         path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
-    #         env_identifier="CLOUD",
-    #         dynamic_vars=constants,
-    #     ).get(source_key="WRITE_TO_KAFKA_JSON")
-    #     write_kafka_io = WriteKafkaIO(kafka_cloud_config)
-    #
-    #     # When
-    #     with patch.object(dynamicio.mixins.with_kafka, Producer) as mock__kafka_producer, patch.object(MockKafkaProducer, "send") as mock__kafka_producer_send:
-    #         mock__kafka_producer.DEFAULT_CONFIG = WithKafka.VALID_CONFIG_KEYS
-    #         mock__kafka_producer.return_value = MockKafkaProducer()
-    #         mock__kafka_producer_send.return_value = MagicMock()
-    #         write_kafka_io.write(test_df)
-    #
-    #     # Then
-    #     key_serializer = write_kafka_io._WithKafka__kafka_config.pop("key_serializer")
-    #     assert "WithKafka._default_key_serializer" in str(key_serializer)
-    #
+    @pytest.mark.unit
+    def test_kafka_producer_default_key_serialiser_is_used_unless_alternative_is_given(self, test_df):
+        # Given
+        kafka_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="WRITE_TO_KAFKA_JSON")
+
+        # Create the MockKafkaProducer instance before patching
+        mock_kafka_producer_instance = MockKafkaProducer()
+
+        write_kafka_io = WriteKafkaIO(kafka_cloud_config)
+
+        # When
+        with patch('dynamicio.mixins.with_kafka.Producer', return_value=mock_kafka_producer_instance):
+            write_kafka_io.write(test_df)
+
+        # Then (excuse me for resorting to private attributes, but it's the only way to test this)
+        assert write_kafka_io._WithKafka__key_serializer == write_kafka_io._default_key_serializer
+
     # @pytest.mark.unit
     # @patch.object(MockKafkaProducer, "send")
     # @patch.object(dynamicio.mixins.with_kafka, Producer)
