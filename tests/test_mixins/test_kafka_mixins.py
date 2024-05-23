@@ -288,31 +288,31 @@ class TestKafkaIO:
 
         assert actual == expected_stream
 
-    # @pytest.mark.unit
-    # @pytest.mark.parametrize(
-    #     "key, encoded_key",
-    #     [
-    #         (None, None),
-    #         ("cacik", b"cacik"),
-    #     ],
-    # )
-    # def test_default_key_serialiser_returns_none_if_key_is_not_provided_and_an_encoded_string_otherwise(self, key, encoded_key):
-    #     # Given/When/Then
-    #     assert encoded_key == WithKafka._default_key_serializer(key)
-    #
-    # @pytest.mark.unit
-    # @pytest.mark.parametrize(
-    #     "value, encoded_value",
-    #     [
-    #         (None, b"null"),
-    #         ({"a": 1, "b": "cacik"}, b'{"a": 1, "b": "cacik"}'),
-    #         ({"a": 1, "b": None}, b'{"a": 1, "b": null}'),
-    #     ],
-    # )
-    # def test_default_value_serialiser_returns_encoded_mapping_if_key_is_not_provided_and_an_encoded_string_otherwise(self, value, encoded_value):
-    #     # Given/When/Then
-    #     assert encoded_value == WithKafka._default_value_serializer(value)
-    #
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "key, encoded_key",
+        [
+            (None, None),
+            ("cacik", b"cacik"),
+        ],
+    )
+    def test_default_key_serialiser_returns_none_if_key_is_not_provided_and_an_encoded_string_otherwise(self, key, encoded_key):
+        # Given/When/Then
+        assert encoded_key == WithKafka._default_key_serializer(key)
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "value, encoded_value",
+        [
+            (None, b"null"),
+            ({"a": 1, "b": "cacik"}, b'{"a": 1, "b": "cacik"}'),
+            ({"a": 1, "b": None}, b'{"a": 1, "b": null}'),
+        ],
+    )
+    def test_default_value_serialiser_returns_encoded_mapping_if_key_is_not_provided_and_an_encoded_string_otherwise(self, value, encoded_value):
+        # Given/When/Then
+        assert encoded_value == WithKafka._default_value_serializer(value)
+
     # @pytest.mark.unit
     # def test_default_key_generator_and_transformer_are_used_if_none_are_provided_by_the_user(self):
     #     # Given
