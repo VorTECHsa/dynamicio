@@ -4,10 +4,8 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
-from kafka import KafkaProducer
-
+from confluent_kafka import Producer
 import dynamicio.mixins.with_kafka
-
 from dynamicio.config import IOConfig
 from dynamicio.mixins import WithKafka
 from tests import constants
@@ -19,7 +17,7 @@ from tests.mocking.io import (
 
 class TestKafkaIO:
     @pytest.mark.unit
-    @patch.object(dynamicio.mixins.with_kafka, "KafkaProducer")
+    @patch.object(dynamicio.mixins.with_kafka, Producer)
     @patch.object(MockKafkaProducer, "send")
     def test_write_to_kafka_is_called_for_writing_an_iterable_of_dicts_with_env_as_cloud_kafka(self, mock__kafka_producer, mock__kafka_producer_send, input_messages_df):
         # Given
@@ -49,7 +47,7 @@ class TestKafkaIO:
             assert mock__kafka_producer_send.call_count == 1
 
     @pytest.mark.unit
-    @patch.object(dynamicio.mixins.with_kafka, "KafkaProducer")
+    @patch.object(dynamicio.mixins.with_kafka, Producer)
     @patch.object(MockKafkaProducer, "send")
     def test_write_to_kafka_is_called_with_document_transformer_if_provided_for_writing_an_iterable_of_dicts_with_env_as_cloud_kafka(
         self, mock__kafka_producer, mock__kafka_producer_send, input_messages_df
@@ -99,8 +97,8 @@ class TestKafkaIO:
         write_kafka_io = WriteKafkaIO(kafka_cloud_config)
 
         # When
-        with patch.object(dynamicio.mixins.with_kafka, "KafkaProducer") as mock__kafka_producer, patch.object(MockKafkaProducer, "send") as mock__kafka_producer_send:
-            mock__kafka_producer.DEFAULT_CONFIG = KafkaProducer.DEFAULT_CONFIG
+        with patch.object(dynamicio.mixins.with_kafka, Producer) as mock__kafka_producer, patch.object(MockKafkaProducer, "send") as mock__kafka_producer_send:
+            mock__kafka_producer.DEFAULT_CONFIG = WithKafka.VALID_CONFIG_KEYS
             mock__kafka_producer.return_value = MockKafkaProducer()
             mock__kafka_producer_send.return_value = MagicMock()
             write_kafka_io.write(test_df)
@@ -120,8 +118,8 @@ class TestKafkaIO:
         write_kafka_io = WriteKafkaIO(kafka_cloud_config)
 
         # When
-        with patch.object(dynamicio.mixins.with_kafka, "KafkaProducer") as mock__kafka_producer, patch.object(MockKafkaProducer, "send") as mock__kafka_producer_send:
-            mock__kafka_producer.DEFAULT_CONFIG = KafkaProducer.DEFAULT_CONFIG
+        with patch.object(dynamicio.mixins.with_kafka, Producer) as mock__kafka_producer, patch.object(MockKafkaProducer, "send") as mock__kafka_producer_send:
+            mock__kafka_producer.DEFAULT_CONFIG = WithKafka.VALID_CONFIG_KEYS
             mock__kafka_producer.return_value = MockKafkaProducer()
             mock__kafka_producer_send.return_value = MagicMock()
             write_kafka_io.write(test_df)
@@ -132,10 +130,10 @@ class TestKafkaIO:
 
     @pytest.mark.unit
     @patch.object(MockKafkaProducer, "send")
-    @patch.object(dynamicio.mixins.with_kafka, "KafkaProducer")
+    @patch.object(dynamicio.mixins.with_kafka, Producer)
     def test_kafka_producer_default_compression_type_is_snappy(self, mock__kafka_producer, mock__kafka_producer_send, test_df):
         # Given
-        mock__kafka_producer.DEFAULT_CONFIG = KafkaProducer.DEFAULT_CONFIG
+        mock__kafka_producer.DEFAULT_CONFIG = WithKafka.VALID_CONFIG_KEYS
         mock__kafka_producer.return_value = MockKafkaProducer()
         mock__kafka_producer_send.return_value = MagicMock()
         kafka_cloud_config = IOConfig(
@@ -155,10 +153,10 @@ class TestKafkaIO:
 
     @pytest.mark.unit
     @patch.object(MockKafkaProducer, "send")
-    @patch.object(dynamicio.mixins.with_kafka, "KafkaProducer")
+    @patch.object(dynamicio.mixins.with_kafka, Producer)
     def test_kafka_producer_options_are_replaced_by_the_user_options(self, mock__kafka_producer, mock__kafka_producer_send, test_df):
         # Given
-        mock__kafka_producer.DEFAULT_CONFIG = KafkaProducer.DEFAULT_CONFIG
+        mock__kafka_producer.DEFAULT_CONFIG = WithKafka.VALID_CONFIG_KEYS
         mock__kafka_producer.return_value = MockKafkaProducer()
         mock__kafka_producer_send.return_value = MagicMock()
         kafka_cloud_config = IOConfig(
@@ -191,8 +189,8 @@ class TestKafkaIO:
         write_kafka_io = WriteKafkaIO(kafka_cloud_config)
 
         # When
-        with patch.object(dynamicio.mixins.with_kafka, "KafkaProducer") as mock__kafka_producer:
-            mock__kafka_producer.DEFAULT_CONFIG = KafkaProducer.DEFAULT_CONFIG
+        with patch.object(dynamicio.mixins.with_kafka, Producer) as mock__kafka_producer:
+            mock__kafka_producer.DEFAULT_CONFIG = WithKafka.VALID_CONFIG_KEYS
             mock_producer = MockKafkaProducer()
             mock__kafka_producer.return_value = mock_producer
             write_kafka_io.write(test_df)
@@ -215,8 +213,8 @@ class TestKafkaIO:
         write_kafka_io = WriteKafkaIO(kafka_cloud_config, key_generator=lambda _, message: "XXX")
 
         # When
-        with patch.object(dynamicio.mixins.with_kafka, "KafkaProducer") as mock__kafka_producer:
-            mock__kafka_producer.DEFAULT_CONFIG = KafkaProducer.DEFAULT_CONFIG
+        with patch.object(dynamicio.mixins.with_kafka, Producer) as mock__kafka_producer:
+            mock__kafka_producer.DEFAULT_CONFIG = WithKafka.VALID_CONFIG_KEYS
             mock_producer = MockKafkaProducer()
             mock__kafka_producer.return_value = mock_producer
             write_kafka_io.write(test_df)
@@ -272,8 +270,8 @@ class TestKafkaIO:
         write_kafka_io = WriteKafkaIO(kafka_cloud_config)
 
         # When
-        with patch.object(dynamicio.mixins.with_kafka, "KafkaProducer") as mock__kafka_producer:
-            mock__kafka_producer.DEFAULT_CONFIG = KafkaProducer.DEFAULT_CONFIG
+        with patch.object(dynamicio.mixins.with_kafka, Producer) as mock__kafka_producer:
+            mock__kafka_producer.DEFAULT_CONFIG = WithKafka.VALID_CONFIG_KEYS
             mock_producer = MockKafkaProducer()
             mock__kafka_producer.return_value = mock_producer
 
@@ -300,8 +298,8 @@ class TestKafkaIO:
         write_kafka_io = WriteKafkaIO(kafka_cloud_config, key_generator=lambda idx, _: "xxx", document_transformer=lambda _: "xxx")
 
         # When
-        with patch.object(dynamicio.mixins.with_kafka, "KafkaProducer") as mock__kafka_producer:
-            mock__kafka_producer.DEFAULT_CONFIG = KafkaProducer.DEFAULT_CONFIG
+        with patch.object(dynamicio.mixins.with_kafka, Producer) as mock__kafka_producer:
+            mock__kafka_producer.DEFAULT_CONFIG = WithKafka.VALID_CONFIG_KEYS
             mock_producer = MockKafkaProducer()
             mock__kafka_producer.return_value = mock_producer
 
