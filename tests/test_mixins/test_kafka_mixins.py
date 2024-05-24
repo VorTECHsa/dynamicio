@@ -366,3 +366,41 @@ class TestKafkaIO:
         # Then
         assert write_kafka_io._WithKafka__key_generator("idx", "value") == "xxx"
         assert write_kafka_io._WithKafka__document_transformer("value") == "xxx"
+
+    @pytest.mark.unit
+    def test_raise_exception_on_single_message_failure(self, input_messages_df):
+        # Given
+        def rows_generator(_df, chunk_size):
+            _chunk = []
+            for _, row in _df.iterrows():
+                _chunk.append(row.to_dict())
+                if len(_chunk) == chunk_size:
+                    yield pd.DataFrame(_chunk)
+                    _chunk.clear()
+
+        df = input_messages_df
+
+        kafka_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="WRITE_TO_KAFKA_JSON")
+
+        # Create the MockKafkaProducer instance before patching
+        mock_kafka_producer_instance = MockKafkaProducer()
+
+        def mock_produce(*args, **kwargs):  # pylint: disable=unused-argument
+            if mock_kafka_producer_instance.produce_call_count == 1:
+                raise Exception("Mock message delivery failure")
+            mock_kafka_producer_instance.produce_call_count += 1
+
+        # When
+        with patch("dynamicio.mixins.with_kafka.Producer", return_value=mock_kafka_producer_instance):
+            with patch.object(mock_kafka_producer_instance, "produce", side_effect=mock_produce):
+                write_kafka_io = WriteKafkaIO(kafka_cloud_config)
+                with pytest.raises(Exception, match="Mock message delivery failure"):
+                    for chunk in rows_generator(_df=df, chunk_size=2):
+                        write_kafka_io.write(chunk)
+
+                # Ensure only one message is sent successfully before the failure
+                assert mock_kafka_producer_instance.produce_call_count == 1

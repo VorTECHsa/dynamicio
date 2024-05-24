@@ -307,6 +307,7 @@ class WithKafka:
         logger.info(f"Sending {len(df)} messages to Kafka topic: {topic}.")
 
         messages = df.reset_index(drop=True).to_dict("records")
+
         for idx, message in zip(df.index.values, messages):
             key = self.__key_generator(idx, message)
             transformed_message = self.__document_transformer(message)
@@ -321,7 +322,7 @@ class WithKafka:
     def _on_delivery(err, msg):
         """Callback for message delivery."""
         if err is not None:
-            logger.error(f"Message delivery failed: {err}, for message: {msg}")
+            raise Exception(f"Message delivery failed: {err}, for message: {msg}")
 
     @staticmethod
     def _default_key_serializer(key: Optional[Any]) -> Optional[bytes]:
