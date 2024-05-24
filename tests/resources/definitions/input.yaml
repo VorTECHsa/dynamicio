@@ -293,3 +293,17 @@ WRITE_TO_S3_PATH_PREFIX_PARQUET:
       bucket: "[[ MOCK_BUCKET ]]"
       path_prefix: "[[ MOCK_PREFIX ]]"
       file_type: "parquet"
+
+PRODUCTS:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/input/some_csv_to_read.csv"
+      file_type: "csv"
+  schema:
+    name: products
+    columns:
+      id:
+        type: "object"
+        validations: {}
+        metrics: []
