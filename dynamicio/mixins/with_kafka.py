@@ -313,11 +313,16 @@ class WithKafka:
             transformed_message = self.__document_transformer(message)
             serialized_key = self.__key_serializer(key)
             serialized_value = self.__value_serializer(transformed_message)
-            self.__producer.produce(
-                topic=topic, key=serialized_key, value=serialized_value, on_delivery=lambda err, msg: logger.info("Message delivered" if err is None else f"Error: {err}")
-            )
+
+            self.__producer.produce(topic=topic, key=serialized_key, value=serialized_value, on_delivery=self._on_delivery)
 
         self.__producer.flush()
+
+    @staticmethod
+    def _on_delivery(err, msg):
+        """Callback for message delivery."""
+        if err is not None:
+            logger.error(f"Message delivery failed: {err}, for message: {msg}")
 
     @staticmethod
     def _default_key_serializer(key: Optional[Any]) -> Optional[bytes]:
