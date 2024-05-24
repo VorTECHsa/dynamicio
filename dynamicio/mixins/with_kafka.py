@@ -96,7 +96,6 @@ class WithKafka:
         "broker.address.family",
         "broker.address.ttl",
         "broker.version.fallback",
-        "buffer.memory",
         "builtin.features",
         "check.crcs",
         "client.dns.lookup",
