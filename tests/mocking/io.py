@@ -1,5 +1,5 @@
 # pylint: disable=missing-class-docstring, missing-module-docstring, missing-function-docstring
-from typing import Optional, Callable
+from typing import Callable, Optional
 from unittest.mock import MagicMock
 
 from dynamicio import UnifiedIO
@@ -124,7 +124,7 @@ class MockKafkaProducer:
         self.config = kwargs  # Store the config to ensure it can accept any options
         self.produce_call_count = 0
 
-    def produce(self, topic: str, key: Optional[bytes], value: bytes, on_delivery: Callable):
+    def produce(self, topic: str, key: Optional[bytes], value: bytes, on_delivery: Callable):  # pylint: disable=unused-argument
         self.my_stream.append({"key": key, "value": value})
         on_delivery(None, MagicMock())
         self.produce_call_count += 1
