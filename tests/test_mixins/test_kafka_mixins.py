@@ -207,12 +207,14 @@ class TestKafkaIO:
 
         # Check that user options are correctly set
         assert kafka_config == {
+            "batch.size": 20000000,
             "bootstrap.servers": "mock-kafka-server",
             "buffer.memory": 134217728,
             "compression.type": "gzip",
             "linger.ms": 3000,
             "max.in.flight.requests.per.connection": 10,
             "message.send.max.retries": 3,
+            "request.timeout.ms": 60000,
             "retry.backoff.ms": 100,
         }
 
