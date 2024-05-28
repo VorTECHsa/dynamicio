@@ -1,6 +1,9 @@
 # pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring, too-many-public-methods
+import os
+
 import pytest
 
+from dynamicio.config import IOConfig
 from dynamicio.validations import (
     has_acceptable_percentage_of_nulls,
     has_no_null_values,
@@ -12,6 +15,8 @@ from dynamicio.validations import (
     is_lower_than,
     is_lower_than_or_equal,
 )
+from tests import constants
+from tests.mocking.io import ReadS3CsvIO
 
 
 class TestHasUniqueValues:
@@ -448,3 +453,24 @@ class TestIsBetween:
 
         # Then
         assert validation.valid is True and validation.value == 0 and validation.message == "All values of TEST[weight_b] is between 4 and 10 thresholds"
+
+
+class TestRegressions:
+    """Tests for regressions discovered in v4.3.0 release."""
+
+    @pytest.mark.unit
+    def test_missing_validations_and_metrics(self):
+        """Test that dynamicio works with schemas without validations specified."""
+        # Given
+        input_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="PRODUCTS")
+        io_instance = ReadS3CsvIO(source_config=input_config, apply_schema_validations=True, log_schema_metrics=True)
+
+        # When
+        data = io_instance.read()
+
+        # Then
+        assert data.to_dict() == {"id": {0: 1, 1: 2, 2: 3, 3: 4, 4: 5, 5: 6, 6: 7, 7: 8, 8: 9, 9: 10, 10: 11, 11: 12, 12: 13, 13: 14, 14: 15}}

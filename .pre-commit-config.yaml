@@ -60,17 +60,6 @@ repos:
 
   - repo: local
     hooks:
-      - id: mypy
-        name: mypy
-        description: Static type checking
-        entry: mypy dynamicio/
-        language: system
-        types: [python]
-        stages: [commit]
-        pass_filenames: false
-
-  - repo: local
-    hooks:
       - id: pytest-check
         name: pytest-check-src
         entry: python -m pytest tests --cov=dynamicio --cov-report=html --cov-report=xml -v

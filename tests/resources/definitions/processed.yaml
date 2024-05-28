@@ -65,6 +65,22 @@ WRITE_TO_KAFKA_JSON:
       kafka_server: "[[ KAFKA_SERVER ]]"
       kafka_topic: "[[ KAFKA_TOPIC ]]"
 
+WRITE_TO_KAFKA_JSON_WITH_OPTIONS:
+  CLOUD:
+    type: "kafka"
+    kafka:
+      kafka_server: "[[ KAFKA_SERVER ]]"
+      kafka_topic: "[[ KAFKA_TOPIC ]]"
+    options:
+      compression.type: "gzip"
+      linger.ms: 3000
+      buffer.memory: 134217728  # 128MB
+      message.send.max.retries: 3  # Mapped from `retries`
+      max.in.flight.requests.per.connection: 10  # Mapped from `max_in_flight_requests_per_connection`
+      request.timeout.ms: 60000  # Mapped from `request_timeout_ms`
+      batch.size: 20000000  # Mapped from `batch_size`
+      retry.backoff.ms: 100
+
 WRITE_TO_PG_PARQUET:
   LOCAL:
     type: "local"

@@ -1,4 +1,6 @@
 # pylint: disable=missing-class-docstring, missing-module-docstring, missing-function-docstring
+from typing import Callable, Optional
+from unittest.mock import MagicMock
 
 from dynamicio import UnifiedIO
 from dynamicio.core import SCHEMA_FROM_FILE
@@ -117,11 +119,15 @@ class WriteKeyedKafkaIO(UnifiedIO):
 
 
 class MockKafkaProducer:
-    def __init__(self):
+    def __init__(self, **kwargs):
         self.my_stream = []
+        self.config = kwargs  # Store the config to ensure it can accept any options
+        self.produce_call_count = 0
 
-    def send(self, topic: str, value: dict, key: str = None):  # pylint: disable=unused-argument
+    def produce(self, topic: str, key: Optional[bytes], value: bytes, on_delivery: Callable):  # pylint: disable=unused-argument
         self.my_stream.append({"key": key, "value": value})
+        on_delivery(None, MagicMock())
+        self.produce_call_count += 1
 
     def flush(self):
         pass

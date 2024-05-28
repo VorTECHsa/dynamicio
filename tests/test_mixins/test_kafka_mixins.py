@@ -1,31 +1,24 @@
 # pylint: disable=no-member, missing-module-docstring, missing-class-docstring, missing-function-docstring, too-many-public-methods, too-few-public-methods, protected-access, C0103, C0302, R0801
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pandas as pd
 import pytest
-from kafka import KafkaProducer
-
-import dynamicio.mixins.with_kafka
+import simplejson
 
 from dynamicio.config import IOConfig
 from dynamicio.mixins import WithKafka
 from tests import constants
-from tests.mocking.io import (
-    MockKafkaProducer,
-    WriteKafkaIO,
-)
+from tests.mocking.io import MockKafkaProducer, WriteKafkaIO
 
 
 class TestKafkaIO:
     @pytest.mark.unit
-    @patch.object(dynamicio.mixins.with_kafka, "KafkaProducer")
-    @patch.object(MockKafkaProducer, "send")
-    def test_write_to_kafka_is_called_for_writing_an_iterable_of_dicts_with_env_as_cloud_kafka(self, mock__kafka_producer, mock__kafka_producer_send, input_messages_df):
+    def test_write_to_kafka_is_called_for_writing_an_iterable_of_dicts_with_env_as_cloud_kafka(self, input_messages_df):
         # Given
         def rows_generator(_df, chunk_size):
             _chunk = []
-            for _, row in df.iterrows():
+            for _, row in _df.iterrows():
                 _chunk.append(row.to_dict())
                 if len(_chunk) == chunk_size:
                     yield pd.DataFrame(_chunk)
@@ -33,40 +26,36 @@ class TestKafkaIO:
 
         df = input_messages_df
 
-        mock__kafka_producer.return_value = MockKafkaProducer()
-        mock__kafka_producer_send.return_value = MagicMock()
-
         kafka_cloud_config = IOConfig(
             path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
             env_identifier="CLOUD",
             dynamic_vars=constants,
         ).get(source_key="WRITE_TO_KAFKA_JSON")
 
+        # Create the MockKafkaProducer instance before patching
+        mock_kafka_producer_instance = MockKafkaProducer()
+
         # When
-        for chunk in rows_generator(_df=df, chunk_size=2):
-            WriteKafkaIO(kafka_cloud_config).write(chunk)
+        with patch("dynamicio.mixins.with_kafka.Producer", return_value=mock_kafka_producer_instance):
+            write_kafka_io = WriteKafkaIO(kafka_cloud_config)
+            for chunk in rows_generator(_df=df, chunk_size=2):
+                write_kafka_io.write(chunk)
+
             # Then
-            assert mock__kafka_producer_send.call_count == 1
+            assert mock_kafka_producer_instance.produce_call_count == len(input_messages_df)
 
     @pytest.mark.unit
-    @patch.object(dynamicio.mixins.with_kafka, "KafkaProducer")
-    @patch.object(MockKafkaProducer, "send")
-    def test_write_to_kafka_is_called_with_document_transformer_if_provided_for_writing_an_iterable_of_dicts_with_env_as_cloud_kafka(
-        self, mock__kafka_producer, mock__kafka_producer_send, input_messages_df
-    ):
+    def test_write_to_kafka_is_called_with_document_transformer_if_provided_for_writing_an_iterable_of_dicts_with_env_as_cloud_kafka(self, input_messages_df):
         # Given
         def rows_generator(_df, chunk_size):
             _chunk = []
-            for _, row in df.iterrows():
+            for _, row in _df.iterrows():
                 _chunk.append(row.to_dict())
                 if len(_chunk) == chunk_size:
                     yield pd.DataFrame(_chunk)
                     _chunk.clear()
 
-        df = input_messages_df.iloc[[0]]
-
-        mock__kafka_producer.return_value = MockKafkaProducer()
-        mock__kafka_producer_send.return_value = MagicMock()
+        df = input_messages_df
 
         kafka_cloud_config = IOConfig(
             path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
@@ -74,19 +63,22 @@ class TestKafkaIO:
             dynamic_vars=constants,
         ).get(source_key="WRITE_TO_KAFKA_JSON")
 
+        # Create the MockKafkaProducer instance before patching
+        mock_kafka_producer_instance = MockKafkaProducer()
+
         # When
-        for chunk in rows_generator(_df=df, chunk_size=2):
-            WriteKafkaIO(kafka_cloud_config, document_transformer=lambda v: dict(**v, worked=True)).write(chunk)
+        with patch("dynamicio.mixins.with_kafka.Producer", return_value=mock_kafka_producer_instance):
+            write_kafka_io = WriteKafkaIO(kafka_cloud_config, document_transformer=lambda v: dict(**v, worked=True))
+            for chunk in rows_generator(_df=df, chunk_size=2):
+                write_kafka_io.write(chunk)
+
+            # Debug: Print the contents of my_stream to trace the issue
+            print("my_stream contents:", mock_kafka_producer_instance.my_stream)
+
             # Then
-            mock__kafka_producer_send.assert_called_once_with(
-                {
-                    "id": "message01",
-                    "foo": "xxxxxxxx",
-                    "bar": 0,
-                    "baz": ["a", "b", "c"],
-                    "worked": True,
-                }
-            )
+            for i in range(len(df)):
+                assert len(mock_kafka_producer_instance.my_stream) > 0, "No messages were produced"
+                assert mock_kafka_producer_instance.my_stream[i]["value"] == simplejson.dumps(dict(**df.iloc[i].to_dict(), worked=True), ignore_nan=True).encode("utf-8")
 
     @pytest.mark.unit
     def test_kafka_producer_default_value_serialiser_is_used_unless_alternative_is_given(self, test_df):
@@ -96,18 +88,18 @@ class TestKafkaIO:
             env_identifier="CLOUD",
             dynamic_vars=constants,
         ).get(source_key="WRITE_TO_KAFKA_JSON")
+
+        # Create the MockKafkaProducer instance before patching
+        mock_kafka_producer_instance = MockKafkaProducer()
+
         write_kafka_io = WriteKafkaIO(kafka_cloud_config)
 
         # When
-        with patch.object(dynamicio.mixins.with_kafka, "KafkaProducer") as mock__kafka_producer, patch.object(MockKafkaProducer, "send") as mock__kafka_producer_send:
-            mock__kafka_producer.DEFAULT_CONFIG = KafkaProducer.DEFAULT_CONFIG
-            mock__kafka_producer.return_value = MockKafkaProducer()
-            mock__kafka_producer_send.return_value = MagicMock()
+        with patch("dynamicio.mixins.with_kafka.Producer", return_value=mock_kafka_producer_instance):
             write_kafka_io.write(test_df)
 
-        # Then
-        value_serializer = write_kafka_io._WithKafka__kafka_config.pop("value_serializer")
-        assert "WithKafka._default_value_serializer" in str(value_serializer)
+        # Then (excuse me for resorting to private attributes, but it's the only way to test this)
+        assert write_kafka_io._WithKafka__value_serializer == write_kafka_io._default_value_serializer  # pylint: disable=comparison-with-callable
 
     @pytest.mark.unit
     def test_kafka_producer_default_key_serialiser_is_used_unless_alternative_is_given(self, test_df):
@@ -117,68 +109,115 @@ class TestKafkaIO:
             env_identifier="CLOUD",
             dynamic_vars=constants,
         ).get(source_key="WRITE_TO_KAFKA_JSON")
+
+        # Create the MockKafkaProducer instance before patching
+        mock_kafka_producer_instance = MockKafkaProducer()
+
         write_kafka_io = WriteKafkaIO(kafka_cloud_config)
 
         # When
-        with patch.object(dynamicio.mixins.with_kafka, "KafkaProducer") as mock__kafka_producer, patch.object(MockKafkaProducer, "send") as mock__kafka_producer_send:
-            mock__kafka_producer.DEFAULT_CONFIG = KafkaProducer.DEFAULT_CONFIG
-            mock__kafka_producer.return_value = MockKafkaProducer()
-            mock__kafka_producer_send.return_value = MagicMock()
+        with patch("dynamicio.mixins.with_kafka.Producer", return_value=mock_kafka_producer_instance):
+            write_kafka_io.write(test_df)
+
+        # Then (excuse me for resorting to private attributes, but it's the only way to test this)
+        assert write_kafka_io._WithKafka__key_serializer == write_kafka_io._default_key_serializer  # pylint: disable=comparison-with-callable
+
+    @pytest.mark.unit
+    def test_kafka_producer_default_compression_type_is_snappy(self, test_df):
+        # Given
+        kafka_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="WRITE_TO_KAFKA_JSON")
+
+        # Create the MockKafkaProducer instance before patching
+        mock_kafka_producer_instance = MockKafkaProducer()
+
+        write_kafka_io = WriteKafkaIO(kafka_cloud_config)
+
+        # When
+        with patch("dynamicio.mixins.with_kafka.Producer", return_value=mock_kafka_producer_instance):
             write_kafka_io.write(test_df)
 
         # Then
-        key_serializer = write_kafka_io._WithKafka__kafka_config.pop("key_serializer")
-        assert "WithKafka._default_key_serializer" in str(key_serializer)
+        # Remove serializers from config for assertion as they are function references
+        kafka_config = write_kafka_io._WithKafka__kafka_config.copy()
+        kafka_config.pop("value_serializer", None)  # Use .pop with default value to avoid KeyError
+        kafka_config.pop("key_serializer", None)  # Use .pop with default value to avoid KeyError
+
+        # Check that default options are correctly set
+        assert kafka_config == {"bootstrap.servers": "mock-kafka-server", "compression.type": "snappy"}
 
     @pytest.mark.unit
-    @patch.object(MockKafkaProducer, "send")
-    @patch.object(dynamicio.mixins.with_kafka, "KafkaProducer")
-    def test_kafka_producer_default_compression_type_is_snappy(self, mock__kafka_producer, mock__kafka_producer_send, test_df):
+    def test_kafka_producer_options_are_replaced_by_the_user_options(self, test_df):
         # Given
-        mock__kafka_producer.DEFAULT_CONFIG = KafkaProducer.DEFAULT_CONFIG
-        mock__kafka_producer.return_value = MockKafkaProducer()
-        mock__kafka_producer_send.return_value = MagicMock()
         kafka_cloud_config = IOConfig(
             path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
             env_identifier="CLOUD",
             dynamic_vars=constants,
         ).get(source_key="WRITE_TO_KAFKA_JSON")
+
+        # Create the MockKafkaProducer instance before patching
+        mock_kafka_producer_instance = MockKafkaProducer()
+
+        write_kafka_io = WriteKafkaIO(kafka_cloud_config, **{"compression.type": "lz4", "acks": 2})
+
+        # When
+        with patch("dynamicio.mixins.with_kafka.Producer", return_value=mock_kafka_producer_instance):
+            write_kafka_io.write(test_df)
+
+        # Then
+        # Remove serializers from config for assertion as they are function references
+        kafka_config = write_kafka_io._WithKafka__kafka_config.copy()
+        kafka_config.pop("value_serializer", None)  # Use .pop with default value to avoid KeyError
+        kafka_config.pop("key_serializer", None)  # Use .pop with default value to avoid KeyError
+
+        # Check that user options are correctly set
+        assert kafka_config == {
+            "acks": 2,
+            "bootstrap.servers": "mock-kafka-server",
+            "compression.type": "lz4",
+        }
+        assert write_kafka_io._WithKafka__kafka_config == kafka_config
+
+    @pytest.mark.unit
+    def test_kafka_producer_options_are_replaced_by_the_user_options_from_resource_definition(self, test_df):
+        # Given
+        kafka_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="WRITE_TO_KAFKA_JSON_WITH_OPTIONS")
+
+        # Create the MockKafkaProducer instance before patching
+        mock_kafka_producer_instance = MockKafkaProducer()
+
         write_kafka_io = WriteKafkaIO(kafka_cloud_config)
 
         # When
-        write_kafka_io.write(test_df)
+        with patch("dynamicio.mixins.with_kafka.Producer", return_value=mock_kafka_producer_instance):
+            write_kafka_io.write(test_df)
 
         # Then
-        write_kafka_io._WithKafka__kafka_config.pop("value_serializer")  # Removed as it returns a unique function identifier
-        write_kafka_io._WithKafka__kafka_config.pop("key_serializer")  # Removed as it returns a unique function identifier
-        assert write_kafka_io._WithKafka__kafka_config == {"bootstrap_servers": "mock-kafka-server", "compression_type": "snappy"}
+        # Remove serializers from config for assertion as they are function references
+        kafka_config = write_kafka_io._WithKafka__kafka_config.copy()
+        kafka_config.pop("value_serializer", None)  # Use .pop with default value to avoid KeyError
+        kafka_config.pop("key_serializer", None)  # Use .pop with default value to avoid KeyError
 
-    @pytest.mark.unit
-    @patch.object(MockKafkaProducer, "send")
-    @patch.object(dynamicio.mixins.with_kafka, "KafkaProducer")
-    def test_kafka_producer_options_are_replaced_by_the_user_options(self, mock__kafka_producer, mock__kafka_producer_send, test_df):
-        # Given
-        mock__kafka_producer.DEFAULT_CONFIG = KafkaProducer.DEFAULT_CONFIG
-        mock__kafka_producer.return_value = MockKafkaProducer()
-        mock__kafka_producer_send.return_value = MagicMock()
-        kafka_cloud_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
-            env_identifier="CLOUD",
-            dynamic_vars=constants,
-        ).get(source_key="WRITE_TO_KAFKA_JSON")
-        write_kafka_io = WriteKafkaIO(kafka_cloud_config, compression_type="lz4", acks=2)
+        # Check that user options are correctly set
+        assert kafka_config == {
+            "batch.size": 20000000,
+            "bootstrap.servers": "mock-kafka-server",
+            "compression.type": "gzip",
+            "linger.ms": 3000,
+            "max.in.flight.requests.per.connection": 10,
+            "message.send.max.retries": 3,
+            "request.timeout.ms": 60000,
+            "retry.backoff.ms": 100,
+        }
 
-        # When
-        write_kafka_io.write(test_df)
-
-        # Then
-        value_serializer = write_kafka_io._WithKafka__kafka_config.pop("value_serializer")  # Removed as it returns a unique function identifier
-        write_kafka_io._WithKafka__kafka_config.pop("key_serializer")  # Removed as it returns a unique function identifier
-        assert write_kafka_io._WithKafka__kafka_config == {
-            "acks": 2,
-            "bootstrap_servers": "mock-kafka-server",
-            "compression_type": "lz4",
-        } and "WithKafka._default_value_serializer" in str(value_serializer)
+        assert write_kafka_io._WithKafka__kafka_config == kafka_config
 
     @pytest.mark.unit
     def test_producer_send_method_sends_messages_with_index_as_key_by_default_if_a_keygen_is_not_provided(self, test_df):
@@ -188,21 +227,30 @@ class TestKafkaIO:
             env_identifier="CLOUD",
             dynamic_vars=constants,
         ).get(source_key="WRITE_TO_KAFKA_JSON")
+
+        # Create the MockKafkaProducer instance before patching
+        mock_kafka_producer_instance = MockKafkaProducer()
+
         write_kafka_io = WriteKafkaIO(kafka_cloud_config)
 
         # When
-        with patch.object(dynamicio.mixins.with_kafka, "KafkaProducer") as mock__kafka_producer:
-            mock__kafka_producer.DEFAULT_CONFIG = KafkaProducer.DEFAULT_CONFIG
-            mock_producer = MockKafkaProducer()
-            mock__kafka_producer.return_value = mock_producer
+        with patch("dynamicio.mixins.with_kafka.Producer", return_value=mock_kafka_producer_instance):
             write_kafka_io.write(test_df)
 
         # Then
-        assert mock_producer.my_stream == [
-            {"key": 0, "value": {"bar": 1000, "baz": "ABC", "foo": "id_1", "id": "cm_1"}},
-            {"key": 1, "value": {"bar": 1000, "baz": "ABC", "foo": "id_2", "id": "cm_2"}},
-            {"key": 2, "value": {"bar": 1000, "baz": "ABC", "foo": "id_3", "id": "cm_3"}},
+        def sort_dict(d):
+            return {k: d[k] for k in sorted(d)}
+
+        expected_stream = [
+            {"key": b"0", "value": simplejson.dumps(sort_dict({"bar": 1000, "baz": "ABC", "foo": "id_1", "id": "cm_1"}), ignore_nan=True).encode("utf-8")},
+            {"key": b"1", "value": simplejson.dumps(sort_dict({"bar": 1000, "baz": "ABC", "foo": "id_2", "id": "cm_2"}), ignore_nan=True).encode("utf-8")},
+            {"key": b"2", "value": simplejson.dumps(sort_dict({"bar": 1000, "baz": "ABC", "foo": "id_3", "id": "cm_3"}), ignore_nan=True).encode("utf-8")},
         ]
+        actual = []
+        for message in mock_kafka_producer_instance.my_stream:
+            actual.append({"key": message["key"], "value": simplejson.dumps(sort_dict(simplejson.loads(message["value"])), ignore_nan=True).encode("utf-8")})
+
+        assert actual == expected_stream
 
     @pytest.mark.unit
     def test_producer_send_method_can_send_keyed_messages_using_a_custom_key_generator(self, test_df):
@@ -214,19 +262,27 @@ class TestKafkaIO:
         ).get(source_key="WRITE_TO_KAFKA_JSON")
         write_kafka_io = WriteKafkaIO(kafka_cloud_config, key_generator=lambda _, message: "XXX")
 
+        # Create the MockKafkaProducer instance before patching
+        mock_kafka_producer_instance = MockKafkaProducer()
+
         # When
-        with patch.object(dynamicio.mixins.with_kafka, "KafkaProducer") as mock__kafka_producer:
-            mock__kafka_producer.DEFAULT_CONFIG = KafkaProducer.DEFAULT_CONFIG
-            mock_producer = MockKafkaProducer()
-            mock__kafka_producer.return_value = mock_producer
+        with patch("dynamicio.mixins.with_kafka.Producer", return_value=mock_kafka_producer_instance):
             write_kafka_io.write(test_df)
 
         # Then
-        assert mock_producer.my_stream == [
-            {"key": "XXX", "value": {"bar": 1000, "baz": "ABC", "foo": "id_1", "id": "cm_1"}},
-            {"key": "XXX", "value": {"bar": 1000, "baz": "ABC", "foo": "id_2", "id": "cm_2"}},
-            {"key": "XXX", "value": {"bar": 1000, "baz": "ABC", "foo": "id_3", "id": "cm_3"}},
+        def sort_dict(d):
+            return {k: d[k] for k in sorted(d)}
+
+        expected_stream = [
+            {"key": b"XXX", "value": simplejson.dumps(sort_dict({"bar": 1000, "baz": "ABC", "foo": "id_1", "id": "cm_1"}), ignore_nan=True).encode("utf-8")},
+            {"key": b"XXX", "value": simplejson.dumps(sort_dict({"bar": 1000, "baz": "ABC", "foo": "id_2", "id": "cm_2"}), ignore_nan=True).encode("utf-8")},
+            {"key": b"XXX", "value": simplejson.dumps(sort_dict({"bar": 1000, "baz": "ABC", "foo": "id_3", "id": "cm_3"}), ignore_nan=True).encode("utf-8")},
         ]
+        actual = []
+        for message in mock_kafka_producer_instance.my_stream:
+            actual.append({"key": message["key"], "value": simplejson.dumps(sort_dict(simplejson.loads(message["value"])), ignore_nan=True).encode("utf-8")})
+
+        assert actual == expected_stream
 
     @pytest.mark.unit
     @pytest.mark.parametrize(
@@ -271,15 +327,16 @@ class TestKafkaIO:
         ).get(source_key="WRITE_TO_KAFKA_JSON")
         write_kafka_io = WriteKafkaIO(kafka_cloud_config)
 
-        # When
-        with patch.object(dynamicio.mixins.with_kafka, "KafkaProducer") as mock__kafka_producer:
-            mock__kafka_producer.DEFAULT_CONFIG = KafkaProducer.DEFAULT_CONFIG
-            mock_producer = MockKafkaProducer()
-            mock__kafka_producer.return_value = mock_producer
+        # Create the MockKafkaProducer instance before patching
+        mock_kafka_producer_instance = MockKafkaProducer()
 
-            # When
+        # When
+        with patch("dynamicio.mixins.with_kafka.Producer", return_value=mock_kafka_producer_instance):
             write_kafka_io.write(keyed_test_df)
-            assert (write_kafka_io._WithKafka__key_generator("idx", "value") == "idx") and (write_kafka_io._WithKafka__document_transformer("value") == "value")
+
+        # Then
+        assert write_kafka_io._WithKafka__key_generator("idx", "value") == "idx"
+        assert write_kafka_io._WithKafka__document_transformer({"value": "value"}) == {"value": "value"}
 
     @pytest.mark.unit
     def test_custom_key_generator_and_transformer_are_used_if_they_are_provided_by_the_user(self):
@@ -299,12 +356,51 @@ class TestKafkaIO:
         ).get(source_key="WRITE_TO_KAFKA_JSON")
         write_kafka_io = WriteKafkaIO(kafka_cloud_config, key_generator=lambda idx, _: "xxx", document_transformer=lambda _: "xxx")
 
-        # When
-        with patch.object(dynamicio.mixins.with_kafka, "KafkaProducer") as mock__kafka_producer:
-            mock__kafka_producer.DEFAULT_CONFIG = KafkaProducer.DEFAULT_CONFIG
-            mock_producer = MockKafkaProducer()
-            mock__kafka_producer.return_value = mock_producer
+        # Create the MockKafkaProducer instance before patching
+        mock_kafka_producer_instance = MockKafkaProducer()
 
-            # When
+        # When
+        with patch("dynamicio.mixins.with_kafka.Producer", return_value=mock_kafka_producer_instance):
             write_kafka_io.write(keyed_test_df)
-            assert (write_kafka_io._WithKafka__key_generator("idx", "value") == "xxx") and (write_kafka_io._WithKafka__document_transformer("value") == "xxx")
+
+        # Then
+        assert write_kafka_io._WithKafka__key_generator("idx", "value") == "xxx"
+        assert write_kafka_io._WithKafka__document_transformer("value") == "xxx"
+
+    @pytest.mark.unit
+    def test_raise_exception_on_single_message_failure(self, input_messages_df):
+        # Given
+        def rows_generator(_df, chunk_size):
+            _chunk = []
+            for _, row in _df.iterrows():
+                _chunk.append(row.to_dict())
+                if len(_chunk) == chunk_size:
+                    yield pd.DataFrame(_chunk)
+                    _chunk.clear()
+
+        df = input_messages_df
+
+        kafka_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="WRITE_TO_KAFKA_JSON")
+
+        # Create the MockKafkaProducer instance before patching
+        mock_kafka_producer_instance = MockKafkaProducer()
+
+        def mock_produce(*args, **kwargs):  # pylint: disable=unused-argument
+            if mock_kafka_producer_instance.produce_call_count == 1:
+                raise Exception("Mock message delivery failure")
+            mock_kafka_producer_instance.produce_call_count += 1
+
+        # When
+        with patch("dynamicio.mixins.with_kafka.Producer", return_value=mock_kafka_producer_instance):
+            with patch.object(mock_kafka_producer_instance, "produce", side_effect=mock_produce):
+                write_kafka_io = WriteKafkaIO(kafka_cloud_config)
+                with pytest.raises(Exception, match="Mock message delivery failure"):
+                    for chunk in rows_generator(_df=df, chunk_size=2):
+                        write_kafka_io.write(chunk)
+
+                # Ensure only one message is sent successfully before the failure
+                assert mock_kafka_producer_instance.produce_call_count == 1
