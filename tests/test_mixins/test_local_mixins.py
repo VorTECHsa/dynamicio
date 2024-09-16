@@ -550,6 +550,34 @@ class TestLocalIO:
         # Then
         mocked__to_parquet.assert_called_once_with(os.path.join(constants.TEST_RESOURCES, "data/processed/write_some_parquet.parquet"), **to_parquet_kwargs)
 
+    @pytest.mark.unit
+    def test_write_parquet_with_max_partitions_and_max_open_files(self):
+        # Given
+        input_df = pd.DataFrame.from_dict({"col_1": [3, 2, 1], "col_2": ["a", "b", "c"], "col_3": ["a", "b", "c"]})
+
+        config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="WRITE_TO_S3_PARQUET")
+
+        to_parquet_kwargs = {
+            "use_deprecated_int96_timestamps": False,
+            "coerce_timestamps": "ms",
+            "allow_truncated_timestamps": True,
+            "row_group_size": 1000000,
+            "max_partitions": 2000,
+            "max_open_files": 100,
+        }
+
+        # When
+        with patch.object(dynamicio.mixins.with_local.pd.DataFrame, "to_parquet") as mocked_to_parquet:
+            write_s3_io = WriteS3ParquetIO(source_config=config, **to_parquet_kwargs)
+            write_s3_io.write(input_df)
+
+        # Then
+        mocked_to_parquet.assert_called_once_with(config.local.file_path, **to_parquet_kwargs)
+
     @pytest.mark.integration
     @patch.object(dynamicio.mixins.with_local.pd, "read_parquet")
     def test_read_parquet_file_is_called_with_additional_pyarrow_args(self, mock__read_parquet):

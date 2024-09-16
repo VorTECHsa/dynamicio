@@ -219,7 +219,7 @@ class WithLocal:
         return WithLocal.__write_with_pyarrow(df, file_path, **options)
 
     @classmethod
-    @utils.allow_options([*utils.args_of(pd.DataFrame.to_parquet), *utils.args_of(write_table)])
+    @utils.allow_options([*utils.args_of(pd.DataFrame.to_parquet), *utils.args_of(write_table), *["max_partitions", "max_open_files"]])
     def __write_with_pyarrow(cls, df: pd.DataFrame, filepath: str, **options: Any):
         return df.to_parquet(filepath, **options)
 
