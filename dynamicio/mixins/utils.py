@@ -1,4 +1,4 @@
-"""Mixin utility functions"""
+"""Mixin utility functions."""
 # pylint: disable=no-member, protected-access, too-few-public-methods
 
 import inspect
@@ -21,7 +21,7 @@ def allow_options(options: Union[Iterable, FunctionType, MethodType]):
         read_with_valid_options: The input function called with modified options.
     """
 
-    def _filter_out_irrelevant_options(kwargs: Mapping, valid_options: Iterable):
+    def _filter_out_irrelevant_options(kwargs: Mapping, valid_options: Iterable, func_name: str, file_type: str):
         filtered_options = {}
         invalid_options = {}
         for key_arg in kwargs.keys():
@@ -29,19 +29,19 @@ def allow_options(options: Union[Iterable, FunctionType, MethodType]):
                 filtered_options[key_arg] = kwargs[key_arg]
             else:
                 invalid_options[key_arg] = kwargs[key_arg]
+
         if len(invalid_options) > 0:
             logger.warning(
-                f"Options {invalid_options} were not used because they were not supported by the read or write method configured for this source. "
-                "Check if you expected any of those to have been used by the operation!"
+                f"Options {invalid_options} were not used by the {func_name} method for file type {file_type}. " "Check if you expected any of those to have been used by the operation!"
             )
         return filtered_options
 
     def read_with_valid_options(func):
         @wraps(func)
-        def _(*args, **kwargs):
+        def _(*args, file_type="unknown", **kwargs):
             if callable(options):
-                return func(*args, **_filter_out_irrelevant_options(kwargs, args_of(options)))
-            return func(*args, **_filter_out_irrelevant_options(kwargs, options))
+                return func(*args, **_filter_out_irrelevant_options(kwargs, args_of(options), func.__name__, file_type))
+            return func(*args, **_filter_out_irrelevant_options(kwargs, options, func.__name__, file_type))
 
         return _
 
