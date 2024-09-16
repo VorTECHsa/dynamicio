@@ -10,6 +10,7 @@ import pydantic
 from pydantic import BaseModel
 
 import dynamicio.config.pydantic.table_schema as table_spec
+from dynamicio.errors import ParentNotSetError
 
 
 @enum.unique
@@ -93,22 +94,17 @@ class IOBinding(BaseModel):
 
 
 class IOEnvironment(BaseModel):
-    """A section specifying an data source backed by a particular data backend."""
+    """A section specifying a data source backed by a particular data backend."""
 
     _parent: Optional[IOBinding] = None  # noqa: F821
     options: Mapping = pydantic.Field(default_factory=dict)
     data_backend_type: DataBackendType = pydantic.Field(alias="type", const=None)
 
-    class Config:
-        """Additional pydantic configuration for the model."""
-
-        underscore_attrs_are_private = True
-
     @property
     def dynamicio_schema(self) -> Union[table_spec.DataframeSchema, None]:
         """Returns tabular data structure definition for the data source (if available)."""
         if not self._parent:
-            raise Exception("Parent field is not set.")
+            raise ParentNotSetError("Parent field is not set for this IOEnvironment.")
         return self._parent.dynamicio_schema
 
     def set_parent(self, parent: IOBinding):  # noqa: F821

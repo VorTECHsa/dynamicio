@@ -11,6 +11,7 @@ __all__ = [
     "SchemaNotFoundError",
     "SchemaValidationError",
     "InvalidDatasetTypeError",
+    "ParentNotSetError",
     "CASTING_WARNING_MSG",
     "NOTICE_MSG",
 ]
@@ -62,6 +63,13 @@ class MissingSchemaDefinition(DynamicIOError):
 
     ERROR_STR = "The resource definition for this class is missing a schema definition"
     ERROR_STR_DETAILED = "The resource definition for this class is missing a schema definition: {0}"
+
+
+class ParentNotSetError(DynamicIOError):
+    """Error raised when a parent field is not set in an IOEnvironment."""
+
+    ERROR_STR = "Parent field is not set in the IOEnvironment."
+    ERROR_STR_DETAILED = "Parent field is not set in the IOEnvironment for {0}."
 
 
 class DataSourceError(DynamicIOError):
