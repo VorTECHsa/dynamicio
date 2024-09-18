@@ -8,8 +8,10 @@ from threading import Lock
 from typing import Any, MutableMapping
 
 import pandas as pd  # type: ignore
+import pyarrow.dataset as ds
+import pyarrow.parquet as pq  # type: ignore # pylint: disable=no-name-in-module
 from fastparquet import ParquetFile, write  # type: ignore
-from pyarrow.parquet import read_table, write_table  # type: ignore # pylint: disable=no-name-in-module
+from pyarrow import Table
 
 from dynamicio.config.pydantic import DataframeSchema, LocalBatchDataEnvironment, LocalDataEnvironment
 from dynamicio.mixins import utils
@@ -144,7 +146,7 @@ class WithLocal:
         return WithLocal.__read_with_pyarrow(file_path, **options)
 
     @classmethod
-    @utils.allow_options([*utils.args_of(pd.read_parquet), *utils.args_of(read_table)])
+    @utils.allow_options([*utils.args_of(pd.read_parquet), *utils.args_of(pq.read_table)])
     def __read_with_pyarrow(cls, file_path: str, **options: Any) -> pd.DataFrame:
         return pd.read_parquet(file_path, **options)
 
@@ -219,8 +221,26 @@ class WithLocal:
         return WithLocal.__write_with_pyarrow(df, file_path, **options)
 
     @classmethod
-    @utils.allow_options([*utils.args_of(pd.DataFrame.to_parquet), *utils.args_of(write_table), *["max_partitions", "max_open_files"]])
+    @utils.allow_options([*utils.args_of(pd.DataFrame.to_parquet), *utils.args_of(pq.write_table), *["max_partitions", "max_open_files", "use_pyarrow_write"]])
     def __write_with_pyarrow(cls, df: pd.DataFrame, filepath: str, **options: Any):
+        # Ensure use_pyarrow has a default of False
+        use_pyarrow_write = options.pop("use_pyarrow_write", False)
+
+        if use_pyarrow_write:
+            # Convert Pandas DataFrame to PyArrow Table
+            table = Table.from_pandas(df)
+
+            # Use pyarrow.dataset.write_dataset when max_partitions or max_open_files are specified
+            if "max_partitions" in options or "max_open_files" in options:
+                # Remove parquet-specific options that might cause errors in write_dataset
+                return ds.write_dataset(data=table, base_dir=filepath, format="parquet", **options)
+
+            # Write with pyarrow-specific options for the usual write_table method
+            return pq.write_table(table, filepath, **options)
+
+        # Remove pyarrow-specific options
+        options.pop("max_partitions", None)
+        options.pop("max_open_files", None)
         return df.to_parquet(filepath, **options)
 
     @classmethod

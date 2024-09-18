@@ -104,16 +104,18 @@ Quoting from the same paper:
 > An important strategy for combating glue-code is to wrap black-box packages into common API's. This allows supporting
 > infrastructure to be more reusable and reduces the cost of changing packages.
 
-Dynamicio (or dynamic(i/o)) serves exactly that; it serves as a convenient wrapper around `pandas` I/O operations. It's a manifestation of 
-the dependency inversion principle--a layer of indirection if you want--which keeps your code DRY and increases re-usability, effectively 
-decoupling business logic from the I/O layer.
+Dynamicio (or dynamic(i/o)) serves exactly that; it serves as a convenient wrapper around `pandas` I/O operations. It's a manifestation of the dependency inversion principle--a layer of indirection if you want--which keeps your code DRY and increases re-usability, effectively decoupling business logic from the I/O layer.
 
 ### Main features
 `dynamic(i/o)` supports:
-* seamless transition between environments; 
-* abstracting away from resource and data types through `resource definitions`; 
+* seamless transition between environments;
+* abstracting away from resource and data types through `resource definitions`;
 * honouring your expectations on data through `schema definitions`;
-* metrics auto-generation (logging) for monitoring purposes.
+* metrics auto-generation (logging) for monitoring purposes;
+
+#### Extras
+* **PyArrow write dataset enhancements**: Added support for writing Parquet files using PyArrow's dataset functionality, which includes handling large-scale data with `max_partitions` and `max_open_files` for efficient parallel I/O operations.
+
 
 ## Supported sources and data formats
 
@@ -903,6 +905,21 @@ TO_PARQUET_KWARGS = {
     "allow_truncated_timestamps": True,
 }
 ```
+Notice that you can pass all pandas options to write out, when for instance you are writing out parquet.
+
+demo/src/constants.py:
+```python
+# Parquet
+TO_PARQUET_KWARGS = {
+    "use_pyarrow_write": True, # Enable PyArrow writing
+    "use_deprecated_int96_timestamps": False,
+    "coerce_timestamps": "ms",
+    "allow_truncated_timestamps": True,
+    "max_partitions": 2000,  # Enable PyArrow dataset writing with partitioning
+    "max_open_files": 100,   # Control the number of simultaneously open files during write
+}
+```
+The newly added support for PyArrow's write_dataset allows you to manage more advanced configurations, such as partitioning (max_partitions) and limiting the number of open files (max_open_files) when writing Parquet files. This ensures more efficient writes, especially for large datasets, by leveraging PyArrow's parallel writing capabilities.
 
 Of, course this is not a problem as parquet is the format used by both resources in either environment. This not always the case however. See in 
 `demo/resources/definitions/processed.yaml`:

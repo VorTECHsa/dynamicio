@@ -562,6 +562,7 @@ class TestLocalIO:
         ).get(source_key="WRITE_TO_S3_PARQUET")
 
         to_parquet_kwargs = {
+            "use_pyarrow_write": True,
             "use_deprecated_int96_timestamps": False,
             "coerce_timestamps": "ms",
             "allow_truncated_timestamps": True,
@@ -571,12 +572,46 @@ class TestLocalIO:
         }
 
         # When
-        with patch.object(dynamicio.mixins.with_local.pd.DataFrame, "to_parquet") as mocked_to_parquet:
+        with patch.object(dynamicio.mixins.with_local.ds, "write_dataset") as mocked_write_dataset:
             write_s3_io = WriteS3ParquetIO(source_config=config, **to_parquet_kwargs)
             write_s3_io.write(input_df)
 
         # Then
-        mocked_to_parquet.assert_called_once_with(config.local.file_path, **to_parquet_kwargs)
+        mocked_write_dataset.assert_called()
+
+        # Extract the arguments passed to write_dataset
+        _, called_kwargs = mocked_write_dataset.call_args
+
+        # Assert that max_partitions and max_open_files were passed correctly
+        assert called_kwargs["max_partitions"] == 2000
+        assert called_kwargs["max_open_files"] == 100
+
+    @pytest.mark.unit
+    def test_write_parquet_with_using_pyarrow_write_table(self):
+        # Given
+        input_df = pd.DataFrame.from_dict({"col_1": [3, 2, 1], "col_2": ["a", "b", "c"], "col_3": ["a", "b", "c"]})
+
+        config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="WRITE_TO_S3_PARQUET")
+
+        to_parquet_kwargs = {
+            "use_pyarrow_write": True,
+            "use_deprecated_int96_timestamps": False,
+            "coerce_timestamps": "ms",
+            "allow_truncated_timestamps": True,
+            "row_group_size": 1000000,
+        }
+
+        # When
+        with patch.object(dynamicio.mixins.with_local.pq, "write_table") as mocked_write_table:
+            write_s3_io = WriteS3ParquetIO(source_config=config, **to_parquet_kwargs)
+            write_s3_io.write(input_df)
+
+        # Then
+        mocked_write_table.assert_called()
 
     @pytest.mark.integration
     @patch.object(dynamicio.mixins.with_local.pd, "read_parquet")
