@@ -6,6 +6,7 @@ confluent-kafka~=2.4.0
 logzero>=1.7.0
 magic-logger>=1.0.2
 no_implicit_optional==1.4.0
+numpy<2.0.0
 pandas>=2.0.0
 psycopg2-binary~=2.9.3
 pyarrow>=7.0.0

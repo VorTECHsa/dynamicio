@@ -516,7 +516,7 @@ class TestCoreIO:
                 CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
             ),
             (
-                pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": np.NAN}]),
+                pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": np.nan}]),
                 "bool",
                 CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
             ),
@@ -578,7 +578,7 @@ class TestCoreIO:
                 CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
             ),
             (
-                pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": np.NAN}]),
+                pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": np.nan}]),
                 "bool",
                 CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
             ),
@@ -640,7 +640,7 @@ class TestCoreIO:
                 CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
             ),
             (
-                pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": np.NAN}]),
+                pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": np.nan}]),
                 "bool",
                 CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
             ),
