@@ -212,3 +212,61 @@ class TestPostgresIO:
 
         # Then
         assert is_valid is True
+
+    @pytest.mark.unit
+    @patch.object(WithPostgres, "_write_to_database")
+    def test_write_to_postgres_appends_data_without_truncation(self, mock__write_to_database, test_df):
+        # Given
+        df = test_df
+        postgres_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="WRITE_TO_PG_APPEND_ONLY")
+
+        # When
+        write_config = WritePostgresIO(source_config=postgres_cloud_config, append_only=True)
+        write_config.write(df)
+
+        # Then
+        mock__write_to_database.assert_called_once()
+        (called_with_session, called_with_table_name, called_with_df, called_with_truncate, called_with_append) = mock__write_to_database.call_args[0]
+        pd.testing.assert_frame_equal(test_df, called_with_df)
+        assert not called_with_truncate
+        assert called_with_append
+        assert "append_only" in write_config.options
+
+
+    @pytest.mark.unit
+    @patch.object(WithPostgres, "_write_to_database")
+    def test_write_to_postgres_raises_error_if_conflicting_flags_set(self, mock__write_to_database, test_df):
+        # Given
+        df = test_df
+        postgres_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="WRITE_TO_PG_CONFLICTING_FLAGS")
+
+        # When / Then
+        with pytest.raises(ValueError) as exc_info:
+            write_config = WritePostgresIO(source_config=postgres_cloud_config, truncate_and_append=True, append_only=True)
+            write_config.write(df)
+
+        assert "Conflicting options set for truncate_and_append and append_only" in str(exc_info.value)
+
+    @pytest.mark.integration
+    def test_append_to_postgres_no_data_loss(self, test_df):
+        # Given
+        initial_data = pd.DataFrame({"id": [1, 2], "value": ["A", "B"]})
+        append_data = pd.DataFrame({"id": [3], "value": ["C"]})
+        expected_result = pd.DataFrame({"id": [1, 2, 3], "value": ["A", "B", "C"]})
+
+        WithPostgres.write_to_postgres(initial_data)
+        # When
+        WithPostgres(options={'append_only': True}).write_to_postgres(append_data)
+
+        # Then
+        result_data = WithPostgres.read_from_postgres()
+        pd.testing.assert_frame_equal(result_data, expected_result)
+

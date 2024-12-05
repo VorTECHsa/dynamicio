@@ -59,7 +59,8 @@ class WithPostgres:
 
     Args:
        - options:
-           - `truncate_and_append: bool`: If set to `True`, truncates the table and then appends the new rows. Otherwise, it drops the table and recreates it with the new rows.
+           - `truncate_and_append: bool`: If set to `True`, truncates the table and then appends the new rows.
+           - `append_only: bool`: If set to `True`, appends data to an existing table without truncation or replacement.
     """
 
     sources_config: PostgresDataEnvironment
@@ -144,7 +145,7 @@ class WithPostgres:
         return pd.read_sql(sql=query, con=session.get_bind(), **options)
 
     def _write_to_postgres(self, df: pd.DataFrame):
-        """Write a dataframe to postgres based on the {file_type} of the config_io configuration.
+        """Write a dataframe to postgres based on the options of the config_io configuration.
 
         Args:
             df: The dataframe to be written
@@ -162,36 +163,29 @@ class WithPostgres:
         model = self._generate_model_from_schema(self.sources_config.dynamicio_schema)
 
         is_truncate_and_append = self.options.get("truncate_and_append", False)
+        append_only = self.options.get("append_only", False)
 
-        logger.info(f"[postgres] Started uploading table: {self.sources_config.dynamicio_schema.name} from: {db_host}:{db_name}")
+        logger.info(f"[postgres] Started uploading to table: {self.sources_config.dynamicio_schema.name} at: {db_host}:{db_name}")
         with session_for(connection_string) as session:
-            self._write_to_database(session, model.__tablename__, df, is_truncate_and_append)  # type: ignore
+            self._write_to_database(session, model.__tablename__, df, is_truncate_and_append, append_only)  # type: ignore
 
     @staticmethod
-    def _write_to_database(session: SqlAlchemySession, table_name: str, df: pd.DataFrame, is_truncate_and_append: bool):
+    def _write_to_database(session: SqlAlchemySession, table_name: str, df: pd.DataFrame, is_truncate_and_append: bool, append_only: bool):
         """Write a dataframe to any database provided a session with a data model and a table name.
 
         Args:
-            session: Generated from a data model and a table name
-            table_name: The name of the table to read from a DB
+            session: Active session
+            table_name: The name of the table to write to in the DB
             df: The dataframe to be written out
-            is_truncate_and_append: Supply to truncate the table and append new rows to it; otherwise, delete and replace
+            is_truncate_and_append: If true, truncate the table and append new rows to it
+            append_only: If true, append new rows without truncation or replacement
         """
         if is_truncate_and_append:
             session.execute(f"TRUNCATE TABLE {table_name};")
-
-            # Below is a speedup hack in place of `df.to_csv` with the multipart option. As of today, even with
-            # `method="multi"`, uploading to Postgres is painfully slow. Hence, we're resorting to dumping the file as
-            # csv and using Postgres's CSV import function.
-            # https://stackoverflow.com/questions/2987433/how-to-import-csv-file-data-into-a-postgresql-table
-            with tempfile.NamedTemporaryFile(mode="r+") as temp_file:
-                df.to_csv(temp_file, index=False, header=False, sep="\t", doublequote=False, escapechar="\\", quoting=csv.QUOTE_NONE)
-                temp_file.flush()
-                temp_file.seek(0)
-
-                cur = session.connection().connection.cursor()
-                cur.copy_from(temp_file, table_name, columns=df.columns, null="")
+            df.to_sql(name=table_name, con=session.get_bind(), if_exists='append', index=False)
+        elif append_only:
+            df.to_sql(name=table_name, con=session.get_bind(), if_exists='append', index=False)
         else:
-            df.to_sql(name=table_name, con=session.get_bind(), if_exists="replace", index=False)
+            df.to_sql(name=table_name, con=session.get_bind(), if_exists='replace', index=False)
 
         session.commit()
