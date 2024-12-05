@@ -2,8 +2,6 @@
 
 """This module provides mixins that are providing Postgres I/O support."""
 
-import csv
-import tempfile
 from contextlib import contextmanager
 from typing import Any, Dict, Generator, MutableMapping, Union
 
@@ -59,7 +57,9 @@ class WithPostgres:
 
     Args:
        - options:
-           - `truncate_and_append: bool`: If set to `True`, truncates the table and then appends the new rows. Otherwise, it drops the table and recreates it with the new rows.
+          -`truncate: bool`: If set to `True`, truncates the table before writing
+          -`append: bool`: If set to `True`, appends the new rows to the table. Else replace the table.
+          - `truncate_and_append: bool`: Shorthand for both truncate and append
     """
 
     sources_config: PostgresDataEnvironment
@@ -161,36 +161,31 @@ class WithPostgres:
         assert self.sources_config.dynamicio_schema is not None, "The schema must be specified for SQL tables"
         model = self._generate_model_from_schema(self.sources_config.dynamicio_schema)
 
+        # Legacy option
         is_truncate_and_append = self.options.get("truncate_and_append", False)
+        is_append = self.options.get("append", False) or is_truncate_and_append
+        is_truncate = self.options.get("truncate", False) or is_truncate_and_append
 
         logger.info(f"[postgres] Started uploading table: {self.sources_config.dynamicio_schema.name} from: {db_host}:{db_name}")
         with session_for(connection_string) as session:
-            self._write_to_database(session, model.__tablename__, df, is_truncate_and_append)  # type: ignore
+            self._write_to_database(session, model.__tablename__, df, is_append, is_truncate)  # type: ignore
 
     @staticmethod
-    def _write_to_database(session: SqlAlchemySession, table_name: str, df: pd.DataFrame, is_truncate_and_append: bool):
+    def _write_to_database(session: SqlAlchemySession, table_name: str, df: pd.DataFrame, is_append: bool, is_truncate: bool):
         """Write a dataframe to any database provided a session with a data model and a table name.
 
         Args:
-            session: Generated from a data model and a table name
-            table_name: The name of the table to read from a DB
+            session: Active DB session
+            table_name: The name of the table to write to
             df: The dataframe to be written out
-            is_truncate_and_append: Supply to truncate the table and append new rows to it; otherwise, delete and replace
+            is_truncate: Supply to truncate the table before writing;
+            is_append: Supply to append new rows to the table; otherwise, delete and replace
         """
-        if is_truncate_and_append:
+        if is_truncate:
             session.execute(f"TRUNCATE TABLE {table_name};")
 
-            # Below is a speedup hack in place of `df.to_csv` with the multipart option. As of today, even with
-            # `method="multi"`, uploading to Postgres is painfully slow. Hence, we're resorting to dumping the file as
-            # csv and using Postgres's CSV import function.
-            # https://stackoverflow.com/questions/2987433/how-to-import-csv-file-data-into-a-postgresql-table
-            with tempfile.NamedTemporaryFile(mode="r+") as temp_file:
-                df.to_csv(temp_file, index=False, header=False, sep="\t", doublequote=False, escapechar="\\", quoting=csv.QUOTE_NONE)
-                temp_file.flush()
-                temp_file.seek(0)
-
-                cur = session.connection().connection.cursor()
-                cur.copy_from(temp_file, table_name, columns=df.columns, null="")
+        if is_append:
+            df.to_sql(name=table_name, con=session.get_bind(), if_exists="append", index=False)
         else:
             df.to_sql(name=table_name, con=session.get_bind(), if_exists="replace", index=False)
 

@@ -95,3 +95,5 @@ WRITE_TO_PG_PARQUET:
       db_name: "[[ DB_NAME ]]"
       db_user: "[[ DB_USER ]]"
       db_password: "[[ DB_PASS ]]"
+  schema:
+    file_path: "[[ TEST_RESOURCES ]]/schemas/pg.yaml"
