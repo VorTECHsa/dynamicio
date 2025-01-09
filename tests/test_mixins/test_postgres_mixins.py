@@ -212,3 +212,66 @@ class TestPostgresIO:
 
         # Then
         assert is_valid is True
+
+    @staticmethod
+    def _test_append_truncate_options(mock__write_to_database, test_df, options):
+        # Given
+        df = test_df
+        postgres_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(
+            source_key="WRITE_TO_PG_PARQUET",
+        )
+
+        # When
+        write_config = WritePostgresIO(source_config=postgres_cloud_config, **options)
+        write_config.write(df)
+
+        # Then
+        mock__write_to_database.assert_called_once()
+        (_, _, df, is_append, is_truncate) = mock__write_to_database.call_args[0]
+        pd.testing.assert_frame_equal(test_df, df)
+        return is_append, is_truncate, write_config.options
+
+    @pytest.mark.unit
+    @patch.object(WithPostgres, "_write_to_database")
+    def test_write_to_postgres_default_options(self, mock__write_to_database, test_df):
+        (append, truncate, options) = self._test_append_truncate_options(mock__write_to_database, test_df, {})
+        assert append is False
+        assert truncate is False
+        assert options == {}
+
+    @pytest.mark.unit
+    @patch.object(WithPostgres, "_write_to_database")
+    def test_write_to_postgres_legacy_append_and_truncate_option_overrules(self, mock__write_to_database, test_df):
+        (append, truncate, options) = self._test_append_truncate_options(mock__write_to_database, test_df, {"truncate_and_append": True, "append": False, "truncate": False})
+        assert append is True
+        assert truncate is True
+        assert "truncate_and_append" in options
+        assert "append" in options
+
+    @pytest.mark.unit
+    @patch.object(WithPostgres, "_write_to_database")
+    def test_write_to_postgres_truncate_option(self, mock__write_to_database, test_df):
+        (append, truncate, options) = self._test_append_truncate_options(mock__write_to_database, test_df, {"truncate": True})
+        assert append is False
+        assert truncate is True
+        assert "truncate" in options
+
+    @pytest.mark.unit
+    @patch.object(WithPostgres, "_write_to_database")
+    def test_write_to_postgres_append_option(self, mock__write_to_database, test_df):
+        (append, truncate, options) = self._test_append_truncate_options(mock__write_to_database, test_df, {"append": True})
+        assert append is True
+        assert truncate is False
+        assert "append" in options
+
+    @pytest.mark.unit
+    @patch.object(WithPostgres, "_write_to_database")
+    def test_write_to_postgres_append_and_truncate_options(self, mock__write_to_database, test_df):
+        (append, truncate, options) = self._test_append_truncate_options(mock__write_to_database, test_df, {"append": True, "truncate": True})
+        assert append is True
+        assert truncate is True
+        assert "append" in options

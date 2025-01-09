@@ -64,6 +64,7 @@ upload-package:
 	@${VENV_BIN_PATH}/twine upload dist/*
 
 tag-release-candidate:
+	@git fetch origin
 	@echo "The latest tag is:'$(shell git tag | sort -V | tail -1)'." \
 	&&echo "Please, provide a new tag (format vX.Y.Z-rc.X)):" \
 	&&read -p "> " tag \
