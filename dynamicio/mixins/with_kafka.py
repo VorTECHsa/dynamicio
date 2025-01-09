@@ -6,6 +6,7 @@ from typing import Any, Callable, Mapping, MutableMapping, Optional
 import pandas as pd  # type: ignore
 import simplejson
 from confluent_kafka import Producer
+from magic_logger import logger
 
 from dynamicio.config.pydantic import DataframeSchema, KafkaDataEnvironment
 from dynamicio.mixins import utils
@@ -303,6 +304,7 @@ class WithKafka:
         return Producer(**self.__kafka_config)
 
     def _send_messages(self, df: pd.DataFrame, topic: str) -> None:
+        logger.debug(f"Sending {len(df)} messages to Kafka topic: {topic}.")
         messages = df.reset_index(drop=True).to_dict("records")
 
         for idx, message in zip(df.index.values, messages):
