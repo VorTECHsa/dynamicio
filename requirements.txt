@@ -5,6 +5,7 @@ fsspec==2022.3.0
 confluent-kafka~=2.4.0
 logzero>=1.7.0
 magic-logger>=1.0.2
+numpy >= 1.24.0
 no_implicit_optional==1.4.0
 pandas>=1.2.4
 psycopg2-binary~=2.9.3
