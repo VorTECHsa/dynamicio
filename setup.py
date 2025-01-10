@@ -64,11 +64,11 @@ setuptools.setup(
     packages=setuptools.find_packages(),
     license="Apache License 2.0",
     classifiers=[
-        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.10",
         "License :: OSI Approved :: Apache Software License",
         "Operating System :: OS Independent",
     ],
-    python_requires=">=3.8",
+    python_requires=">=3.10",
     install_requires=read_requirements("requirements.txt"),
     package_data={"dynamicio": ["py.typed"]},
     entry_points="""

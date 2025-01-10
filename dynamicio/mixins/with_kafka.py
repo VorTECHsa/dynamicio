@@ -304,8 +304,7 @@ class WithKafka:
         return Producer(**self.__kafka_config)
 
     def _send_messages(self, df: pd.DataFrame, topic: str) -> None:
-        logger.info(f"Sending {len(df)} messages to Kafka topic: {topic}.")
-
+        logger.debug(f"Sending {len(df)} messages to Kafka topic: {topic}.")
         messages = df.reset_index(drop=True).to_dict("records")
 
         for idx, message in zip(df.index.values, messages):

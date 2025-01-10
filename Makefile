@@ -56,7 +56,7 @@ generate-docs:
 
 build-locally:
 	@${VENV_BIN_PATH}/pip install --upgrade build
-	@BUILD_VERSION=4.1.3 ${VENV_BIN_PATH}/python setup.py sdist bdist_wheel # Add a <some_version>, e.g. 0.2.3
+	@BUILD_VERSION=7.0.1 ${VENV_BIN_PATH}/python setup.py sdist bdist_wheel # Add a <some_version>, e.g. 0.2.3
 
 upload-package:
 	@${VENV_BIN_PATH}/pip install --upgrade twine

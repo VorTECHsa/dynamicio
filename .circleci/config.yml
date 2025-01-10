@@ -6,7 +6,7 @@ jobs:
   style_checks:
     working_directory: ~/project
     docker:
-      - image: cimg/python:3.8.13
+      - image: cimg/python:3.10
     steps:
       - checkout
       - run:
@@ -31,67 +31,11 @@ jobs:
             yamllint -v dynamicio
             yamllint -v tests
 
-  test_python_3_8:
-    parallelism: 6
-    working_directory: ~/project
-    docker:
-      - image: cimg/python:3.8.13
-    steps:
-      - checkout
-      - run:
-          name: "Remove .python-version file"
-          command: |
-            rm .python-version
-      - run:
-          name: "Install requirements"
-          command: |
-            pip install --upgrade pip
-            pip install \
-              -r requirements.txt \
-              -r requirements-dev.txt
-      - run:
-          name: "Run Python Tests"
-          command: |
-            shopt -s globstar
-            mkdir test-results
-            TESTS=$(circleci tests glob "tests/**/test_*.py" | circleci tests split)
-            pytest -vv --junitxml=test-results/junit.xml $TESTS
-      - store_test_results:
-          path: test-results
-
-  test_python_3_9:
-    parallelism: 6
-    working_directory: ~/project
-    docker:
-      - image: cimg/python:3.9.13
-    steps:
-      - checkout
-      - run:
-          name: "Remove .python-version file"
-          command: |
-            rm .python-version
-      - run:
-          name: "Install requirements"
-          command: |
-            pip install --upgrade pip
-            pip install \
-              -r requirements.txt \
-              -r requirements-dev.txt
-      - run:
-          name: "Run Python Tests"
-          command: |
-            shopt -s globstar
-            mkdir test-results
-            TESTS=$(circleci tests glob "tests/**/test_*.py" | circleci tests split)
-            pytest -vv --junitxml=test-results/junit.xml $TESTS
-      - store_test_results:
-          path: test-results
-
   test_python_3_10:
     parallelism: 6
     working_directory: ~/project
     docker:
-      - image: cimg/python:3.10.4
+      - image: cimg/python:3.10
     steps:
       - checkout
       - run:
@@ -118,7 +62,7 @@ jobs:
   build_and_publish:
     working_directory: ~/project
     docker:
-      - image: cimg/python:3.8.13
+      - image: cimg/python:3.10
     steps:
       - checkout
       - run:
@@ -149,18 +93,6 @@ workflows:
           filters:
             tags:
               only: /v.*/
-      - test_python_3_8:
-          requires:
-            - style_checks
-          filters:
-            tags:
-              only: /v.*/
-      - test_python_3_9:
-          requires:
-            - style_checks
-          filters:
-            tags:
-              only: /v.*/
       - test_python_3_10:
           requires:
             - style_checks
@@ -169,8 +101,6 @@ workflows:
               only: /v.*/
       - build_and_publish:
           requires:
-            - test_python_3_8
-            - test_python_3_9
             - test_python_3_10
           filters:
             tags:
