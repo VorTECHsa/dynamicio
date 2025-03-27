@@ -9,7 +9,6 @@ import tempfile
 import urllib.parse
 import uuid
 from contextlib import contextmanager
-from enum import Enum
 from typing import IO, Generator, List, Optional, Union  # noqa: I101
 
 import boto3  # type: ignore
@@ -22,6 +21,7 @@ from pandas import DataFrame, Series
 
 from dynamicio.config.pydantic import DataframeSchema, S3DataEnvironment, S3PathPrefixEnvironment
 from dynamicio.mixins import utils, with_local
+from dynamicio.mixins.utils import get_file_type_value
 
 
 class InMemStore(pd.io.pytables.HDFStore):
@@ -135,8 +135,7 @@ class WithS3PathPrefix(with_local.WithLocal):
             ValueError: In case the `partition_cols` arg is missing while trying to write a parquet file
         """
         s3_config = self.sources_config.s3
-
-        file_type = s3_config.file_type.value if isinstance(s3_config.file_type, Enum) else s3_config.file_type
+        file_type = get_file_type_value(s3_config.file_type)
         if file_type != "parquet":
             raise ValueError(f"File type not supported: {file_type}, only parquet files can be written to an S3 key")
         if "partition_cols" not in self.options:
@@ -200,7 +199,7 @@ class WithS3PathPrefix(with_local.WithLocal):
         in the `options` of the configuration.
         """
         s3_config = self.sources_config.s3
-        file_type = s3_config.file_type.value if isinstance(s3_config.file_type, Enum) else s3_config.file_type
+        file_type = get_file_type_value(s3_config.file_type)
         if file_type not in {"parquet", "csv", "hdf", "json"}:
             raise ValueError(f"File type not supported: {file_type}")
 
@@ -393,8 +392,7 @@ class WithS3File(with_local.WithLocal):
             DataFrame
         """
         s3_config = self.sources_config.s3
-        file_type = s3_config.file_type.value if isinstance(s3_config.file_type, Enum) else s3_config.file_type
-
+        file_type = get_file_type_value(s3_config.file_type)
         file_path = utils.resolve_template(s3_config.file_path, self.options)
         bucket = s3_config.bucket
 
@@ -429,7 +427,7 @@ class WithS3File(with_local.WithLocal):
         s3_config = self.sources_config.s3
         bucket = s3_config.bucket
         file_path = utils.resolve_template(s3_config.file_path, self.options)
-        file_type = s3_config.file_type.value if isinstance(s3_config.file_type, Enum) else s3_config.file_type
+        file_type = get_file_type_value(s3_config.file_type)
 
         logger.info(f"[s3] Started uploading: s3://{bucket}/{file_path}")
         if file_type in ["csv", "json", "parquet"]:

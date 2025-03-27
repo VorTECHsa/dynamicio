@@ -1,15 +1,14 @@
 # pylint: disable=no-member, missing-module-docstring, missing-class-docstring, missing-function-docstring, too-many-public-methods, too-few-public-methods, protected-access, C0103, C0302, R0801
 import os
+from enum import Enum
 from typing import Any
 
 import pytest
 
 from dynamicio.config import IOConfig
-from dynamicio.mixins.utils import allow_options, args_of, get_string_template_field_names, resolve_template
+from dynamicio.mixins.utils import allow_options, args_of, get_file_type_value, get_string_template_field_names, resolve_template
 from tests import constants
-from tests.mocking.io import (
-    ReadS3CsvIO,
-)
+from tests.mocking.io import ReadS3CsvIO
 
 
 class TestGetStringTemplateFieldNames:
@@ -157,3 +156,23 @@ class TestAllowedOptions:
 
         # Then
         assert expected_s3_csv_df.equals(s3_csv_df)
+
+
+class DummyFileType(str, Enum):
+    PARQUET = "parquet"
+    CSV = "csv"
+
+
+class TestGetFileTypeValue:
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        ["file_type", "expected"],
+        [
+            ("csv", "csv"),  # str
+            ("parquet", "parquet"),  # str
+            (DummyFileType.PARQUET, "parquet"),  # Enum
+            (DummyFileType.CSV, "csv"),  # Enum
+        ],
+    )
+    def test_returns_correct_string_value(self, file_type, expected):
+        assert get_file_type_value(file_type) == expected
