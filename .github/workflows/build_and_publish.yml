@@ -1,5 +1,5 @@
 ---
-name: Python CI
+name: Build and Publish
 
 on:
   push:

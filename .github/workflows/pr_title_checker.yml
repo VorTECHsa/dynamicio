@@ -1,0 +1,15 @@
+name: 'PR Title Checker'
+on:
+  pull_request:
+    types: [edited, opened, synchronize, reopened]
+
+jobs:
+  title-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: naveenk1223/action-pr-title@master
+        with:
+          regex: '^((?:Revert ")*)(build|ci|docs|feat|fix|bug|perf|refactor|style|test|eda|dag|adr|chore|dev|monitor|alert)(\(RND-\d{4,5}\))?: .+$(|" \(#\d+\))'
+          prefix_case_sensitive: false
+          min_length: 10
+          max_length: -1
