@@ -17,3 +17,4 @@ s3fs==0.4.2
 simplejson~=3.17.2
 SQLAlchemy~=1.4.11
 tables>=3.10.1
+libcst==1.5.1
