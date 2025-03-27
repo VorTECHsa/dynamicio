@@ -59,6 +59,62 @@ jobs:
       - store_test_results:
           path: test-results
 
+  test_python_3_11:
+    parallelism: 6
+    working_directory: ~/project
+    docker:
+      - image: cimg/python:3.11
+    steps:
+      - checkout
+      - run:
+          name: "Remove .python-version file"
+          command: |
+            rm .python-version
+      - run:
+          name: "Install requirements"
+          command: |
+            pip install --upgrade pip
+            pip install \
+              -r requirements.txt \
+              -r requirements-dev.txt
+      - run:
+          name: "Run Python Tests"
+          command: |
+            shopt -s globstar
+            mkdir test-results
+            TESTS=$(circleci tests glob "tests/**/test_*.py" | circleci tests split)
+            pytest -vv --junitxml=test-results/junit.xml $TESTS
+      - store_test_results:
+          path: test-results
+
+  test_python_3_12:
+    parallelism: 6
+    working_directory: ~/project
+    docker:
+      - image: cimg/python:3.12
+    steps:
+      - checkout
+      - run:
+          name: "Remove .python-version file"
+          command: |
+            rm .python-version
+      - run:
+          name: "Install requirements"
+          command: |
+            pip install --upgrade pip
+            pip install \
+              -r requirements.txt \
+              -r requirements-dev.txt
+      - run:
+          name: "Run Python Tests"
+          command: |
+            shopt -s globstar
+            mkdir test-results
+            TESTS=$(circleci tests glob "tests/**/test_*.py" | circleci tests split)
+            pytest -vv --junitxml=test-results/junit.xml $TESTS
+      - store_test_results:
+          path: test-results
+
   build_and_publish:
     working_directory: ~/project
     docker:
