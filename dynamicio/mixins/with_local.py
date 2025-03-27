@@ -4,6 +4,7 @@
 
 import glob
 import os
+from enum import Enum
 from threading import Lock
 from typing import Any, MutableMapping
 
@@ -39,7 +40,8 @@ class WithLocal:
         """
         local_config = self.sources_config.local
         file_path = utils.resolve_template(local_config.file_path, self.options)
-        file_type = local_config.file_type
+
+        file_type = local_config.file_type.value if isinstance(local_config.file_type, Enum) else local_config.file_type
 
         return getattr(self, f"_read_{file_type}_file")(file_path, self.schema, **self.options)
 
@@ -59,8 +61,7 @@ class WithLocal:
         """
         local_config = self.sources_config.local
         file_path = utils.resolve_template(local_config.file_path, self.options)
-        file_type = local_config.file_type
-
+        file_type = local_config.file_type.value
         getattr(self, f"_write_{file_type}_file")(df, file_path, **self.options)
 
     @staticmethod
@@ -265,10 +266,8 @@ class WithLocalBatch(WithLocal):
         """
         local_batch_config = self.sources_config.local
 
-        file_type = local_batch_config.file_type
-        filtering_file_type = file_type.value
-        if filtering_file_type == "hdf":
-            filtering_file_type = "h5"
+        file_type = local_batch_config.file_type.value if isinstance(local_batch_config.file_type, Enum) else local_batch_config.file_type
+        filtering_file_type = "h5" if file_type == "hdf" else file_type
 
         # Determine if the path is dynamic or static
         if local_batch_config.dynamic_file_path:

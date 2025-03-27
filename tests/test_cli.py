@@ -92,7 +92,7 @@ class TestCli:
             dynamicio.cli.run()
 
         # Then
-        assert mocked__generate_schema_for.called_once_with("the_one.parquet", ".")
+        mocked__generate_schema_for.assert_called_once_with("the_one.parquet")
 
     @pytest.mark.unit
     def test_when_batch_flag_is_used__generate_schema_for__is_called_multiple_times_as_per_the_no_of_files_under_the_datasets_dir(
