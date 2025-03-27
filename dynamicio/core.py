@@ -146,7 +146,7 @@ class DynamicDataIO:
         Returns:
             A pandas dataframe or an iterable.
         """
-        source_name = self.sources_config.data_backend_type
+        source_name = self.sources_config.data_backend_type.value
         df = getattr(self, f"_read_from_{source_name}")()
 
         df = self._apply_schema(df)
@@ -172,7 +172,7 @@ class DynamicDataIO:
         Args:
             df: The data to be written
         """
-        source_name = self.sources_config.data_backend_type
+        source_name = self.sources_config.data_backend_type.value
         if set(df.columns) != self.schema.column_names:  # pylint: disable=E1101
             columns = [column for column in df.columns.to_list() if column in self.schema.column_names]
             df = df[columns]
@@ -190,7 +190,7 @@ class DynamicDataIO:
         All validations are checked and if any of them fails, a `SchemaValidationError` is raised.
 
         Args:
-            df:
+            df: A dataframe to be validated.
 
         Returns:
              self (to allow for method chaining).
@@ -200,7 +200,6 @@ class DynamicDataIO:
                 the exception object is a `List[str]`, where each element is the name of a
                 validation that failed.
         """
-
         failed_validations = {}
         for column in self.schema_validations.keys():
             col_validations = self.schema_validations[column]
@@ -225,7 +224,6 @@ class DynamicDataIO:
         Returns:
              self (to allow for method chaining).
         """
-
         for column in self.schema_metrics.keys():
             for metric in self.schema_metrics[column]:
                 get_metric(metric)(self.name, df, column)()  # type: ignore
