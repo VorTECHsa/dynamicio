@@ -1,6 +1,7 @@
 ---
 ignore: |
   charts/dynamicio/charts
+  .github/workflows
 
 yaml-files:
   - '*.yaml'
