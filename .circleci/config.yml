@@ -155,9 +155,23 @@ workflows:
           filters:
             tags:
               only: /v.*/
+      - test_python_3_11:
+          requires:
+            - style_checks
+          filters:
+            tags:
+              only: /v.*/
+      - test_python_3_12:
+          requires:
+            - style_checks
+          filters:
+            tags:
+              only: /v.*/
       - build_and_publish:
           requires:
             - test_python_3_10
+            - test_python_3_11
+            - test_python_3_12
           filters:
             tags:
               only: /v.*/
