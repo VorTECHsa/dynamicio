@@ -1,0 +1,82 @@
+---
+name: Python CI
+
+on:
+  push:
+    branches: ["main"]
+    tags: ["v*"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  style-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+      - name: Run style checks
+        run: |
+          black --check dynamicio tests
+          flake8 --verbose dynamicio tests
+          pylint -v dynamicio tests
+          yamllint -v dynamicio tests
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+      - name: Run tests
+        run: |
+          mkdir -p test-results
+          pytest -vv --junitxml=test-results/junit.xml
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results-${{ matrix.python-version }}
+          path: test-results
+
+  build-and-publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: ["style-checks", "test"]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+      - name: Install build dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements-build.txt
+      - name: Build package
+        run: |
+          BUILD_VERSION=${GITHUB_REF_NAME#v} python setup.py sdist bdist_wheel
+      - name: Publish to PyPI
+        env:
+          TWINE_USERNAME: ${{ secrets.TWINE_USERNAME }}
+          TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
+          TWINE_REPOSITORY_URL: ${{ secrets.TWINE_REPOSITORY_URL }}
+        run: |
+          pip install --upgrade twine
+          twine check dist/*
+          twine upload --repository-url "$TWINE_REPOSITORY_URL" dist/*
