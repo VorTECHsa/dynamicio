@@ -68,7 +68,7 @@ class DynamicDataIO:
         self.log_schema_metrics = log_schema_metrics
         self.show_casting_warnings = show_casting_warnings
         self.options = self._get_options(options, source_config.options)
-        source_name = self.sources_config.data_backend_type
+        source_name = self.sources_config.data_backend_type.value
         if self.schema is SCHEMA_FROM_FILE:
             active_schema = self.sources_config.dynamicio_schema
         else:
