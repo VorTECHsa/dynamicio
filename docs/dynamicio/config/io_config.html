@@ -1,0 +1,1016 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
+<meta name="generator" content="pdoc 0.10.0" />
+<title>dynamicio.config.io_config API documentation</title>
+<meta name="description" content="Implements the `IOConfig` class, generating objects used as a configuration parameter for the instantiation …" />
+<link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
+<link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/typography.min.css" integrity="sha256-7l/o7C8jubJiy74VsKTidCy1yBkRtiUGbVkYBylBqUg=" crossorigin>
+<link rel="stylesheet preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.1.1/styles/github.min.css" crossorigin>
+<style>:root{--highlight-color:#fe9}.flex{display:flex !important}body{line-height:1.5em}#content{padding:20px}#sidebar{padding:30px;overflow:hidden}#sidebar > *:last-child{margin-bottom:2cm}.http-server-breadcrumbs{font-size:130%;margin:0 0 15px 0}#footer{font-size:.75em;padding:5px 30px;border-top:1px solid #ddd;text-align:right}#footer p{margin:0 0 0 1em;display:inline-block}#footer p:last-child{margin-right:30px}h1,h2,h3,h4,h5{font-weight:300}h1{font-size:2.5em;line-height:1.1em}h2{font-size:1.75em;margin:1em 0 .50em 0}h3{font-size:1.4em;margin:25px 0 10px 0}h4{margin:0;font-size:105%}h1:target,h2:target,h3:target,h4:target,h5:target,h6:target{background:var(--highlight-color);padding:.2em 0}a{color:#058;text-decoration:none;transition:color .3s ease-in-out}a:hover{color:#e82}.title code{font-weight:bold}h2[id^="header-"]{margin-top:2em}.ident{color:#900}pre code{background:#f8f8f8;font-size:.8em;line-height:1.4em}code{background:#f2f2f1;padding:1px 4px;overflow-wrap:break-word}h1 code{background:transparent}pre{background:#f8f8f8;border:0;border-top:1px solid #ccc;border-bottom:1px solid #ccc;margin:1em 0;padding:1ex}#http-server-module-list{display:flex;flex-flow:column}#http-server-module-list div{display:flex}#http-server-module-list dt{min-width:10%}#http-server-module-list p{margin-top:0}.toc ul,#index{list-style-type:none;margin:0;padding:0}#index code{background:transparent}#index h3{border-bottom:1px solid #ddd}#index ul{padding:0}#index h4{margin-top:.6em;font-weight:bold}@media (min-width:200ex){#index .two-column{column-count:2}}@media (min-width:300ex){#index .two-column{column-count:3}}dl{margin-bottom:2em}dl dl:last-child{margin-bottom:4em}dd{margin:0 0 1em 3em}#header-classes + dl > dd{margin-bottom:3em}dd dd{margin-left:2em}dd p{margin:10px 0}.name{background:#eee;font-weight:bold;font-size:.85em;padding:5px 10px;display:inline-block;min-width:40%}.name:hover{background:#e0e0e0}dt:target .name{background:var(--highlight-color)}.name > span:first-child{white-space:nowrap}.name.class > span:nth-child(2){margin-left:.4em}.inherited{color:#999;border-left:5px solid #eee;padding-left:1em}.inheritance em{font-style:normal;font-weight:bold}.desc h2{font-weight:400;font-size:1.25em}.desc h3{font-size:1em}.desc dt code{background:inherit}.source summary,.git-link-div{color:#666;text-align:right;font-weight:400;font-size:.8em;text-transform:uppercase}.source summary > *{white-space:nowrap;cursor:pointer}.git-link{color:inherit;margin-left:1em}.source pre{max-height:500px;overflow:auto;margin:0}.source pre code{font-size:12px;overflow:visible}.hlist{list-style:none}.hlist li{display:inline}.hlist li:after{content:',\2002'}.hlist li:last-child:after{content:none}.hlist .hlist{display:inline;padding-left:1em}img{max-width:100%}td{padding:0 .5em}.admonition{padding:.1em .5em;margin-bottom:1em}.admonition-title{font-weight:bold}.admonition.note,.admonition.info,.admonition.important{background:#aef}.admonition.todo,.admonition.versionadded,.admonition.tip,.admonition.hint{background:#dfd}.admonition.warning,.admonition.versionchanged,.admonition.deprecated{background:#fd4}.admonition.error,.admonition.danger,.admonition.caution{background:lightpink}</style>
+<style media="screen and (min-width: 700px)">@media screen and (min-width:700px){#sidebar{width:30%;height:100vh;overflow:auto;position:sticky;top:0}#content{width:70%;max-width:100ch;padding:3em 4em;border-left:1px solid #ddd}pre code{font-size:1em}.item .name{font-size:1em}main{display:flex;flex-direction:row-reverse;justify-content:flex-end}.toc ul ul,#index ul{padding-left:1.5em}.toc > ul > li{margin-top:.5em}}</style>
+<style media="print">@media print{#sidebar h1{page-break-before:always}.source{display:none}}@media print{*{background:transparent !important;color:#000 !important;box-shadow:none !important;text-shadow:none !important}a[href]:after{content:" (" attr(href) ")";font-size:90%}a[href][title]:after{content:none}abbr[title]:after{content:" (" attr(title) ")"}.ir a:after,a[href^="javascript:"]:after,a[href^="#"]:after{content:""}pre,blockquote{border:1px solid #999;page-break-inside:avoid}thead{display:table-header-group}tr,img{page-break-inside:avoid}img{max-width:100% !important}@page{margin:0.5cm}p,h2,h3{orphans:3;widows:3}h1,h2,h3,h4,h5,h6{page-break-after:avoid}}</style>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.1.1/highlight.min.js" integrity="sha256-Uv3H6lx7dJmRfRvH8TH6kJD1TSK1aFcwgx+mdg3epi8=" crossorigin></script>
+<script>window.addEventListener('DOMContentLoaded', () => hljs.initHighlighting())</script>
+</head>
+<body>
+<main>
+<article id="content">
+<header>
+<h1 class="title">Module <code>dynamicio.config.io_config</code></h1>
+</header>
+<section id="section-intro">
+<p>Implements the <code><a title="dynamicio.config.io_config.IOConfig" href="#dynamicio.config.io_config.IOConfig">IOConfig</a></code> class, generating objects used as a configuration parameter for the instantiation of<code>src.utils.dynamicio.dataio.DynamicDataIO</code> objects.</p>
+<p>The <code><a title="dynamicio.config.io_config.IOConfig" href="#dynamicio.config.io_config.IOConfig">IOConfig</a></code> object, essentially parses a yaml file that contains a set of input sources that will be processed by a
+task, converting filtering and converting them into dictionaries.</p>
+<p>For example, suppose an <code>input.yaml</code> file, containing:</p>
+<pre><code>READ_FROM_S3_CSV:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/input/some_csv_to_read.csv"
+      file_type: "csv"
+  CLOUD:
+    type: "s3"
+    s3:
+      bucket: "[[ MOCK_BUCKET ]]"
+      file_path: "[[ MOCK_KEY ]]"
+      file_type: "csv"
+</code></pre>
+<p>would be loaded with:</p>
+<pre><code>input_sources_config = IOConfig(
+        "path_to/input.yaml",
+        env_identifier="CLOUD",
+        dynamic_vars=config_module
+    )
+</code></pre>
+<p>and:</p>
+<pre><code>input_sources_config.config
+</code></pre>
+<p>would return:</p>
+<pre><code>    {
+        "READ_FROM_S3_CSV": {
+            "LOCAL": {
+                "type": "local",
+                "local": {
+                    "file_path": f"{test_global_vars.TEST_RESOURCES}/data/input/some_csv_to_read.csv",
+                    "file_type": "csv",
+                },
+            },
+            "CLOUD": {
+                "type": "s3",
+                "s3": {
+                    "bucket": "mock-bucket",
+                    "file_path": "mock-key",
+                    "file_type": "csv"
+                }
+            },
+        }
+    }
+</code></pre>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">&#34;&#34;&#34;Implements the `IOConfig` class, generating objects used as a configuration parameter for the instantiation of`src.utils.dynamicio.dataio.DynamicDataIO` objects.
+
+The `IOConfig` object, essentially parses a yaml file that contains a set of input sources that will be processed by a
+task, converting filtering and converting them into dictionaries.
+
+For example, suppose an `input.yaml` file, containing:
+
+    READ_FROM_S3_CSV:
+      LOCAL:
+        type: &#34;local&#34;
+        local:
+          file_path: &#34;[[ TEST_RESOURCES ]]/data/input/some_csv_to_read.csv&#34;
+          file_type: &#34;csv&#34;
+      CLOUD:
+        type: &#34;s3&#34;
+        s3:
+          bucket: &#34;[[ MOCK_BUCKET ]]&#34;
+          file_path: &#34;[[ MOCK_KEY ]]&#34;
+          file_type: &#34;csv&#34;
+
+would be loaded with:
+
+    input_sources_config = IOConfig(
+            &#34;path_to/input.yaml&#34;,
+            env_identifier=&#34;CLOUD&#34;,
+            dynamic_vars=config_module
+        )
+
+and:
+
+    input_sources_config.config
+
+would return:
+
+        {
+            &#34;READ_FROM_S3_CSV&#34;: {
+                &#34;LOCAL&#34;: {
+                    &#34;type&#34;: &#34;local&#34;,
+                    &#34;local&#34;: {
+                        &#34;file_path&#34;: f&#34;{test_global_vars.TEST_RESOURCES}/data/input/some_csv_to_read.csv&#34;,
+                        &#34;file_type&#34;: &#34;csv&#34;,
+                    },
+                },
+                &#34;CLOUD&#34;: {
+                    &#34;type&#34;: &#34;s3&#34;,
+                    &#34;s3&#34;: {
+                        &#34;bucket&#34;: &#34;mock-bucket&#34;,
+                        &#34;file_path&#34;: &#34;mock-key&#34;,
+                        &#34;file_type&#34;: &#34;csv&#34;
+                    }
+                },
+            }
+        }
+&#34;&#34;&#34;
+__all__ = [&#34;IOConfig&#34;, &#34;SafeDynamicResourceLoader&#34;, &#34;SafeDynamicSchemaLoader&#34;]
+
+import re
+from types import ModuleType
+from typing import Any, List, MutableMapping
+
+import pydantic
+import yaml
+from magic_logger import logger
+
+from dynamicio.config.pydantic import BindingsYaml, IOEnvironment
+
+
+class SafeDynamicResourceLoader(yaml.SafeLoader):
+    &#34;&#34;&#34;Implements a dynamic yaml loader that parses yaml files and replaces strings that map to [[ DYNAMIC_VAR ]].
+
+    Dynamic variables defined in a provided module object.
+    &#34;&#34;&#34;
+
+    module = None
+    dynamic_data_matcher = re.compile(r&#34;(.*)(\[\[\s*(\S+)\s*]])(.*)&#34;)
+
+    @classmethod
+    def with_module(cls, module: ModuleType):
+        &#34;&#34;&#34;Creates a dynamic subclass of SafeDynamicLoader with the `data_module` attribute set to `module`.
+
+        Args:
+            module: A global vars module with all the dynamic values defined in it.
+
+        Returns:
+            type
+        &#34;&#34;&#34;
+        return type(f&#34;{cls.__name__}_{module.__name__}&#34;, (cls,), {&#34;module&#34;: module})
+
+    def dyn_str_constructor(self, node: yaml.nodes.ScalarNode) -&gt; str:
+        &#34;&#34;&#34;Responsible for the switching of one or more &#34;[[ DYNAMIC_VAR ]]&#34; strings with the respective attributes value in a given module.
+
+        Args:
+            node: Parsed item whose dynamic values that map to the &#34;[[ DYNAMIC_VAR ]]&#34; convention
+                are replaced with the respective attributes in te provided module.
+
+        Returns:
+            Constructed `str` or numerical.
+        &#34;&#34;&#34;
+        value = node.value
+
+        while result := self.dynamic_data_matcher.match(value):
+            ref = result.group(3)
+            replacement = getattr(self.module, ref)
+
+            value = self.dynamic_data_matcher.sub(f&#34;\\g&lt;1&gt;{replacement}\\g&lt;4&gt;&#34;, value)
+
+        return value
+
+
+class SafeDynamicSchemaLoader(yaml.SafeLoader):
+    &#34;&#34;&#34;Implements a dynamic yaml loader that parses yaml files and replaces strings that map to [[ DYNAMIC_VAR ]].
+
+    Dynamic variables defined in a provided module object.
+    &#34;&#34;&#34;
+
+    module = None
+    dynamic_data_matcher = re.compile(r&#34;(.*)(\[\[\s*(\S+)\s*]])(.*)&#34;)
+
+    @classmethod
+    def with_module(cls, module: ModuleType):
+        &#34;&#34;&#34;Creates a dynamic subclass of SafeDynamicLoader with the `data_module` attribute set to `module`.
+
+        Args:
+            module: A global vars module with all the dynamic values defined in it.
+
+        Returns:
+            type
+        &#34;&#34;&#34;
+        return type(f&#34;{cls.__name__}_{module.__name__}&#34;, (cls,), {&#34;module&#34;: module})
+
+    def dyn_value_constructor(self, node: yaml.nodes.ScalarNode) -&gt; Any:
+        &#34;&#34;&#34;Responsible for the switching of one or more &#34;[[ DYNAMIC_VAR ]]&#34; strings with the respective attributes value in a given module.
+
+        Args:
+            node: Parsed item whose dynamic values that map to the &#34;[[ DYNAMIC_VAR ]]&#34; convention
+                are replaced with the respective attributes in te provided module.
+
+        Returns:
+            Constructed `str` or numerical.
+        &#34;&#34;&#34;
+        value = node.value
+
+        while result := self.dynamic_data_matcher.match(value):
+            ref = result.group(3)
+            replacement = getattr(self.module, ref)
+
+            value = self.dynamic_data_matcher.sub(f&#34;\\g&lt;1&gt;{replacement}\\g&lt;4&gt;&#34;, value)
+
+            try:
+                value = float(value)
+                return value
+            except ValueError:
+                pass
+
+        return value
+
+
+class IOConfig:
+    &#34;&#34;&#34;Generates an object that returns a sub-dictionary of the elements of that yaml file.
+
+    The file serves as a config for setting up DynamicDataIO objects. Requires a resources yaml file,
+    an ENVIRONMENT value {CLOUD or LOCAL} and a vars module.
+
+    Example:
+        input_sources_config = IOConfig(
+            &#34;path_to/input.yaml&#34;,
+            env_identifier=&#34;CLOUD&#34;,
+            dynamic_vars=config_module
+        )
+    &#34;&#34;&#34;
+
+    YAML_TAG = &#34;tag:yaml.org,2002:str&#34;
+    SafeDynamicResourceLoader.add_constructor(YAML_TAG, SafeDynamicResourceLoader.dyn_str_constructor)
+    SafeDynamicSchemaLoader.add_constructor(YAML_TAG, SafeDynamicSchemaLoader.dyn_value_constructor)
+
+    path_to_source_yaml: str
+    env_identifier: str
+    config: BindingsYaml
+
+    def __init__(self, path_to_source_yaml: str, env_identifier: str, dynamic_vars: ModuleType):
+        &#34;&#34;&#34;Class constructor.
+
+        Args:
+            path_to_source_yaml: Absolute file path to yaml file containing source definitions
+            env_identifier: &#34;LOCAL&#34; or &#34;CLOUD&#34;.
+            dynamic_vars: module containing values for dynamic values that the source yaml
+                may reference.
+        &#34;&#34;&#34;
+        self.path_to_source_yaml = path_to_source_yaml
+        self.env_identifier = env_identifier
+        self.dynamic_vars = dynamic_vars
+        self.config = self._parse_sources_config()
+
+    def _parse_sources_config(self) -&gt; BindingsYaml:
+        &#34;&#34;&#34;Parses the yaml input and return a dictionary.
+
+        Returns:
+            A dictionary with the list of all file paths pointing to various input sources as those
+            are defined in their respective data/*.yaml files.
+        &#34;&#34;&#34;
+        used_file_inputs = [self.path_to_source_yaml]
+        with open(self.path_to_source_yaml, &#34;r&#34;) as stream:  # pylint: disable=unspecified-encoding]
+            logger.debug(f&#34;Parsing {self.path_to_source_yaml}...&#34;)
+            data = yaml.load(stream, SafeDynamicResourceLoader.with_module(self.dynamic_vars))
+
+        # Load any file_path&#39;s found in schema definitions
+        for io_binding in data.values():
+            if isinstance(io_binding, MutableMapping) and io_binding.get(&#34;schema&#34;, {}).get(&#34;file_path&#34;):
+                file_path = io_binding[&#34;schema&#34;][&#34;file_path&#34;]
+                used_file_inputs.append(file_path)
+                # schema has `file_path`` in it
+                with open(file_path, &#34;r&#34;, encoding=&#34;utf8&#34;) as stream:
+                    io_binding[&#34;schema&#34;] = yaml.load(stream, SafeDynamicSchemaLoader.with_module(self.dynamic_vars))
+
+        try:
+            config = BindingsYaml(bindings=data)
+            config.update_config_refs()
+        except pydantic.ValidationError:
+            logger.exception(f&#34;Error loading {data=!r}, {used_file_inputs=!r}&#34;)
+            raise
+        return config
+
+    @property
+    def sources(self) -&gt; List[str]:
+        &#34;&#34;&#34;Class property for easy access to a list of sources.
+
+        Returns:
+            All top level names of the available resources for the used resources yaml config.
+        &#34;&#34;&#34;
+        return list(self.config.bindings.keys())
+
+    def get(self, source_key: str) -&gt; IOEnvironment:
+        &#34;&#34;&#34;A getter.
+
+        Args:
+            source_key: The name of the resource for which we want to create a config.
+
+        Returns:
+            A dictionary with the necessary fields for loading the data from a source.
+
+        Example:
+
+            Given:
+
+                VOYAGE_DATA:
+                  LOCAL:
+                    type: &#34;local&#34;
+                    local:
+                      file_path: &#34;[[ TEST_RESOURCES ]]/data/processed/voyage_data.parquet&#34;
+                      file_type: &#34;parquet&#34;
+                  CLOUD:
+                    type: &#34;kafka&#34;
+                    KAFKA:
+                      KAFKA_SERVER: &#34;[[ KAFKA_SERVER ]]&#34;
+                      KAFKA_TOPIC: &#34;[[ KAFKA_TOPIC ]]&#34;
+
+            If you do:
+
+                input_sources_config = IOConfig(
+                    &#34;path_to/input.yaml&#34;,
+                    env_identifier=&#34;CLOUD&#34;,
+                    dynamic_vars=globals
+                )
+                voyage_data_cloud_mapping = input_config.get(source_key=&#34;VOYAGE_DATA&#34;)
+
+            then `voyage_data_cloud_mapping` is:
+
+                &#34;KAFKA&#34;: {
+                    &#34;KAFKA_SERVER&#34;: &#34;mock-kafka-server&#34;,
+                    &#34;KAFKA_TOPIC&#34;: &#34;mock-kafka-topic&#34;
+                }
+        &#34;&#34;&#34;
+        return self.config.bindings[source_key].get_binding_for_environment(self.env_identifier)</code></pre>
+</details>
+</section>
+<section>
+</section>
+<section>
+</section>
+<section>
+</section>
+<section>
+<h2 class="section-title" id="header-classes">Classes</h2>
+<dl>
+<dt id="dynamicio.config.io_config.IOConfig"><code class="flex name class">
+<span>class <span class="ident">IOConfig</span></span>
+<span>(</span><span>path_to_source_yaml: str, env_identifier: str, dynamic_vars: module)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Generates an object that returns a sub-dictionary of the elements of that yaml file.</p>
+<p>The file serves as a config for setting up DynamicDataIO objects. Requires a resources yaml file,
+an ENVIRONMENT value {CLOUD or LOCAL} and a vars module.</p>
+<h2 id="example">Example</h2>
+<p>input_sources_config = IOConfig(
+"path_to/input.yaml",
+env_identifier="CLOUD",
+dynamic_vars=config_module
+)</p>
+<p>Class constructor.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>path_to_source_yaml</code></strong></dt>
+<dd>Absolute file path to yaml file containing source definitions</dd>
+<dt><strong><code>env_identifier</code></strong></dt>
+<dd>"LOCAL" or "CLOUD".</dd>
+<dt><strong><code>dynamic_vars</code></strong></dt>
+<dd>module containing values for dynamic values that the source yaml
+may reference.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class IOConfig:
+    &#34;&#34;&#34;Generates an object that returns a sub-dictionary of the elements of that yaml file.
+
+    The file serves as a config for setting up DynamicDataIO objects. Requires a resources yaml file,
+    an ENVIRONMENT value {CLOUD or LOCAL} and a vars module.
+
+    Example:
+        input_sources_config = IOConfig(
+            &#34;path_to/input.yaml&#34;,
+            env_identifier=&#34;CLOUD&#34;,
+            dynamic_vars=config_module
+        )
+    &#34;&#34;&#34;
+
+    YAML_TAG = &#34;tag:yaml.org,2002:str&#34;
+    SafeDynamicResourceLoader.add_constructor(YAML_TAG, SafeDynamicResourceLoader.dyn_str_constructor)
+    SafeDynamicSchemaLoader.add_constructor(YAML_TAG, SafeDynamicSchemaLoader.dyn_value_constructor)
+
+    path_to_source_yaml: str
+    env_identifier: str
+    config: BindingsYaml
+
+    def __init__(self, path_to_source_yaml: str, env_identifier: str, dynamic_vars: ModuleType):
+        &#34;&#34;&#34;Class constructor.
+
+        Args:
+            path_to_source_yaml: Absolute file path to yaml file containing source definitions
+            env_identifier: &#34;LOCAL&#34; or &#34;CLOUD&#34;.
+            dynamic_vars: module containing values for dynamic values that the source yaml
+                may reference.
+        &#34;&#34;&#34;
+        self.path_to_source_yaml = path_to_source_yaml
+        self.env_identifier = env_identifier
+        self.dynamic_vars = dynamic_vars
+        self.config = self._parse_sources_config()
+
+    def _parse_sources_config(self) -&gt; BindingsYaml:
+        &#34;&#34;&#34;Parses the yaml input and return a dictionary.
+
+        Returns:
+            A dictionary with the list of all file paths pointing to various input sources as those
+            are defined in their respective data/*.yaml files.
+        &#34;&#34;&#34;
+        used_file_inputs = [self.path_to_source_yaml]
+        with open(self.path_to_source_yaml, &#34;r&#34;) as stream:  # pylint: disable=unspecified-encoding]
+            logger.debug(f&#34;Parsing {self.path_to_source_yaml}...&#34;)
+            data = yaml.load(stream, SafeDynamicResourceLoader.with_module(self.dynamic_vars))
+
+        # Load any file_path&#39;s found in schema definitions
+        for io_binding in data.values():
+            if isinstance(io_binding, MutableMapping) and io_binding.get(&#34;schema&#34;, {}).get(&#34;file_path&#34;):
+                file_path = io_binding[&#34;schema&#34;][&#34;file_path&#34;]
+                used_file_inputs.append(file_path)
+                # schema has `file_path`` in it
+                with open(file_path, &#34;r&#34;, encoding=&#34;utf8&#34;) as stream:
+                    io_binding[&#34;schema&#34;] = yaml.load(stream, SafeDynamicSchemaLoader.with_module(self.dynamic_vars))
+
+        try:
+            config = BindingsYaml(bindings=data)
+            config.update_config_refs()
+        except pydantic.ValidationError:
+            logger.exception(f&#34;Error loading {data=!r}, {used_file_inputs=!r}&#34;)
+            raise
+        return config
+
+    @property
+    def sources(self) -&gt; List[str]:
+        &#34;&#34;&#34;Class property for easy access to a list of sources.
+
+        Returns:
+            All top level names of the available resources for the used resources yaml config.
+        &#34;&#34;&#34;
+        return list(self.config.bindings.keys())
+
+    def get(self, source_key: str) -&gt; IOEnvironment:
+        &#34;&#34;&#34;A getter.
+
+        Args:
+            source_key: The name of the resource for which we want to create a config.
+
+        Returns:
+            A dictionary with the necessary fields for loading the data from a source.
+
+        Example:
+
+            Given:
+
+                VOYAGE_DATA:
+                  LOCAL:
+                    type: &#34;local&#34;
+                    local:
+                      file_path: &#34;[[ TEST_RESOURCES ]]/data/processed/voyage_data.parquet&#34;
+                      file_type: &#34;parquet&#34;
+                  CLOUD:
+                    type: &#34;kafka&#34;
+                    KAFKA:
+                      KAFKA_SERVER: &#34;[[ KAFKA_SERVER ]]&#34;
+                      KAFKA_TOPIC: &#34;[[ KAFKA_TOPIC ]]&#34;
+
+            If you do:
+
+                input_sources_config = IOConfig(
+                    &#34;path_to/input.yaml&#34;,
+                    env_identifier=&#34;CLOUD&#34;,
+                    dynamic_vars=globals
+                )
+                voyage_data_cloud_mapping = input_config.get(source_key=&#34;VOYAGE_DATA&#34;)
+
+            then `voyage_data_cloud_mapping` is:
+
+                &#34;KAFKA&#34;: {
+                    &#34;KAFKA_SERVER&#34;: &#34;mock-kafka-server&#34;,
+                    &#34;KAFKA_TOPIC&#34;: &#34;mock-kafka-topic&#34;
+                }
+        &#34;&#34;&#34;
+        return self.config.bindings[source_key].get_binding_for_environment(self.env_identifier)</code></pre>
+</details>
+<h3>Class variables</h3>
+<dl>
+<dt id="dynamicio.config.io_config.IOConfig.YAML_TAG"><code class="name">var <span class="ident">YAML_TAG</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.io_config.IOConfig.config"><code class="name">var <span class="ident">config</span> : <a title="dynamicio.config.pydantic.config.BindingsYaml" href="pydantic/config.html#dynamicio.config.pydantic.config.BindingsYaml">BindingsYaml</a></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.io_config.IOConfig.env_identifier"><code class="name">var <span class="ident">env_identifier</span> : str</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.io_config.IOConfig.path_to_source_yaml"><code class="name">var <span class="ident">path_to_source_yaml</span> : str</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+<h3>Instance variables</h3>
+<dl>
+<dt id="dynamicio.config.io_config.IOConfig.sources"><code class="name">var <span class="ident">sources</span> : List[str]</code></dt>
+<dd>
+<div class="desc"><p>Class property for easy access to a list of sources.</p>
+<h2 id="returns">Returns</h2>
+<p>All top level names of the available resources for the used resources yaml config.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@property
+def sources(self) -&gt; List[str]:
+    &#34;&#34;&#34;Class property for easy access to a list of sources.
+
+    Returns:
+        All top level names of the available resources for the used resources yaml config.
+    &#34;&#34;&#34;
+    return list(self.config.bindings.keys())</code></pre>
+</details>
+</dd>
+</dl>
+<h3>Methods</h3>
+<dl>
+<dt id="dynamicio.config.io_config.IOConfig.get"><code class="name flex">
+<span>def <span class="ident">get</span></span>(<span>self, source_key: str) ‑> <a title="dynamicio.config.pydantic.io_resources.IOEnvironment" href="pydantic/io_resources.html#dynamicio.config.pydantic.io_resources.IOEnvironment">IOEnvironment</a></span>
+</code></dt>
+<dd>
+<div class="desc"><p>A getter.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>source_key</code></strong></dt>
+<dd>The name of the resource for which we want to create a config.</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>A dictionary with the necessary fields for loading the data from a source.</p>
+<h2 id="example">Example</h2>
+<p>Given:</p>
+<pre><code>VOYAGE_DATA:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/processed/voyage_data.parquet"
+      file_type: "parquet"
+  CLOUD:
+    type: "kafka"
+    KAFKA:
+      KAFKA_SERVER: "[[ KAFKA_SERVER ]]"
+      KAFKA_TOPIC: "[[ KAFKA_TOPIC ]]"
+</code></pre>
+<p>If you do:</p>
+<pre><code>input_sources_config = IOConfig(
+    "path_to/input.yaml",
+    env_identifier="CLOUD",
+    dynamic_vars=globals
+)
+voyage_data_cloud_mapping = input_config.get(source_key="VOYAGE_DATA")
+</code></pre>
+<p>then <code>voyage_data_cloud_mapping</code> is:</p>
+<pre><code>"KAFKA": {
+    "KAFKA_SERVER": "mock-kafka-server",
+    "KAFKA_TOPIC": "mock-kafka-topic"
+}
+</code></pre></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get(self, source_key: str) -&gt; IOEnvironment:
+    &#34;&#34;&#34;A getter.
+
+    Args:
+        source_key: The name of the resource for which we want to create a config.
+
+    Returns:
+        A dictionary with the necessary fields for loading the data from a source.
+
+    Example:
+
+        Given:
+
+            VOYAGE_DATA:
+              LOCAL:
+                type: &#34;local&#34;
+                local:
+                  file_path: &#34;[[ TEST_RESOURCES ]]/data/processed/voyage_data.parquet&#34;
+                  file_type: &#34;parquet&#34;
+              CLOUD:
+                type: &#34;kafka&#34;
+                KAFKA:
+                  KAFKA_SERVER: &#34;[[ KAFKA_SERVER ]]&#34;
+                  KAFKA_TOPIC: &#34;[[ KAFKA_TOPIC ]]&#34;
+
+        If you do:
+
+            input_sources_config = IOConfig(
+                &#34;path_to/input.yaml&#34;,
+                env_identifier=&#34;CLOUD&#34;,
+                dynamic_vars=globals
+            )
+            voyage_data_cloud_mapping = input_config.get(source_key=&#34;VOYAGE_DATA&#34;)
+
+        then `voyage_data_cloud_mapping` is:
+
+            &#34;KAFKA&#34;: {
+                &#34;KAFKA_SERVER&#34;: &#34;mock-kafka-server&#34;,
+                &#34;KAFKA_TOPIC&#34;: &#34;mock-kafka-topic&#34;
+            }
+    &#34;&#34;&#34;
+    return self.config.bindings[source_key].get_binding_for_environment(self.env_identifier)</code></pre>
+</details>
+</dd>
+</dl>
+</dd>
+<dt id="dynamicio.config.io_config.SafeDynamicResourceLoader"><code class="flex name class">
+<span>class <span class="ident">SafeDynamicResourceLoader</span></span>
+<span>(</span><span>stream)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Implements a dynamic yaml loader that parses yaml files and replaces strings that map to [[ DYNAMIC_VAR ]].</p>
+<p>Dynamic variables defined in a provided module object.</p>
+<p>Initialize the scanner.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class SafeDynamicResourceLoader(yaml.SafeLoader):
+    &#34;&#34;&#34;Implements a dynamic yaml loader that parses yaml files and replaces strings that map to [[ DYNAMIC_VAR ]].
+
+    Dynamic variables defined in a provided module object.
+    &#34;&#34;&#34;
+
+    module = None
+    dynamic_data_matcher = re.compile(r&#34;(.*)(\[\[\s*(\S+)\s*]])(.*)&#34;)
+
+    @classmethod
+    def with_module(cls, module: ModuleType):
+        &#34;&#34;&#34;Creates a dynamic subclass of SafeDynamicLoader with the `data_module` attribute set to `module`.
+
+        Args:
+            module: A global vars module with all the dynamic values defined in it.
+
+        Returns:
+            type
+        &#34;&#34;&#34;
+        return type(f&#34;{cls.__name__}_{module.__name__}&#34;, (cls,), {&#34;module&#34;: module})
+
+    def dyn_str_constructor(self, node: yaml.nodes.ScalarNode) -&gt; str:
+        &#34;&#34;&#34;Responsible for the switching of one or more &#34;[[ DYNAMIC_VAR ]]&#34; strings with the respective attributes value in a given module.
+
+        Args:
+            node: Parsed item whose dynamic values that map to the &#34;[[ DYNAMIC_VAR ]]&#34; convention
+                are replaced with the respective attributes in te provided module.
+
+        Returns:
+            Constructed `str` or numerical.
+        &#34;&#34;&#34;
+        value = node.value
+
+        while result := self.dynamic_data_matcher.match(value):
+            ref = result.group(3)
+            replacement = getattr(self.module, ref)
+
+            value = self.dynamic_data_matcher.sub(f&#34;\\g&lt;1&gt;{replacement}\\g&lt;4&gt;&#34;, value)
+
+        return value</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>yaml.loader.SafeLoader</li>
+<li>yaml.reader.Reader</li>
+<li>yaml.scanner.Scanner</li>
+<li>yaml.parser.Parser</li>
+<li>yaml.composer.Composer</li>
+<li>yaml.constructor.SafeConstructor</li>
+<li>yaml.constructor.BaseConstructor</li>
+<li>yaml.resolver.Resolver</li>
+<li>yaml.resolver.BaseResolver</li>
+</ul>
+<h3>Class variables</h3>
+<dl>
+<dt id="dynamicio.config.io_config.SafeDynamicResourceLoader.dynamic_data_matcher"><code class="name">var <span class="ident">dynamic_data_matcher</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.io_config.SafeDynamicResourceLoader.module"><code class="name">var <span class="ident">module</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.io_config.SafeDynamicResourceLoader.yaml_constructors"><code class="name">var <span class="ident">yaml_constructors</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+<h3>Static methods</h3>
+<dl>
+<dt id="dynamicio.config.io_config.SafeDynamicResourceLoader.with_module"><code class="name flex">
+<span>def <span class="ident">with_module</span></span>(<span>module: module)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Creates a dynamic subclass of SafeDynamicLoader with the <code>data_module</code> attribute set to <code>module</code>.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>module</code></strong></dt>
+<dd>A global vars module with all the dynamic values defined in it.</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>type</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@classmethod
+def with_module(cls, module: ModuleType):
+    &#34;&#34;&#34;Creates a dynamic subclass of SafeDynamicLoader with the `data_module` attribute set to `module`.
+
+    Args:
+        module: A global vars module with all the dynamic values defined in it.
+
+    Returns:
+        type
+    &#34;&#34;&#34;
+    return type(f&#34;{cls.__name__}_{module.__name__}&#34;, (cls,), {&#34;module&#34;: module})</code></pre>
+</details>
+</dd>
+</dl>
+<h3>Methods</h3>
+<dl>
+<dt id="dynamicio.config.io_config.SafeDynamicResourceLoader.dyn_str_constructor"><code class="name flex">
+<span>def <span class="ident">dyn_str_constructor</span></span>(<span>self, node: yaml.nodes.ScalarNode) ‑> str</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Responsible for the switching of one or more "[[ DYNAMIC_VAR ]]" strings with the respective attributes value in a given module.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>node</code></strong></dt>
+<dd>Parsed item whose dynamic values that map to the "[[ DYNAMIC_VAR ]]" convention
+are replaced with the respective attributes in te provided module.</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>Constructed <code>str</code> or numerical.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def dyn_str_constructor(self, node: yaml.nodes.ScalarNode) -&gt; str:
+    &#34;&#34;&#34;Responsible for the switching of one or more &#34;[[ DYNAMIC_VAR ]]&#34; strings with the respective attributes value in a given module.
+
+    Args:
+        node: Parsed item whose dynamic values that map to the &#34;[[ DYNAMIC_VAR ]]&#34; convention
+            are replaced with the respective attributes in te provided module.
+
+    Returns:
+        Constructed `str` or numerical.
+    &#34;&#34;&#34;
+    value = node.value
+
+    while result := self.dynamic_data_matcher.match(value):
+        ref = result.group(3)
+        replacement = getattr(self.module, ref)
+
+        value = self.dynamic_data_matcher.sub(f&#34;\\g&lt;1&gt;{replacement}\\g&lt;4&gt;&#34;, value)
+
+    return value</code></pre>
+</details>
+</dd>
+</dl>
+</dd>
+<dt id="dynamicio.config.io_config.SafeDynamicSchemaLoader"><code class="flex name class">
+<span>class <span class="ident">SafeDynamicSchemaLoader</span></span>
+<span>(</span><span>stream)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Implements a dynamic yaml loader that parses yaml files and replaces strings that map to [[ DYNAMIC_VAR ]].</p>
+<p>Dynamic variables defined in a provided module object.</p>
+<p>Initialize the scanner.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class SafeDynamicSchemaLoader(yaml.SafeLoader):
+    &#34;&#34;&#34;Implements a dynamic yaml loader that parses yaml files and replaces strings that map to [[ DYNAMIC_VAR ]].
+
+    Dynamic variables defined in a provided module object.
+    &#34;&#34;&#34;
+
+    module = None
+    dynamic_data_matcher = re.compile(r&#34;(.*)(\[\[\s*(\S+)\s*]])(.*)&#34;)
+
+    @classmethod
+    def with_module(cls, module: ModuleType):
+        &#34;&#34;&#34;Creates a dynamic subclass of SafeDynamicLoader with the `data_module` attribute set to `module`.
+
+        Args:
+            module: A global vars module with all the dynamic values defined in it.
+
+        Returns:
+            type
+        &#34;&#34;&#34;
+        return type(f&#34;{cls.__name__}_{module.__name__}&#34;, (cls,), {&#34;module&#34;: module})
+
+    def dyn_value_constructor(self, node: yaml.nodes.ScalarNode) -&gt; Any:
+        &#34;&#34;&#34;Responsible for the switching of one or more &#34;[[ DYNAMIC_VAR ]]&#34; strings with the respective attributes value in a given module.
+
+        Args:
+            node: Parsed item whose dynamic values that map to the &#34;[[ DYNAMIC_VAR ]]&#34; convention
+                are replaced with the respective attributes in te provided module.
+
+        Returns:
+            Constructed `str` or numerical.
+        &#34;&#34;&#34;
+        value = node.value
+
+        while result := self.dynamic_data_matcher.match(value):
+            ref = result.group(3)
+            replacement = getattr(self.module, ref)
+
+            value = self.dynamic_data_matcher.sub(f&#34;\\g&lt;1&gt;{replacement}\\g&lt;4&gt;&#34;, value)
+
+            try:
+                value = float(value)
+                return value
+            except ValueError:
+                pass
+
+        return value</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>yaml.loader.SafeLoader</li>
+<li>yaml.reader.Reader</li>
+<li>yaml.scanner.Scanner</li>
+<li>yaml.parser.Parser</li>
+<li>yaml.composer.Composer</li>
+<li>yaml.constructor.SafeConstructor</li>
+<li>yaml.constructor.BaseConstructor</li>
+<li>yaml.resolver.Resolver</li>
+<li>yaml.resolver.BaseResolver</li>
+</ul>
+<h3>Class variables</h3>
+<dl>
+<dt id="dynamicio.config.io_config.SafeDynamicSchemaLoader.dynamic_data_matcher"><code class="name">var <span class="ident">dynamic_data_matcher</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.io_config.SafeDynamicSchemaLoader.module"><code class="name">var <span class="ident">module</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.io_config.SafeDynamicSchemaLoader.yaml_constructors"><code class="name">var <span class="ident">yaml_constructors</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+<h3>Static methods</h3>
+<dl>
+<dt id="dynamicio.config.io_config.SafeDynamicSchemaLoader.with_module"><code class="name flex">
+<span>def <span class="ident">with_module</span></span>(<span>module: module)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Creates a dynamic subclass of SafeDynamicLoader with the <code>data_module</code> attribute set to <code>module</code>.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>module</code></strong></dt>
+<dd>A global vars module with all the dynamic values defined in it.</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>type</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@classmethod
+def with_module(cls, module: ModuleType):
+    &#34;&#34;&#34;Creates a dynamic subclass of SafeDynamicLoader with the `data_module` attribute set to `module`.
+
+    Args:
+        module: A global vars module with all the dynamic values defined in it.
+
+    Returns:
+        type
+    &#34;&#34;&#34;
+    return type(f&#34;{cls.__name__}_{module.__name__}&#34;, (cls,), {&#34;module&#34;: module})</code></pre>
+</details>
+</dd>
+</dl>
+<h3>Methods</h3>
+<dl>
+<dt id="dynamicio.config.io_config.SafeDynamicSchemaLoader.dyn_value_constructor"><code class="name flex">
+<span>def <span class="ident">dyn_value_constructor</span></span>(<span>self, node: yaml.nodes.ScalarNode) ‑> Any</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Responsible for the switching of one or more "[[ DYNAMIC_VAR ]]" strings with the respective attributes value in a given module.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>node</code></strong></dt>
+<dd>Parsed item whose dynamic values that map to the "[[ DYNAMIC_VAR ]]" convention
+are replaced with the respective attributes in te provided module.</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>Constructed <code>str</code> or numerical.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def dyn_value_constructor(self, node: yaml.nodes.ScalarNode) -&gt; Any:
+    &#34;&#34;&#34;Responsible for the switching of one or more &#34;[[ DYNAMIC_VAR ]]&#34; strings with the respective attributes value in a given module.
+
+    Args:
+        node: Parsed item whose dynamic values that map to the &#34;[[ DYNAMIC_VAR ]]&#34; convention
+            are replaced with the respective attributes in te provided module.
+
+    Returns:
+        Constructed `str` or numerical.
+    &#34;&#34;&#34;
+    value = node.value
+
+    while result := self.dynamic_data_matcher.match(value):
+        ref = result.group(3)
+        replacement = getattr(self.module, ref)
+
+        value = self.dynamic_data_matcher.sub(f&#34;\\g&lt;1&gt;{replacement}\\g&lt;4&gt;&#34;, value)
+
+        try:
+            value = float(value)
+            return value
+        except ValueError:
+            pass
+
+    return value</code></pre>
+</details>
+</dd>
+</dl>
+</dd>
+</dl>
+</section>
+</article>
+<nav id="sidebar">
+<h1>Index</h1>
+<div class="toc">
+<ul></ul>
+</div>
+<ul id="index">
+<li><h3>Super-module</h3>
+<ul>
+<li><code><a title="dynamicio.config" href="index.html">dynamicio.config</a></code></li>
+</ul>
+</li>
+<li><h3><a href="#header-classes">Classes</a></h3>
+<ul>
+<li>
+<h4><code><a title="dynamicio.config.io_config.IOConfig" href="#dynamicio.config.io_config.IOConfig">IOConfig</a></code></h4>
+<ul class="two-column">
+<li><code><a title="dynamicio.config.io_config.IOConfig.YAML_TAG" href="#dynamicio.config.io_config.IOConfig.YAML_TAG">YAML_TAG</a></code></li>
+<li><code><a title="dynamicio.config.io_config.IOConfig.config" href="#dynamicio.config.io_config.IOConfig.config">config</a></code></li>
+<li><code><a title="dynamicio.config.io_config.IOConfig.env_identifier" href="#dynamicio.config.io_config.IOConfig.env_identifier">env_identifier</a></code></li>
+<li><code><a title="dynamicio.config.io_config.IOConfig.get" href="#dynamicio.config.io_config.IOConfig.get">get</a></code></li>
+<li><code><a title="dynamicio.config.io_config.IOConfig.path_to_source_yaml" href="#dynamicio.config.io_config.IOConfig.path_to_source_yaml">path_to_source_yaml</a></code></li>
+<li><code><a title="dynamicio.config.io_config.IOConfig.sources" href="#dynamicio.config.io_config.IOConfig.sources">sources</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="dynamicio.config.io_config.SafeDynamicResourceLoader" href="#dynamicio.config.io_config.SafeDynamicResourceLoader">SafeDynamicResourceLoader</a></code></h4>
+<ul class="">
+<li><code><a title="dynamicio.config.io_config.SafeDynamicResourceLoader.dyn_str_constructor" href="#dynamicio.config.io_config.SafeDynamicResourceLoader.dyn_str_constructor">dyn_str_constructor</a></code></li>
+<li><code><a title="dynamicio.config.io_config.SafeDynamicResourceLoader.dynamic_data_matcher" href="#dynamicio.config.io_config.SafeDynamicResourceLoader.dynamic_data_matcher">dynamic_data_matcher</a></code></li>
+<li><code><a title="dynamicio.config.io_config.SafeDynamicResourceLoader.module" href="#dynamicio.config.io_config.SafeDynamicResourceLoader.module">module</a></code></li>
+<li><code><a title="dynamicio.config.io_config.SafeDynamicResourceLoader.with_module" href="#dynamicio.config.io_config.SafeDynamicResourceLoader.with_module">with_module</a></code></li>
+<li><code><a title="dynamicio.config.io_config.SafeDynamicResourceLoader.yaml_constructors" href="#dynamicio.config.io_config.SafeDynamicResourceLoader.yaml_constructors">yaml_constructors</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="dynamicio.config.io_config.SafeDynamicSchemaLoader" href="#dynamicio.config.io_config.SafeDynamicSchemaLoader">SafeDynamicSchemaLoader</a></code></h4>
+<ul class="">
+<li><code><a title="dynamicio.config.io_config.SafeDynamicSchemaLoader.dyn_value_constructor" href="#dynamicio.config.io_config.SafeDynamicSchemaLoader.dyn_value_constructor">dyn_value_constructor</a></code></li>
+<li><code><a title="dynamicio.config.io_config.SafeDynamicSchemaLoader.dynamic_data_matcher" href="#dynamicio.config.io_config.SafeDynamicSchemaLoader.dynamic_data_matcher">dynamic_data_matcher</a></code></li>
+<li><code><a title="dynamicio.config.io_config.SafeDynamicSchemaLoader.module" href="#dynamicio.config.io_config.SafeDynamicSchemaLoader.module">module</a></code></li>
+<li><code><a title="dynamicio.config.io_config.SafeDynamicSchemaLoader.with_module" href="#dynamicio.config.io_config.SafeDynamicSchemaLoader.with_module">with_module</a></code></li>
+<li><code><a title="dynamicio.config.io_config.SafeDynamicSchemaLoader.yaml_constructors" href="#dynamicio.config.io_config.SafeDynamicSchemaLoader.yaml_constructors">yaml_constructors</a></code></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</nav>
+</main>
+<footer id="footer">
+<p>Generated by <a href="https://pdoc3.github.io/pdoc" title="pdoc: Python API documentation generator"><cite>pdoc</cite> 0.10.0</a>.</p>
+</footer>
+</body>
+</html>

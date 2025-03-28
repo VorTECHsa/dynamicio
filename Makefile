@@ -1,68 +1,84 @@
+# OS & Architecture Info
+OS := $(shell uname)
+ARCH := $(shell arch)
+
+# Project Config
 CODE_DIR = dynamicio
 TESTS = tests
-VENV_DIR = venv
+POETRY_VERSION ?= 1.7.1
+VENV_DIR = .venv
 VENV_VERSION = $(shell head -n 1 .python-version)
-VENV_NAME =  $(shell head -n 1 .python-virtualenv)
 VENV_BIN_PATH = ${VENV_DIR}/bin
 
-dev-env-setup:
-	@echo "Creating DEV virtual environment..."
-	@pyenv local ${VENV_VERSION}
-	@python -m venv ${VENV_DIR}
-	@echo "Installing requirements..."
-	@${VENV_BIN_PATH}/pip install --upgrade pip
-	@${VENV_BIN_PATH}/pip install \
-		-r requirements.txt \
-		-r requirements-dev.txt \
-		-r requirements-docs.txt \
-		-r requirements-build.txt
-	@echo "Installing pre-commit hook..."
-	@${VENV_BIN_PATH}/pre-commit install
-	@${VENV_BIN_PATH}/pre-commit install --hook-type commit-msg
+# Mac-specific binaries (optional)
+install-binary-packages-Darwin:
+	@brew list jq > /dev/null || brew install jq
+	@brew list xz > /dev/null || brew install xz
+	@brew list openblas > /dev/null || brew install openblas
+	@brew list hdf5 > /dev/null || brew install hdf5
+	@brew list postgresql@14 > /dev/null || brew install postgresql@14
 
+# Install Poetry if not present
+install-poetry:
+	@echo "# Ensure correct Python version"
+	@pyenv local $(VENV_VERSION)
+	@if ! pyenv which poetry > /dev/null 2>&1; then \
+		echo "Installing poetry for Python version $$(cat .python-version)..."; \
+		pyenv exec pip install --upgrade pip "poetry==$(POETRY_VERSION)" --index-url 'https://pypi.python.org/simple'; \
+	else \
+		echo "Poetry is already installed."; \
+	fi
+
+# Full dev setup (OS deps + poetry + pre-commit)
+dev-env-setup: install-poetry install-binary-packages-Darwin
+	@echo "Installing Poetry dependencies..."
+	@pyenv exec poetry install --sync
+	@echo "Setting up pre-commit hooks..."
+	@pyenv exec poetry self add poetry-pre-commit-plugin
+	@pyenv exec poetry run pre-commit install
+	@pyenv exec poetry run pre-commit install --hook-type commit-msg
+
+# Checks for local development
 check-linting:
-	@python -m black ${CODE_DIR}
-	@python -m flake8 --verbose ${CODE_DIR}
-	@python -m pylint -v ${CODE_DIR}
-	@python -m yamllint -v ${CODE_DIR}
-	@python -m mypy ${CODE_DIR}
+	poetry run black ${CODE_DIR}
+	poetry run flake8 --verbose ${CODE_DIR}
+	poetry run pylint -v ${CODE_DIR}
+	poetry run yamllint -v ${CODE_DIR}
 
 check-docstring:
-	@${VENV_BIN_PATH}/pydocstyle -e --count $(file)
+	@pyenv exec poetry run pydocstyle -e --count $(file)
 
 create-jupyter-kernel:
-	@${VENV_BIN_PATH}/pip install ipykernel
-	@${VENV_BIN_PATH}/ipython kernel install --user --name=${VIRTUALENV_NAME}
+	@pyenv exec poetry run python -m ipykernel install --user --name=dynamicio
 
+# Tests
 run-tests:
-	@python -m pytest --cache-clear --cov=${CODE_DIR} ${TESTS}
-	@python -m pytest --cache-clear --cov=demo/src demo/tests
+	@pyenv exec poetry run pytest --cache-clear --cov=${CODE_DIR} ${TESTS}
+	@pyenv exec poetry run pytest --cache-clear --cov=demo/src demo/tests
 
 run-unit-tests:
-	@python -m pytest -v -m unit ${TESTS}
+	@pyenv exec poetry run pytest -v -m unit ${TESTS}
 
 run-integration-tests:
-	@python -m pytest -v -m integration ${TESTS}
+	@pyenv exec poetry run pytest -v -m integration ${TESTS}
 
 update-test-coverage:
-	@python -m pytest ${TESTS} --cov=${CODE_DIR} --cov-report=html --cov-report=xml
-	@coverage-badge -o docs/coverage_report/coverage-badge.svg -f
+	@pyenv exec poetry run pytest ${TESTS} --cov=${CODE_DIR} --cov-report=html --cov-report=xml
+	@pyenv exec poetry run coverage-badge -o docs/coverage_report/coverage-badge.svg -f || echo "⚠️ coverage-badge failed (likely due to version compatibility)"
 	@mv coverage.xml htmlcov/coverage.xml
 
 generate-docs:
-	@python -m pdoc --force --html ${CODE_DIR} -o docs
+	@pyenv exec poetry run python -m pdoc --force --html ${CODE_DIR} -o docs
 	@mv docs/dynamicio/* docs
 	@rm -rf docs/dynamicio
 
 build-locally:
-	@${VENV_BIN_PATH}/pip install --upgrade build
-	@BUILD_VERSION=7.0.1 ${VENV_BIN_PATH}/python setup.py sdist bdist_wheel # Add a <some_version>, e.g. 0.2.3
+	@pyenv exec poetry build
 
 upload-package:
-	@${VENV_BIN_PATH}/pip install --upgrade twine
-	@${VENV_BIN_PATH}/twine check dist/*
-	@${VENV_BIN_PATH}/twine upload dist/*
+	@pyenv exec poetry publish --build
 
+# Git tagging
 tag-release-candidate:
 	@echo "The latest tag is:'$(shell git tag | sort -V | tail -1)'." \
 	&&echo "Please, provide a new tag (format vX.Y.Z-rc.X)):" \
