@@ -13,6 +13,7 @@ from pyarrow.parquet import read_table, write_table  # type: ignore # pylint: di
 
 from dynamicio.config.pydantic import DataframeSchema, LocalBatchDataEnvironment, LocalDataEnvironment
 from dynamicio.mixins import utils
+from dynamicio.mixins.utils import get_file_type_value
 
 hdf_lock = Lock()
 
@@ -39,7 +40,7 @@ class WithLocal:
         """
         local_config = self.sources_config.local
         file_path = utils.resolve_template(local_config.file_path, self.options)
-        file_type = local_config.file_type
+        file_type = get_file_type_value(local_config.file_type)
 
         return getattr(self, f"_read_{file_type}_file")(file_path, self.schema, **self.options)
 
@@ -59,8 +60,7 @@ class WithLocal:
         """
         local_config = self.sources_config.local
         file_path = utils.resolve_template(local_config.file_path, self.options)
-        file_type = local_config.file_type
-
+        file_type = get_file_type_value(local_config.file_type)
         getattr(self, f"_write_{file_type}_file")(df, file_path, **self.options)
 
     @staticmethod
@@ -265,10 +265,8 @@ class WithLocalBatch(WithLocal):
         """
         local_batch_config = self.sources_config.local
 
-        file_type = local_batch_config.file_type
-        filtering_file_type = file_type.value
-        if filtering_file_type == "hdf":
-            filtering_file_type = "h5"
+        file_type = get_file_type_value(local_batch_config.file_type)
+        filtering_file_type = "h5" if file_type == "hdf" else file_type
 
         # Determine if the path is dynamic or static
         if local_batch_config.dynamic_file_path:

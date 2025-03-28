@@ -1,9 +1,10 @@
-"""Mixin utility functions"""
+"""Mixin utility functions."""
 # pylint: disable=no-member, protected-access, too-few-public-methods
 
 import inspect
 import string
 from contextlib import contextmanager
+from enum import Enum
 from functools import wraps
 from types import FunctionType, MethodType
 from typing import Any, Collection, Iterable, Mapping, MutableMapping, Optional, Union
@@ -139,3 +140,8 @@ def pickle_protocol(protocol: Optional[int]):
         yield
     finally:
         pickle.HIGHEST_PROTOCOL = previous
+
+
+def get_file_type_value(file_type: Union[str, Enum]) -> str:
+    """Get the value of the file type."""
+    return file_type.value if isinstance(file_type, Enum) else file_type
