@@ -272,11 +272,11 @@ class WithLocalBatch(WithLocal):
         if local_batch_config.dynamic_file_path:
             # Dynamic path: use it directly
             file_path = utils.resolve_template(local_batch_config.dynamic_file_path, self.options)
-            files = glob.glob(file_path, recursive=True)
+            files = sorted(glob.glob(file_path, recursive=True))
         elif local_batch_config.path_prefix:
             # Static path: append the file type
             file_path = utils.resolve_template(local_batch_config.path_prefix, self.options)
-            files = glob.glob(os.path.join(file_path, f"*.{filtering_file_type}"), recursive=True)
+            files = sorted(glob.glob(os.path.join(file_path, f"*.{filtering_file_type}"), recursive=True))
         else:
             raise ValueError("Either path_prefix or dynamic_path must be provided in local_batch_config")
 
