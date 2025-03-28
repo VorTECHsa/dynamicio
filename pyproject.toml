@@ -73,8 +73,14 @@ wheel = "==0.38.4"
 dynamicio = "dynamicio.cli:run"
 
 [build-system]
-requires = ["poetry-dynamic-versioning", "poetry-core"]
+requires = [
+  "setuptools>=69.0.3",
+  "wheel",
+  "poetry-core>=1.0.0",
+  "poetry-dynamic-versioning"
+]
 build-backend = "poetry_dynamic_versioning.backend"
+
 
 [tool.poetry-dynamic-versioning]
 enable = true
