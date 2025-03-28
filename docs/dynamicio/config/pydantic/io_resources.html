@@ -1,0 +1,1614 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1" />
+<meta name="generator" content="pdoc 0.10.0" />
+<title>dynamicio.config.pydantic.io_resources API documentation</title>
+<meta name="description" content="This module contains pylint models for physical data sources (places the bytes are being read from)." />
+<link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/sanitize.min.css" integrity="sha256-PK9q560IAAa6WVRRh76LtCaI8pjTJ2z11v0miyNNjrs=" crossorigin>
+<link rel="preload stylesheet" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/10up-sanitize.css/11.0.1/typography.min.css" integrity="sha256-7l/o7C8jubJiy74VsKTidCy1yBkRtiUGbVkYBylBqUg=" crossorigin>
+<link rel="stylesheet preload" as="style" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.1.1/styles/github.min.css" crossorigin>
+<style>:root{--highlight-color:#fe9}.flex{display:flex !important}body{line-height:1.5em}#content{padding:20px}#sidebar{padding:30px;overflow:hidden}#sidebar > *:last-child{margin-bottom:2cm}.http-server-breadcrumbs{font-size:130%;margin:0 0 15px 0}#footer{font-size:.75em;padding:5px 30px;border-top:1px solid #ddd;text-align:right}#footer p{margin:0 0 0 1em;display:inline-block}#footer p:last-child{margin-right:30px}h1,h2,h3,h4,h5{font-weight:300}h1{font-size:2.5em;line-height:1.1em}h2{font-size:1.75em;margin:1em 0 .50em 0}h3{font-size:1.4em;margin:25px 0 10px 0}h4{margin:0;font-size:105%}h1:target,h2:target,h3:target,h4:target,h5:target,h6:target{background:var(--highlight-color);padding:.2em 0}a{color:#058;text-decoration:none;transition:color .3s ease-in-out}a:hover{color:#e82}.title code{font-weight:bold}h2[id^="header-"]{margin-top:2em}.ident{color:#900}pre code{background:#f8f8f8;font-size:.8em;line-height:1.4em}code{background:#f2f2f1;padding:1px 4px;overflow-wrap:break-word}h1 code{background:transparent}pre{background:#f8f8f8;border:0;border-top:1px solid #ccc;border-bottom:1px solid #ccc;margin:1em 0;padding:1ex}#http-server-module-list{display:flex;flex-flow:column}#http-server-module-list div{display:flex}#http-server-module-list dt{min-width:10%}#http-server-module-list p{margin-top:0}.toc ul,#index{list-style-type:none;margin:0;padding:0}#index code{background:transparent}#index h3{border-bottom:1px solid #ddd}#index ul{padding:0}#index h4{margin-top:.6em;font-weight:bold}@media (min-width:200ex){#index .two-column{column-count:2}}@media (min-width:300ex){#index .two-column{column-count:3}}dl{margin-bottom:2em}dl dl:last-child{margin-bottom:4em}dd{margin:0 0 1em 3em}#header-classes + dl > dd{margin-bottom:3em}dd dd{margin-left:2em}dd p{margin:10px 0}.name{background:#eee;font-weight:bold;font-size:.85em;padding:5px 10px;display:inline-block;min-width:40%}.name:hover{background:#e0e0e0}dt:target .name{background:var(--highlight-color)}.name > span:first-child{white-space:nowrap}.name.class > span:nth-child(2){margin-left:.4em}.inherited{color:#999;border-left:5px solid #eee;padding-left:1em}.inheritance em{font-style:normal;font-weight:bold}.desc h2{font-weight:400;font-size:1.25em}.desc h3{font-size:1em}.desc dt code{background:inherit}.source summary,.git-link-div{color:#666;text-align:right;font-weight:400;font-size:.8em;text-transform:uppercase}.source summary > *{white-space:nowrap;cursor:pointer}.git-link{color:inherit;margin-left:1em}.source pre{max-height:500px;overflow:auto;margin:0}.source pre code{font-size:12px;overflow:visible}.hlist{list-style:none}.hlist li{display:inline}.hlist li:after{content:',\2002'}.hlist li:last-child:after{content:none}.hlist .hlist{display:inline;padding-left:1em}img{max-width:100%}td{padding:0 .5em}.admonition{padding:.1em .5em;margin-bottom:1em}.admonition-title{font-weight:bold}.admonition.note,.admonition.info,.admonition.important{background:#aef}.admonition.todo,.admonition.versionadded,.admonition.tip,.admonition.hint{background:#dfd}.admonition.warning,.admonition.versionchanged,.admonition.deprecated{background:#fd4}.admonition.error,.admonition.danger,.admonition.caution{background:lightpink}</style>
+<style media="screen and (min-width: 700px)">@media screen and (min-width:700px){#sidebar{width:30%;height:100vh;overflow:auto;position:sticky;top:0}#content{width:70%;max-width:100ch;padding:3em 4em;border-left:1px solid #ddd}pre code{font-size:1em}.item .name{font-size:1em}main{display:flex;flex-direction:row-reverse;justify-content:flex-end}.toc ul ul,#index ul{padding-left:1.5em}.toc > ul > li{margin-top:.5em}}</style>
+<style media="print">@media print{#sidebar h1{page-break-before:always}.source{display:none}}@media print{*{background:transparent !important;color:#000 !important;box-shadow:none !important;text-shadow:none !important}a[href]:after{content:" (" attr(href) ")";font-size:90%}a[href][title]:after{content:none}abbr[title]:after{content:" (" attr(title) ")"}.ir a:after,a[href^="javascript:"]:after,a[href^="#"]:after{content:""}pre,blockquote{border:1px solid #999;page-break-inside:avoid}thead{display:table-header-group}tr,img{page-break-inside:avoid}img{max-width:100% !important}@page{margin:0.5cm}p,h2,h3{orphans:3;widows:3}h1,h2,h3,h4,h5,h6{page-break-after:avoid}}</style>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/10.1.1/highlight.min.js" integrity="sha256-Uv3H6lx7dJmRfRvH8TH6kJD1TSK1aFcwgx+mdg3epi8=" crossorigin></script>
+<script>window.addEventListener('DOMContentLoaded', () => hljs.initHighlighting())</script>
+</head>
+<body>
+<main>
+<article id="content">
+<header>
+<h1 class="title">Module <code>dynamicio.config.pydantic.io_resources</code></h1>
+</header>
+<section id="section-intro">
+<p>This module contains pylint models for physical data sources (places the bytes are being read from).</p>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python"># pylint: disable=no-member, no-self-argument, unused-argument
+
+&#34;&#34;&#34;This module contains pylint models for physical data sources (places the bytes are being read from).&#34;&#34;&#34;
+
+import enum
+import posixpath
+from typing import Mapping, Optional, Union
+
+import pydantic
+from pydantic import BaseModel
+
+import dynamicio.config.pydantic.table_schema as table_spec
+
+
+@enum.unique
+class DataBackendType(str, enum.Enum):
+    &#34;&#34;&#34;Input file types.&#34;&#34;&#34;
+
+    # pylint: disable=invalid-name
+    local = &#34;local&#34;
+    local_batch = &#34;local_batch&#34;
+    s3 = &#34;s3&#34;  # is there a difference between &#39;s3&#39; and &#39;s3_file&#39; ?
+    s3_file = &#34;s3_file&#34;
+    s3_path_prefix = &#34;s3_path_prefix&#34;
+    postgres = &#34;postgres&#34;
+    athena = &#34;athena&#34;
+    kafka = &#34;kafka&#34;
+
+
+@enum.unique
+class FileType(str, enum.Enum):
+    &#34;&#34;&#34;List of supported file formats.&#34;&#34;&#34;
+
+    # pylint: disable=invalid-name
+    parquet = &#34;parquet&#34;
+    csv = &#34;csv&#34;
+    json = &#34;json&#34;
+    hdf = &#34;hdf&#34;
+
+
+class IOBinding(BaseModel):
+    &#34;&#34;&#34;A binding for a single i/o object.&#34;&#34;&#34;
+
+    name: str = pydantic.Field(alias=&#34;__binding_name__&#34;)
+    environments: Mapping[
+        str,
+        Union[&#34;IOEnvironment&#34;, &#34;LocalDataEnvironment&#34;, &#34;LocalBatchDataEnvironment&#34;, &#34;S3DataEnvironment&#34;, &#34;S3PathPrefixEnvironment&#34;, &#34;KafkaDataEnvironment&#34;, &#34;PostgresDataEnvironment&#34;],
+    ]
+    dynamicio_schema: Union[table_spec.DataframeSchema, None] = pydantic.Field(default=None, alias=&#34;schema&#34;)
+
+    def get_binding_for_environment(self, environment: str) -&gt; &#34;IOEnvironment&#34;:
+        &#34;&#34;&#34;Fetch the IOEnvironment spec for the name provided.&#34;&#34;&#34;
+        return self.environments[environment]
+
+    @pydantic.validator(&#34;environments&#34;, pre=True, always=True)
+    def pick_correct_env_cls(cls, info):
+        &#34;&#34;&#34;This pre-validator picks an appropriate IOEnvironment subclass for the `data_backend_type`.&#34;&#34;&#34;
+        if not isinstance(info, Mapping):
+            raise ValueError(f&#34;Environments input should be a dict. Got {info!r} instead.&#34;)
+        config_cls_overrides = {
+            DataBackendType.local: LocalDataEnvironment,
+            DataBackendType.local_batch: LocalBatchDataEnvironment,
+            DataBackendType.s3: S3DataEnvironment,
+            DataBackendType.s3_file: S3DataEnvironment,
+            DataBackendType.s3_path_prefix: S3PathPrefixEnvironment,
+            DataBackendType.kafka: KafkaDataEnvironment,
+            DataBackendType.postgres: PostgresDataEnvironment,
+        }
+        out_dict = {}
+        for (env_name, env_data) in info.items():
+            base_obj: IOEnvironment = IOEnvironment(**env_data)
+            override_cls = config_cls_overrides.get(base_obj.data_backend_type)
+            if override_cls:
+                use_obj = override_cls(**env_data)
+            else:
+                use_obj = base_obj
+            out_dict[env_name] = use_obj
+        return out_dict
+
+    @pydantic.root_validator(pre=True)
+    def _preprocess_raw_config(cls, values):
+        if not isinstance(values, Mapping):
+            raise ValueError(f&#34;IOBinding must be a dict at the top level. (got {values!r} instead)&#34;)
+        remapped_value = {&#34;environments&#34;: {}}
+        for (key, value) in values.items():
+            if key in (&#34;__binding_name__&#34;, &#34;schema&#34;):
+                # Passthrough params
+                remapped_value[key] = value
+            else:
+                # Assuming an environment config
+                remapped_value[&#34;environments&#34;][key] = value
+        return remapped_value
+
+
+class IOEnvironment(BaseModel):
+    &#34;&#34;&#34;A section specifying an data source backed by a particular data backend.&#34;&#34;&#34;
+
+    _parent: Optional[IOBinding] = None  # noqa: F821
+    options: Mapping = pydantic.Field(default_factory=dict)
+    data_backend_type: DataBackendType = pydantic.Field(alias=&#34;type&#34;, const=None)
+
+    class Config:
+        &#34;&#34;&#34;Additional pydantic configuration for the model.&#34;&#34;&#34;
+
+        underscore_attrs_are_private = True
+
+    @property
+    def dynamicio_schema(self) -&gt; Union[table_spec.DataframeSchema, None]:
+        &#34;&#34;&#34;Returns tabular data structure definition for the data source (if available).&#34;&#34;&#34;
+        if not self._parent:
+            raise Exception(&#34;Parent field is not set.&#34;)
+        return self._parent.dynamicio_schema
+
+    def set_parent(self, parent: IOBinding):  # noqa: F821
+        &#34;&#34;&#34;Helper method to set parent config object.&#34;&#34;&#34;
+        assert self._parent is None
+        self._parent = parent
+
+
+class LocalDataSubSection(BaseModel):
+    &#34;&#34;&#34;Config section for local data provider.&#34;&#34;&#34;
+
+    file_path: str
+    file_type: FileType
+
+
+class LocalDataEnvironment(IOEnvironment):
+    &#34;&#34;&#34;The data is provided by local storage.&#34;&#34;&#34;
+
+    local: LocalDataSubSection
+
+
+class LocalBatchDataSubSection(BaseModel):
+    &#34;&#34;&#34;Config section for local batch data (multiple input files).&#34;&#34;&#34;
+
+    path_prefix: Optional[str] = None
+    dynamic_file_path: Optional[str] = None
+    file_type: FileType
+
+    @pydantic.root_validator(pre=True)
+    def check_path_fields(cls, values):
+        &#34;&#34;&#34;Check that only one of path_prefix or dynamic_file_path is provided &amp; they meet format requirements.&#34;&#34;&#34;
+        path_prefix = values.get(&#34;path_prefix&#34;)
+        dynamic_file_path = values.get(&#34;dynamic_file_path&#34;)
+
+        # Check for mutual exclusivity
+        if path_prefix and dynamic_file_path:
+            raise ValueError(&#34;Only one of path_prefix or dynamic_file_path should be provided&#34;)
+
+        # Check for path_prefix format
+        if path_prefix and not path_prefix.endswith(&#34;/&#34;):
+            raise ValueError(&#34;path_prefix must end with &#39;/&#39;&#34;)
+
+        # Check for dynamic_file_path format
+        if dynamic_file_path:
+            allowed_extensions = [&#34;.parquet&#34;, &#34;.h5&#34;, &#34;.json&#34;, &#34;.csv&#34;]
+            if not any(dynamic_file_path.endswith(ext) for ext in allowed_extensions):
+                raise ValueError(&#34;`dynamic_file_path` must end with one of: .parquet, .h5, .json, .csv&#34;)
+
+        return values
+
+
+class LocalBatchDataEnvironment(IOEnvironment):
+    &#34;&#34;&#34;Parent section for local batch (multiple files) config.&#34;&#34;&#34;
+
+    local: LocalBatchDataSubSection
+
+
+class S3DataSubSection(BaseModel):
+    &#34;&#34;&#34;Config section for S3 data source.&#34;&#34;&#34;
+
+    file_path: str
+    file_type: FileType
+    bucket: str
+
+
+class S3DataEnvironment(IOEnvironment):
+    &#34;&#34;&#34;Parent section for s3 data source config.&#34;&#34;&#34;
+
+    s3: S3DataSubSection
+
+
+class S3PathPrefixSubSection(BaseModel):
+    &#34;&#34;&#34;Config section for s3 prefix data source (multiple s3 objects).&#34;&#34;&#34;
+
+    path_prefix: Optional[str] = None
+    dynamic_file_path: Optional[str] = None
+    file_type: FileType
+    bucket: str
+
+    @pydantic.root_validator(pre=True)
+    def check_path_fields(cls, values):
+        &#34;&#34;&#34;Check that only one of path_prefix or dynamic_file_path is provided &amp; they meet format requirements.&#34;&#34;&#34;
+        path_prefix = values.get(&#34;path_prefix&#34;)
+        dynamic_file_path = values.get(&#34;dynamic_file_path&#34;)
+
+        # Check for mutual exclusivity
+        if path_prefix and dynamic_file_path:
+            raise ValueError(&#34;Only one of path_prefix or dynamic_file_path should be provided&#34;)
+
+        # Check for at least one being provided
+        if not path_prefix and not dynamic_file_path:
+            raise ValueError(&#34;Either path_prefix or dynamic_file_path must be provided&#34;)
+
+        # Check for path_prefix format
+        if path_prefix and not path_prefix.endswith(&#34;/&#34;):
+            raise ValueError(&#34;path_prefix must end with &#39;/&#39;&#34;)
+
+        # Check for dynamic_file_path format
+        if dynamic_file_path:
+            allowed_extensions = [&#34;.parquet&#34;, &#34;.h5&#34;, &#34;.json&#34;, &#34;.csv&#34;]
+            if not any(dynamic_file_path.endswith(ext) for ext in allowed_extensions):
+                raise ValueError(&#34;`dynamic_file_path` must end with one of: .parquet, .h5, .json, .csv&#34;)
+
+        return values
+
+    @pydantic.root_validator(pre=True)
+    def support_legacy_config_path_prefix(cls, values):
+        &#34;&#34;&#34;This validator implements support for legacy config format.
+
+        I addresses a case where the bucket &amp; path_prefix path could&#39;ve been passed as a single param in &#39;bucket&#39; field.
+        E.g.
+            bucket: &#34;[[ MOCK_BUCKET ]]/data/input/{file_name_to_replace}.hdf&#34;
+        &#34;&#34;&#34;
+        bucket = values.get(&#34;bucket&#34;)
+        path_prefix = values.get(&#34;path_prefix&#34;)
+        if (bucket and isinstance(bucket, str) and posixpath.sep in bucket) and (not path_prefix):
+            (new_bucket, new_path_prefix) = bucket.split(posixpath.sep, 1)
+            values.update(
+                {
+                    &#34;bucket&#34;: new_bucket,
+                    &#34;path_prefix&#34;: new_path_prefix,
+                }
+            )
+        return values
+
+
+class S3PathPrefixEnvironment(IOEnvironment):
+    &#34;&#34;&#34;Parent section for the multi-object s3 data source.&#34;&#34;&#34;
+
+    s3: S3PathPrefixSubSection
+
+
+class KafkaDataSubSection(BaseModel):
+    &#34;&#34;&#34;Kafka configuration section.&#34;&#34;&#34;
+
+    kafka_server: str
+    kafka_topic: str
+
+
+class KafkaDataEnvironment(IOEnvironment):
+    &#34;&#34;&#34;Parent section for kafka data source config.&#34;&#34;&#34;
+
+    kafka: KafkaDataSubSection
+
+
+class PostgresDataSubSection(BaseModel):
+    &#34;&#34;&#34;Postgres data source configuration.&#34;&#34;&#34;
+
+    db_host: str
+    db_port: str
+    db_name: str
+    db_user: str
+    db_password: str
+
+
+class PostgresDataEnvironment(IOEnvironment):
+    &#34;&#34;&#34;Parent section for postgres data source.&#34;&#34;&#34;
+
+    postgres: PostgresDataSubSection
+
+
+IOBinding.update_forward_refs()</code></pre>
+</details>
+</section>
+<section>
+</section>
+<section>
+</section>
+<section>
+</section>
+<section>
+<h2 class="section-title" id="header-classes">Classes</h2>
+<dl>
+<dt id="dynamicio.config.pydantic.io_resources.DataBackendType"><code class="flex name class">
+<span>class <span class="ident">DataBackendType</span></span>
+<span>(</span><span>*args, **kwds)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Input file types.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@enum.unique
+class DataBackendType(str, enum.Enum):
+    &#34;&#34;&#34;Input file types.&#34;&#34;&#34;
+
+    # pylint: disable=invalid-name
+    local = &#34;local&#34;
+    local_batch = &#34;local_batch&#34;
+    s3 = &#34;s3&#34;  # is there a difference between &#39;s3&#39; and &#39;s3_file&#39; ?
+    s3_file = &#34;s3_file&#34;
+    s3_path_prefix = &#34;s3_path_prefix&#34;
+    postgres = &#34;postgres&#34;
+    athena = &#34;athena&#34;
+    kafka = &#34;kafka&#34;</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>builtins.str</li>
+<li>enum.Enum</li>
+</ul>
+<h3>Class variables</h3>
+<dl>
+<dt id="dynamicio.config.pydantic.io_resources.DataBackendType.athena"><code class="name">var <span class="ident">athena</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.DataBackendType.kafka"><code class="name">var <span class="ident">kafka</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.DataBackendType.local"><code class="name">var <span class="ident">local</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.DataBackendType.local_batch"><code class="name">var <span class="ident">local_batch</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.DataBackendType.postgres"><code class="name">var <span class="ident">postgres</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.DataBackendType.s3"><code class="name">var <span class="ident">s3</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.DataBackendType.s3_file"><code class="name">var <span class="ident">s3_file</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.DataBackendType.s3_path_prefix"><code class="name">var <span class="ident">s3_path_prefix</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.FileType"><code class="flex name class">
+<span>class <span class="ident">FileType</span></span>
+<span>(</span><span>*args, **kwds)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>List of supported file formats.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@enum.unique
+class FileType(str, enum.Enum):
+    &#34;&#34;&#34;List of supported file formats.&#34;&#34;&#34;
+
+    # pylint: disable=invalid-name
+    parquet = &#34;parquet&#34;
+    csv = &#34;csv&#34;
+    json = &#34;json&#34;
+    hdf = &#34;hdf&#34;</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>builtins.str</li>
+<li>enum.Enum</li>
+</ul>
+<h3>Class variables</h3>
+<dl>
+<dt id="dynamicio.config.pydantic.io_resources.FileType.csv"><code class="name">var <span class="ident">csv</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.FileType.hdf"><code class="name">var <span class="ident">hdf</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.FileType.json"><code class="name">var <span class="ident">json</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.FileType.parquet"><code class="name">var <span class="ident">parquet</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.IOBinding"><code class="flex name class">
+<span>class <span class="ident">IOBinding</span></span>
+<span>(</span><span>**data: Any)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>A binding for a single i/o object.</p>
+<p>Create a new model by parsing and validating input data from keyword arguments.</p>
+<p>Raises [<code>ValidationError</code>][pydantic_core.ValidationError] if the input data cannot be
+validated to form a valid model.</p>
+<p><code>self</code> is explicitly positional-only to allow <code>self</code> as a field name.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class IOBinding(BaseModel):
+    &#34;&#34;&#34;A binding for a single i/o object.&#34;&#34;&#34;
+
+    name: str = pydantic.Field(alias=&#34;__binding_name__&#34;)
+    environments: Mapping[
+        str,
+        Union[&#34;IOEnvironment&#34;, &#34;LocalDataEnvironment&#34;, &#34;LocalBatchDataEnvironment&#34;, &#34;S3DataEnvironment&#34;, &#34;S3PathPrefixEnvironment&#34;, &#34;KafkaDataEnvironment&#34;, &#34;PostgresDataEnvironment&#34;],
+    ]
+    dynamicio_schema: Union[table_spec.DataframeSchema, None] = pydantic.Field(default=None, alias=&#34;schema&#34;)
+
+    def get_binding_for_environment(self, environment: str) -&gt; &#34;IOEnvironment&#34;:
+        &#34;&#34;&#34;Fetch the IOEnvironment spec for the name provided.&#34;&#34;&#34;
+        return self.environments[environment]
+
+    @pydantic.validator(&#34;environments&#34;, pre=True, always=True)
+    def pick_correct_env_cls(cls, info):
+        &#34;&#34;&#34;This pre-validator picks an appropriate IOEnvironment subclass for the `data_backend_type`.&#34;&#34;&#34;
+        if not isinstance(info, Mapping):
+            raise ValueError(f&#34;Environments input should be a dict. Got {info!r} instead.&#34;)
+        config_cls_overrides = {
+            DataBackendType.local: LocalDataEnvironment,
+            DataBackendType.local_batch: LocalBatchDataEnvironment,
+            DataBackendType.s3: S3DataEnvironment,
+            DataBackendType.s3_file: S3DataEnvironment,
+            DataBackendType.s3_path_prefix: S3PathPrefixEnvironment,
+            DataBackendType.kafka: KafkaDataEnvironment,
+            DataBackendType.postgres: PostgresDataEnvironment,
+        }
+        out_dict = {}
+        for (env_name, env_data) in info.items():
+            base_obj: IOEnvironment = IOEnvironment(**env_data)
+            override_cls = config_cls_overrides.get(base_obj.data_backend_type)
+            if override_cls:
+                use_obj = override_cls(**env_data)
+            else:
+                use_obj = base_obj
+            out_dict[env_name] = use_obj
+        return out_dict
+
+    @pydantic.root_validator(pre=True)
+    def _preprocess_raw_config(cls, values):
+        if not isinstance(values, Mapping):
+            raise ValueError(f&#34;IOBinding must be a dict at the top level. (got {values!r} instead)&#34;)
+        remapped_value = {&#34;environments&#34;: {}}
+        for (key, value) in values.items():
+            if key in (&#34;__binding_name__&#34;, &#34;schema&#34;):
+                # Passthrough params
+                remapped_value[key] = value
+            else:
+                # Assuming an environment config
+                remapped_value[&#34;environments&#34;][key] = value
+        return remapped_value</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>pydantic.main.BaseModel</li>
+</ul>
+<h3>Class variables</h3>
+<dl>
+<dt id="dynamicio.config.pydantic.io_resources.IOBinding.dynamicio_schema"><code class="name">var <span class="ident">dynamicio_schema</span> : Optional[<a title="dynamicio.config.pydantic.table_schema.DataframeSchema" href="table_schema.html#dynamicio.config.pydantic.table_schema.DataframeSchema">DataframeSchema</a>]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.IOBinding.environments"><code class="name">var <span class="ident">environments</span> : Mapping[str, Union[<a title="dynamicio.config.pydantic.io_resources.IOEnvironment" href="#dynamicio.config.pydantic.io_resources.IOEnvironment">IOEnvironment</a>, <a title="dynamicio.config.pydantic.io_resources.LocalDataEnvironment" href="#dynamicio.config.pydantic.io_resources.LocalDataEnvironment">LocalDataEnvironment</a>, <a title="dynamicio.config.pydantic.io_resources.LocalBatchDataEnvironment" href="#dynamicio.config.pydantic.io_resources.LocalBatchDataEnvironment">LocalBatchDataEnvironment</a>, <a title="dynamicio.config.pydantic.io_resources.S3DataEnvironment" href="#dynamicio.config.pydantic.io_resources.S3DataEnvironment">S3DataEnvironment</a>, <a title="dynamicio.config.pydantic.io_resources.S3PathPrefixEnvironment" href="#dynamicio.config.pydantic.io_resources.S3PathPrefixEnvironment">S3PathPrefixEnvironment</a>, <a title="dynamicio.config.pydantic.io_resources.KafkaDataEnvironment" href="#dynamicio.config.pydantic.io_resources.KafkaDataEnvironment">KafkaDataEnvironment</a>, <a title="dynamicio.config.pydantic.io_resources.PostgresDataEnvironment" href="#dynamicio.config.pydantic.io_resources.PostgresDataEnvironment">PostgresDataEnvironment</a>]]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.IOBinding.model_config"><code class="name">var <span class="ident">model_config</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.IOBinding.name"><code class="name">var <span class="ident">name</span> : str</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+<h3>Static methods</h3>
+<dl>
+<dt id="dynamicio.config.pydantic.io_resources.IOBinding.pick_correct_env_cls"><code class="name flex">
+<span>def <span class="ident">pick_correct_env_cls</span></span>(<span>info)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>This pre-validator picks an appropriate IOEnvironment subclass for the <code>data_backend_type</code>.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@pydantic.validator(&#34;environments&#34;, pre=True, always=True)
+def pick_correct_env_cls(cls, info):
+    &#34;&#34;&#34;This pre-validator picks an appropriate IOEnvironment subclass for the `data_backend_type`.&#34;&#34;&#34;
+    if not isinstance(info, Mapping):
+        raise ValueError(f&#34;Environments input should be a dict. Got {info!r} instead.&#34;)
+    config_cls_overrides = {
+        DataBackendType.local: LocalDataEnvironment,
+        DataBackendType.local_batch: LocalBatchDataEnvironment,
+        DataBackendType.s3: S3DataEnvironment,
+        DataBackendType.s3_file: S3DataEnvironment,
+        DataBackendType.s3_path_prefix: S3PathPrefixEnvironment,
+        DataBackendType.kafka: KafkaDataEnvironment,
+        DataBackendType.postgres: PostgresDataEnvironment,
+    }
+    out_dict = {}
+    for (env_name, env_data) in info.items():
+        base_obj: IOEnvironment = IOEnvironment(**env_data)
+        override_cls = config_cls_overrides.get(base_obj.data_backend_type)
+        if override_cls:
+            use_obj = override_cls(**env_data)
+        else:
+            use_obj = base_obj
+        out_dict[env_name] = use_obj
+    return out_dict</code></pre>
+</details>
+</dd>
+</dl>
+<h3>Methods</h3>
+<dl>
+<dt id="dynamicio.config.pydantic.io_resources.IOBinding.get_binding_for_environment"><code class="name flex">
+<span>def <span class="ident">get_binding_for_environment</span></span>(<span>self, environment: str) ‑> <a title="dynamicio.config.pydantic.io_resources.IOEnvironment" href="#dynamicio.config.pydantic.io_resources.IOEnvironment">IOEnvironment</a></span>
+</code></dt>
+<dd>
+<div class="desc"><p>Fetch the IOEnvironment spec for the name provided.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_binding_for_environment(self, environment: str) -&gt; &#34;IOEnvironment&#34;:
+    &#34;&#34;&#34;Fetch the IOEnvironment spec for the name provided.&#34;&#34;&#34;
+    return self.environments[environment]</code></pre>
+</details>
+</dd>
+</dl>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.IOEnvironment"><code class="flex name class">
+<span>class <span class="ident">IOEnvironment</span></span>
+<span>(</span><span>**data: Any)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>A section specifying an data source backed by a particular data backend.</p>
+<p>Create a new model by parsing and validating input data from keyword arguments.</p>
+<p>Raises [<code>ValidationError</code>][pydantic_core.ValidationError] if the input data cannot be
+validated to form a valid model.</p>
+<p><code>self</code> is explicitly positional-only to allow <code>self</code> as a field name.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class IOEnvironment(BaseModel):
+    &#34;&#34;&#34;A section specifying an data source backed by a particular data backend.&#34;&#34;&#34;
+
+    _parent: Optional[IOBinding] = None  # noqa: F821
+    options: Mapping = pydantic.Field(default_factory=dict)
+    data_backend_type: DataBackendType = pydantic.Field(alias=&#34;type&#34;, const=None)
+
+    class Config:
+        &#34;&#34;&#34;Additional pydantic configuration for the model.&#34;&#34;&#34;
+
+        underscore_attrs_are_private = True
+
+    @property
+    def dynamicio_schema(self) -&gt; Union[table_spec.DataframeSchema, None]:
+        &#34;&#34;&#34;Returns tabular data structure definition for the data source (if available).&#34;&#34;&#34;
+        if not self._parent:
+            raise Exception(&#34;Parent field is not set.&#34;)
+        return self._parent.dynamicio_schema
+
+    def set_parent(self, parent: IOBinding):  # noqa: F821
+        &#34;&#34;&#34;Helper method to set parent config object.&#34;&#34;&#34;
+        assert self._parent is None
+        self._parent = parent</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>pydantic.main.BaseModel</li>
+</ul>
+<h3>Subclasses</h3>
+<ul class="hlist">
+<li><a title="dynamicio.config.pydantic.io_resources.KafkaDataEnvironment" href="#dynamicio.config.pydantic.io_resources.KafkaDataEnvironment">KafkaDataEnvironment</a></li>
+<li><a title="dynamicio.config.pydantic.io_resources.LocalBatchDataEnvironment" href="#dynamicio.config.pydantic.io_resources.LocalBatchDataEnvironment">LocalBatchDataEnvironment</a></li>
+<li><a title="dynamicio.config.pydantic.io_resources.LocalDataEnvironment" href="#dynamicio.config.pydantic.io_resources.LocalDataEnvironment">LocalDataEnvironment</a></li>
+<li><a title="dynamicio.config.pydantic.io_resources.PostgresDataEnvironment" href="#dynamicio.config.pydantic.io_resources.PostgresDataEnvironment">PostgresDataEnvironment</a></li>
+<li><a title="dynamicio.config.pydantic.io_resources.S3DataEnvironment" href="#dynamicio.config.pydantic.io_resources.S3DataEnvironment">S3DataEnvironment</a></li>
+<li><a title="dynamicio.config.pydantic.io_resources.S3PathPrefixEnvironment" href="#dynamicio.config.pydantic.io_resources.S3PathPrefixEnvironment">S3PathPrefixEnvironment</a></li>
+</ul>
+<h3>Class variables</h3>
+<dl>
+<dt id="dynamicio.config.pydantic.io_resources.IOEnvironment.Config"><code class="name">var <span class="ident">Config</span></code></dt>
+<dd>
+<div class="desc"><p>Additional pydantic configuration for the model.</p></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.IOEnvironment.data_backend_type"><code class="name">var <span class="ident">data_backend_type</span> : <a title="dynamicio.config.pydantic.io_resources.DataBackendType" href="#dynamicio.config.pydantic.io_resources.DataBackendType">DataBackendType</a></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.IOEnvironment.model_config"><code class="name">var <span class="ident">model_config</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.IOEnvironment.options"><code class="name">var <span class="ident">options</span> : Mapping</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+<h3>Instance variables</h3>
+<dl>
+<dt id="dynamicio.config.pydantic.io_resources.IOEnvironment.dynamicio_schema"><code class="name">var <span class="ident">dynamicio_schema</span> : Optional[<a title="dynamicio.config.pydantic.table_schema.DataframeSchema" href="table_schema.html#dynamicio.config.pydantic.table_schema.DataframeSchema">DataframeSchema</a>]</code></dt>
+<dd>
+<div class="desc"><p>Returns tabular data structure definition for the data source (if available).</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@property
+def dynamicio_schema(self) -&gt; Union[table_spec.DataframeSchema, None]:
+    &#34;&#34;&#34;Returns tabular data structure definition for the data source (if available).&#34;&#34;&#34;
+    if not self._parent:
+        raise Exception(&#34;Parent field is not set.&#34;)
+    return self._parent.dynamicio_schema</code></pre>
+</details>
+</dd>
+</dl>
+<h3>Methods</h3>
+<dl>
+<dt id="dynamicio.config.pydantic.io_resources.IOEnvironment.model_post_init"><code class="name flex">
+<span>def <span class="ident">model_post_init</span></span>(<span>self: BaseModel, context: Any, /) ‑> None</span>
+</code></dt>
+<dd>
+<div class="desc"><p>This function is meant to behave like a BaseModel method to initialise private attributes.</p>
+<p>It takes context as an argument since that's what pydantic-core passes when calling it.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>self</code></strong></dt>
+<dd>The BaseModel instance.</dd>
+<dt><strong><code>context</code></strong></dt>
+<dd>The context.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def init_private_attributes(self: BaseModel, context: Any, /) -&gt; None:
+    &#34;&#34;&#34;This function is meant to behave like a BaseModel method to initialise private attributes.
+
+    It takes context as an argument since that&#39;s what pydantic-core passes when calling it.
+
+    Args:
+        self: The BaseModel instance.
+        context: The context.
+    &#34;&#34;&#34;
+    if getattr(self, &#39;__pydantic_private__&#39;, None) is None:
+        pydantic_private = {}
+        for name, private_attr in self.__private_attributes__.items():
+            default = private_attr.get_default()
+            if default is not PydanticUndefined:
+                pydantic_private[name] = default
+        object_setattr(self, &#39;__pydantic_private__&#39;, pydantic_private)</code></pre>
+</details>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.IOEnvironment.set_parent"><code class="name flex">
+<span>def <span class="ident">set_parent</span></span>(<span>self, parent: <a title="dynamicio.config.pydantic.io_resources.IOBinding" href="#dynamicio.config.pydantic.io_resources.IOBinding">IOBinding</a>)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Helper method to set parent config object.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def set_parent(self, parent: IOBinding):  # noqa: F821
+    &#34;&#34;&#34;Helper method to set parent config object.&#34;&#34;&#34;
+    assert self._parent is None
+    self._parent = parent</code></pre>
+</details>
+</dd>
+</dl>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.KafkaDataEnvironment"><code class="flex name class">
+<span>class <span class="ident">KafkaDataEnvironment</span></span>
+<span>(</span><span>**data: Any)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Parent section for kafka data source config.</p>
+<p>Create a new model by parsing and validating input data from keyword arguments.</p>
+<p>Raises [<code>ValidationError</code>][pydantic_core.ValidationError] if the input data cannot be
+validated to form a valid model.</p>
+<p><code>self</code> is explicitly positional-only to allow <code>self</code> as a field name.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class KafkaDataEnvironment(IOEnvironment):
+    &#34;&#34;&#34;Parent section for kafka data source config.&#34;&#34;&#34;
+
+    kafka: KafkaDataSubSection</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li><a title="dynamicio.config.pydantic.io_resources.IOEnvironment" href="#dynamicio.config.pydantic.io_resources.IOEnvironment">IOEnvironment</a></li>
+<li>pydantic.main.BaseModel</li>
+</ul>
+<h3>Class variables</h3>
+<dl>
+<dt id="dynamicio.config.pydantic.io_resources.KafkaDataEnvironment.kafka"><code class="name">var <span class="ident">kafka</span> : <a title="dynamicio.config.pydantic.io_resources.KafkaDataSubSection" href="#dynamicio.config.pydantic.io_resources.KafkaDataSubSection">KafkaDataSubSection</a></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.KafkaDataEnvironment.model_config"><code class="name">var <span class="ident">model_config</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+<h3>Inherited members</h3>
+<ul class="hlist">
+<li><code><b><a title="dynamicio.config.pydantic.io_resources.IOEnvironment" href="#dynamicio.config.pydantic.io_resources.IOEnvironment">IOEnvironment</a></b></code>:
+<ul class="hlist">
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOEnvironment.Config" href="#dynamicio.config.pydantic.io_resources.IOEnvironment.Config">Config</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOEnvironment.dynamicio_schema" href="#dynamicio.config.pydantic.io_resources.IOEnvironment.dynamicio_schema">dynamicio_schema</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOEnvironment.model_post_init" href="#dynamicio.config.pydantic.io_resources.IOEnvironment.model_post_init">model_post_init</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOEnvironment.set_parent" href="#dynamicio.config.pydantic.io_resources.IOEnvironment.set_parent">set_parent</a></code></li>
+</ul>
+</li>
+</ul>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.KafkaDataSubSection"><code class="flex name class">
+<span>class <span class="ident">KafkaDataSubSection</span></span>
+<span>(</span><span>**data: Any)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Kafka configuration section.</p>
+<p>Create a new model by parsing and validating input data from keyword arguments.</p>
+<p>Raises [<code>ValidationError</code>][pydantic_core.ValidationError] if the input data cannot be
+validated to form a valid model.</p>
+<p><code>self</code> is explicitly positional-only to allow <code>self</code> as a field name.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class KafkaDataSubSection(BaseModel):
+    &#34;&#34;&#34;Kafka configuration section.&#34;&#34;&#34;
+
+    kafka_server: str
+    kafka_topic: str</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>pydantic.main.BaseModel</li>
+</ul>
+<h3>Class variables</h3>
+<dl>
+<dt id="dynamicio.config.pydantic.io_resources.KafkaDataSubSection.kafka_server"><code class="name">var <span class="ident">kafka_server</span> : str</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.KafkaDataSubSection.kafka_topic"><code class="name">var <span class="ident">kafka_topic</span> : str</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.KafkaDataSubSection.model_config"><code class="name">var <span class="ident">model_config</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.LocalBatchDataEnvironment"><code class="flex name class">
+<span>class <span class="ident">LocalBatchDataEnvironment</span></span>
+<span>(</span><span>**data: Any)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Parent section for local batch (multiple files) config.</p>
+<p>Create a new model by parsing and validating input data from keyword arguments.</p>
+<p>Raises [<code>ValidationError</code>][pydantic_core.ValidationError] if the input data cannot be
+validated to form a valid model.</p>
+<p><code>self</code> is explicitly positional-only to allow <code>self</code> as a field name.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class LocalBatchDataEnvironment(IOEnvironment):
+    &#34;&#34;&#34;Parent section for local batch (multiple files) config.&#34;&#34;&#34;
+
+    local: LocalBatchDataSubSection</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li><a title="dynamicio.config.pydantic.io_resources.IOEnvironment" href="#dynamicio.config.pydantic.io_resources.IOEnvironment">IOEnvironment</a></li>
+<li>pydantic.main.BaseModel</li>
+</ul>
+<h3>Class variables</h3>
+<dl>
+<dt id="dynamicio.config.pydantic.io_resources.LocalBatchDataEnvironment.local"><code class="name">var <span class="ident">local</span> : <a title="dynamicio.config.pydantic.io_resources.LocalBatchDataSubSection" href="#dynamicio.config.pydantic.io_resources.LocalBatchDataSubSection">LocalBatchDataSubSection</a></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.LocalBatchDataEnvironment.model_config"><code class="name">var <span class="ident">model_config</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+<h3>Inherited members</h3>
+<ul class="hlist">
+<li><code><b><a title="dynamicio.config.pydantic.io_resources.IOEnvironment" href="#dynamicio.config.pydantic.io_resources.IOEnvironment">IOEnvironment</a></b></code>:
+<ul class="hlist">
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOEnvironment.Config" href="#dynamicio.config.pydantic.io_resources.IOEnvironment.Config">Config</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOEnvironment.dynamicio_schema" href="#dynamicio.config.pydantic.io_resources.IOEnvironment.dynamicio_schema">dynamicio_schema</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOEnvironment.model_post_init" href="#dynamicio.config.pydantic.io_resources.IOEnvironment.model_post_init">model_post_init</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOEnvironment.set_parent" href="#dynamicio.config.pydantic.io_resources.IOEnvironment.set_parent">set_parent</a></code></li>
+</ul>
+</li>
+</ul>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.LocalBatchDataSubSection"><code class="flex name class">
+<span>class <span class="ident">LocalBatchDataSubSection</span></span>
+<span>(</span><span>**data: Any)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Config section for local batch data (multiple input files).</p>
+<p>Create a new model by parsing and validating input data from keyword arguments.</p>
+<p>Raises [<code>ValidationError</code>][pydantic_core.ValidationError] if the input data cannot be
+validated to form a valid model.</p>
+<p><code>self</code> is explicitly positional-only to allow <code>self</code> as a field name.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class LocalBatchDataSubSection(BaseModel):
+    &#34;&#34;&#34;Config section for local batch data (multiple input files).&#34;&#34;&#34;
+
+    path_prefix: Optional[str] = None
+    dynamic_file_path: Optional[str] = None
+    file_type: FileType
+
+    @pydantic.root_validator(pre=True)
+    def check_path_fields(cls, values):
+        &#34;&#34;&#34;Check that only one of path_prefix or dynamic_file_path is provided &amp; they meet format requirements.&#34;&#34;&#34;
+        path_prefix = values.get(&#34;path_prefix&#34;)
+        dynamic_file_path = values.get(&#34;dynamic_file_path&#34;)
+
+        # Check for mutual exclusivity
+        if path_prefix and dynamic_file_path:
+            raise ValueError(&#34;Only one of path_prefix or dynamic_file_path should be provided&#34;)
+
+        # Check for path_prefix format
+        if path_prefix and not path_prefix.endswith(&#34;/&#34;):
+            raise ValueError(&#34;path_prefix must end with &#39;/&#39;&#34;)
+
+        # Check for dynamic_file_path format
+        if dynamic_file_path:
+            allowed_extensions = [&#34;.parquet&#34;, &#34;.h5&#34;, &#34;.json&#34;, &#34;.csv&#34;]
+            if not any(dynamic_file_path.endswith(ext) for ext in allowed_extensions):
+                raise ValueError(&#34;`dynamic_file_path` must end with one of: .parquet, .h5, .json, .csv&#34;)
+
+        return values</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>pydantic.main.BaseModel</li>
+</ul>
+<h3>Class variables</h3>
+<dl>
+<dt id="dynamicio.config.pydantic.io_resources.LocalBatchDataSubSection.dynamic_file_path"><code class="name">var <span class="ident">dynamic_file_path</span> : Optional[str]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.LocalBatchDataSubSection.file_type"><code class="name">var <span class="ident">file_type</span> : <a title="dynamicio.config.pydantic.io_resources.FileType" href="#dynamicio.config.pydantic.io_resources.FileType">FileType</a></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.LocalBatchDataSubSection.model_config"><code class="name">var <span class="ident">model_config</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.LocalBatchDataSubSection.path_prefix"><code class="name">var <span class="ident">path_prefix</span> : Optional[str]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+<h3>Static methods</h3>
+<dl>
+<dt id="dynamicio.config.pydantic.io_resources.LocalBatchDataSubSection.check_path_fields"><code class="name flex">
+<span>def <span class="ident">check_path_fields</span></span>(<span>values)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Check that only one of path_prefix or dynamic_file_path is provided &amp; they meet format requirements.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@pydantic.root_validator(pre=True)
+def check_path_fields(cls, values):
+    &#34;&#34;&#34;Check that only one of path_prefix or dynamic_file_path is provided &amp; they meet format requirements.&#34;&#34;&#34;
+    path_prefix = values.get(&#34;path_prefix&#34;)
+    dynamic_file_path = values.get(&#34;dynamic_file_path&#34;)
+
+    # Check for mutual exclusivity
+    if path_prefix and dynamic_file_path:
+        raise ValueError(&#34;Only one of path_prefix or dynamic_file_path should be provided&#34;)
+
+    # Check for path_prefix format
+    if path_prefix and not path_prefix.endswith(&#34;/&#34;):
+        raise ValueError(&#34;path_prefix must end with &#39;/&#39;&#34;)
+
+    # Check for dynamic_file_path format
+    if dynamic_file_path:
+        allowed_extensions = [&#34;.parquet&#34;, &#34;.h5&#34;, &#34;.json&#34;, &#34;.csv&#34;]
+        if not any(dynamic_file_path.endswith(ext) for ext in allowed_extensions):
+            raise ValueError(&#34;`dynamic_file_path` must end with one of: .parquet, .h5, .json, .csv&#34;)
+
+    return values</code></pre>
+</details>
+</dd>
+</dl>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.LocalDataEnvironment"><code class="flex name class">
+<span>class <span class="ident">LocalDataEnvironment</span></span>
+<span>(</span><span>**data: Any)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>The data is provided by local storage.</p>
+<p>Create a new model by parsing and validating input data from keyword arguments.</p>
+<p>Raises [<code>ValidationError</code>][pydantic_core.ValidationError] if the input data cannot be
+validated to form a valid model.</p>
+<p><code>self</code> is explicitly positional-only to allow <code>self</code> as a field name.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class LocalDataEnvironment(IOEnvironment):
+    &#34;&#34;&#34;The data is provided by local storage.&#34;&#34;&#34;
+
+    local: LocalDataSubSection</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li><a title="dynamicio.config.pydantic.io_resources.IOEnvironment" href="#dynamicio.config.pydantic.io_resources.IOEnvironment">IOEnvironment</a></li>
+<li>pydantic.main.BaseModel</li>
+</ul>
+<h3>Class variables</h3>
+<dl>
+<dt id="dynamicio.config.pydantic.io_resources.LocalDataEnvironment.local"><code class="name">var <span class="ident">local</span> : <a title="dynamicio.config.pydantic.io_resources.LocalDataSubSection" href="#dynamicio.config.pydantic.io_resources.LocalDataSubSection">LocalDataSubSection</a></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.LocalDataEnvironment.model_config"><code class="name">var <span class="ident">model_config</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+<h3>Inherited members</h3>
+<ul class="hlist">
+<li><code><b><a title="dynamicio.config.pydantic.io_resources.IOEnvironment" href="#dynamicio.config.pydantic.io_resources.IOEnvironment">IOEnvironment</a></b></code>:
+<ul class="hlist">
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOEnvironment.Config" href="#dynamicio.config.pydantic.io_resources.IOEnvironment.Config">Config</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOEnvironment.dynamicio_schema" href="#dynamicio.config.pydantic.io_resources.IOEnvironment.dynamicio_schema">dynamicio_schema</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOEnvironment.model_post_init" href="#dynamicio.config.pydantic.io_resources.IOEnvironment.model_post_init">model_post_init</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOEnvironment.set_parent" href="#dynamicio.config.pydantic.io_resources.IOEnvironment.set_parent">set_parent</a></code></li>
+</ul>
+</li>
+</ul>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.LocalDataSubSection"><code class="flex name class">
+<span>class <span class="ident">LocalDataSubSection</span></span>
+<span>(</span><span>**data: Any)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Config section for local data provider.</p>
+<p>Create a new model by parsing and validating input data from keyword arguments.</p>
+<p>Raises [<code>ValidationError</code>][pydantic_core.ValidationError] if the input data cannot be
+validated to form a valid model.</p>
+<p><code>self</code> is explicitly positional-only to allow <code>self</code> as a field name.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class LocalDataSubSection(BaseModel):
+    &#34;&#34;&#34;Config section for local data provider.&#34;&#34;&#34;
+
+    file_path: str
+    file_type: FileType</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>pydantic.main.BaseModel</li>
+</ul>
+<h3>Class variables</h3>
+<dl>
+<dt id="dynamicio.config.pydantic.io_resources.LocalDataSubSection.file_path"><code class="name">var <span class="ident">file_path</span> : str</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.LocalDataSubSection.file_type"><code class="name">var <span class="ident">file_type</span> : <a title="dynamicio.config.pydantic.io_resources.FileType" href="#dynamicio.config.pydantic.io_resources.FileType">FileType</a></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.LocalDataSubSection.model_config"><code class="name">var <span class="ident">model_config</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.PostgresDataEnvironment"><code class="flex name class">
+<span>class <span class="ident">PostgresDataEnvironment</span></span>
+<span>(</span><span>**data: Any)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Parent section for postgres data source.</p>
+<p>Create a new model by parsing and validating input data from keyword arguments.</p>
+<p>Raises [<code>ValidationError</code>][pydantic_core.ValidationError] if the input data cannot be
+validated to form a valid model.</p>
+<p><code>self</code> is explicitly positional-only to allow <code>self</code> as a field name.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class PostgresDataEnvironment(IOEnvironment):
+    &#34;&#34;&#34;Parent section for postgres data source.&#34;&#34;&#34;
+
+    postgres: PostgresDataSubSection</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li><a title="dynamicio.config.pydantic.io_resources.IOEnvironment" href="#dynamicio.config.pydantic.io_resources.IOEnvironment">IOEnvironment</a></li>
+<li>pydantic.main.BaseModel</li>
+</ul>
+<h3>Class variables</h3>
+<dl>
+<dt id="dynamicio.config.pydantic.io_resources.PostgresDataEnvironment.model_config"><code class="name">var <span class="ident">model_config</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.PostgresDataEnvironment.postgres"><code class="name">var <span class="ident">postgres</span> : <a title="dynamicio.config.pydantic.io_resources.PostgresDataSubSection" href="#dynamicio.config.pydantic.io_resources.PostgresDataSubSection">PostgresDataSubSection</a></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+<h3>Inherited members</h3>
+<ul class="hlist">
+<li><code><b><a title="dynamicio.config.pydantic.io_resources.IOEnvironment" href="#dynamicio.config.pydantic.io_resources.IOEnvironment">IOEnvironment</a></b></code>:
+<ul class="hlist">
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOEnvironment.Config" href="#dynamicio.config.pydantic.io_resources.IOEnvironment.Config">Config</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOEnvironment.dynamicio_schema" href="#dynamicio.config.pydantic.io_resources.IOEnvironment.dynamicio_schema">dynamicio_schema</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOEnvironment.model_post_init" href="#dynamicio.config.pydantic.io_resources.IOEnvironment.model_post_init">model_post_init</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOEnvironment.set_parent" href="#dynamicio.config.pydantic.io_resources.IOEnvironment.set_parent">set_parent</a></code></li>
+</ul>
+</li>
+</ul>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.PostgresDataSubSection"><code class="flex name class">
+<span>class <span class="ident">PostgresDataSubSection</span></span>
+<span>(</span><span>**data: Any)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Postgres data source configuration.</p>
+<p>Create a new model by parsing and validating input data from keyword arguments.</p>
+<p>Raises [<code>ValidationError</code>][pydantic_core.ValidationError] if the input data cannot be
+validated to form a valid model.</p>
+<p><code>self</code> is explicitly positional-only to allow <code>self</code> as a field name.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class PostgresDataSubSection(BaseModel):
+    &#34;&#34;&#34;Postgres data source configuration.&#34;&#34;&#34;
+
+    db_host: str
+    db_port: str
+    db_name: str
+    db_user: str
+    db_password: str</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>pydantic.main.BaseModel</li>
+</ul>
+<h3>Class variables</h3>
+<dl>
+<dt id="dynamicio.config.pydantic.io_resources.PostgresDataSubSection.db_host"><code class="name">var <span class="ident">db_host</span> : str</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.PostgresDataSubSection.db_name"><code class="name">var <span class="ident">db_name</span> : str</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.PostgresDataSubSection.db_password"><code class="name">var <span class="ident">db_password</span> : str</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.PostgresDataSubSection.db_port"><code class="name">var <span class="ident">db_port</span> : str</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.PostgresDataSubSection.db_user"><code class="name">var <span class="ident">db_user</span> : str</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.PostgresDataSubSection.model_config"><code class="name">var <span class="ident">model_config</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.S3DataEnvironment"><code class="flex name class">
+<span>class <span class="ident">S3DataEnvironment</span></span>
+<span>(</span><span>**data: Any)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Parent section for s3 data source config.</p>
+<p>Create a new model by parsing and validating input data from keyword arguments.</p>
+<p>Raises [<code>ValidationError</code>][pydantic_core.ValidationError] if the input data cannot be
+validated to form a valid model.</p>
+<p><code>self</code> is explicitly positional-only to allow <code>self</code> as a field name.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class S3DataEnvironment(IOEnvironment):
+    &#34;&#34;&#34;Parent section for s3 data source config.&#34;&#34;&#34;
+
+    s3: S3DataSubSection</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li><a title="dynamicio.config.pydantic.io_resources.IOEnvironment" href="#dynamicio.config.pydantic.io_resources.IOEnvironment">IOEnvironment</a></li>
+<li>pydantic.main.BaseModel</li>
+</ul>
+<h3>Class variables</h3>
+<dl>
+<dt id="dynamicio.config.pydantic.io_resources.S3DataEnvironment.model_config"><code class="name">var <span class="ident">model_config</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.S3DataEnvironment.s3"><code class="name">var <span class="ident">s3</span> : <a title="dynamicio.config.pydantic.io_resources.S3DataSubSection" href="#dynamicio.config.pydantic.io_resources.S3DataSubSection">S3DataSubSection</a></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+<h3>Inherited members</h3>
+<ul class="hlist">
+<li><code><b><a title="dynamicio.config.pydantic.io_resources.IOEnvironment" href="#dynamicio.config.pydantic.io_resources.IOEnvironment">IOEnvironment</a></b></code>:
+<ul class="hlist">
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOEnvironment.Config" href="#dynamicio.config.pydantic.io_resources.IOEnvironment.Config">Config</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOEnvironment.dynamicio_schema" href="#dynamicio.config.pydantic.io_resources.IOEnvironment.dynamicio_schema">dynamicio_schema</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOEnvironment.model_post_init" href="#dynamicio.config.pydantic.io_resources.IOEnvironment.model_post_init">model_post_init</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOEnvironment.set_parent" href="#dynamicio.config.pydantic.io_resources.IOEnvironment.set_parent">set_parent</a></code></li>
+</ul>
+</li>
+</ul>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.S3DataSubSection"><code class="flex name class">
+<span>class <span class="ident">S3DataSubSection</span></span>
+<span>(</span><span>**data: Any)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Config section for S3 data source.</p>
+<p>Create a new model by parsing and validating input data from keyword arguments.</p>
+<p>Raises [<code>ValidationError</code>][pydantic_core.ValidationError] if the input data cannot be
+validated to form a valid model.</p>
+<p><code>self</code> is explicitly positional-only to allow <code>self</code> as a field name.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class S3DataSubSection(BaseModel):
+    &#34;&#34;&#34;Config section for S3 data source.&#34;&#34;&#34;
+
+    file_path: str
+    file_type: FileType
+    bucket: str</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>pydantic.main.BaseModel</li>
+</ul>
+<h3>Class variables</h3>
+<dl>
+<dt id="dynamicio.config.pydantic.io_resources.S3DataSubSection.bucket"><code class="name">var <span class="ident">bucket</span> : str</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.S3DataSubSection.file_path"><code class="name">var <span class="ident">file_path</span> : str</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.S3DataSubSection.file_type"><code class="name">var <span class="ident">file_type</span> : <a title="dynamicio.config.pydantic.io_resources.FileType" href="#dynamicio.config.pydantic.io_resources.FileType">FileType</a></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.S3DataSubSection.model_config"><code class="name">var <span class="ident">model_config</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.S3PathPrefixEnvironment"><code class="flex name class">
+<span>class <span class="ident">S3PathPrefixEnvironment</span></span>
+<span>(</span><span>**data: Any)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Parent section for the multi-object s3 data source.</p>
+<p>Create a new model by parsing and validating input data from keyword arguments.</p>
+<p>Raises [<code>ValidationError</code>][pydantic_core.ValidationError] if the input data cannot be
+validated to form a valid model.</p>
+<p><code>self</code> is explicitly positional-only to allow <code>self</code> as a field name.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class S3PathPrefixEnvironment(IOEnvironment):
+    &#34;&#34;&#34;Parent section for the multi-object s3 data source.&#34;&#34;&#34;
+
+    s3: S3PathPrefixSubSection</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li><a title="dynamicio.config.pydantic.io_resources.IOEnvironment" href="#dynamicio.config.pydantic.io_resources.IOEnvironment">IOEnvironment</a></li>
+<li>pydantic.main.BaseModel</li>
+</ul>
+<h3>Class variables</h3>
+<dl>
+<dt id="dynamicio.config.pydantic.io_resources.S3PathPrefixEnvironment.model_config"><code class="name">var <span class="ident">model_config</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.S3PathPrefixEnvironment.s3"><code class="name">var <span class="ident">s3</span> : <a title="dynamicio.config.pydantic.io_resources.S3PathPrefixSubSection" href="#dynamicio.config.pydantic.io_resources.S3PathPrefixSubSection">S3PathPrefixSubSection</a></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+<h3>Inherited members</h3>
+<ul class="hlist">
+<li><code><b><a title="dynamicio.config.pydantic.io_resources.IOEnvironment" href="#dynamicio.config.pydantic.io_resources.IOEnvironment">IOEnvironment</a></b></code>:
+<ul class="hlist">
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOEnvironment.Config" href="#dynamicio.config.pydantic.io_resources.IOEnvironment.Config">Config</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOEnvironment.dynamicio_schema" href="#dynamicio.config.pydantic.io_resources.IOEnvironment.dynamicio_schema">dynamicio_schema</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOEnvironment.model_post_init" href="#dynamicio.config.pydantic.io_resources.IOEnvironment.model_post_init">model_post_init</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOEnvironment.set_parent" href="#dynamicio.config.pydantic.io_resources.IOEnvironment.set_parent">set_parent</a></code></li>
+</ul>
+</li>
+</ul>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.S3PathPrefixSubSection"><code class="flex name class">
+<span>class <span class="ident">S3PathPrefixSubSection</span></span>
+<span>(</span><span>**data: Any)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Config section for s3 prefix data source (multiple s3 objects).</p>
+<p>Create a new model by parsing and validating input data from keyword arguments.</p>
+<p>Raises [<code>ValidationError</code>][pydantic_core.ValidationError] if the input data cannot be
+validated to form a valid model.</p>
+<p><code>self</code> is explicitly positional-only to allow <code>self</code> as a field name.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class S3PathPrefixSubSection(BaseModel):
+    &#34;&#34;&#34;Config section for s3 prefix data source (multiple s3 objects).&#34;&#34;&#34;
+
+    path_prefix: Optional[str] = None
+    dynamic_file_path: Optional[str] = None
+    file_type: FileType
+    bucket: str
+
+    @pydantic.root_validator(pre=True)
+    def check_path_fields(cls, values):
+        &#34;&#34;&#34;Check that only one of path_prefix or dynamic_file_path is provided &amp; they meet format requirements.&#34;&#34;&#34;
+        path_prefix = values.get(&#34;path_prefix&#34;)
+        dynamic_file_path = values.get(&#34;dynamic_file_path&#34;)
+
+        # Check for mutual exclusivity
+        if path_prefix and dynamic_file_path:
+            raise ValueError(&#34;Only one of path_prefix or dynamic_file_path should be provided&#34;)
+
+        # Check for at least one being provided
+        if not path_prefix and not dynamic_file_path:
+            raise ValueError(&#34;Either path_prefix or dynamic_file_path must be provided&#34;)
+
+        # Check for path_prefix format
+        if path_prefix and not path_prefix.endswith(&#34;/&#34;):
+            raise ValueError(&#34;path_prefix must end with &#39;/&#39;&#34;)
+
+        # Check for dynamic_file_path format
+        if dynamic_file_path:
+            allowed_extensions = [&#34;.parquet&#34;, &#34;.h5&#34;, &#34;.json&#34;, &#34;.csv&#34;]
+            if not any(dynamic_file_path.endswith(ext) for ext in allowed_extensions):
+                raise ValueError(&#34;`dynamic_file_path` must end with one of: .parquet, .h5, .json, .csv&#34;)
+
+        return values
+
+    @pydantic.root_validator(pre=True)
+    def support_legacy_config_path_prefix(cls, values):
+        &#34;&#34;&#34;This validator implements support for legacy config format.
+
+        I addresses a case where the bucket &amp; path_prefix path could&#39;ve been passed as a single param in &#39;bucket&#39; field.
+        E.g.
+            bucket: &#34;[[ MOCK_BUCKET ]]/data/input/{file_name_to_replace}.hdf&#34;
+        &#34;&#34;&#34;
+        bucket = values.get(&#34;bucket&#34;)
+        path_prefix = values.get(&#34;path_prefix&#34;)
+        if (bucket and isinstance(bucket, str) and posixpath.sep in bucket) and (not path_prefix):
+            (new_bucket, new_path_prefix) = bucket.split(posixpath.sep, 1)
+            values.update(
+                {
+                    &#34;bucket&#34;: new_bucket,
+                    &#34;path_prefix&#34;: new_path_prefix,
+                }
+            )
+        return values</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>pydantic.main.BaseModel</li>
+</ul>
+<h3>Class variables</h3>
+<dl>
+<dt id="dynamicio.config.pydantic.io_resources.S3PathPrefixSubSection.bucket"><code class="name">var <span class="ident">bucket</span> : str</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.S3PathPrefixSubSection.dynamic_file_path"><code class="name">var <span class="ident">dynamic_file_path</span> : Optional[str]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.S3PathPrefixSubSection.file_type"><code class="name">var <span class="ident">file_type</span> : <a title="dynamicio.config.pydantic.io_resources.FileType" href="#dynamicio.config.pydantic.io_resources.FileType">FileType</a></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.S3PathPrefixSubSection.model_config"><code class="name">var <span class="ident">model_config</span></code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.S3PathPrefixSubSection.path_prefix"><code class="name">var <span class="ident">path_prefix</span> : Optional[str]</code></dt>
+<dd>
+<div class="desc"></div>
+</dd>
+</dl>
+<h3>Static methods</h3>
+<dl>
+<dt id="dynamicio.config.pydantic.io_resources.S3PathPrefixSubSection.check_path_fields"><code class="name flex">
+<span>def <span class="ident">check_path_fields</span></span>(<span>values)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Check that only one of path_prefix or dynamic_file_path is provided &amp; they meet format requirements.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@pydantic.root_validator(pre=True)
+def check_path_fields(cls, values):
+    &#34;&#34;&#34;Check that only one of path_prefix or dynamic_file_path is provided &amp; they meet format requirements.&#34;&#34;&#34;
+    path_prefix = values.get(&#34;path_prefix&#34;)
+    dynamic_file_path = values.get(&#34;dynamic_file_path&#34;)
+
+    # Check for mutual exclusivity
+    if path_prefix and dynamic_file_path:
+        raise ValueError(&#34;Only one of path_prefix or dynamic_file_path should be provided&#34;)
+
+    # Check for at least one being provided
+    if not path_prefix and not dynamic_file_path:
+        raise ValueError(&#34;Either path_prefix or dynamic_file_path must be provided&#34;)
+
+    # Check for path_prefix format
+    if path_prefix and not path_prefix.endswith(&#34;/&#34;):
+        raise ValueError(&#34;path_prefix must end with &#39;/&#39;&#34;)
+
+    # Check for dynamic_file_path format
+    if dynamic_file_path:
+        allowed_extensions = [&#34;.parquet&#34;, &#34;.h5&#34;, &#34;.json&#34;, &#34;.csv&#34;]
+        if not any(dynamic_file_path.endswith(ext) for ext in allowed_extensions):
+            raise ValueError(&#34;`dynamic_file_path` must end with one of: .parquet, .h5, .json, .csv&#34;)
+
+    return values</code></pre>
+</details>
+</dd>
+<dt id="dynamicio.config.pydantic.io_resources.S3PathPrefixSubSection.support_legacy_config_path_prefix"><code class="name flex">
+<span>def <span class="ident">support_legacy_config_path_prefix</span></span>(<span>values)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>This validator implements support for legacy config format.</p>
+<p>I addresses a case where the bucket &amp; path_prefix path could've been passed as a single param in 'bucket' field.
+E.g.
+bucket: "[[ MOCK_BUCKET ]]/data/input/{file_name_to_replace}.hdf"</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">@pydantic.root_validator(pre=True)
+def support_legacy_config_path_prefix(cls, values):
+    &#34;&#34;&#34;This validator implements support for legacy config format.
+
+    I addresses a case where the bucket &amp; path_prefix path could&#39;ve been passed as a single param in &#39;bucket&#39; field.
+    E.g.
+        bucket: &#34;[[ MOCK_BUCKET ]]/data/input/{file_name_to_replace}.hdf&#34;
+    &#34;&#34;&#34;
+    bucket = values.get(&#34;bucket&#34;)
+    path_prefix = values.get(&#34;path_prefix&#34;)
+    if (bucket and isinstance(bucket, str) and posixpath.sep in bucket) and (not path_prefix):
+        (new_bucket, new_path_prefix) = bucket.split(posixpath.sep, 1)
+        values.update(
+            {
+                &#34;bucket&#34;: new_bucket,
+                &#34;path_prefix&#34;: new_path_prefix,
+            }
+        )
+    return values</code></pre>
+</details>
+</dd>
+</dl>
+</dd>
+</dl>
+</section>
+</article>
+<nav id="sidebar">
+<h1>Index</h1>
+<div class="toc">
+<ul></ul>
+</div>
+<ul id="index">
+<li><h3>Super-module</h3>
+<ul>
+<li><code><a title="dynamicio.config.pydantic" href="index.html">dynamicio.config.pydantic</a></code></li>
+</ul>
+</li>
+<li><h3><a href="#header-classes">Classes</a></h3>
+<ul>
+<li>
+<h4><code><a title="dynamicio.config.pydantic.io_resources.DataBackendType" href="#dynamicio.config.pydantic.io_resources.DataBackendType">DataBackendType</a></code></h4>
+<ul class="two-column">
+<li><code><a title="dynamicio.config.pydantic.io_resources.DataBackendType.athena" href="#dynamicio.config.pydantic.io_resources.DataBackendType.athena">athena</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.DataBackendType.kafka" href="#dynamicio.config.pydantic.io_resources.DataBackendType.kafka">kafka</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.DataBackendType.local" href="#dynamicio.config.pydantic.io_resources.DataBackendType.local">local</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.DataBackendType.local_batch" href="#dynamicio.config.pydantic.io_resources.DataBackendType.local_batch">local_batch</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.DataBackendType.postgres" href="#dynamicio.config.pydantic.io_resources.DataBackendType.postgres">postgres</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.DataBackendType.s3" href="#dynamicio.config.pydantic.io_resources.DataBackendType.s3">s3</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.DataBackendType.s3_file" href="#dynamicio.config.pydantic.io_resources.DataBackendType.s3_file">s3_file</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.DataBackendType.s3_path_prefix" href="#dynamicio.config.pydantic.io_resources.DataBackendType.s3_path_prefix">s3_path_prefix</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="dynamicio.config.pydantic.io_resources.FileType" href="#dynamicio.config.pydantic.io_resources.FileType">FileType</a></code></h4>
+<ul class="">
+<li><code><a title="dynamicio.config.pydantic.io_resources.FileType.csv" href="#dynamicio.config.pydantic.io_resources.FileType.csv">csv</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.FileType.hdf" href="#dynamicio.config.pydantic.io_resources.FileType.hdf">hdf</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.FileType.json" href="#dynamicio.config.pydantic.io_resources.FileType.json">json</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.FileType.parquet" href="#dynamicio.config.pydantic.io_resources.FileType.parquet">parquet</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="dynamicio.config.pydantic.io_resources.IOBinding" href="#dynamicio.config.pydantic.io_resources.IOBinding">IOBinding</a></code></h4>
+<ul class="">
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOBinding.dynamicio_schema" href="#dynamicio.config.pydantic.io_resources.IOBinding.dynamicio_schema">dynamicio_schema</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOBinding.environments" href="#dynamicio.config.pydantic.io_resources.IOBinding.environments">environments</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOBinding.get_binding_for_environment" href="#dynamicio.config.pydantic.io_resources.IOBinding.get_binding_for_environment">get_binding_for_environment</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOBinding.model_config" href="#dynamicio.config.pydantic.io_resources.IOBinding.model_config">model_config</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOBinding.name" href="#dynamicio.config.pydantic.io_resources.IOBinding.name">name</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOBinding.pick_correct_env_cls" href="#dynamicio.config.pydantic.io_resources.IOBinding.pick_correct_env_cls">pick_correct_env_cls</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="dynamicio.config.pydantic.io_resources.IOEnvironment" href="#dynamicio.config.pydantic.io_resources.IOEnvironment">IOEnvironment</a></code></h4>
+<ul class="two-column">
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOEnvironment.Config" href="#dynamicio.config.pydantic.io_resources.IOEnvironment.Config">Config</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOEnvironment.data_backend_type" href="#dynamicio.config.pydantic.io_resources.IOEnvironment.data_backend_type">data_backend_type</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOEnvironment.dynamicio_schema" href="#dynamicio.config.pydantic.io_resources.IOEnvironment.dynamicio_schema">dynamicio_schema</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOEnvironment.model_config" href="#dynamicio.config.pydantic.io_resources.IOEnvironment.model_config">model_config</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOEnvironment.model_post_init" href="#dynamicio.config.pydantic.io_resources.IOEnvironment.model_post_init">model_post_init</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOEnvironment.options" href="#dynamicio.config.pydantic.io_resources.IOEnvironment.options">options</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.IOEnvironment.set_parent" href="#dynamicio.config.pydantic.io_resources.IOEnvironment.set_parent">set_parent</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="dynamicio.config.pydantic.io_resources.KafkaDataEnvironment" href="#dynamicio.config.pydantic.io_resources.KafkaDataEnvironment">KafkaDataEnvironment</a></code></h4>
+<ul class="">
+<li><code><a title="dynamicio.config.pydantic.io_resources.KafkaDataEnvironment.kafka" href="#dynamicio.config.pydantic.io_resources.KafkaDataEnvironment.kafka">kafka</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.KafkaDataEnvironment.model_config" href="#dynamicio.config.pydantic.io_resources.KafkaDataEnvironment.model_config">model_config</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="dynamicio.config.pydantic.io_resources.KafkaDataSubSection" href="#dynamicio.config.pydantic.io_resources.KafkaDataSubSection">KafkaDataSubSection</a></code></h4>
+<ul class="">
+<li><code><a title="dynamicio.config.pydantic.io_resources.KafkaDataSubSection.kafka_server" href="#dynamicio.config.pydantic.io_resources.KafkaDataSubSection.kafka_server">kafka_server</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.KafkaDataSubSection.kafka_topic" href="#dynamicio.config.pydantic.io_resources.KafkaDataSubSection.kafka_topic">kafka_topic</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.KafkaDataSubSection.model_config" href="#dynamicio.config.pydantic.io_resources.KafkaDataSubSection.model_config">model_config</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="dynamicio.config.pydantic.io_resources.LocalBatchDataEnvironment" href="#dynamicio.config.pydantic.io_resources.LocalBatchDataEnvironment">LocalBatchDataEnvironment</a></code></h4>
+<ul class="">
+<li><code><a title="dynamicio.config.pydantic.io_resources.LocalBatchDataEnvironment.local" href="#dynamicio.config.pydantic.io_resources.LocalBatchDataEnvironment.local">local</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.LocalBatchDataEnvironment.model_config" href="#dynamicio.config.pydantic.io_resources.LocalBatchDataEnvironment.model_config">model_config</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="dynamicio.config.pydantic.io_resources.LocalBatchDataSubSection" href="#dynamicio.config.pydantic.io_resources.LocalBatchDataSubSection">LocalBatchDataSubSection</a></code></h4>
+<ul class="">
+<li><code><a title="dynamicio.config.pydantic.io_resources.LocalBatchDataSubSection.check_path_fields" href="#dynamicio.config.pydantic.io_resources.LocalBatchDataSubSection.check_path_fields">check_path_fields</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.LocalBatchDataSubSection.dynamic_file_path" href="#dynamicio.config.pydantic.io_resources.LocalBatchDataSubSection.dynamic_file_path">dynamic_file_path</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.LocalBatchDataSubSection.file_type" href="#dynamicio.config.pydantic.io_resources.LocalBatchDataSubSection.file_type">file_type</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.LocalBatchDataSubSection.model_config" href="#dynamicio.config.pydantic.io_resources.LocalBatchDataSubSection.model_config">model_config</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.LocalBatchDataSubSection.path_prefix" href="#dynamicio.config.pydantic.io_resources.LocalBatchDataSubSection.path_prefix">path_prefix</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="dynamicio.config.pydantic.io_resources.LocalDataEnvironment" href="#dynamicio.config.pydantic.io_resources.LocalDataEnvironment">LocalDataEnvironment</a></code></h4>
+<ul class="">
+<li><code><a title="dynamicio.config.pydantic.io_resources.LocalDataEnvironment.local" href="#dynamicio.config.pydantic.io_resources.LocalDataEnvironment.local">local</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.LocalDataEnvironment.model_config" href="#dynamicio.config.pydantic.io_resources.LocalDataEnvironment.model_config">model_config</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="dynamicio.config.pydantic.io_resources.LocalDataSubSection" href="#dynamicio.config.pydantic.io_resources.LocalDataSubSection">LocalDataSubSection</a></code></h4>
+<ul class="">
+<li><code><a title="dynamicio.config.pydantic.io_resources.LocalDataSubSection.file_path" href="#dynamicio.config.pydantic.io_resources.LocalDataSubSection.file_path">file_path</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.LocalDataSubSection.file_type" href="#dynamicio.config.pydantic.io_resources.LocalDataSubSection.file_type">file_type</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.LocalDataSubSection.model_config" href="#dynamicio.config.pydantic.io_resources.LocalDataSubSection.model_config">model_config</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="dynamicio.config.pydantic.io_resources.PostgresDataEnvironment" href="#dynamicio.config.pydantic.io_resources.PostgresDataEnvironment">PostgresDataEnvironment</a></code></h4>
+<ul class="">
+<li><code><a title="dynamicio.config.pydantic.io_resources.PostgresDataEnvironment.model_config" href="#dynamicio.config.pydantic.io_resources.PostgresDataEnvironment.model_config">model_config</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.PostgresDataEnvironment.postgres" href="#dynamicio.config.pydantic.io_resources.PostgresDataEnvironment.postgres">postgres</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="dynamicio.config.pydantic.io_resources.PostgresDataSubSection" href="#dynamicio.config.pydantic.io_resources.PostgresDataSubSection">PostgresDataSubSection</a></code></h4>
+<ul class="two-column">
+<li><code><a title="dynamicio.config.pydantic.io_resources.PostgresDataSubSection.db_host" href="#dynamicio.config.pydantic.io_resources.PostgresDataSubSection.db_host">db_host</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.PostgresDataSubSection.db_name" href="#dynamicio.config.pydantic.io_resources.PostgresDataSubSection.db_name">db_name</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.PostgresDataSubSection.db_password" href="#dynamicio.config.pydantic.io_resources.PostgresDataSubSection.db_password">db_password</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.PostgresDataSubSection.db_port" href="#dynamicio.config.pydantic.io_resources.PostgresDataSubSection.db_port">db_port</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.PostgresDataSubSection.db_user" href="#dynamicio.config.pydantic.io_resources.PostgresDataSubSection.db_user">db_user</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.PostgresDataSubSection.model_config" href="#dynamicio.config.pydantic.io_resources.PostgresDataSubSection.model_config">model_config</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="dynamicio.config.pydantic.io_resources.S3DataEnvironment" href="#dynamicio.config.pydantic.io_resources.S3DataEnvironment">S3DataEnvironment</a></code></h4>
+<ul class="">
+<li><code><a title="dynamicio.config.pydantic.io_resources.S3DataEnvironment.model_config" href="#dynamicio.config.pydantic.io_resources.S3DataEnvironment.model_config">model_config</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.S3DataEnvironment.s3" href="#dynamicio.config.pydantic.io_resources.S3DataEnvironment.s3">s3</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="dynamicio.config.pydantic.io_resources.S3DataSubSection" href="#dynamicio.config.pydantic.io_resources.S3DataSubSection">S3DataSubSection</a></code></h4>
+<ul class="">
+<li><code><a title="dynamicio.config.pydantic.io_resources.S3DataSubSection.bucket" href="#dynamicio.config.pydantic.io_resources.S3DataSubSection.bucket">bucket</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.S3DataSubSection.file_path" href="#dynamicio.config.pydantic.io_resources.S3DataSubSection.file_path">file_path</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.S3DataSubSection.file_type" href="#dynamicio.config.pydantic.io_resources.S3DataSubSection.file_type">file_type</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.S3DataSubSection.model_config" href="#dynamicio.config.pydantic.io_resources.S3DataSubSection.model_config">model_config</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="dynamicio.config.pydantic.io_resources.S3PathPrefixEnvironment" href="#dynamicio.config.pydantic.io_resources.S3PathPrefixEnvironment">S3PathPrefixEnvironment</a></code></h4>
+<ul class="">
+<li><code><a title="dynamicio.config.pydantic.io_resources.S3PathPrefixEnvironment.model_config" href="#dynamicio.config.pydantic.io_resources.S3PathPrefixEnvironment.model_config">model_config</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.S3PathPrefixEnvironment.s3" href="#dynamicio.config.pydantic.io_resources.S3PathPrefixEnvironment.s3">s3</a></code></li>
+</ul>
+</li>
+<li>
+<h4><code><a title="dynamicio.config.pydantic.io_resources.S3PathPrefixSubSection" href="#dynamicio.config.pydantic.io_resources.S3PathPrefixSubSection">S3PathPrefixSubSection</a></code></h4>
+<ul class="">
+<li><code><a title="dynamicio.config.pydantic.io_resources.S3PathPrefixSubSection.bucket" href="#dynamicio.config.pydantic.io_resources.S3PathPrefixSubSection.bucket">bucket</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.S3PathPrefixSubSection.check_path_fields" href="#dynamicio.config.pydantic.io_resources.S3PathPrefixSubSection.check_path_fields">check_path_fields</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.S3PathPrefixSubSection.dynamic_file_path" href="#dynamicio.config.pydantic.io_resources.S3PathPrefixSubSection.dynamic_file_path">dynamic_file_path</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.S3PathPrefixSubSection.file_type" href="#dynamicio.config.pydantic.io_resources.S3PathPrefixSubSection.file_type">file_type</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.S3PathPrefixSubSection.model_config" href="#dynamicio.config.pydantic.io_resources.S3PathPrefixSubSection.model_config">model_config</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.S3PathPrefixSubSection.path_prefix" href="#dynamicio.config.pydantic.io_resources.S3PathPrefixSubSection.path_prefix">path_prefix</a></code></li>
+<li><code><a title="dynamicio.config.pydantic.io_resources.S3PathPrefixSubSection.support_legacy_config_path_prefix" href="#dynamicio.config.pydantic.io_resources.S3PathPrefixSubSection.support_legacy_config_path_prefix">support_legacy_config_path_prefix</a></code></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</nav>
+</main>
+<footer id="footer">
+<p>Generated by <a href="https://pdoc3.github.io/pdoc" title="pdoc: Python API documentation generator"><cite>pdoc</cite> 0.10.0</a>.</p>
+</footer>
+</body>
+</html>
