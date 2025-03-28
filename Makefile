@@ -88,3 +88,4 @@ tag-new-release:
 	&&git tag -a -F CHANGELOG.txt $$tag \
 	&&rm CHANGELOG.txt \
 	&&git push origin $$tag
+
