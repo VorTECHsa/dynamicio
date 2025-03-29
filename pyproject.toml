@@ -81,14 +81,11 @@ requires = [
 ]
 build-backend = "poetry_dynamic_versioning.backend"
 
-
 [tool.poetry-dynamic-versioning]
 enable = true
+pattern = "v(?P<base>\\d+\\.\\d+\\.\\d+)(?:-rc\\.(?P<rc>\\d+))?"
 vcs = "git"
 style = "pep440"
-
-[tool.poetry-dynamic-versioning.pattern]
-tag = "v(?P<base>\\d+\\.\\d+\\.\\d+)(?:-rc\\.(?P<rc>\\d+))?"
 
 [tool.black]
 py38 = true
