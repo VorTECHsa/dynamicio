@@ -91,4 +91,4 @@ jobs:
       - name: Publish to PyPI
         env:
           POETRY_PYPI_TOKEN_PYPI: ${{ secrets.PYPI_API_TOKEN }}
-        run: poetry publish --no-interaction --username __token__ --password "$POETRY_PYPI_TOKEN_PYPI"
+        run: poetry publish --build --no-interaction --username __token__ --password "$POETRY_PYPI_TOKEN_PYPI"
