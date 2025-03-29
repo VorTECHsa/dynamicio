@@ -82,6 +82,9 @@ jobs:
       - name: Install Poetry
         uses: snok/install-poetry@v1
 
+      - name: Install poetry-dynamic-versioning plugin
+        run: poetry self add poetry-dynamic-versioning
+
       - name: Install dependencies and build
         run: |
           poetry config virtualenvs.create false
@@ -91,4 +94,4 @@ jobs:
       - name: Publish to PyPI
         env:
           POETRY_PYPI_TOKEN_PYPI: ${{ secrets.PYPI_API_TOKEN }}
-        run: poetry publish --build --no-interaction --username __token__ --password "$POETRY_PYPI_TOKEN_PYPI"
+        run: poetry publish --no-interaction --build --username __token__ --password "$POETRY_PYPI_TOKEN_PYPI"
