@@ -5,15 +5,15 @@ from contextlib import suppress
 from magic_logger import logger
 
 try:
-    from importlib.metadata import PackageNotFoundError, version
+    from importlib.metadata import version, PackageNotFoundError
 except ImportError:
-    from importlib_metadata import PackageNotFoundError, version  # For Python <3.8
+    from importlib_metadata import version, PackageNotFoundError  # type: ignore
 
 with suppress(Exception):
     try:
         __version__ = version("dynamicio")
     except PackageNotFoundError:
-        __version__ = "unknown"
+        __version__ = "0.0.0"
 
 from dynamicio.core import DynamicDataIO
 from dynamicio.mixins import WithKafka, WithLocal, WithLocalBatch, WithPostgres, WithS3File, WithS3PathPrefix

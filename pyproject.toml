@@ -83,23 +83,21 @@ build-backend = "poetry_dynamic_versioning.backend"
 
 [tool.poetry-dynamic-versioning]
 enable = true
-pattern = "v(?P<base>\\d+\\.\\d+\\.\\d+)(?:-rc\\.(?P<rc>\\d+))?"
 vcs = "git"
 style = "pep440"
+pattern = "v(?P<base>\\d+\\.\\d+\\.\\d+)(?:-rc\\.(?P<rc>\\d+))?"
 
 [tool.black]
 py38 = true
 line-length = 185
-include = '\.pyi?$'
+include = '\\.pyi?$'
 exclude = '''
 (
   /(
       \.git
     | \.mypy_cache
     | \.github
-    | \.circleci
-    | \.tox
-    | \venv
+    | \.venv
     | \flake8
     | docs
     | demo
