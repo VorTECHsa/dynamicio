@@ -87,6 +87,9 @@ enable = true
 vcs = "git"
 style = "pep440"
 
+[tool.poetry-dynamic-versioning.pattern]
+tag = "v(?P<base>\\d+\\.\\d+\\.\\d+)(?:-rc\\.(?P<rc>\\d+))?"
+
 [tool.black]
 py38 = true
 line-length = 185
