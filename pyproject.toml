@@ -81,7 +81,6 @@ requires = [
 ]
 build-backend = "poetry_dynamic_versioning.backend"
 
-
 [tool.poetry-dynamic-versioning]
 enable = true
 pattern = "v(?P<base>\\d+\\.\\d+\\.\\d+)(?:-rc\\.(?P<rc>\\d+))?"
