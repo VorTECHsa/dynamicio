@@ -73,6 +73,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Important: fetch full history so dunamai works
 
       - name: Set up Python
         uses: actions/setup-python@v4
