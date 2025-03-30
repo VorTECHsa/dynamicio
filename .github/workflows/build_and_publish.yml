@@ -87,13 +87,17 @@ jobs:
       - name: Install poetry-dynamic-versioning plugin
         run: poetry self add poetry-dynamic-versioning
 
-      - name: Install dependencies and build
+      - name: Install dependencies
         run: |
           poetry config virtualenvs.create false
           poetry install --no-interaction
-          poetry build
 
-      - name: Publish to PyPI
+      - name: Build and Publish to PyPI
         env:
-          POETRY_PYPI_TOKEN_PYPI: ${{ secrets.PYPI_API_TOKEN }}
-        run: poetry publish --no-interaction --build --username __token__ --password "$POETRY_PYPI_TOKEN_PYPI"
+            POETRY_PYPI_TOKEN_PYPI: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          set -x
+          git tag --list
+          git log -n 5 --oneline
+          poetry version
+          poetry publish --no-interaction --build --username __token__ --password "$POETRY_PYPI_TOKEN_PYPI"
