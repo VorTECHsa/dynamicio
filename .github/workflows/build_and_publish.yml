@@ -94,10 +94,7 @@ jobs:
 
       - name: Build and Publish to PyPI
         env:
-            POETRY_PYPI_TOKEN_PYPI: ${{ secrets.PYPI_API_TOKEN }}
+          POETRY_PYPI_TOKEN_PYPI: ${{ secrets.PYPI_API_TOKEN }}
         run: |
-          set -x
-          git tag --list
-          git log -n 5 --oneline
-          poetry version
           poetry publish --no-interaction --build --username __token__ --password "$POETRY_PYPI_TOKEN_PYPI"
+
