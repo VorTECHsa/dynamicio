@@ -86,6 +86,7 @@ enable = true
 vcs = "git"
 pattern = "v(?P<base>\\d+\\.\\d+\\.\\d+)(?:-rc\\.(?P<rc>\\d+))?"
 style = "pep440"
+fix-shallow-repository = true
 
 [tool.black]
 py38 = true
