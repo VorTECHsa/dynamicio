@@ -40,10 +40,10 @@ dev-env-setup: install-poetry install-binary-packages-Darwin
 
 # Checks for local development
 check-linting:
-	poetry run black ${CODE_DIR}
-	poetry run flake8 --verbose ${CODE_DIR}
-	poetry run pylint -v ${CODE_DIR}
-	poetry run yamllint -v ${CODE_DIR}
+	@pyenv exec poetry run black ${CODE_DIR}
+	@pyenv exec poetry run flake8 --verbose ${CODE_DIR}
+	@pyenv exec poetry run pylint -v ${CODE_DIR}
+	@pyenv exec poetry run yamllint -v ${CODE_DIR}
 
 check-docstring:
 	@pyenv exec poetry run pydocstyle -e --count $(file)
