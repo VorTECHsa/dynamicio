@@ -2,11 +2,18 @@
 import os
 from contextlib import suppress
 
-import pkg_resources
 from magic_logger import logger
 
+try:
+    from importlib.metadata import version, PackageNotFoundError
+except ImportError:
+    from importlib_metadata import version, PackageNotFoundError  # type: ignore
+
 with suppress(Exception):
-    __version__ = pkg_resources.get_distribution("dynamicio").version
+    try:
+        __version__ = version("dynamicio")
+    except PackageNotFoundError:
+        __version__ = "0.0.0"
 
 from dynamicio.core import DynamicDataIO
 from dynamicio.mixins import WithKafka, WithLocal, WithLocalBatch, WithPostgres, WithS3File, WithS3PathPrefix

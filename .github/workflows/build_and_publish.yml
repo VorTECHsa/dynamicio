@@ -4,30 +4,33 @@ on:
   push:
     branches: ["*"]
     tags: ["v*"]
-  pull_request:
-    branches: ["*"]
   workflow_dispatch:
-
 
 jobs:
   style-checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.10"
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+
       - name: Install dependencies
         run: |
-          pip install --upgrade pip
-          pip install -r requirements.txt -r requirements-dev.txt
+          poetry config virtualenvs.create false
+          poetry install --no-interaction
+
       - name: Run style checks
         run: |
-          black --check dynamicio tests
-          flake8 --verbose dynamicio tests
-          pylint -v dynamicio tests
-          yamllint -v dynamicio tests
+          poetry run black --check dynamicio tests
+          poetry run flake8 --verbose dynamicio tests
+          poetry run pylint -v dynamicio tests
+          poetry run yamllint -v dynamicio tests
 
   test:
     runs-on: ubuntu-latest
@@ -36,18 +39,25 @@ jobs:
         python-version: ["3.10", "3.11", "3.12"]
     steps:
       - uses: actions/checkout@v3
+
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+
       - name: Install dependencies
         run: |
-          pip install --upgrade pip
-          pip install -r requirements.txt -r requirements-dev.txt
+          poetry config virtualenvs.create false
+          poetry install --no-interaction
+
       - name: Run tests
         run: |
           mkdir -p test-results
-          pytest -vv --junitxml=test-results/junit.xml
+          poetry run pytest -vv --junitxml=test-results/junit.xml
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -61,23 +71,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Important: fetch full history so dunamai works
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.10"
-      - name: Install build dependencies
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+
+      - name: Install poetry-dynamic-versioning plugin
+        run: poetry self add poetry-dynamic-versioning
+
+      - name: Install dependencies
         run: |
-          pip install --upgrade pip
-          pip install -r requirements-build.txt
-      - name: Build package
-        run: |
-          BUILD_VERSION=${GITHUB_REF_NAME#v} python setup.py sdist bdist_wheel
-      - name: Publish to PyPI
+          poetry config virtualenvs.create false
+          poetry install --no-interaction
+
+      - name: Build and Publish to PyPI
         env:
-          TWINE_USERNAME: ${{ secrets.TWINE_USERNAME }}
-          TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
-          TWINE_REPOSITORY_URL: ${{ secrets.TWINE_REPOSITORY_URL }}
+          POETRY_PYPI_TOKEN_PYPI: ${{ secrets.PYPI_API_TOKEN }}
         run: |
-          pip install --upgrade twine
-          twine check dist/*
-          twine upload --repository-url "$TWINE_REPOSITORY_URL" dist/*
+          poetry publish --no-interaction --build --username __token__ --password "$POETRY_PYPI_TOKEN_PYPI"
+

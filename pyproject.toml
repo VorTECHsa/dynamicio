@@ -1,20 +1,103 @@
+[tool.poetry]
+name = "dynamicio"
+version = "0.0.0"  # dummy, will be overridden by git tag
+description = "Panda's wrapper for IO operations"
+authors = [
+    "Christos Hadjinikolis <christos.hadjinikolis@gmail.com>",
+    "Radu Ghitescu <radu.ghitescu@gmail.com>"
+]
+readme = "README.md"
+packages = [{ include = "dynamicio" }]
+license = "Apache-2.0"
+keywords = ["data", "pandas", "io"]
+classifiers = [
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.13"
+awscli = ">=1.22.24"
+boto3 = ">=1.20.24"
+fastparquet = ">=0.8.0"
+fsspec = "==2022.3.0"
+confluent-kafka = "~2.4.0"
+logzero = ">=1.7.0"
+magic-logger = ">=1.0.2"
+numpy = ">=1.24.0,<2.0.0"
+no_implicit_optional = "==1.4.0"
+pandas = ">=1.5.1"
+psycopg2-binary = "~2.9.3"
+pyarrow = ">=10.0.1"
+pydantic = ">=1.9.2,<3"
+python-json-logger = "~2.0.1"
+PyYAML = ">=5.4.1"
+s3fs = "==0.4.2"
+simplejson = "~3.17.2"
+SQLAlchemy = "~1.4.11"
+tables = ">=3.10.1"
+libcst = "==1.5.1"
+
+[tool.poetry.group.dev.dependencies]
+black = "==22.10.0"
+coverage-badge = "==1.1.0"
+flake8-import-order = ">=0.18.0"
+flake8-print = ">=5.0.0"
+flake8-tidy-imports = ">=4.8.0"
+flake8 = "==5.0.4"
+gitlint = "==0.17.0"
+mock = "==4.0.3"
+pandas-stubs = "==2.0.3.230814"
+pre-commit = "==2.20.0"
+pydocstyle = "==6.1.1"
+pylint = "==2.15.5"
+pytest-asyncio = "==0.20.2"
+pytest-cov = "==4.0.0"
+pytest = "==7.2.0"
+tox = "==3.27.1"
+types-PyYAML = "==6.0.12.2"
+types-setuptools = "==65.5.0.3"
+types-simplejson = "==3.17.7.2"
+yamllint = "==1.28.0"
+
+[tool.poetry.group.docs.dependencies]
+pdoc3 = "==0.10.0"
+
+[tool.poetry.group.build.dependencies]
+setuptools = "==65.5.1"
+twine = "==4.0.1"
+wheel = "==0.38.4"
+
+[tool.poetry.scripts]
+dynamicio = "dynamicio.cli:run"
+
 [build-system]
-requires = ["setuptools>=62"]
-build-backend = "setuptools.build_meta"
+requires = [
+  "setuptools>=69.0.3",
+  "wheel",
+  "poetry-core>=1.0.0",
+  "poetry-dynamic-versioning"
+]
+build-backend = "poetry_dynamic_versioning.backend"
+
+[tool.poetry-dynamic-versioning]
+enable = true
+vcs = "git"
+style = "pep440"
+fix-shallow-repository = true
 
 [tool.black]
 py38 = true
 line-length = 185
-include = '\.pyi?$'
+include = '\\.(pyi?)$'
 exclude = '''
 (
   /(
       \.git
     | \.mypy_cache
     | \.github
-    | \.circleci
-    | \.tox
-    | \venv
+    | \.venv
     | \flake8
     | docs
     | demo
