@@ -6,13 +6,10 @@ READ_FROM_ATHENA:
       file_path: "[[ TEST_RESOURCES ]]/data/input/some_parquet_to_read.parquet"
       file_type: "parquet"
   CLOUD:
-    type: "athena"
+    type: athena
     athena:
-      db_host: "[[ DB_HOST ]]"
-      db_port: "[[ DB_PORT ]]"
-      db_name: "[[ DB_NAME ]]"
-      db_user: "[[ DB_USER ]]"
-      db_password: "[[ DB_PASS ]]"
+      s3_staging_dir: s3://test-staging/
+      region_name: eu-west-1
 
 READ_MOCK_S3_CSV:
   LOCAL:

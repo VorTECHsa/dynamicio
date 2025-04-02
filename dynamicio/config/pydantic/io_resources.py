@@ -9,6 +9,7 @@ from typing import Mapping, Optional, Union
 import pydantic
 from pydantic import BaseModel
 
+# Application Imports
 import dynamicio.config.pydantic.table_schema as table_spec
 
 
@@ -65,9 +66,10 @@ class IOBinding(BaseModel):
             DataBackendType.s3_path_prefix: S3PathPrefixEnvironment,
             DataBackendType.kafka: KafkaDataEnvironment,
             DataBackendType.postgres: PostgresDataEnvironment,
+            DataBackendType.athena: AthenaDataEnvironment,
         }
         out_dict = {}
-        for (env_name, env_data) in info.items():
+        for env_name, env_data in info.items():
             base_obj: IOEnvironment = IOEnvironment(**env_data)
             override_cls = config_cls_overrides.get(base_obj.data_backend_type)
             if override_cls:
@@ -82,7 +84,7 @@ class IOBinding(BaseModel):
         if not isinstance(values, Mapping):
             raise ValueError(f"IOBinding must be a dict at the top level. (got {values!r} instead)")
         remapped_value = {"environments": {}}
-        for (key, value) in values.items():
+        for key, value in values.items():
             if key in ("__binding_name__", "schema"):
                 # Passthrough params
                 remapped_value[key] = value
@@ -268,6 +270,22 @@ class PostgresDataEnvironment(IOEnvironment):
     """Parent section for postgres data source."""
 
     postgres: PostgresDataSubSection
+
+
+class AthenaDataSubSection(BaseModel):
+    """AWS Athena configuration section."""
+
+    s3_staging_dir: str
+    region_name: str
+
+    # Optional fields, one must be provided via YAML or mixin options
+    query: Optional[str] = None
+
+
+class AthenaDataEnvironment(IOEnvironment):
+    """Parent section for Athena source config."""
+
+    athena: AthenaDataSubSection
 
 
 IOBinding.update_forward_refs()

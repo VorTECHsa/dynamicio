@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+# Application Imports
 import dynamicio
 from dynamicio.config import IOConfig
 from dynamicio.core import CASTING_WARNING_MSG, DynamicDataIO
@@ -26,8 +27,8 @@ from tests.mocking.io import (
     ReadS3CsvIO,
     ReadS3CsvWithWrongSchemaIO,
     ReadS3DataWithFalseTypes,
-    ReadS3IO,
     ReadS3ParquetIO,
+    SubclassMissingMixin,
     WriteS3CsvIO,
     WriteS3CsvWithSchema,
     WriteS3ParquetExternalIO,
@@ -168,7 +169,7 @@ class TestCoreIO:
 
         # When
         with pytest.raises(AssertionError):
-            ReadS3IO(source_config=athena_cloud_config)
+            SubclassMissingMixin(source_config=athena_cloud_config)
 
     @pytest.mark.unit
     def test_key_error_is_thrown_for_missing_schema_if_unified_io_subclass_assigns_schema_from_file_but_file_is_missing(

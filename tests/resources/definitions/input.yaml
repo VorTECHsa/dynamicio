@@ -307,3 +307,15 @@ PRODUCTS:
         type: "object"
         validations: {}
         metrics: []
+
+READ_FROM_ATHENA:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/input/some_parquet_to_read.parquet"
+      file_type: "parquet"
+  CLOUD:
+    type: athena
+    athena:
+      s3_staging_dir: s3://test-staging/
+      region_name: eu-west-1

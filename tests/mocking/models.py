@@ -1,6 +1,6 @@
 """A module for defining sql_alchemy models."""
 # pylint: disable=too-few-public-methods, R0801, C0104
-__all__ = ["ERModel"]
+__all__ = ["ERModel", "PgModel"]
 
 from sqlalchemy import Column, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
