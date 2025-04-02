@@ -2,8 +2,13 @@
 from typing import Callable, Optional
 from unittest.mock import MagicMock
 
-from dynamicio import UnifiedIO
-from dynamicio.core import SCHEMA_FROM_FILE
+# Application Imports
+from dynamicio import UnifiedIO, WithLocal
+from dynamicio.core import SCHEMA_FROM_FILE, DynamicDataIO
+
+
+class SubclassMissingMixin(WithLocal, DynamicDataIO):
+    schema = {"id": "int64"}
 
 
 class ReadS3IO(UnifiedIO):
@@ -196,3 +201,7 @@ class ParquetWithCustomValidate(UnifiedIO):
         if df["bar"].isna().any():
             return False
         return True
+
+
+class ReadAthenaIO(UnifiedIO):
+    schema = {"id": "object", "foo": "object", "bar": "int64"}

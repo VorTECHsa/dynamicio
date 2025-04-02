@@ -1,13 +1,14 @@
 """A package for wrapping your I/O operations."""
+# pylint: disable=abstract-method
 import os
 from contextlib import suppress
 
 from magic_logger import logger
 
 try:
-    from importlib.metadata import version, PackageNotFoundError
+    from importlib.metadata import PackageNotFoundError, version
 except ImportError:
-    from importlib_metadata import version, PackageNotFoundError  # type: ignore
+    from importlib_metadata import PackageNotFoundError, version  # type: ignore
 
 with suppress(Exception):
     try:
@@ -15,13 +16,14 @@ with suppress(Exception):
     except PackageNotFoundError:
         __version__ = "0.0.0"
 
+# Application Imports
 from dynamicio.core import DynamicDataIO
-from dynamicio.mixins import WithKafka, WithLocal, WithLocalBatch, WithPostgres, WithS3File, WithS3PathPrefix
+from dynamicio.mixins import WithAthena, WithKafka, WithLocal, WithLocalBatch, WithPostgres, WithS3File, WithS3PathPrefix
 
 os.environ["LC_CTYPE"] = "en_US.UTF"  # Set your locale to a unicode-compatible one
 
 
-class UnifiedIO(WithS3File, WithS3PathPrefix, WithLocalBatch, WithLocal, WithKafka, WithPostgres, DynamicDataIO):  # type: ignore
+class UnifiedIO(WithS3File, WithS3PathPrefix, WithLocalBatch, WithLocal, WithKafka, WithAthena, WithPostgres, DynamicDataIO):  # type: ignore
     """A unified io composed of dynamicio.mixins."""
 
 
