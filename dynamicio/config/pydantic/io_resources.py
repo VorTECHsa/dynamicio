@@ -44,7 +44,8 @@ class IOBinding(BaseModel):
     name: str = pydantic.Field(alias="__binding_name__")
     environments: Mapping[
         str,
-        Union["IOEnvironment", "LocalDataEnvironment", "LocalBatchDataEnvironment", "S3DataEnvironment", "S3PathPrefixEnvironment", "KafkaDataEnvironment", "PostgresDataEnvironment"],
+        Union[
+            "IOEnvironment", "LocalDataEnvironment", "LocalBatchDataEnvironment", "S3DataEnvironment", "S3PathPrefixEnvironment", "KafkaDataEnvironment", "PostgresDataEnvironment"],
     ]
     dynamicio_schema: Union[table_spec.DataframeSchema, None] = pydantic.Field(default=None, alias="schema")
 
@@ -65,6 +66,7 @@ class IOBinding(BaseModel):
             DataBackendType.s3_path_prefix: S3PathPrefixEnvironment,
             DataBackendType.kafka: KafkaDataEnvironment,
             DataBackendType.postgres: PostgresDataEnvironment,
+            DataBackendType.athena: AthenaDataEnvironment,
         }
         out_dict = {}
         for (env_name, env_data) in info.items():
@@ -268,6 +270,26 @@ class PostgresDataEnvironment(IOEnvironment):
     """Parent section for postgres data source."""
 
     postgres: PostgresDataSubSection
+
+
+class AthenaDataSubSection(BaseModel):
+    """AWS Athena configuration section."""
+
+    aws_access_key_id: str
+    aws_secret_access_key: str
+    s3_staging_dir: str
+    region_name: str
+    database: str
+
+    # Optional fields, one must be provided via YAML or mixin options
+    query: Optional[str] = None
+    table: Optional[str] = None
+
+
+class AthenaDataEnvironment(IOEnvironment):
+    """Parent section for Athena source config."""
+
+    athena: AthenaDataSubSection
 
 
 IOBinding.update_forward_refs()
