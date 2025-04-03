@@ -57,7 +57,7 @@ class TestCoreIO:
 
     @pytest.mark.unit
     def test_objects_of_dynamic_data_io_subclasses_cant_be_instantiated_in_the_absence_of_a_non_empty_schema(
-        self,
+            self,
     ):
         # Given
         s3_csv_local_config = IOConfig(
@@ -68,7 +68,6 @@ class TestCoreIO:
 
         # When/Then
         with pytest.raises(AssertionError):
-
             class AbsentSchemaIO(DynamicDataIO):
                 pass
 
@@ -76,7 +75,7 @@ class TestCoreIO:
 
     @pytest.mark.unit
     def test_objects_of_s3io_subclasses_cant_be_instantiated_in_the_presence_of_a_empty_dict_schema(
-        self,
+            self,
     ):
         # Given
         s3_csv_local_config = IOConfig(
@@ -87,7 +86,6 @@ class TestCoreIO:
 
         # Given/When/Then
         with pytest.raises(ValueError):
-
             class EmptySchemaIO(WithS3File, DynamicDataIO):
                 dataset_name = "EmptySchema"
                 schema = {}
@@ -96,7 +94,7 @@ class TestCoreIO:
 
     @pytest.mark.unit
     def test_objects_of_dynamic_data_io_subclasses_cant_be_instantiated_in_the_presence_of_a_schema_eq_to_none(
-        self,
+            self,
     ):
         # Given
         s3_csv_local_config = IOConfig(
@@ -107,7 +105,6 @@ class TestCoreIO:
 
         # When/Then
         with pytest.raises(ValueError):
-
             class NoneSchemaIO(WithS3File, DynamicDataIO):
                 dataset_name = "NoneSchema"
                 schema = None
@@ -133,7 +130,6 @@ class TestCoreIO:
     def test_subclasses_of_dynamic_data_io_need_to_define_a_schema(self):
         # Given/When/Then
         with pytest.raises(AssertionError):
-
             class S3CsvIONoSchema(DynamicDataIO):  # pylint: disable=unused-variable
                 pass
 
@@ -148,7 +144,6 @@ class TestCoreIO:
 
         # When/Then
         with pytest.raises(AssertionError):
-
             class CMVolumesIONoValidationFunction(DynamicDataIO):
                 schema = {"foo": "int64"}
 
@@ -156,7 +151,7 @@ class TestCoreIO:
 
     @pytest.mark.unit
     def test_subclasses_of_dynamic_data_io_need_to_implement_private_reader_for_new_source_types(
-        self,
+            self,
     ):
         # Given
         athena_cloud_config = IOConfig(
@@ -171,7 +166,7 @@ class TestCoreIO:
 
     @pytest.mark.unit
     def test_key_error_is_thrown_for_missing_schema_if_unified_io_subclass_assigns_schema_from_file_but_file_is_missing(
-        self,
+            self,
     ):
         # Given
         read_mock_s3_cloud_config = IOConfig(
@@ -219,18 +214,21 @@ class TestCoreIO:
 
         # Then
         assert (
-            io_instance is return_value
-            and (len(caplog.records) == 10)
-            and (getattr(caplog.records[0], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "id", "metric": "UniqueCounts", "value": 4.0}')
-            and (getattr(caplog.records[1], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "id", "metric": "Counts", "value": 4.0}')
-            and (getattr(caplog.records[2], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "foo_name-class_a", "metric": "CountsPerLabel", "value": 2.0}')
-            and (getattr(caplog.records[3], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "foo_name-class_b", "metric": "CountsPerLabel", "value": 1.0}')
-            and (getattr(caplog.records[4], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "foo_name-class_c", "metric": "CountsPerLabel", "value": 1.0}')
-            and (getattr(caplog.records[5], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "bar", "metric": "Min", "value": 1500.0}')
-            and (getattr(caplog.records[6], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "bar", "metric": "Max", "value": 1500.0}')
-            and (getattr(caplog.records[7], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "bar", "metric": "Mean", "value": 1500.0}')
-            and (getattr(caplog.records[8], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "bar", "metric": "Std", "value": 0.0}')
-            and (getattr(caplog.records[9], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "bar", "metric": "Variance", "value": 0.0}')
+                io_instance is return_value
+                and (len(caplog.records) == 10)
+                and (getattr(caplog.records[0], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "id", "metric": "UniqueCounts", "value": 4.0}')
+                and (getattr(caplog.records[1], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "id", "metric": "Counts", "value": 4.0}')
+                and (getattr(caplog.records[2],
+                             "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "foo_name-class_a", "metric": "CountsPerLabel", "value": 2.0}')
+                and (getattr(caplog.records[3],
+                             "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "foo_name-class_b", "metric": "CountsPerLabel", "value": 1.0}')
+                and (getattr(caplog.records[4],
+                             "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "foo_name-class_c", "metric": "CountsPerLabel", "value": 1.0}')
+                and (getattr(caplog.records[5], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "bar", "metric": "Min", "value": 1500.0}')
+                and (getattr(caplog.records[6], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "bar", "metric": "Max", "value": 1500.0}')
+                and (getattr(caplog.records[7], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "bar", "metric": "Mean", "value": 1500.0}')
+                and (getattr(caplog.records[8], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "bar", "metric": "Std", "value": 0.0}')
+                and (getattr(caplog.records[9], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "bar", "metric": "Variance", "value": 0.0}')
         )
 
     @pytest.mark.integration
@@ -451,331 +449,6 @@ class TestCoreIO:
             os.remove(s3_csv_local_config.local.file_path)
 
     @pytest.mark.unit
-    @pytest.mark.parametrize(
-        "df, expected_dtype, expected_warning",
-        [
-            (
-                pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": False}]),
-                "bool",
-                None,
-            ),
-            (
-                pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": None}]),
-                "bool",
-                CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
-            ),
-            (
-                pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": np.nan}]),
-                "bool",
-                CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
-            ),
-            (
-                pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": pd.NaT}]),
-                "bool",
-                CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
-            ),
-        ],
-    )
-    def test__has_valid_dtypes_does_not_attempt_to_convert_object_type_to_other_type_unless_other_is_bool_and_column_has_no_non_boolean_values_when_writing_a_parquet(
-        self, caplog, df, expected_dtype, expected_warning
-    ):
-        # Note: In the presence of a boolean cell value in a column, if that column also has numbers or strings, df.to_parquet() will not write it out.
-        # It will try to convert it to a bool and it will fail throwing an `pyarrow.lib.ArrowInvalid:` error
-        #
-        # This makes parquet a safer option from the available filetypes.
-
-        # Given
-        s3_parquet_with_some_bool_col_local_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
-            env_identifier="LOCAL",
-            dynamic_vars=constants,
-        ).get(source_key="S3_PARQUET_WITH_BOOL")
-
-        ParquetWithSomeBool(source_config=s3_parquet_with_some_bool_col_local_config).write(df)
-
-        # Then
-        try:
-            if caplog.messages:
-                assert caplog.messages[0] == expected_warning
-            assert pd.read_parquet(s3_parquet_with_some_bool_col_local_config.local.file_path)["bool_col"].dtype.name == expected_dtype
-        finally:
-            os.remove(s3_parquet_with_some_bool_col_local_config.local.file_path)
-
-    @pytest.mark.unit
-    @pytest.mark.parametrize(
-        "df, expected_dtype, expected_warning",
-        [
-            (
-                pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": False}]),
-                "bool",
-                None,
-            ),
-            (
-                pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": None}]),
-                "bool",
-                CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
-            ),
-            (
-                pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": np.nan}]),
-                "bool",
-                CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
-            ),
-            (
-                pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": 1}]),
-                "bool",
-                CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
-            ),
-            (
-                pd.DataFrame.from_records(
-                    [
-                        {"id": 1, "foo_name": "A", "bar": 12, "bool_col": True},
-                        {"id": 2, "foo_name": "B", "bar": 12, "bool_col": "random"},
-                    ]
-                ),
-                "bool",
-                CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
-            ),
-            (
-                pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": pd.NaT}]),
-                "bool",
-                CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
-            ),
-        ],
-    )
-    def test__has_valid_dtypes_does_not_attempt_to_convert_object_type_to_other_type_unless_other_is_bool_and_column_has_no_non_boolean_values_when_writing_a_csv(
-        self, caplog, df, expected_dtype, expected_warning
-    ):
-
-        # Given
-        s3_csv_with_some_bool_col_local_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
-            env_identifier="LOCAL",
-            dynamic_vars=constants,
-        ).get(source_key="S3_CSV_WITH_BOOL")
-
-        CsvWithSomeBool(source_config=s3_csv_with_some_bool_col_local_config).write(df)
-
-        # Then
-        try:
-            if caplog.messages:
-                assert caplog.messages[0] == expected_warning
-            assert pd.read_csv(s3_csv_with_some_bool_col_local_config.local.file_path)["bool_col"].dtype.name == expected_dtype
-        finally:
-            os.remove(s3_csv_with_some_bool_col_local_config.local.file_path)
-
-    @pytest.mark.unit
-    @pytest.mark.parametrize(
-        "df, expected_dtype, expected_warning",
-        [
-            (
-                pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": False}]),
-                "bool",
-                None,
-            ),
-            (
-                pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": None}]),
-                "bool",
-                CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
-            ),
-            (
-                pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": np.nan}]),
-                "bool",
-                CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
-            ),
-            (
-                pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": 1}]),
-                "bool",
-                CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
-            ),
-            (
-                pd.DataFrame.from_records(
-                    [
-                        {"id": 1, "foo_name": "A", "bar": 12, "bool_col": True},
-                        {"id": 2, "foo_name": "B", "bar": 12, "bool_col": "random"},
-                    ]
-                ),
-                "bool",
-                CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
-            ),
-            (
-                pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": pd.NaT}]),
-                "bool",
-                CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
-            ),
-        ],
-    )
-    def test__has_valid_dtypes_does_not_attempt_to_convert_object_type_to_other_type_unless_other_is_bool_and_column_has_no_non_boolean_values_when_writing_a_hdf(
-        self, caplog, df, expected_dtype, expected_warning
-    ):
-
-        # Given
-        s3_hdf_with_some_bool_col_local_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
-            env_identifier="LOCAL",
-            dynamic_vars=constants,
-        ).get(source_key="S3_HDF_WITH_BOOL")
-
-        HdfWithSomeBool(source_config=s3_hdf_with_some_bool_col_local_config).write(df)
-
-        # Then
-        try:
-            if caplog.messages:
-                assert caplog.messages[0] == expected_warning
-            assert pd.read_hdf(s3_hdf_with_some_bool_col_local_config.local.file_path)["bool_col"].dtype.name == expected_dtype
-        finally:
-            os.remove(s3_hdf_with_some_bool_col_local_config.local.file_path)
-
-    @pytest.mark.unit
-    @pytest.mark.parametrize(
-        "df, expected_dtype, expected_warning",
-        [
-            (
-                pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": False}]),
-                "bool",
-                None,
-            ),
-            (
-                pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": None}]),
-                "bool",
-                CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
-            ),
-            (
-                pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": np.nan}]),
-                "bool",
-                CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
-            ),
-            (
-                pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": 1}]),
-                "bool",
-                CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
-            ),
-            (
-                pd.DataFrame.from_records(
-                    [
-                        {"id": 1, "foo_name": "A", "bar": 12, "bool_col": True},
-                        {"id": 2, "foo_name": "B", "bar": 12, "bool_col": "random"},
-                    ]
-                ),
-                "bool",
-                CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
-            ),
-            (
-                pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": pd.NaT}]),
-                "bool",
-                CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
-            ),
-        ],
-    )
-    def test__has_valid_dtypes_does_not_attempt_to_convert_object_type_to_other_type_unless_other_is_bool_and_column_has_no_non_boolean_values_when_writing_a_json(
-        self, caplog, df, expected_dtype, expected_warning
-    ):
-
-        # Note: In the presence of a boolean cell value in a column, but with additional values of ambiguous type, df.to_json() will try to convert the column
-        # to a type `int` or `float`, converting boolean values to numbers to `1.0 : True` and `0.0 : False`, and the rest to NaN. This can cause data corruption issues.
-
-        # Given
-        s3_json_with_some_bool_col_local_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
-            env_identifier="LOCAL",
-            dynamic_vars=constants,
-        ).get(source_key="S3_JSON_WITH_BOOL")
-
-        JsonWithSomeBool(source_config=s3_json_with_some_bool_col_local_config).write(df)
-
-        # Then
-        try:
-            if caplog.messages:
-                assert caplog.messages[0] == expected_warning
-            assert pd.read_json(s3_json_with_some_bool_col_local_config.local.file_path)["bool_col"].dtype.name == expected_dtype
-        finally:
-            os.remove(s3_json_with_some_bool_col_local_config.local.file_path)
-
-    @pytest.mark.unit
-    @pytest.mark.parametrize(
-        "df",
-        [
-            (pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": pd.NA}])),
-            (
-                pd.DataFrame.from_records(
-                    [
-                        {"id": 1, "foo_name": "A", "bar": False, "bool_col": True},
-                        {"id": 2, "foo_name": "B", "bar": "BAD-VALUE", "bool_col": False},
-                    ]
-                )
-            ),
-        ],
-    )
-    def test__has_valid_dtypes_throws_columns_data_type_error_when_casting_fails(self, df):
-
-        # Note: In the presence of a boolean cell value in a column, but with additional values of ambiguous type, df.to_json() will try to convert the column
-        # to a type `int` or `float`, converting boolean values to numbers to `1.0 : True` and `0.0 : False`, and the rest to NaN. This can cause data corruption issues.
-
-        # Given
-        s3_parquet_with_some_bool_col_local_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
-            env_identifier="LOCAL",
-            dynamic_vars=constants,
-        ).get(source_key="S3_PARQUET_WITH_BOOL")
-
-        # Then
-        with pytest.raises(ColumnsDataTypeError):
-            ParquetWithSomeBool(source_config=s3_parquet_with_some_bool_col_local_config).write(df)
-
-    @pytest.mark.unit
-    def test_a_custom_validate_method_can_be_used_to_override_the_default_abstract_one(self):
-
-        # Given
-        df = pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 13, "bool_col": False}])
-        s3_parquet_with_some_bool_col_local_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
-            env_identifier="LOCAL",
-            dynamic_vars=constants,
-        ).get(source_key="S3_PARQUET_WITH_CUSTOM_VALIDATE")
-
-        # When
-        ParquetWithCustomValidate(source_config=s3_parquet_with_some_bool_col_local_config).write(df)
-
-        # Then
-        try:
-            pd.testing.assert_frame_equal(pd.read_parquet(s3_parquet_with_some_bool_col_local_config.local.file_path), df)
-        finally:
-            os.remove(s3_parquet_with_some_bool_col_local_config.local.file_path)
-
-    @pytest.mark.integration
-    def test_show_casting_warnings_flag_default_value_prevents_showing_casting_logs(self, caplog):
-        # Given
-        s3_csv_cloud_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
-            env_identifier="LOCAL",
-            dynamic_vars=constants,
-        ).get(source_key="READ_FROM_S3_CSV")
-        io_instance = ReadS3DataWithFalseTypes(source_config=s3_csv_cloud_config)  # i.e.show_casting_warnings=False
-
-        # When
-        with caplog.at_level(logging.INFO):
-            io_instance.read()
-
-        # Then
-        assert len(caplog.records) == 0
-
-    @pytest.mark.integration
-    def test_show_casting_warnings_flag_allows_casting_logs_to_be_printed_if_set_to_true(self, caplog):
-        # Given
-        s3_csv_cloud_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
-            env_identifier="LOCAL",
-            dynamic_vars=constants,
-        ).get(source_key="READ_FROM_S3_CSV")
-        io_instance = ReadS3DataWithFalseTypes(source_config=s3_csv_cloud_config, show_casting_warnings=True)
-
-        # When
-        with caplog.at_level(logging.INFO):
-            io_instance.read()
-
-        # Then
-        assert getattr(caplog.records[0], "message") == "Expected: 'float64' dtype for READ_S3_DATA_WITH_FALSE_TYPES['id'], found 'int64'"
-
-    @pytest.mark.unit
     def test_options_are_read_from_code(self, s3_parquet_local_config):
         # When
         config_io = ReadS3ParquetIO(source_config=s3_parquet_local_config, option_1=False, option_2=True)
@@ -814,13 +487,11 @@ class TestCoreIO:
     @pytest.mark.unit
     def test_columns_options_with_names_missing_from_schema_fails(self, s3_parquet_local_config):
         with patch("dynamicio.mixins.with_local.pd.read_parquet"):
-
             # Given
             reader = ReadS3ParquetIO(source_config=s3_parquet_local_config, columns=["bar", "column_missing_from_schema"])
 
             # When
             with pytest.raises(ColumnsDataTypeError):
-
                 # Then
                 reader.read()
 
@@ -933,6 +604,364 @@ class TestCoreIO:
 
         # Then
         assert config_io.name == "READ_FROM_S3_CSV"
+
+
+class TestTypeCastingAndValidation:
+
+    @patch("dynamicio.core.logger")
+    def test_has_valid_dtypes_skips_strict_check_by_default(self, mock_logger):
+
+        s3_csv_local_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_S3_CSV")
+
+        ReadS3CsvIO(source_config=s3_csv_local_config, strict_dtype_check=False).read()
+
+        assert not mock_logger.warning.called
+
+    @patch("dynamicio.core.logger")
+    def test_has_valid_dtypes_logs_and_casts_with_strict_check(self, mock_logger):
+
+        # Given
+        s3_csv_local_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_S3_CSV")
+
+        # When
+        ReadS3CsvIO(source_config=s3_csv_local_config, show_casting_warnings=True, strict_dtype_check=True).read()
+
+        # Then
+        assert mock_logger.warning.called
+        assert "performance" in mock_logger.warning.call_args[0][0].lower()
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "df",
+        [
+            (pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": pd.NA}])),
+            (
+                    pd.DataFrame.from_records(
+                        [
+                            {"id": 1, "foo_name": "A", "bar": False, "bool_col": True},
+                            {"id": 2, "foo_name": "B", "bar": "BAD-VALUE", "bool_col": False},
+                        ]
+                    )
+            ),
+        ],
+    )
+    def test__has_valid_dtypes_throws_columns_data_type_error_when_casting_fails(self, df):
+
+        # Note: In the presence of a boolean cell value in a column, but with additional values of ambiguous type, df.to_json() will try to convert the column
+        # to a type `int` or `float`, converting boolean values to numbers to `1.0 : True` and `0.0 : False`, and the rest to NaN. This can cause data corruption issues.
+
+        # Given
+        s3_parquet_with_some_bool_col_local_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="S3_PARQUET_WITH_BOOL")
+
+        # Then
+        with pytest.raises(ColumnsDataTypeError):
+            ParquetWithSomeBool(source_config=s3_parquet_with_some_bool_col_local_config, strict_dtype_check=True).write(df)
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "df, expected_dtype, expected_warning",
+        [
+            (
+                    pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": False}]),
+                    "bool",
+                    None,
+            ),
+            (
+                    pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": None}]),
+                    "bool",
+                    CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
+            ),
+            (
+                    pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": np.nan}]),
+                    "bool",
+                    CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
+            ),
+            (
+                    pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": pd.NaT}]),
+                    "bool",
+                    CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
+            ),
+        ],
+    )
+    def test__has_valid_dtypes_does_not_attempt_to_convert_object_type_to_other_type_unless_other_is_bool_and_column_has_no_non_boolean_values_when_writing_a_parquet(
+            self, caplog, df, expected_dtype, expected_warning
+    ):
+        # Note: In the presence of a boolean cell value in a column, if that column also has numbers or strings, df.to_parquet() will not write it out.
+        # It will try to convert it to a bool and it will fail throwing an `pyarrow.lib.ArrowInvalid:` error
+        #
+        # This makes parquet a safer option from the available filetypes.
+
+        # Given
+        s3_parquet_with_some_bool_col_local_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="S3_PARQUET_WITH_BOOL")
+
+        ParquetWithSomeBool(source_config=s3_parquet_with_some_bool_col_local_config, strict_dtype_check=True).write(df)
+
+        # Then
+        try:
+            if caplog.messages:
+                assert caplog.messages[1] == expected_warning
+            assert pd.read_parquet(s3_parquet_with_some_bool_col_local_config.local.file_path)["bool_col"].dtype.name == expected_dtype
+        finally:
+            os.remove(s3_parquet_with_some_bool_col_local_config.local.file_path)
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "df, expected_dtype, expected_warning",
+        [
+            (
+                    pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": False}]),
+                    "bool",
+                    None,
+            ),
+            (
+                    pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": None}]),
+                    "bool",
+                    CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
+            ),
+            (
+                    pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": np.nan}]),
+                    "bool",
+                    CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
+            ),
+            (
+                    pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": 1}]),
+                    "bool",
+                    CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
+            ),
+            (
+                    pd.DataFrame.from_records(
+                        [
+                            {"id": 1, "foo_name": "A", "bar": 12, "bool_col": True},
+                            {"id": 2, "foo_name": "B", "bar": 12, "bool_col": "random"},
+                        ]
+                    ),
+                    "bool",
+                    CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
+            ),
+            (
+                    pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": pd.NaT}]),
+                    "bool",
+                    CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
+            ),
+        ],
+    )
+    def test__has_valid_dtypes_does_not_attempt_to_convert_object_type_to_other_type_unless_other_is_bool_and_column_has_no_non_boolean_values_when_writing_a_json(
+            self, caplog, df, expected_dtype, expected_warning
+    ):
+
+        # Note: In the presence of a boolean cell value in a column, but with additional values of ambiguous type, df.to_json() will try to convert the column
+        # to a type `int` or `float`, converting boolean values to numbers to `1.0 : True` and `0.0 : False`, and the rest to NaN. This can cause data corruption issues.
+
+        # Given
+        s3_json_with_some_bool_col_local_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="S3_JSON_WITH_BOOL")
+
+        JsonWithSomeBool(source_config=s3_json_with_some_bool_col_local_config).write(df)
+
+        # Then
+        try:
+            if caplog.messages:
+                assert caplog.messages[0] == expected_warning
+            assert pd.read_json(s3_json_with_some_bool_col_local_config.local.file_path)["bool_col"].dtype.name == expected_dtype
+        finally:
+            os.remove(s3_json_with_some_bool_col_local_config.local.file_path)
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "df, expected_dtype, expected_warning",
+        [
+            (
+                    pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": False}]),
+                    "bool",
+                    None,
+            ),
+            (
+                    pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": None}]),
+                    "bool",
+                    CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
+            ),
+            (
+                    pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": np.nan}]),
+                    "bool",
+                    CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
+            ),
+            (
+                    pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": 1}]),
+                    "bool",
+                    CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
+            ),
+            (
+                    pd.DataFrame.from_records(
+                        [
+                            {"id": 1, "foo_name": "A", "bar": 12, "bool_col": True},
+                            {"id": 2, "foo_name": "B", "bar": 12, "bool_col": "random"},
+                        ]
+                    ),
+                    "bool",
+                    CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
+            ),
+            (
+                    pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": pd.NaT}]),
+                    "bool",
+                    CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
+            ),
+        ],
+    )
+    def test__has_valid_dtypes_does_not_attempt_to_convert_object_type_to_other_type_unless_other_is_bool_and_column_has_no_non_boolean_values_when_writing_a_csv(
+            self, caplog, df, expected_dtype, expected_warning
+    ):
+
+        # Given
+        s3_csv_with_some_bool_col_local_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="S3_CSV_WITH_BOOL")
+
+        CsvWithSomeBool(source_config=s3_csv_with_some_bool_col_local_config).write(df)
+
+        # Then
+        try:
+            if caplog.messages:
+                assert caplog.messages[0] == expected_warning
+            assert pd.read_csv(s3_csv_with_some_bool_col_local_config.local.file_path)["bool_col"].dtype.name == expected_dtype
+        finally:
+            os.remove(s3_csv_with_some_bool_col_local_config.local.file_path)
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "df, expected_dtype, expected_warning",
+        [
+            (
+                    pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": False}]),
+                    "bool",
+                    None,
+            ),
+            (
+                    pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": None}]),
+                    "bool",
+                    CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
+            ),
+            (
+                    pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": np.nan}]),
+                    "bool",
+                    CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
+            ),
+            (
+                    pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": 1}]),
+                    "bool",
+                    CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
+            ),
+            (
+                    pd.DataFrame.from_records(
+                        [
+                            {"id": 1, "foo_name": "A", "bar": 12, "bool_col": True},
+                            {"id": 2, "foo_name": "B", "bar": 12, "bool_col": "random"},
+                        ]
+                    ),
+                    "bool",
+                    CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
+            ),
+            (
+                    pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": pd.NaT}]),
+                    "bool",
+                    CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
+            ),
+        ],
+    )
+    def test__has_valid_dtypes_does_not_attempt_to_convert_object_type_to_other_type_unless_other_is_bool_and_column_has_no_non_boolean_values_when_writing_a_hdf(
+            self, caplog, df, expected_dtype, expected_warning
+    ):
+
+        # Given
+        s3_hdf_with_some_bool_col_local_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="S3_HDF_WITH_BOOL")
+
+        HdfWithSomeBool(source_config=s3_hdf_with_some_bool_col_local_config).write(df)
+
+        # Then
+        try:
+            if caplog.messages:
+                assert caplog.messages[0] == expected_warning
+            assert pd.read_hdf(s3_hdf_with_some_bool_col_local_config.local.file_path)["bool_col"].dtype.name == expected_dtype
+        finally:
+            os.remove(s3_hdf_with_some_bool_col_local_config.local.file_path)
+
+    @pytest.mark.unit
+    def test_a_custom_validate_method_can_be_used_to_override_the_default_abstract_one(self):
+
+        # Given
+        df = pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 13, "bool_col": False}])
+        s3_parquet_with_some_bool_col_local_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="S3_PARQUET_WITH_CUSTOM_VALIDATE")
+
+        # When
+        ParquetWithCustomValidate(source_config=s3_parquet_with_some_bool_col_local_config).write(df)
+
+        # Then
+        try:
+            pd.testing.assert_frame_equal(pd.read_parquet(s3_parquet_with_some_bool_col_local_config.local.file_path), df)
+        finally:
+            os.remove(s3_parquet_with_some_bool_col_local_config.local.file_path)
+
+    @pytest.mark.integration
+    def test_show_casting_warnings_flag_default_value_prevents_showing_casting_logs(self, caplog):
+        # Given
+        s3_csv_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_S3_CSV")
+        io_instance = ReadS3DataWithFalseTypes(source_config=s3_csv_cloud_config)  # i.e.show_casting_warnings=False
+
+        # When
+        with caplog.at_level(logging.INFO):
+            io_instance.read()
+
+        # Then
+        assert len(caplog.records) == 0
+
+    @pytest.mark.integration
+    def test_show_casting_warnings_flag_allows_casting_logs_to_be_printed_if_set_to_true(self, caplog):
+        # Given
+        s3_csv_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_S3_CSV")
+        io_instance = ReadS3DataWithFalseTypes(source_config=s3_csv_cloud_config, show_casting_warnings=True)
+
+        # When
+        with caplog.at_level(logging.INFO):
+            io_instance.read()
+
+        # Then
+        assert getattr(caplog.records[0], "message") == "Expected: 'float64' dtype for READ_S3_DATA_WITH_FALSE_TYPES['id'], found 'int64'"
 
 
 class TestAsyncCoreIO:

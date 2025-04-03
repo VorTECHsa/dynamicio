@@ -1,6 +1,6 @@
 """Implements the DynamicDataIO class which provides functionality for data: loading; sinking, and; schema validation."""
 # pylint: disable=no-member
-__all__ = ["DynamicDataIO", "SCHEMA_FROM_FILE"]
+__all__ = ["DynamicDataIO", "SCHEMA_FROM_FILE", "CASTING_WARNING_MSG"]
 
 import asyncio
 import inspect
@@ -58,7 +58,7 @@ class DynamicDataIO:
             apply_schema_validations: Applies schema validations on either read() or write()
             log_schema_metrics: Logs schema metrics on either read() or write()
             show_casting_warnings: Logs casting warnings on either read() or write() if set to True
-            strict_dtype_check: Applies strict dtype check on either read() or write() if set to True
+            strict_dtype_check: Applies strict dtype check on either read() or write(), confirming the correct type for all rows per column, if set to True
             options: Any additional kwargs that may be used throughout the lifecycle of the object
         """
         if type(self) is DynamicDataIO:  # pylint: disable=unidiomatic-typecheck
