@@ -29,7 +29,7 @@ from tests.mocking.io import (
     ReadS3ParquetIO,
     WriteS3CsvIO,
     WriteS3CsvWithSchema,
-    WriteS3ParquetExternalIO,
+    WriteS3ParquetExternalIO, ReadAthenaIO,
 )
 
 
@@ -167,7 +167,7 @@ class TestCoreIO:
 
         # When
         with pytest.raises(AssertionError):
-            ReadS3IO(source_config=athena_cloud_config)
+            ReadAthenaIO(source_config=athena_cloud_config)
 
     @pytest.mark.unit
     def test_key_error_is_thrown_for_missing_schema_if_unified_io_subclass_assigns_schema_from_file_but_file_is_missing(
