@@ -48,6 +48,7 @@ class DynamicDataIO:
         apply_schema_validations: bool = False,
         log_schema_metrics: bool = False,
         show_casting_warnings: bool = False,
+        strict_dtype_check: bool = False,
         **options: MutableMapping[str, Any],
     ):
         """Class constructor.
@@ -57,6 +58,7 @@ class DynamicDataIO:
             apply_schema_validations: Applies schema validations on either read() or write()
             log_schema_metrics: Logs schema metrics on either read() or write()
             show_casting_warnings: Logs casting warnings on either read() or write() if set to True
+            strict_dtype_check: Applies strict dtype check on either read() or write() if set to True
             options: Any additional kwargs that may be used throughout the lifecycle of the object
         """
         if type(self) is DynamicDataIO:  # pylint: disable=unidiomatic-typecheck
@@ -67,6 +69,7 @@ class DynamicDataIO:
         self.apply_schema_validations = apply_schema_validations
         self.log_schema_metrics = log_schema_metrics
         self.show_casting_warnings = show_casting_warnings
+        self.strict_dtype_check = strict_dtype_check
         self.options = self._get_options(options, source_config.options)
         source_name = self.sources_config.data_backend_type.value
         if self.schema is SCHEMA_FROM_FILE:
@@ -262,18 +265,14 @@ class DynamicDataIO:
     def _has_valid_dtypes(self, df: pd.DataFrame) -> bool:
         """Checks if `df` has the expected dtypes defined in `schema`.
 
-        Schema is a dictionary object where keys are column names and values are dtypes in string format as returned by e.g.
-        `df[column].dtype.name`.
-
-        This function issues `error` level logs describing the first column that caused the check to fail.
-
-        It is assumed that `df` only has the columns defined in `schema`.
+        If `strict_dtype_check=True`, performs row-wise type inspection and logs warnings if
+        multiple Python-level types are detected in any column.
 
         Args:
-            df:
+            df: A pandas dataframe to be validated.
 
         Returns:
-            bool - `True` if `df` has the given dtypes, `False` otherwise
+            bool: True if column types match schema expectations or can be casted, False otherwise.
         """
         dtypes = df.dtypes
 
@@ -286,17 +285,25 @@ class DynamicDataIO:
             column_name = col_info.name
             expected_dtype = col_info.data_type
             found_dtype = dtypes[column_name].name
+
             if found_dtype != expected_dtype:
                 if self.show_casting_warnings:
-                    logger.info(f"Expected: '{expected_dtype}' dtype for {self.name}['{column_name}]', found '{found_dtype}'")
+                    logger.info(f"Expected: '{expected_dtype}' dtype for {self.name}['{column_name}'], " f"found '{found_dtype}'")
                 try:
-                    if len(set(type(v) for v in df[column_name].values)) > 1:  # pylint: disable=consider-using-set-comprehension
-                        logger.warning(CASTING_WARNING_MSG.format(column_name, expected_dtype, found_dtype))  # pylint: disable=logging-format-interpolation
-                        logger.info(NOTICE_MSG.format(column_name))  # pylint: disable=logging-format-interpolation
-                    df[column_name] = df[column_name].astype(self.schema.columns[column_name].data_type)
+                    if self.strict_dtype_check:
+                        logger.warning(
+                            f"[strict_dtype_check=True] Performing expensive type-checking for " f"{self.name}['{column_name}']. This may impact performance on large datasets."
+                        )
+                        num_types = df[column_name].map(type).nunique()
+                        if num_types > 1:
+                            logger.warning(CASTING_WARNING_MSG.format(column_name, expected_dtype, found_dtype))
+                            logger.info(NOTICE_MSG.format(column_name))
+
+                    df[column_name] = df[column_name].astype(expected_dtype)
                 except (ValueError, TypeError):
-                    logger.exception(f"ValueError: Tried casting column {self.name}['{column_name}'] to '{expected_dtype}' from '{found_dtype}', but failed")
+                    logger.exception(f"ValueError: Tried casting column {self.name}['{column_name}'] to " f"'{expected_dtype}' from '{found_dtype}', but failed")
                     return False
+
         return True
 
     def _split_columns_to_validate_between_allowed_and_not(self, columns_to_validate: List[str]) -> Tuple[List[SchemaColumn], List[str]]:

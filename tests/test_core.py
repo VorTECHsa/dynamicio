@@ -773,7 +773,7 @@ class TestCoreIO:
             io_instance.read()
 
         # Then
-        assert getattr(caplog.records[0], "message") == "Expected: 'float64' dtype for READ_S3_DATA_WITH_FALSE_TYPES['id]', found 'int64'"
+        assert getattr(caplog.records[0], "message") == "Expected: 'float64' dtype for READ_S3_DATA_WITH_FALSE_TYPES['id'], found 'int64'"
 
     @pytest.mark.unit
     def test_options_are_read_from_code(self, s3_parquet_local_config):
