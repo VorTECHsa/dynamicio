@@ -26,6 +26,10 @@ class ReadS3CsvIO(UnifiedIO):
     schema = SCHEMA_FROM_FILE
 
 
+class ReadS3CsvWithWrongSchemaIO(UnifiedIO):
+    schema = {"id": "int64", "foo_name": "object", "bar": "float64"}
+
+
 class ReadS3DataWithLessColumnsIO(UnifiedIO):
     schema = {"id": "int64", "foo_name": "object"}
 
