@@ -192,3 +192,7 @@ class ParquetWithCustomValidate(UnifiedIO):
         if df["bar"].isna().any():
             return False
         return True
+
+
+class ReadAthenaIO(UnifiedIO):
+    schema = {"id": "object", "foo": "object", "bar": "int64", "baz": "object"}

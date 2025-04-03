@@ -5,13 +5,9 @@ from unittest.mock import ANY, patch
 import pandas as pd
 import pytest
 
-from dynamicio import UnifiedIO
 from dynamicio.config import IOConfig
 from tests import constants
-
-
-class ReadAthenaIO(UnifiedIO):
-    schema = {"id": "object", "foo": "object", "bar": "int64", "baz": "object"}
+from tests.mocking.io import ReadAthenaIO
 
 
 @pytest.mark.unit
