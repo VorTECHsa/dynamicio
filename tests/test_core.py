@@ -24,6 +24,7 @@ from tests.mocking.io import (
     ParquetWithSomeBool,
     ReadMockS3CsvIO,
     ReadS3CsvIO,
+    ReadS3CsvWithWrongSchemaIO,
     ReadS3DataWithFalseTypes,
     ReadS3IO,
     ReadS3ParquetIO,
@@ -451,6 +452,226 @@ class TestCoreIO:
             os.remove(s3_csv_local_config.local.file_path)
 
     @pytest.mark.unit
+    def test_options_are_read_from_code(self, s3_parquet_local_config):
+        # When
+        config_io = ReadS3ParquetIO(source_config=s3_parquet_local_config, option_1=False, option_2=True)
+
+        # Then
+        assert config_io.options == {"option_1": False, "option_2": True}
+
+    @pytest.mark.unit
+    def test_columns_options_is_passed_to_parquet_read(self, s3_parquet_local_config):
+        with patch("dynamicio.mixins.with_local.pd.read_parquet") as mocked_call:
+            # Given
+            reader = ReadS3ParquetIO(source_config=s3_parquet_local_config, columns=["bar"])
+
+            # When
+            reader.read()
+            kwargs_values = mocked_call.call_args.kwargs
+
+            # Then
+            assert "columns" in kwargs_values
+            assert kwargs_values["columns"] == ["bar"]
+
+    @pytest.mark.unit
+    def test_schema_columns_are_used_as_default_in_parquet_read(self, s3_parquet_local_config):
+        with patch("dynamicio.mixins.with_local.pd.read_parquet") as mocked_call:
+            # Given
+            reader = ReadS3ParquetIO(source_config=s3_parquet_local_config)
+
+            # When
+            reader.read()
+            kwargs_values = mocked_call.call_args.kwargs
+
+            # Then
+            assert "columns" in kwargs_values
+            assert kwargs_values["columns"] == ["id", "foo_name", "bar"]
+
+    @pytest.mark.unit
+    def test_columns_options_with_names_missing_from_schema_fails(self, s3_parquet_local_config):
+        with patch("dynamicio.mixins.with_local.pd.read_parquet"):
+            # Given
+            reader = ReadS3ParquetIO(source_config=s3_parquet_local_config, columns=["bar", "column_missing_from_schema"])
+
+            # When
+            with pytest.raises(ColumnsDataTypeError):
+                # Then
+                reader.read()
+
+    @pytest.mark.unit
+    def test_options_are_read_from_resource_definition(self):
+        # Given
+        s3_parquet_local_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="S3_PARQUET_WITH_OPTIONS_IN_DEFINITION")
+
+        # When
+        config_io = ReadS3ParquetIO(source_config=s3_parquet_local_config)
+
+        # Then
+        assert config_io.options == {"option_3": False, "option_4": True}
+
+    @pytest.mark.unit
+    def test_options_are_that_are_read_from_both_resource_definition_and_code_but_with_no_conflicts_are_merged(self):
+        # Given
+        s3_parquet_local_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="S3_PARQUET_WITH_OPTIONS_IN_DEFINITION")
+
+        # When
+        config_io = ReadS3ParquetIO(source_config=s3_parquet_local_config, option_1=False, option_2=True)
+
+        # Then
+        assert config_io.options == {"option_1": False, "option_2": True, "option_3": False, "option_4": True}
+
+    @pytest.mark.unit
+    def test_options_from_code_are_prioritized(self):
+        # Given
+        s3_parquet_local_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="S3_PARQUET_WITH_OPTIONS_IN_DEFINITION")
+
+        # When
+        config_io = ReadS3ParquetIO(source_config=s3_parquet_local_config, option_1=False, option_2=True, option_3=True)  # option_3 is conflicting
+
+        # Then
+        assert config_io.options == {"option_1": False, "option_2": True, "option_3": True, "option_4": True}
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "camel_case_string, expected_string",
+        [
+            ("TestStringABC", "TEST_STRING_ABC"),
+            ("TestString", "TEST_STRING"),
+            ("ThisIsAnotherTest", "THIS_IS_ANOTHER_TEST"),
+            ("AbstractS3Test", "ABSTRACT_S3_TEST"),
+            ("YetAnotherGREATTest", "YET_ANOTHER_GREAT_TEST"),
+        ],
+    )
+    def test_transform_class_names_to_dataset_names(self, camel_case_string, expected_string):
+        # Given/When
+        transformed_string = DynamicDataIO._transform_class_name_to_dataset_name(camel_case_string)  # pylint: disable=W0212
+
+        assert transformed_string == expected_string
+
+    @pytest.mark.unit
+    def test_no_options_at_all_are_provided_with_no_issues(self):
+
+        # Given
+        s3_parquet_local_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="S3_PARQUET_WITH_OPTIONS_IN_CODE")
+
+        # When
+        config_io = ReadS3ParquetIO(source_config=s3_parquet_local_config)
+
+        # Then
+        assert config_io.options == {}
+
+    @pytest.mark.unit
+    def test_dataset_name_is_defined_by_io_class_if_schema_from_file_is_not_provided(self):
+
+        # Given
+        s3_parquet_local_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_S3_PARQUET")
+
+        # When
+        config_io = ReadS3ParquetIO(source_config=s3_parquet_local_config)
+
+        # Then
+        assert config_io.name == "READ_S3_PARQUET_IO"
+
+    @pytest.mark.unit
+    def test_dataset_name_is_inferred_from_schema_if_schema_from_file_is_provided(self):
+
+        # Given
+        s3_read_from_csv_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_S3_CSV")
+
+        # When
+        config_io = ReadS3CsvIO(source_config=s3_read_from_csv_config)
+
+        # Then
+        assert config_io.name == "READ_FROM_S3_CSV"
+
+
+class TestTypeCastingAndValidation:
+    @patch("dynamicio.core.logger")
+    def test_has_valid_dtypes_skips_strict_check_by_default(self, mock_logger):
+
+        s3_csv_local_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_S3_CSV")
+
+        ReadS3CsvIO(source_config=s3_csv_local_config, strict_dtype_check=False).read()
+
+        assert not mock_logger.warning.called
+
+    @patch("dynamicio.core.logger")
+    def test_has_valid_dtypes_logs_and_casts_with_strict_check(self, mock_logger):
+
+        # Given
+        s3_csv_local_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_S3_CSV")
+
+        # When
+        ReadS3CsvWithWrongSchemaIO(source_config=s3_csv_local_config, show_casting_warnings=True, strict_dtype_check=True).read()
+
+        # Then
+        assert mock_logger.warning.called
+        assert "performance" in mock_logger.warning.call_args[0][0].lower()
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "df",
+        [
+            (pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": pd.NA}])),
+            (
+                pd.DataFrame.from_records(
+                    [
+                        {"id": 1, "foo_name": "A", "bar": False, "bool_col": True},
+                        {"id": 2, "foo_name": "B", "bar": "BAD-VALUE", "bool_col": False},
+                    ]
+                )
+            ),
+        ],
+    )
+    def test__has_valid_dtypes_throws_columns_data_type_error_when_casting_fails(self, df):
+
+        # Note: In the presence of a boolean cell value in a column, but with additional values of ambiguous type, df.to_json() will try to convert the column
+        # to a type `int` or `float`, converting boolean values to numbers to `1.0 : True` and `0.0 : False`, and the rest to NaN. This can cause data corruption issues.
+
+        # Given
+        s3_parquet_with_some_bool_col_local_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="S3_PARQUET_WITH_BOOL")
+
+        # Then
+        with pytest.raises(ColumnsDataTypeError):
+            ParquetWithSomeBool(source_config=s3_parquet_with_some_bool_col_local_config, strict_dtype_check=True).write(df)
+
+    @pytest.mark.unit
     @pytest.mark.parametrize(
         "df, expected_dtype, expected_warning",
         [
@@ -491,15 +712,80 @@ class TestCoreIO:
             dynamic_vars=constants,
         ).get(source_key="S3_PARQUET_WITH_BOOL")
 
-        ParquetWithSomeBool(source_config=s3_parquet_with_some_bool_col_local_config).write(df)
+        ParquetWithSomeBool(source_config=s3_parquet_with_some_bool_col_local_config, strict_dtype_check=True).write(df)
+
+        # Then
+        try:
+            if caplog.messages:
+                assert caplog.messages[1] == expected_warning
+            assert pd.read_parquet(s3_parquet_with_some_bool_col_local_config.local.file_path)["bool_col"].dtype.name == expected_dtype
+        finally:
+            os.remove(s3_parquet_with_some_bool_col_local_config.local.file_path)
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "df, expected_dtype, expected_warning",
+        [
+            (
+                pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": False}]),
+                "bool",
+                None,
+            ),
+            (
+                pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": None}]),
+                "bool",
+                CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
+            ),
+            (
+                pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": np.nan}]),
+                "bool",
+                CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
+            ),
+            (
+                pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": 1}]),
+                "bool",
+                CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
+            ),
+            (
+                pd.DataFrame.from_records(
+                    [
+                        {"id": 1, "foo_name": "A", "bar": 12, "bool_col": True},
+                        {"id": 2, "foo_name": "B", "bar": 12, "bool_col": "random"},
+                    ]
+                ),
+                "bool",
+                CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
+            ),
+            (
+                pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": pd.NaT}]),
+                "bool",
+                CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
+            ),
+        ],
+    )
+    def test__has_valid_dtypes_does_not_attempt_to_convert_object_type_to_other_type_unless_other_is_bool_and_column_has_no_non_boolean_values_when_writing_a_json(
+        self, caplog, df, expected_dtype, expected_warning
+    ):
+
+        # Note: In the presence of a boolean cell value in a column, but with additional values of ambiguous type, df.to_json() will try to convert the column
+        # to a type `int` or `float`, converting boolean values to numbers to `1.0 : True` and `0.0 : False`, and the rest to NaN. This can cause data corruption issues.
+
+        # Given
+        s3_json_with_some_bool_col_local_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="S3_JSON_WITH_BOOL")
+
+        JsonWithSomeBool(source_config=s3_json_with_some_bool_col_local_config).write(df)
 
         # Then
         try:
             if caplog.messages:
                 assert caplog.messages[0] == expected_warning
-            assert pd.read_parquet(s3_parquet_with_some_bool_col_local_config.local.file_path)["bool_col"].dtype.name == expected_dtype
+            assert pd.read_json(s3_json_with_some_bool_col_local_config.local.file_path)["bool_col"].dtype.name == expected_dtype
         finally:
-            os.remove(s3_parquet_with_some_bool_col_local_config.local.file_path)
+            os.remove(s3_json_with_some_bool_col_local_config.local.file_path)
 
     @pytest.mark.unit
     @pytest.mark.parametrize(
@@ -626,102 +912,6 @@ class TestCoreIO:
             os.remove(s3_hdf_with_some_bool_col_local_config.local.file_path)
 
     @pytest.mark.unit
-    @pytest.mark.parametrize(
-        "df, expected_dtype, expected_warning",
-        [
-            (
-                pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": False}]),
-                "bool",
-                None,
-            ),
-            (
-                pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": None}]),
-                "bool",
-                CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
-            ),
-            (
-                pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": np.nan}]),
-                "bool",
-                CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
-            ),
-            (
-                pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": 1}]),
-                "bool",
-                CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
-            ),
-            (
-                pd.DataFrame.from_records(
-                    [
-                        {"id": 1, "foo_name": "A", "bar": 12, "bool_col": True},
-                        {"id": 2, "foo_name": "B", "bar": 12, "bool_col": "random"},
-                    ]
-                ),
-                "bool",
-                CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
-            ),
-            (
-                pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": pd.NaT}]),
-                "bool",
-                CASTING_WARNING_MSG.format("bool_col", "bool", "object"),
-            ),
-        ],
-    )
-    def test__has_valid_dtypes_does_not_attempt_to_convert_object_type_to_other_type_unless_other_is_bool_and_column_has_no_non_boolean_values_when_writing_a_json(
-        self, caplog, df, expected_dtype, expected_warning
-    ):
-
-        # Note: In the presence of a boolean cell value in a column, but with additional values of ambiguous type, df.to_json() will try to convert the column
-        # to a type `int` or `float`, converting boolean values to numbers to `1.0 : True` and `0.0 : False`, and the rest to NaN. This can cause data corruption issues.
-
-        # Given
-        s3_json_with_some_bool_col_local_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
-            env_identifier="LOCAL",
-            dynamic_vars=constants,
-        ).get(source_key="S3_JSON_WITH_BOOL")
-
-        JsonWithSomeBool(source_config=s3_json_with_some_bool_col_local_config).write(df)
-
-        # Then
-        try:
-            if caplog.messages:
-                assert caplog.messages[0] == expected_warning
-            assert pd.read_json(s3_json_with_some_bool_col_local_config.local.file_path)["bool_col"].dtype.name == expected_dtype
-        finally:
-            os.remove(s3_json_with_some_bool_col_local_config.local.file_path)
-
-    @pytest.mark.unit
-    @pytest.mark.parametrize(
-        "df",
-        [
-            (pd.DataFrame.from_records([{"id": 1, "foo_name": "A", "bar": 12, "bool_col": True}, {"id": 2, "foo_name": "B", "bar": 12, "bool_col": pd.NA}])),
-            (
-                pd.DataFrame.from_records(
-                    [
-                        {"id": 1, "foo_name": "A", "bar": False, "bool_col": True},
-                        {"id": 2, "foo_name": "B", "bar": "BAD-VALUE", "bool_col": False},
-                    ]
-                )
-            ),
-        ],
-    )
-    def test__has_valid_dtypes_throws_columns_data_type_error_when_casting_fails(self, df):
-
-        # Note: In the presence of a boolean cell value in a column, but with additional values of ambiguous type, df.to_json() will try to convert the column
-        # to a type `int` or `float`, converting boolean values to numbers to `1.0 : True` and `0.0 : False`, and the rest to NaN. This can cause data corruption issues.
-
-        # Given
-        s3_parquet_with_some_bool_col_local_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
-            env_identifier="LOCAL",
-            dynamic_vars=constants,
-        ).get(source_key="S3_PARQUET_WITH_BOOL")
-
-        # Then
-        with pytest.raises(ColumnsDataTypeError):
-            ParquetWithSomeBool(source_config=s3_parquet_with_some_bool_col_local_config).write(df)
-
-    @pytest.mark.unit
     def test_a_custom_validate_method_can_be_used_to_override_the_default_abstract_one(self):
 
         # Given
@@ -773,166 +963,7 @@ class TestCoreIO:
             io_instance.read()
 
         # Then
-        assert getattr(caplog.records[0], "message") == "Expected: 'float64' dtype for READ_S3_DATA_WITH_FALSE_TYPES['id]', found 'int64'"
-
-    @pytest.mark.unit
-    def test_options_are_read_from_code(self, s3_parquet_local_config):
-        # When
-        config_io = ReadS3ParquetIO(source_config=s3_parquet_local_config, option_1=False, option_2=True)
-
-        # Then
-        assert config_io.options == {"option_1": False, "option_2": True}
-
-    @pytest.mark.unit
-    def test_columns_options_is_passed_to_parquet_read(self, s3_parquet_local_config):
-        with patch("dynamicio.mixins.with_local.pd.read_parquet") as mocked_call:
-            # Given
-            reader = ReadS3ParquetIO(source_config=s3_parquet_local_config, columns=["bar"])
-
-            # When
-            reader.read()
-            kwargs_values = mocked_call.call_args.kwargs
-
-            # Then
-            assert "columns" in kwargs_values
-            assert kwargs_values["columns"] == ["bar"]
-
-    @pytest.mark.unit
-    def test_schema_columns_are_used_as_default_in_parquet_read(self, s3_parquet_local_config):
-        with patch("dynamicio.mixins.with_local.pd.read_parquet") as mocked_call:
-            # Given
-            reader = ReadS3ParquetIO(source_config=s3_parquet_local_config)
-
-            # When
-            reader.read()
-            kwargs_values = mocked_call.call_args.kwargs
-
-            # Then
-            assert "columns" in kwargs_values
-            assert kwargs_values["columns"] == ["id", "foo_name", "bar"]
-
-    @pytest.mark.unit
-    def test_columns_options_with_names_missing_from_schema_fails(self, s3_parquet_local_config):
-        with patch("dynamicio.mixins.with_local.pd.read_parquet"):
-
-            # Given
-            reader = ReadS3ParquetIO(source_config=s3_parquet_local_config, columns=["bar", "column_missing_from_schema"])
-
-            # When
-            with pytest.raises(ColumnsDataTypeError):
-
-                # Then
-                reader.read()
-
-    @pytest.mark.unit
-    def test_options_are_read_from_resource_definition(self):
-        # Given
-        s3_parquet_local_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
-            env_identifier="LOCAL",
-            dynamic_vars=constants,
-        ).get(source_key="S3_PARQUET_WITH_OPTIONS_IN_DEFINITION")
-
-        # When
-        config_io = ReadS3ParquetIO(source_config=s3_parquet_local_config)
-
-        # Then
-        assert config_io.options == {"option_3": False, "option_4": True}
-
-    @pytest.mark.unit
-    def test_options_are_that_are_read_from_both_resource_definition_and_code_but_with_no_conflicts_are_merged(self):
-        # Given
-        s3_parquet_local_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
-            env_identifier="LOCAL",
-            dynamic_vars=constants,
-        ).get(source_key="S3_PARQUET_WITH_OPTIONS_IN_DEFINITION")
-
-        # When
-        config_io = ReadS3ParquetIO(source_config=s3_parquet_local_config, option_1=False, option_2=True)
-
-        # Then
-        assert config_io.options == {"option_1": False, "option_2": True, "option_3": False, "option_4": True}
-
-    @pytest.mark.unit
-    def test_options_from_code_are_prioritized(self):
-        # Given
-        s3_parquet_local_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
-            env_identifier="LOCAL",
-            dynamic_vars=constants,
-        ).get(source_key="S3_PARQUET_WITH_OPTIONS_IN_DEFINITION")
-
-        # When
-        config_io = ReadS3ParquetIO(source_config=s3_parquet_local_config, option_1=False, option_2=True, option_3=True)  # option_3 is conflicting
-
-        # Then
-        assert config_io.options == {"option_1": False, "option_2": True, "option_3": True, "option_4": True}
-
-    @pytest.mark.unit
-    @pytest.mark.parametrize(
-        "camel_case_string, expected_string",
-        [
-            ("TestStringABC", "TEST_STRING_ABC"),
-            ("TestString", "TEST_STRING"),
-            ("ThisIsAnotherTest", "THIS_IS_ANOTHER_TEST"),
-            ("AbstractS3Test", "ABSTRACT_S3_TEST"),
-            ("YetAnotherGREATTest", "YET_ANOTHER_GREAT_TEST"),
-        ],
-    )
-    def test_transform_class_names_to_dataset_names(self, camel_case_string, expected_string):
-        # Given/When
-        transformed_string = DynamicDataIO._transform_class_name_to_dataset_name(camel_case_string)  # pylint: disable=W0212
-
-        assert transformed_string == expected_string
-
-    @pytest.mark.unit
-    def test_no_options_at_all_are_provided_with_no_issues(self):
-
-        # Given
-        s3_parquet_local_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
-            env_identifier="LOCAL",
-            dynamic_vars=constants,
-        ).get(source_key="S3_PARQUET_WITH_OPTIONS_IN_CODE")
-
-        # When
-        config_io = ReadS3ParquetIO(source_config=s3_parquet_local_config)
-
-        # Then
-        assert config_io.options == {}
-
-    @pytest.mark.unit
-    def test_dataset_name_is_defined_by_io_class_if_schema_from_file_is_not_provided(self):
-
-        # Given
-        s3_parquet_local_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
-            env_identifier="LOCAL",
-            dynamic_vars=constants,
-        ).get(source_key="READ_FROM_S3_PARQUET")
-
-        # When
-        config_io = ReadS3ParquetIO(source_config=s3_parquet_local_config)
-
-        # Then
-        assert config_io.name == "READ_S3_PARQUET_IO"
-
-    @pytest.mark.unit
-    def test_dataset_name_is_inferred_from_schema_if_schema_from_file_is_provided(self):
-
-        # Given
-        s3_read_from_csv_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
-            env_identifier="LOCAL",
-            dynamic_vars=constants,
-        ).get(source_key="READ_FROM_S3_CSV")
-
-        # When
-        config_io = ReadS3CsvIO(source_config=s3_read_from_csv_config)
-
-        # Then
-        assert config_io.name == "READ_FROM_S3_CSV"
+        assert getattr(caplog.records[0], "message") == "Expected: 'float64' dtype for READ_S3_DATA_WITH_FALSE_TYPES['id'], found 'int64'"
 
 
 class TestAsyncCoreIO:
