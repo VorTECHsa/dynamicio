@@ -40,7 +40,7 @@ tables = ">=3.10.1"
 libcst = "==1.5.1"
 
 [tool.poetry.group.dev.dependencies]
-black = "==22.10.0"
+black = "==24.3.0"
 coverage-badge = "==1.1.0"
 flake8-import-order = "*"
 flake8-print = "*"
@@ -65,7 +65,7 @@ yamllint = "==1.28.0"
 pdoc3 = "==0.10.0"
 
 [tool.poetry.group.build.dependencies]
-setuptools = "==65.5.1"
+setuptools = "==70.0.0"
 twine = "==4.0.1"
 wheel = "==0.38.4"
 
