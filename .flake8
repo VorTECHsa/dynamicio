@@ -1,21 +1,13 @@
 [flake8]
-ignore = E203, E266, E501, W503, F403
-per-file-ignores = 
-    # F401: imported but unused
+ignore = E203, E266, E501, W503, F403, I101
+per-file-ignores =
     __init__.py: F401
-    # Allow print() in cli.py and tests
     cli.py: T
     tests/*: T
-exclude =
-    .git,
-    .circleci
-    __pycache__,
-    docs,
+exclude = .git, .circleci, __pycache__, docs
 max-line-length = 185
 max-complexity = 18
 select = B,C,E,F,W,T,I,B
-
-ban-relative-imports = true
-
-import-order-style = edited
+import-order-style = smarkets
 application-import-names = dynamicio, tests
+ban-relative-imports = true

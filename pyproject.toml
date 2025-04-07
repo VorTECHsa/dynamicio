@@ -42,10 +42,10 @@ libcst = "==1.5.1"
 [tool.poetry.group.dev.dependencies]
 black = "==22.10.0"
 coverage-badge = "==1.1.0"
-flake8-import-order = ">=0.18.0"
-flake8-print = ">=5.0.0"
-flake8-tidy-imports = ">=4.8.0"
-flake8 = "==5.0.4"
+flake8-import-order = "*"
+flake8-print = "*"
+flake8-tidy-imports = "*"
+flake8 = "^7.2.0"
 gitlint = "==0.17.0"
 mock = "==4.0.3"
 pandas-stubs = "==2.0.3.230814"
@@ -95,16 +95,38 @@ exclude = '''
 (
   /(
       \.git
-    | \.mypy_cache
     | \.github
     | \.venv
-    | \flake8
     | docs
     | demo
   )/
   | tests/conftest.py
 )
 '''
+
+[tool.isort]
+profile = "black"
+line_length = 185
+known_first_party = ["dynamicio", "tests"]
+import_heading_firstparty = "Application Imports"
+
+[tool.pylint.'MASTER']
+load-plugins = ["pylint.extensions.docparams"]
+extension-pkg-whitelist = "pydantic"
+max-line-length = 185
+
+[tool.pylint.'MESSAGES CONTROL']
+disable = [
+    "C0114", # missing-module-docstring
+    "C0115", # missing-class-docstring
+    "C0116", # missing-function-docstring
+    "R0903", # too-few-public-methods
+    "W0621", # redefined-outer-name
+]
+
+[tool.pylint.'FORMAT']
+max-line-length = 185
+
 
 [tool.pytest.ini_options]
     markers = [
