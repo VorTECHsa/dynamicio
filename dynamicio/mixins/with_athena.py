@@ -5,13 +5,15 @@ import inspect
 from typing import Any, MutableMapping
 
 import pandas as pd
-from dynamicio.config.pydantic import AthenaDataEnvironment
-from dynamicio.mixins.utils import allow_options
 from magic_logger import logger
 from pyathena import connect
 from pyathena.connection import Connection
 from pyathena.pandas.cursor import PandasCursor
 from pyathena.pandas.result_set import AthenaPandasResultSet
+
+# Application Imports
+from dynamicio.config.pydantic import AthenaDataEnvironment
+from dynamicio.mixins.utils import allow_options
 
 allowed_athena_options = set(inspect.signature(AthenaPandasResultSet.__init__).parameters.keys()) - {"self"}
 
@@ -35,11 +37,7 @@ class WithAthena:
 
         assert query, "A 'query' must be provided for Athena read"
 
-        conn = connect(
-            s3_staging_dir=cfg.s3_staging_dir,
-            region_name=cfg.region_name,
-            cursor_class=PandasCursor
-        )
+        conn = connect(s3_staging_dir=cfg.s3_staging_dir, region_name=cfg.region_name, cursor_class=PandasCursor)
         return self._run_query(conn, query, **self.options)
 
     @allow_options(allowed_athena_options)
