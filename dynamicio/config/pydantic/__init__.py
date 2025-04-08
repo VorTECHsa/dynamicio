@@ -9,5 +9,6 @@ from dynamicio.config.pydantic.io_resources import (
     PostgresDataEnvironment,
     S3DataEnvironment,
     S3PathPrefixEnvironment,
+    AthenaDataEnvironment
 )
 from dynamicio.config.pydantic.table_schema import DataframeSchema, SchemaColumn

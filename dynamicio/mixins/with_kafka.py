@@ -8,6 +8,7 @@ import simplejson
 from confluent_kafka import Producer
 from magic_logger import logger
 
+# Application Imports
 from dynamicio.config.pydantic import DataframeSchema, KafkaDataEnvironment
 from dynamicio.mixins import utils
 
@@ -241,6 +242,10 @@ class WithKafka:
         "transaction.timeout.ms",
         "transactional.id",
     }
+
+    def _read_from_kafka(self, df: pd.DataFrame):
+        """Kafka is not ideal for reading files as part of batch ETL jobs. Raise NotImplementedError."""
+        raise NotImplementedError("Dynamicio does not support reading from Kafka Topics.")
 
     def _write_to_kafka(self, df: pd.DataFrame) -> None:
         """Given a dataframe where each row is a message to be sent to a Kafka Topic, iterate through all rows and send them to a Kafka topic.
