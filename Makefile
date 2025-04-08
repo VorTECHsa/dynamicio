@@ -62,10 +62,8 @@ run-unit-tests:
 run-integration-tests:
 	@pyenv exec poetry run pytest -v -m integration ${TESTS}
 
-update-test-coverage:
-	@pyenv exec poetry run pytest ${TESTS} --cov=${CODE_DIR} --cov-report=html --cov-report=xml
-	@pyenv exec poetry run coverage-badge -o docs/coverage_report/coverage-badge.svg -f || echo "⚠️ coverage-badge failed (likely due to version compatibility)"
-	@mv coverage.xml htmlcov/coverage.xml
+check-test-coverage:
+	@pyenv exec poetry run pytest -vv --cov=$(CODE_DIR) --cov-report=term-missing
 
 generate-docs:
 	@pyenv exec poetry run python -m pdoc --force --html ${CODE_DIR} -o docs

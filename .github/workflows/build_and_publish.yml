@@ -67,7 +67,6 @@ jobs:
 
   codecov:
     runs-on: ubuntu-latest
-    needs: style-checks
     steps:
       - uses: actions/checkout@v3
 
