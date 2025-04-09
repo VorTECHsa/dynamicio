@@ -379,33 +379,32 @@ class WithS3File:
         """
         s3_config = self.sources_config.s3
         file_type = get_file_type_value(s3_config.file_type)
-        s3_path = f"s3://{s3_config.bucket}/{utils.resolve_template(s3_config.file_path, self.options)}"
+        options = getattr(self, "options", {})
+        s3_path = f"s3://{s3_config.bucket}/{utils.resolve_template(s3_config.file_path, options)}"
 
         logger.info(f"[s3] Started downloading: {s3_path}")
 
-        return getattr(self, f"_read_{file_type}_file")(s3_path, self.schema, **self.options)
+        return getattr(self, f"_read_s3_{file_type}_file")(s3_path, self.schema, **options)
 
     @staticmethod
     @utils.allow_options(wr.s3.read_parquet)
-    def _read_parquet_file(s3_path: str, schema: DataframeSchema, **kwargs) -> pd.DataFrame:
-        columns = list(schema.columns.keys())
-        return wr.s3.read_parquet(path=s3_path, columns=columns, **kwargs)
+    def _read_s3_parquet_file(s3_path: str, schema: DataframeSchema, **kwargs) -> pd.DataFrame:
+        return wr.s3.read_parquet(path=s3_path, columns=(list(schema.columns.keys())), **kwargs)
 
     @staticmethod
     @utils.allow_options(wr.s3.read_csv)
-    def _read_csv_file(s3_path: str, schema: DataframeSchema, **kwargs) -> pd.DataFrame:
-        columns = list(schema.columns.keys())
-        return wr.s3.read_csv(path=s3_path, usecols=columns, **kwargs)
+    def _read_s3_csv_file(s3_path: str, schema: DataframeSchema, **kwargs) -> pd.DataFrame:
+        return wr.s3.read_csv(path=s3_path, usecols=(list(schema.columns.keys())), **kwargs)
 
     @staticmethod
     @utils.allow_options(wr.s3.read_json)
-    def _read_json_file(s3_path: str, schema: DataframeSchema, **kwargs) -> pd.DataFrame:
+    def _read_s3_json_file(s3_path: str, schema: DataframeSchema, **kwargs) -> pd.DataFrame:
         df = wr.s3.read_json(path=s3_path, **kwargs)
         return df[list(schema.columns.keys())]
 
     @staticmethod
     @utils.allow_options(pd.read_hdf)
-    def _read_hdf_file(s3_path: str, schema: DataframeSchema, **kwargs) -> pd.DataFrame:
+    def _read_s3_hdf_file(s3_path: str, schema: DataframeSchema, **kwargs) -> pd.DataFrame:
         parsed = urlparse(s3_path)
         bucket = parsed.netloc
         file_path = parsed.path.lstrip("/")
@@ -426,30 +425,31 @@ class WithS3File:
         """
         s3_config = self.sources_config.s3
         file_type = get_file_type_value(s3_config.file_type)
-        s3_path = f"s3://{s3_config.bucket}/{utils.resolve_template(s3_config.file_path, self.options)}"
+        options = getattr(self, "options", {})
+        s3_path = f"s3://{s3_config.bucket}/{utils.resolve_template(s3_config.file_path, options)}"
 
         logger.info(f"[s3] Started uploading: {s3_path}")
-        getattr(self, f"_write_{file_type}_file")(df, s3_path, **self.options)
+        getattr(self, f"_write_s3_{file_type}_file")(df, s3_path, **options)
         logger.info(f"[s3] Finished uploading: {s3_path}")
 
     @staticmethod
     @utils.allow_options(wr.s3.to_parquet)
-    def _write_parquet_file(df: pd.DataFrame, s3_path: str, **kwargs):
+    def _write_s3_parquet_file(df: pd.DataFrame, s3_path: str, **kwargs):
         wr.s3.to_parquet(df=df, path=s3_path, dataset=True, **kwargs)
 
     @staticmethod
     @utils.allow_options(wr.s3.to_csv)
-    def _write_csv_file(df: pd.DataFrame, s3_path: str, **kwargs):
+    def _write_s3_csv_file(df: pd.DataFrame, s3_path: str, **kwargs):
         wr.s3.to_csv(df=df, path=s3_path, index=False, **kwargs)
 
     @staticmethod
     @utils.allow_options(wr.s3.to_json)
-    def _write_json_file(df: pd.DataFrame, s3_path: str, **kwargs):
+    def _write_s3_json_file(df: pd.DataFrame, s3_path: str, **kwargs):
         wr.s3.to_json(df=df, path=s3_path, orient="records", lines=True, **kwargs)
 
     @staticmethod
     @utils.allow_options(pd.HDFStore.put)
-    def _write_hdf_file(df: pd.DataFrame, s3_path: str, **kwargs):
+    def _write_s3_hdf_file(df: pd.DataFrame, s3_path: str, **kwargs):
         """Write a DataFrame to S3 as an HDF5 file, using in-memory streaming."""
         parsed = urlparse(s3_path)
         bucket = parsed.netloc

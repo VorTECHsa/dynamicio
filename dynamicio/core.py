@@ -186,7 +186,7 @@ class DynamicDataIO:
         if self.log_schema_metrics:
             self.log_metrics_from_schema(df)
 
-        getattr(self, f"_write_to_{source_name}")(self._apply_schema(df))
+        getattr(self, f"_write_to_{source_name}")(self._apply_schema(df))   # this apply_schema is called before we write
 
     def validate_from_schema(self, df: pd.DataFrame) -> "DynamicDataIO":
         """Validates a dataframe based on the validations present in its schema definition.

@@ -283,6 +283,6 @@ class WithLocalBatch(WithLocal):
         dfs_to_concatenate = []
         for file in files:
             file_to_load = os.path.join(file_path, file)
-            dfs_to_concatenate.append(getattr(self, f"_read_{file_type}_file")(file_to_load, self.schema, **self.options))  # type: ignore
+            dfs_to_concatenate.append(getattr(self, f"_read_{file_type}_file")(file_to_load, self.schema, **self.options))
 
         return pd.concat(dfs_to_concatenate).reset_index(drop=True)
