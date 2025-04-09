@@ -1,4 +1,5 @@
 """Mixin utility functions."""
+
 # pylint: disable=no-member, protected-access, too-few-public-methods
 
 import inspect

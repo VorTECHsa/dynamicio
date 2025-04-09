@@ -1,4 +1,5 @@
 """This module provides mixins that are providing S3 I/O support."""
+
 import dataclasses
 import io
 import os
@@ -6,7 +7,7 @@ import tempfile
 import urllib.parse
 import uuid
 from contextlib import contextmanager
-from typing import IO, Generator, List, Optional, Union, Dict
+from typing import IO, Dict, Generator, List, Optional, Union
 from urllib.parse import urlparse
 
 import awswrangler as wr
@@ -18,6 +19,7 @@ from awscli.clidriver import create_clidriver
 from magic_logger import logger
 from pandas import DataFrame, Series
 
+# Application Imports
 from dynamicio.config.pydantic import DataframeSchema, S3DataEnvironment, S3PathPrefixEnvironment
 from dynamicio.mixins import utils, with_local
 from dynamicio.mixins.utils import get_file_type_value
@@ -35,7 +37,7 @@ class InMemStore(pd.io.pytables.HDFStore):
 
     def open(self, *_args, **_kwargs):
         """Open the in-memory table."""
-        pd.io.pytables._tables()
+        pd.io.pytables._tables()  # pylint: disable=protected-access
         self._handle = self._in_mem_table
 
     def close(self, *_args, **_kwargs):
@@ -48,8 +50,7 @@ class InMemStore(pd.io.pytables.HDFStore):
 
 
 class HdfIO:
-    """
-    Provides in-memory stream support for reading and writing HDF5 tables.
+    """Provides in-memory stream support for reading and writing HDF5 tables.
 
     Uses PyTables to create in-memory file handles, enabling read/write
     operations on HDF content without persisting to disk.
@@ -57,8 +58,7 @@ class HdfIO:
 
     @contextmanager
     def create_file(self, label: str, mode: str, data: Optional[bytes] = None) -> Generator[tables.File, None, None]:
-        """
-        Create an in-memory HDF5 file using PyTables with optional preloaded data.
+        """Create an in-memory HDF5 file using PyTables with optional preloaded data.
 
         Args:
             label (str): A label used for naming the temporary in-memory file.
@@ -73,15 +73,7 @@ class HdfIO:
             extra_kw["driver_core_image"] = data
 
         file_name = f"{label}_{uuid.uuid4()}.h5"
-        file_handle = tables.File(
-            file_name,
-            mode,
-            title=label,
-            root_uep="/",
-            filters=None,
-            driver="H5FD_CORE",
-            **extra_kw
-        )
+        file_handle = tables.File(file_name, mode, title=label, root_uep="/", filters=None, driver="H5FD_CORE", **extra_kw)
 
         try:
             yield file_handle
@@ -89,8 +81,7 @@ class HdfIO:
             file_handle.close()
 
     def load(self, fobj: IO[bytes], label: str = "unknown_file.h5", options: Optional[Dict] = None) -> Union[DataFrame, Series]:
-        """
-        Load a DataFrame or Series from an in-memory HDF5 file-like object.
+        """Load a DataFrame or Series from an in-memory HDF5 file-like object.
 
         Args:
             fobj (IO[bytes]): A file-like object containing the HDF5 data.
@@ -106,8 +97,7 @@ class HdfIO:
             return pd.read_hdf(InMemStore(label, file_handle), **options)
 
     def save(self, df: DataFrame, fobj: IO[bytes], label: str = "unknown_file.h5", options: Optional[Dict] = None) -> None:
-        """
-        Save a DataFrame to a file-like object as an HDF5 structure.
+        """Save a DataFrame to a file-like object as an HDF5 structure.
 
         Args:
             df (DataFrame): The DataFrame to store.
@@ -268,7 +258,7 @@ class WithS3PathPrefix(with_local.WithLocal):
                 return self._read_parquet_file(full_path, self.schema, **self.options)
             if file_type == "hdf":
                 dfs: List[DataFrame] = []
-                for fobj in self._iter_s3_files(full_path, file_ext=".h5", max_memory_use=1024 ** 3):  # 1 gib
+                for fobj in self._iter_s3_files(full_path, file_ext=".h5", max_memory_use=1024**3):  # 1 gib
                     dfs.append(HdfIO().load(fobj))
                 df = pd.concat(dfs, ignore_index=True)
                 columns = [column for column in df.columns.to_list() if column in self.schema.columns.keys()]

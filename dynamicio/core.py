@@ -1,4 +1,5 @@
 """Implements the DynamicDataIO class which provides functionality for data: loading; sinking, and; schema validation."""
+
 # pylint: disable=no-member
 __all__ = ["DynamicDataIO", "SCHEMA_FROM_FILE", "CASTING_WARNING_MSG"]
 
@@ -100,7 +101,7 @@ class DynamicDataIO:
             - CAN have `schema_validations` and `schema_metrics` attributes
         """
         col_info = {}
-        for (col_name, dtype) in target.schema.items():
+        for col_name, dtype in target.schema.items():
             col_validations = {}
             col_metrics = []
             try:
@@ -186,7 +187,7 @@ class DynamicDataIO:
         if self.log_schema_metrics:
             self.log_metrics_from_schema(df)
 
-        getattr(self, f"_write_to_{source_name}")(self._apply_schema(df))   # this apply_schema is called before we write
+        getattr(self, f"_write_to_{source_name}")(self._apply_schema(df))  # this apply_schema is called before we write
 
     def validate_from_schema(self, df: pd.DataFrame) -> "DynamicDataIO":
         """Validates a dataframe based on the validations present in its schema definition.

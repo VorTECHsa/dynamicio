@@ -77,7 +77,7 @@ class ReadS3JsonIO(UnifiedIO):
     schema = {"id": "int64", "foo_name": "object", "bar": "int64"}
 
 
-class WriteS3ParquetIO(UnifiedIO):
+class WriteS3IO(UnifiedIO):
     schema = {"col_1": "int64", "col_2": "object"}
 
 

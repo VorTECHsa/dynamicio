@@ -90,9 +90,9 @@ style = "pep440"
 fix-shallow-repository = true
 
 [tool.black]
-py38 = true
+target-version = ["py38"]
 line-length = 185
-include = '\\.(pyi?)$'
+include = '\.pyi?$'
 exclude = '''
 (
   /(
