@@ -19,7 +19,15 @@ allowed_athena_options = set(inspect.signature(AthenaPandasResultSet.__init__).p
 
 
 class WithAthena:
-    """Handles I/O operations for AWS Athena."""
+    """Handles I/O operations for AWS Athena.
+
+    Note:
+        The `__abstractmethods__ = frozenset()` is used to silence false positives from pylint,
+        which might wrongly assume this class has abstract methods due to NotImplementedError.
+        This class is *not* an abstract base class and does not use `abc.ABC`.
+    """
+
+    __abstractmethods__ = frozenset()
 
     sources_config: AthenaDataEnvironment
     options: MutableMapping[str, Any]

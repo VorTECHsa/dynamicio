@@ -1,11 +1,11 @@
 # pylint: disable=no-member, missing-module-docstring, missing-class-docstring, missing-function-docstring, too-many-public-methods, too-few-public-methods, protected-access, C0103, C0302, R0801
 import os
-import types
-from unittest.mock import ANY, patch
-
 import pandas as pd
 import pytest
+import types
 from sqlalchemy.sql.base import ReadOnlyColumnCollection
+from unittest.mock import ANY, MagicMock, patch
+from unittest.mock import ANY, patch
 
 # Application Imports
 from dynamicio import WithPostgres
@@ -16,6 +16,21 @@ from tests.mocking.models import ERModel, PgModel
 
 
 class TestPostgresIO:
+
+    @pytest.mark.unit
+    @patch.object(pd.DataFrame, "to_sql")
+    def test_write_to_postgres_using_replace_strategy(self, mock_to_sql):
+        # Given
+        session = MagicMock()
+        df = pd.DataFrame({"id": [1], "val": ["a"]})
+
+        # When
+        WithPostgres._write_to_database(session, "dummy_table", df, is_truncate_and_append=False)
+
+        # Then
+        mock_to_sql.assert_called_once()
+        session.commit.assert_called_once()
+
     @pytest.mark.unit
     def test_when_reading_from_postgres_with_env_as_cloud_get_table_columns_returns_valid_list_of_columns_for_a_model(self, expected_columns):
         # Given
@@ -27,6 +42,7 @@ class TestPostgresIO:
 
         # When
         columns = ReadPostgresIO(source_config=pg_cloud_config)._get_table_columns(ERModel)  # pylint: disable=protected-access
+
         # Then
         assert columns == expected_columns
 
