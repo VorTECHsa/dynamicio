@@ -382,12 +382,12 @@ class WithS3File:
         return wr.s3.read_parquet(path=s3_path, columns=(list(schema.columns.keys())), **kwargs)
 
     @staticmethod
-    @utils.allow_options(wr.s3.read_csv)
+    @utils.allow_options(utils.args_of(wr.s3.read_csv, pd.read_csv))
     def _read_s3_csv_file(s3_path: str, schema: DataframeSchema, **kwargs) -> pd.DataFrame:
         return wr.s3.read_csv(path=s3_path, usecols=(list(schema.columns.keys())), **kwargs)
 
     @staticmethod
-    @utils.allow_options(wr.s3.read_json)
+    @utils.allow_options(utils.args_of(wr.s3.read_json, pd.read_json))
     def _read_s3_json_file(s3_path: str, schema: DataframeSchema, **kwargs) -> pd.DataFrame:
         df = wr.s3.read_json(path=s3_path, **kwargs)
         return df[list(schema.columns.keys())]
@@ -428,12 +428,12 @@ class WithS3File:
         wr.s3.to_parquet(df=df, path=s3_path, dataset=True, **kwargs)
 
     @staticmethod
-    @utils.allow_options(wr.s3.to_csv)
+    @utils.allow_options(utils.args_of(wr.s3.to_csv, pd.DataFrame.to_csv))
     def _write_s3_csv_file(df: pd.DataFrame, s3_path: str, **kwargs):
         wr.s3.to_csv(df=df, path=s3_path, index=False, **kwargs)
 
     @staticmethod
-    @utils.allow_options(wr.s3.to_json)
+    @utils.allow_options(utils.args_of(wr.s3.to_json, pd.DataFrame.to_json))
     def _write_s3_json_file(df: pd.DataFrame, s3_path: str, **kwargs):
         wr.s3.to_json(df=df, path=s3_path, orient="records", lines=True, **kwargs)
 

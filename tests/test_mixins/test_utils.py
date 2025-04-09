@@ -5,6 +5,7 @@ from typing import Any
 
 import pytest
 
+# Application Imports
 from dynamicio.config import IOConfig
 from dynamicio.mixins.utils import allow_options, args_of, get_file_type_value, get_string_template_field_names, resolve_template
 from tests import constants
@@ -156,6 +157,30 @@ class TestAllowedOptions:
 
         # Then
         assert expected_s3_csv_df.equals(s3_csv_df)
+
+    def test_args_of_combines_args_from_multiple_functions(self):
+        # Given
+        def a(_: int):
+            pass
+
+        def b(__: str):
+            pass
+
+        # When/Then
+        assert args_of(a, b) == {"_", "__"}
+
+    def test_invalid_options_emit_warning_log(self, caplog):
+        # Given
+        @allow_options(["a", "b"])
+        def method(**_):
+            pass
+
+        # When
+        with caplog.at_level("WARNING"):
+            method(a=1, b=2, x="invalid")
+
+        # Then
+        assert "Options {'x': 'invalid'} were not used" in caplog.text
 
 
 class DummyFileType(str, Enum):

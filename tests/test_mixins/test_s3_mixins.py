@@ -15,7 +15,7 @@ import dynamicio.mixins.with_local
 import dynamicio.mixins.with_s3
 from dynamicio.config import IOConfig
 from tests import constants
-from tests.mocking.io import ReadS3CsvIO, ReadS3HdfIO, ReadS3JsonIO, ReadS3ParquetIO, ReadS3ParquetWEmptyFilesIO, ReadS3ParquetWithLessColumnsIO, TemplatedFile, WriteS3IO
+from tests.mocking.io import ReadS3CsvIO, ReadS3HdfIO, ReadS3IO, ReadS3JsonIO, ReadS3ParquetIO, ReadS3ParquetWEmptyFilesIO, ReadS3ParquetWithLessColumnsIO, TemplatedFile, WriteS3IO
 
 
 class TestS3FileIO:
@@ -344,7 +344,112 @@ class TestS3FileIO:
         mock_upload.assert_called()
 
 
+class TestAllowedArgsAreConfiguredCorrectlyForWithS3File:
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "source_key, patch_target, input_options, expected_kwargs",
+        [
+            ("READ_FROM_S3_PARQUET", "read_parquet", {"ignore_empty": True, "invalid_opt": True}, {"ignore_empty": True}),
+            ("READ_FROM_S3_CSV", "read_csv", {"compression": "gzip", "invalid_opt": 123}, {"compression": "gzip"}),
+            ("READ_FROM_S3_JSON", "read_json", {"invalid": "nope"}, {}),
+        ],
+    )
+    def test_wr_s3_readers_accept_only_valid_options(self, source_key, patch_target, input_options, expected_kwargs, expected_s3_csv_df):
+        config = IOConfig(
+            path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml"),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key=source_key)
+
+        with patch.object(dynamicio.mixins.with_s3.wr.s3, patch_target, return_value=expected_s3_csv_df) as mock_reader:
+            ReadS3IO(source_config=config, **input_options).read()
+
+        call_kwargs = mock_reader.call_args.kwargs
+        for k, v in expected_kwargs.items():
+            assert call_kwargs[k] == v
+        assert all(k not in call_kwargs for k in input_options if k not in expected_kwargs)
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "source_key, patch_target, input_options, expected_options",
+        [
+            ("WRITE_TO_S3_PARQUET", "to_parquet", {"compression": "snappy", "invalid_opt": True}, {"compression": "snappy", "dataset": True}),
+            ("WRITE_TO_S3_CSV", "to_csv", {"compression": "gzip", "invalid_opt": 123}, {"compression": "gzip", "index": False}),
+            ("WRITE_TO_S3_JSON", "to_json", {"invalid": "nope"}, {}),
+        ],
+    )
+    def test_wr_s3_writers_accept_only_valid_options(self, source_key, patch_target, input_options, expected_options):
+        df = pd.DataFrame({"col_1": [1, 2], "col_2": ["a", "b"]})
+        config = IOConfig(
+            path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml"),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key=source_key)
+
+        with patch.object(dynamicio.mixins.with_s3.wr.s3, patch_target) as mock_writer:
+            WriteS3IO(source_config=config, **input_options).write(df)
+
+        call_kwargs = mock_writer.call_args.kwargs
+        for k, v in expected_options.items():
+            assert call_kwargs[k] == v
+        assert all(k not in call_kwargs for k in input_options if k not in expected_options)
+
+    # TODO: Fix these last two tests
+    # @pytest.mark.unit
+    # def test_hdf_reader_accepts_only_valid_options(self, expected_s3_hdf_file_path):
+    #     # Given
+    #     config = IOConfig(
+    #         path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml"),
+    #         env_identifier="CLOUD",
+    #         dynamic_vars=constants,
+    #     ).get(source_key="READ_FROM_S3_HDF")
+    #
+    #     def mock_download_fobj(_, __, fobj):
+    #         with open(expected_s3_hdf_file_path, "rb") as fin:
+    #             fobj.write(fin.read())
+    #
+    #     mock_boto3 = MagicMock()
+    #     mock_boto3.download_fileobj.side_effect = mock_download_fobj
+    #
+    #     with patch("dynamicio.mixins.with_s3.boto3.client", return_value=mock_boto3):
+    #         with patch("dynamicio.mixins.with_s3.pd.read_hdf") as mock_read_hdf:
+    #             mock_read_hdf.return_value = pd.DataFrame({"id": [1, 2]})
+    #
+    #             # When
+    #             ReadS3HdfIO(source_config=config, invalid_opt=True, start=0).read()
+    #
+    #     # Then
+    #     call_kwargs = mock_read_hdf.call_args.kwargs
+    #     assert "start" in call_kwargs
+    #     assert "invalid_opt" not in call_kwargs
+    #
+    # @pytest.mark.unit
+    # def test_hdf_writer_accepts_only_valid_options(self):
+    #     # Given
+    #     df = pd.DataFrame({"id": [1, 2], "foo": ["x", "y"]})
+    #     config = IOConfig(
+    #         path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml"),
+    #         env_identifier="CLOUD",
+    #         dynamic_vars=constants,
+    #     ).get(source_key="WRITE_TO_S3_HDF")
+    #
+    #     mock_boto3 = MagicMock()
+    #     with patch("dynamicio.mixins.with_s3.boto3.client", return_value=mock_boto3):
+    #         with patch("dynamicio.mixins.with_s3.HdfIO.save") as mock_save:
+    #             mock_save.return_value = None
+    #
+    #             # When
+    #             WriteS3IO(source_config=config, key="my_key", invalid_opt="nope").write(df)
+    #
+    #     # Then
+    #     call_kwargs = mock_save.call_args.kwargs["options"]
+    #     assert call_kwargs.get("key") == "my_key"
+    #     assert "invalid_opt" not in call_kwargs
+
+
 class TestS3PathPrefixIO:
+
     @pytest.mark.unit
     def test_error_is_raised_if_path_prefix_missing_from_config(self, tmp_path):
         tmp_yaml = tmp_path / "test.yaml"

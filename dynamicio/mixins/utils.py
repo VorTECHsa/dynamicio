@@ -1,65 +1,62 @@
 """Mixin utility functions."""
 
-# pylint: disable=no-member, protected-access, too-few-public-methods
-
 import inspect
 import string
 from contextlib import contextmanager
 from enum import Enum
 from functools import wraps
-from types import FunctionType, MethodType
-from typing import Any, Collection, Iterable, Mapping, MutableMapping, Optional, Union
+from typing import Any, Callable, Collection, Iterable, Mapping, MutableMapping, Optional, Union
 
 from magic_logger import logger
 
 
-def allow_options(options: Union[Iterable, FunctionType, MethodType]):
-    """Validate **options for a decorated reader function.
+def allow_options(options: Union[Iterable[str], Callable]):
+    """Decorator to filter **kwargs passed to a function, allowing only valid ones.
 
     Args:
-        options: A set of valid options for a reader (e.g. `pandas.read_parquet` or `pandas.read_csv`)
+        options: A list of valid options or a callable that returns a list of valid options.
 
     Returns:
-        read_with_valid_options: The input function called with modified options.
+        Callable: A decorator that filters **kwargs passed to the function.
     """
 
     def _filter_out_irrelevant_options(kwargs: Mapping, valid_options: Iterable):
         filtered_options = {}
         invalid_options = {}
-        for key_arg in kwargs.keys():
-            if key_arg in valid_options:
-                filtered_options[key_arg] = kwargs[key_arg]
+        for key, val in kwargs.items():
+            if key in valid_options:
+                filtered_options[key] = val
             else:
-                invalid_options[key_arg] = kwargs[key_arg]
-        if len(invalid_options) > 0:
-            logger.warning(
-                f"Options {invalid_options} were not used because they were not supported by the read or write method configured for this source. "
-                "Check if you expected any of those to have been used by the operation!"
-            )
+                invalid_options[key] = val
+        if invalid_options:
+            logger.warning(f"Options {invalid_options} were not used because they are not supported by this operation. " f"Review your kwargs!")
         return filtered_options
 
     def read_with_valid_options(func):
         @wraps(func)
-        def _(*args, **kwargs):
-            if callable(options):
-                return func(*args, **_filter_out_irrelevant_options(kwargs, args_of(options)))
-            return func(*args, **_filter_out_irrelevant_options(kwargs, options))
+        def wrapper(*args, **kwargs):
+            valid = args_of(options) if callable(options) else set(options)
+            return func(*args, **_filter_out_irrelevant_options(kwargs, valid))
 
-        return _
+        return wrapper
 
     return read_with_valid_options
 
 
-def args_of(func):
-    """Retrieve allowed options for a given function.
+def args_of(*funcs) -> set[str]:
+    """Retrieve a set of accepted keyword arguments from one or more functions.
 
     Args:
-        func: A function like, e.g., pd.read_csv
+        funcs: A list of functions to inspect.
 
     Returns:
-        A set of allowed options
+        set[str]: A set of accepted keyword arguments.
     """
-    return set(inspect.signature(func).parameters.keys())
+    allowed_args = set()
+    for func in funcs:
+        sig = inspect.signature(func)
+        allowed_args.update(sig.parameters.keys())
+    return allowed_args
 
 
 def get_string_template_field_names(s: str) -> Collection[str]:  # pylint: disable=C0103
@@ -68,13 +65,12 @@ def get_string_template_field_names(s: str) -> Collection[str]:  # pylint: disab
      If `s` is not a string template, the returned `Collection` is empty.
 
     Args:
-        s:
+        s: A string which is either a template, e.g. /path/to/file/{replace_me}.h5 or just a path /path/to/file/dont_replace_me.h5
 
     Returns:
         Collection[str]
 
     Example:
-
         >>> get_string_template_field_names("abc{def}{efg}")
         ["def", "efg"]
         >>> get_string_template_field_names("{0}-{1}")
@@ -103,8 +99,7 @@ def resolve_template(path: str, options: MutableMapping[str, Any]) -> str:  # py
         str: Returns a static path replaced with the value in the options mapping.
 
     Raises:
-        ValueError: if any template fields in s are not named using valid Python identifiers
-        ValueError: if a given template field cannot be resolved in `options`
+        ValueError: if any template fields in s are not named using valid Python identifiers or if a given template field cannot be resolved in `options`
     """
     fields = get_string_template_field_names(path)
 
@@ -144,5 +139,12 @@ def pickle_protocol(protocol: Optional[int]):
 
 
 def get_file_type_value(file_type: Union[str, Enum]) -> str:
-    """Get the value of the file type."""
+    """Get the value of the file type.
+
+    Args:
+        file_type: The file type, which can be a string or an Enum.
+
+    Returns:
+        str: The value of the file type.
+    """
     return file_type.value if isinstance(file_type, Enum) else file_type
