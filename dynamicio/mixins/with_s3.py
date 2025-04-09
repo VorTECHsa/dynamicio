@@ -1,7 +1,4 @@
-# pylint: disable=no-member, protected-access, too-few-public-methods
-
 """This module provides mixins that are providing S3 I/O support."""
-
 import dataclasses
 import io
 import os
@@ -9,13 +6,15 @@ import tempfile
 import urllib.parse
 import uuid
 from contextlib import contextmanager
-from typing import IO, Generator, List, Optional, Union  # noqa: I101
+from typing import IO, Generator, List, Optional, Union, Dict
+from urllib.parse import urlparse
 
-import boto3  # type: ignore
+import awswrangler as wr
+import boto3
 import pandas as pd
-import s3transfer.futures  # type: ignore
-import tables  # type: ignore
-from awscli.clidriver import create_clidriver  # type: ignore
+import s3transfer.futures
+import tables
+from awscli.clidriver import create_clidriver
 from magic_logger import logger
 from pandas import DataFrame, Series
 
@@ -49,32 +48,83 @@ class InMemStore(pd.io.pytables.HDFStore):
 
 
 class HdfIO:
-    """Class providing stream support for HDF tables."""
+    """
+    Provides in-memory stream support for reading and writing HDF5 tables.
+
+    Uses PyTables to create in-memory file handles, enabling read/write
+    operations on HDF content without persisting to disk.
+    """
 
     @contextmanager
     def create_file(self, label: str, mode: str, data: Optional[bytes] = None) -> Generator[tables.File, None, None]:
-        """Create an in-memory pytables table."""
-        extra_kw = {}
+        """
+        Create an in-memory HDF5 file using PyTables with optional preloaded data.
+
+        Args:
+            label (str): A label used for naming the temporary in-memory file.
+            mode (str): File access mode ('r' for read, 'w' for write).
+            data (Optional[bytes]): Raw file data to preload when opening for reading.
+
+        Yields:
+            tables.File: A PyTables file object representing the HDF5 structure.
+        """
+        extra_kw = {"driver_core_backing_store": 0}
         if data:
             extra_kw["driver_core_image"] = data
-        file_handle = tables.File(f"{label}_{uuid.uuid4()}.h5", mode, title=label, root_uep="/", filters=None, driver="H5FD_CORE", driver_core_backing_store=0, **extra_kw)
+
+        file_name = f"{label}_{uuid.uuid4()}.h5"
+        file_handle = tables.File(
+            file_name,
+            mode,
+            title=label,
+            root_uep="/",
+            filters=None,
+            driver="H5FD_CORE",
+            **extra_kw
+        )
+
         try:
             yield file_handle
         finally:
             file_handle.close()
 
-    def load(self, fobj: IO[bytes], label: str = "unknown_file.h5") -> Union[DataFrame, Series]:
-        """Load the dataframe from an file-like object."""
-        with self.create_file(label, mode="r", data=fobj.read()) as file_handle:
-            return pd.read_hdf(InMemStore(label, file_handle))
+    def load(self, fobj: IO[bytes], label: str = "unknown_file.h5", options: Optional[Dict] = None) -> Union[DataFrame, Series]:
+        """
+        Load a DataFrame or Series from an in-memory HDF5 file-like object.
 
-    def save(self, df: DataFrame, fobj: IO[bytes], label: str = "unknown_file.h5", options: Optional[dict] = None):
-        """Load the dataframe to a file-like object."""
-        if not options:
-            options = {}
-        with self.create_file(label, mode="w", data=fobj.read()) as file_handle:
+        Args:
+            fobj (IO[bytes]): A file-like object containing the HDF5 data.
+            label (str): A logical name for the file (used in metadata).
+            options (Optional[dict]): Optional keyword arguments to pass to `pd.read_hdf`.
+
+        Returns:
+            Union[DataFrame, Series]: The object read from the HDF file.
+        """
+        options = options or {}
+
+        with self.create_file(label, mode="r", data=fobj.read()) as file_handle:
+            return pd.read_hdf(InMemStore(label, file_handle), **options)
+
+    def save(self, df: DataFrame, fobj: IO[bytes], label: str = "unknown_file.h5", options: Optional[Dict] = None) -> None:
+        """
+        Save a DataFrame to a file-like object as an HDF5 structure.
+
+        Args:
+            df (DataFrame): The DataFrame to store.
+            fobj (IO[bytes]): The target file-like object.
+            label (str): A logical name used for the in-memory file.
+            options (Optional[dict]): Optional keyword arguments to pass to `HDFStore.put`.
+                                      You can also include a `key` (defaults to 'df').
+
+        Notes:
+            Data is first written to an in-memory PyTables structure, then streamed into the provided file-like object.
+        """
+        options = options or {}
+        key = options.pop("key", "df")
+
+        with self.create_file(label, mode="w") as file_handle:
             store = InMemStore(path=label, table=file_handle, mode="w")
-            store.put(key="df", value=df, **options)
+            store.put(key=key, value=df, **options)
             fobj.write(file_handle.get_file_image())
 
 
@@ -218,7 +268,7 @@ class WithS3PathPrefix(with_local.WithLocal):
                 return self._read_parquet_file(full_path, self.schema, **self.options)
             if file_type == "hdf":
                 dfs: List[DataFrame] = []
-                for fobj in self._iter_s3_files(full_path, file_ext=".h5", max_memory_use=1024**3):  # 1 gib
+                for fobj in self._iter_s3_files(full_path, file_ext=".h5", max_memory_use=1024 ** 3):  # 1 gib
                     dfs.append(HdfIO().load(fobj))
                 df = pd.concat(dfs, ignore_index=True)
                 columns = [column for column in df.columns.to_list() if column in self.schema.columns.keys()]
@@ -304,79 +354,15 @@ class WithS3PathPrefix(with_local.WithLocal):
                 yield handle.fobj
 
 
-class WithS3File(with_local.WithLocal):
-    """Handles I/O operations for AWS S3.
+class WithS3File:
+    """Handles I/O operations for AWS S3 using in-memory streaming for CSV, JSON, Parquet, and HDF files.
 
-    All files are persisted to disk first using boto3 as this has proven to be faster than reading them into memory.
-    Note that reading things into memory is available for csv, json and parquet types only. Unfortunately, until support
-    for generic buffer is added to read_hdf, we need to download and persists the file to disk first anyway.
-
-    Options:
-        no_disk_space: If `True`, then s3fs + fsspec will be used to read data directly into memory.
+    For CSV, JSON, and Parquet, AWS Data Wrangler is used for efficient direct reads from S3.
+    For HDF files, content is streamed into memory using boto3 and then loaded via PyTables.
     """
 
-    sources_config: S3DataEnvironment  # type: ignore
+    sources_config: S3DataEnvironment
     schema: DataframeSchema
-
-    boto3_client = boto3.client("s3")
-
-    @contextmanager
-    def _s3_named_file_reader(self, s3_bucket: str, s3_key: str) -> Generator:
-        """Contextmanager to abstract reading different file types in S3.
-
-        This implementation saves the downloaded data to a temporary file.
-
-        Args:
-            s3_bucket: The S3 bucket from where to read the file.
-            s3_key: The file-path to the target file to be read.
-
-        Returns:
-            The local file path from where the file can be read, once it has been downloaded there by the boto3.client.
-
-        """
-        with tempfile.NamedTemporaryFile("wb") as target_file:
-            # Download the file from S3
-            self.boto3_client.download_fileobj(s3_bucket, s3_key, target_file)
-            # Yield local file path to body of `with` statement
-            target_file.flush()
-            yield target_file
-
-    @contextmanager
-    def _s3_reader(self, s3_bucket: str, s3_key: str) -> Generator[io.BytesIO, None, None]:
-        """Contextmanager to abstract reading different file types in S3.
-
-         This implementation only retains data in-memory, avoiding creating any temp files.
-
-        Args:
-            s3_bucket: The S3 bucket from where to read the file.
-            s3_key: The file-path to the target file to be read.
-
-        Returns:
-            The local file path from where the file can be read, once it has been downloaded there by the boto3.client.
-
-        """
-        fobj = io.BytesIO()
-        # Download the file from S3
-        self.boto3_client.download_fileobj(s3_bucket, s3_key, fobj)
-        # Yield the buffer
-        fobj.seek(0)
-        yield fobj
-
-    @contextmanager
-    def _s3_writer(self, s3_bucket: str, s3_key: str) -> Generator[IO[bytes], None, None]:
-        """Contextmanager to abstract loading different file types to S3.
-
-        Args:
-            s3_bucket: The S3 bucket to upload the file to.
-            s3_key: The file-path where the target file should be uploaded to.
-
-        Returns:
-            The local file path where to actually write the file, to be read and uploaded by boto3.client.
-        """
-        fobj = io.BytesIO()
-        yield fobj
-        fobj.seek(0)
-        self.boto3_client.upload_fileobj(fobj, s3_bucket, s3_key, ExtraArgs={"ACL": "bucket-owner-full-control"})
 
     def _read_from_s3_file(self) -> pd.DataFrame:
         """Read a file from an S3 bucket as a `DataFrame`.
@@ -393,50 +379,88 @@ class WithS3File(with_local.WithLocal):
         """
         s3_config = self.sources_config.s3
         file_type = get_file_type_value(s3_config.file_type)
-        file_path = utils.resolve_template(s3_config.file_path, self.options)
-        bucket = s3_config.bucket
+        s3_path = f"s3://{s3_config.bucket}/{utils.resolve_template(s3_config.file_path, self.options)}"
 
-        logger.info(f"[s3] Started downloading: s3://{s3_config.bucket}/{file_path}")
-        if self.options.pop("no_disk_space", None):
-            no_disk_space_rv = None
-            if file_type in ["csv", "json", "parquet"]:
-                no_disk_space_rv = getattr(self, f"_read_{file_type}_file")(f"s3://{s3_config.bucket}/{file_path}", self.schema, **self.options)  # type: ignore
-            elif file_type == "hdf":
-                with self._s3_reader(s3_bucket=bucket, s3_key=file_path) as fobj:  # type: ignore
-                    no_disk_space_rv = HdfIO().load(fobj)  # type: ignore
-            else:
-                raise NotImplementedError(f"Unsupported file type {file_type!r}.")
-            if no_disk_space_rv is not None:
-                return no_disk_space_rv
-        with self._s3_named_file_reader(s3_bucket=bucket, s3_key=file_path) as target_file:  # type: ignore
-            return getattr(self, f"_read_{file_type}_file")(target_file.name, self.schema, **self.options)  # type: ignore
+        logger.info(f"[s3] Started downloading: {s3_path}")
+
+        return getattr(self, f"_read_{file_type}_file")(s3_path, self.schema, **self.options)
+
+    @staticmethod
+    @utils.allow_options(wr.s3.read_parquet)
+    def _read_parquet_file(s3_path: str, schema: DataframeSchema, **kwargs) -> pd.DataFrame:
+        columns = list(schema.columns.keys())
+        return wr.s3.read_parquet(path=s3_path, columns=columns, **kwargs)
+
+    @staticmethod
+    @utils.allow_options(wr.s3.read_csv)
+    def _read_csv_file(s3_path: str, schema: DataframeSchema, **kwargs) -> pd.DataFrame:
+        columns = list(schema.columns.keys())
+        return wr.s3.read_csv(path=s3_path, usecols=columns, **kwargs)
+
+    @staticmethod
+    @utils.allow_options(wr.s3.read_json)
+    def _read_json_file(s3_path: str, schema: DataframeSchema, **kwargs) -> pd.DataFrame:
+        df = wr.s3.read_json(path=s3_path, **kwargs)
+        return df[list(schema.columns.keys())]
+
+    @staticmethod
+    @utils.allow_options(pd.read_hdf)
+    def _read_hdf_file(s3_path: str, schema: DataframeSchema, **kwargs) -> pd.DataFrame:
+        parsed = urlparse(s3_path)
+        bucket = parsed.netloc
+        file_path = parsed.path.lstrip("/")
+
+        fobj = io.BytesIO()  # Stream file directly into memory (no disk), unlike tempfile or open(...) which write to disk
+        boto3.client("s3").download_fileobj(bucket, file_path, fobj)
+        fobj.seek(0)
+
+        df = HdfIO().load(fobj, options=kwargs)
+
+        return df[list(schema.columns.keys())] if schema and schema.columns else df
 
     def _write_to_s3_file(self, df: pd.DataFrame):
-        """Write a dataframe to s3 based on the {file_type} of the config_io configuration.
+        """Write a DataFrame to S3 based on the config's file type and path.
 
-        The configuration object is expected to have two keys:
-
-            - `file_path`
-            - `file_type`
-
-        To actually write the file, a method is dynamically invoked by name, using "_write_{file_type}_file".
-
-        Args:
-            df: The dataframe to be written out
+        The appropriate writer function is dynamically resolved via the file type:
+        `_write_parquet_file`, `_write_csv_file`, `_write_json_file`, or `_write_hdf_file`.
         """
         s3_config = self.sources_config.s3
-        bucket = s3_config.bucket
-        file_path = utils.resolve_template(s3_config.file_path, self.options)
         file_type = get_file_type_value(s3_config.file_type)
+        s3_path = f"s3://{s3_config.bucket}/{utils.resolve_template(s3_config.file_path, self.options)}"
 
-        logger.info(f"[s3] Started uploading: s3://{bucket}/{file_path}")
-        if file_type in ["csv", "json", "parquet"]:
-            getattr(self, f"_write_{file_type}_file")(df, f"s3://{bucket}/{file_path}", **self.options)  # type: ignore
-        elif file_type == "hdf":
-            hdf_options = dict(self.options)
-            pickle_protocol = hdf_options.pop("pickle_protocol", None)
-            with self._s3_writer(s3_bucket=s3_config.bucket, s3_key=file_path) as target_file, utils.pickle_protocol(protocol=pickle_protocol):
-                HdfIO().save(df, target_file, hdf_options)  # type: ignore
-        else:
-            raise ValueError(f"File type: {file_type} not supported!")
-        logger.info(f"[s3] Finished uploading: s3://{bucket}/{file_path}")
+        logger.info(f"[s3] Started uploading: {s3_path}")
+        getattr(self, f"_write_{file_type}_file")(df, s3_path, **self.options)
+        logger.info(f"[s3] Finished uploading: {s3_path}")
+
+    @staticmethod
+    @utils.allow_options(wr.s3.to_parquet)
+    def _write_parquet_file(df: pd.DataFrame, s3_path: str, **kwargs):
+        wr.s3.to_parquet(df=df, path=s3_path, dataset=True, **kwargs)
+
+    @staticmethod
+    @utils.allow_options(wr.s3.to_csv)
+    def _write_csv_file(df: pd.DataFrame, s3_path: str, **kwargs):
+        wr.s3.to_csv(df=df, path=s3_path, index=False, **kwargs)
+
+    @staticmethod
+    @utils.allow_options(wr.s3.to_json)
+    def _write_json_file(df: pd.DataFrame, s3_path: str, **kwargs):
+        wr.s3.to_json(df=df, path=s3_path, orient="records", lines=True, **kwargs)
+
+    @staticmethod
+    @utils.allow_options(pd.HDFStore.put)
+    def _write_hdf_file(df: pd.DataFrame, s3_path: str, **kwargs):
+        """Write a DataFrame to S3 as an HDF5 file, using in-memory streaming."""
+        parsed = urlparse(s3_path)
+        bucket = parsed.netloc
+        key = parsed.path.lstrip("/")
+
+        # Separate protocol and HDF put options
+        pickle_protocol = kwargs.pop("pickle_protocol", None)
+
+        fobj = io.BytesIO()
+        with utils.pickle_protocol(protocol=pickle_protocol):
+            HdfIO().save(df, fobj, options=kwargs)
+
+        fobj.seek(0)
+        boto3.client("s3").upload_fileobj(fobj, bucket, key, ExtraArgs={"ACL": "bucket-owner-full-control"})
