@@ -20,14 +20,13 @@ from tests.mocking.io import (
     ReadS3HdfIO,
     ReadS3IO,
     ReadS3JsonIO,
-    ReadS3JsonOrientIndexIO,
+    ReadS3JsonOrientRecordsAltIO,
     ReadS3JsonOrientRecordsIO,
     ReadS3ParquetIO,
     ReadS3ParquetWEmptyFilesIO,
     ReadS3ParquetWithLessColumnsIO,
     TemplatedFile,
     WriteS3IO,
-    WriteS3JsonOrientIndexIO,
     WriteS3JsonOrientRecordsIO,
 )
 
@@ -359,8 +358,6 @@ class TestS3FileIO:
 
 
 class TestAllowedArgsAreConfiguredCorrectlyForWithS3File:
-    # How wrangler will read a json file in using orient=records by defaul
-    raw_wrangler_json_read_df = pd.DataFrame.from_dict({"data": {"release": "feb09", "timestamp": 1614268643313}}, orient="index").T
 
     @pytest.mark.unit
     @pytest.mark.parametrize(
@@ -439,23 +436,31 @@ class TestAllowedArgsAreConfiguredCorrectlyForWithS3File:
             # ✅ Supported: records
             (
                 {"orient": "records"},
-                raw_wrangler_json_read_df,
-                raw_wrangler_json_read_df,
+                pd.DataFrame.from_dict({"data": {"release": "feb09", "timestamp": 1614268643313}}, orient="index").T,  # raw_wrangler_json_read_df
+                pd.DataFrame.from_dict({"data": {"release": "feb09", "timestamp": 1614268643313}}, orient="index").T,
                 False,
                 ReadS3JsonOrientRecordsIO,
             ),
-            # ✅ Supported: index (converted internally)
+            # ✅ Supported: Alternative records
+            (
+                {"orient": "records"},
+                pd.DataFrame([{"release": "feb09", "timestamp": 1614268643313}]),
+                pd.DataFrame([{"release": "feb09", "timestamp": 1614268643313}]),
+                False,
+                ReadS3JsonOrientRecordsAltIO,
+            ),
+            # ❌ Unsupported: index (should raise)
             (
                 {"orient": "index"},
-                raw_wrangler_json_read_df,
-                raw_wrangler_json_read_df.T,
-                False,
-                ReadS3JsonOrientIndexIO,
+                pd.DataFrame.from_dict({"data": {"release": "feb09", "timestamp": 1614268643313}}, orient="index").T,
+                None,
+                True,
+                ReadS3JsonOrientRecordsIO,
             ),
             # ❌ Unsupported: columns (should raise)
             (
                 {"orient": "columns"},
-                raw_wrangler_json_read_df,
+                pd.DataFrame.from_dict({"data": {"release": "feb09", "timestamp": 1614268643313}}, orient="index").T,
                 None,
                 True,
                 ReadS3JsonOrientRecordsIO,
@@ -463,7 +468,7 @@ class TestAllowedArgsAreConfiguredCorrectlyForWithS3File:
             # ❌ Unsupported: values (should raise)
             (
                 {"orient": "values"},
-                raw_wrangler_json_read_df,
+                pd.DataFrame.from_dict({"data": {"release": "feb09", "timestamp": 1614268643313}}, orient="index").T,
                 None,
                 True,
                 ReadS3JsonOrientRecordsIO,
@@ -471,7 +476,7 @@ class TestAllowedArgsAreConfiguredCorrectlyForWithS3File:
             # ❌ Unsupported: split (should raise)
             (
                 {"orient": "split"},
-                raw_wrangler_json_read_df,
+                pd.DataFrame.from_dict({"data": {"release": "feb09", "timestamp": 1614268643313}}, orient="index").T,
                 None,
                 True,
                 ReadS3JsonOrientRecordsIO,
@@ -504,16 +509,14 @@ class TestAllowedArgsAreConfiguredCorrectlyForWithS3File:
         [
             # ✅ Supported: records
             ({"orient": "records", "lines": True}, WriteS3JsonOrientRecordsIO, False, None),
-            # ✅ Supported: index
-            ({"orient": "index", "lines": True}, WriteS3JsonOrientIndexIO, False, None),
+            # ✅ Supported: records with overridden lines
+            ({"orient": "records", "lines": False}, WriteS3JsonOrientRecordsIO, False, "[s3-json] Overriding lines=False with lines=True for JSON serialization."),
+            # ❌ Unsupported: index
+            ({"orient": "index", "lines": True}, WriteS3JsonOrientRecordsIO, True, None),
             # ❌ Unsupported: values
             ({"orient": "values", "lines": True}, WriteS3JsonOrientRecordsIO, True, None),
             # ❌ Unsupported: split
             ({"orient": "split", "lines": True}, WriteS3JsonOrientRecordsIO, True, None),
-            # ✅ Supported: records with overridden lines
-            ({"orient": "records", "lines": False}, WriteS3JsonOrientRecordsIO, False, "[s3-json] Overriding lines=False with lines=True for JSON serialization."),
-            # ✅ Supported: index with overridden lines
-            ({"orient": "index", "lines": False}, WriteS3JsonOrientIndexIO, False, "[s3-json] Overriding lines=False with lines=True for JSON serialization."),
         ],
     )
     def test_json_writer_enforces_orient_restrictions(self, input_options, io_class, should_raise, expected_warning, caplog):

@@ -392,17 +392,13 @@ class WithS3File:
         orient = kwargs.pop("orient", None)
         lines = kwargs.pop("lines", None)
 
-        if orient and orient != "records" and orient != "index":
-            raise ValueError(f"[s3-json] Unsupported orient='{orient}' ignored. Only 'records' and 'index' are supported.")
+        if orient is not None and orient != "records":
+            raise ValueError(f"[s3-json] Unsupported orient='{orient}'. Only 'records' orientation is supported.")
 
         if lines is not None and lines is not True:
             logger.warning("[s3-json-read] Only 'lines=True' is supported for S3 reads. Ignoring lines=%s.", lines)
 
         df = wr.s3.read_json(path=s3_path, orient="records", lines=True, **kwargs)
-
-        if orient == "index":
-            df = df.T
-
         return df[[col for col in df.columns if col in schema.columns]]
 
     @staticmethod
@@ -451,11 +447,8 @@ class WithS3File:
         user_orient = kwargs.pop("orient", None)
         user_lines = kwargs.pop("lines", None)
 
-        if user_orient and user_orient != "records" and user_orient != "index":
-            raise ValueError(f"[s3-json] Unsupported orient='{user_orient}' ignored. Only 'records' and 'index' are supported.")
-
-        if user_orient == "index":
-            df = df.T
+        if user_orient is not None and user_orient != "records":
+            raise ValueError(f"[s3-json] Unsupported orient='{user_orient}'. Only 'records' orientation is supported.")
 
         if user_lines is not None and user_lines is not True:
             logger.warning(f"[s3-json] Overriding lines={user_lines} with lines=True for JSON serialization.")
