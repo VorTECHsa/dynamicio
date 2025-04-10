@@ -389,7 +389,16 @@ class WithS3File:
     @staticmethod
     @utils.allow_options(utils.args_of(wr.s3.read_json, pd.read_json))
     def _read_s3_json_file(s3_path: str, schema: DataframeSchema, **kwargs) -> pd.DataFrame:
-        df = wr.s3.read_json(path=s3_path, **kwargs)
+        user_orient = kwargs.pop("orient", None)
+        user_lines = kwargs.pop("lines", None)
+
+        if user_orient and user_orient != "records":
+            logger.warning(f"[s3-json] Ignoring orient='{user_orient}'. wr.s3.read_json only supports orient='records'.")
+        if user_lines is not None and user_lines is not True:
+            logger.warning(f"[s3-json] Ignoring lines={user_lines}. wr.s3.read_json only supports lines=True.")
+
+        df = wr.s3.read_json(path=s3_path, orient="records", lines=True, **kwargs)
+
         return df[list(schema.columns.keys())]
 
     @staticmethod
@@ -435,7 +444,15 @@ class WithS3File:
     @staticmethod
     @utils.allow_options(utils.args_of(wr.s3.to_json, pd.DataFrame.to_json))
     def _write_s3_json_file(df: pd.DataFrame, s3_path: str, **kwargs):
-        wr.s3.to_json(df=df, path=s3_path, orient="records", lines=True, **kwargs)
+        user_orient = kwargs.pop("orient", None)
+        user_lines = kwargs.pop("lines", None)
+
+        if user_orient and user_orient != "records":
+            logger.warning(f"[s3-json] Overriding unsupported orient='{user_orient}' with 'records' for JSON serialization.")
+        if user_lines is not None and user_lines is not True:
+            logger.warning(f"[s3-json] Overriding lines={user_lines} with lines=True for JSON serialization.")
+
+        wr.s3.to_json(df=df, path=s3_path, orient="records", lines=True, index=False, **kwargs)
 
     @staticmethod
     @utils.allow_options(pd.HDFStore.put)

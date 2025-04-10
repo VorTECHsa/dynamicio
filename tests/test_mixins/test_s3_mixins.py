@@ -351,20 +351,29 @@ class TestAllowedArgsAreConfiguredCorrectlyForWithS3File:
         "source_key, patch_target, input_options, expected_kwargs",
         [
             ("READ_FROM_S3_PARQUET", "read_parquet", {"ignore_empty": True, "invalid_opt": True}, {"ignore_empty": True}),
-            ("READ_FROM_S3_CSV", "read_csv", {"compression": "gzip", "invalid_opt": 123}, {"compression": "gzip"}),
-            ("READ_FROM_S3_JSON", "read_json", {"invalid": "nope"}, {}),
+            (
+                "READ_FROM_S3_CSV",
+                "read_csv",
+                {"compression": "gzip", "dataset": True, "skipinitialspace": True, "invalid_opt": 123},
+                {"compression": "gzip", "dataset": True, "skipinitialspace": True},
+            ),
+            ("READ_FROM_S3_JSON", "read_json", {"version_id": "1.0.1", "orient": "records", "invalid": "nope"}, {"version_id": "1.0.1", "orient": "records"}),
         ],
     )
     def test_wr_s3_readers_accept_only_valid_options(self, source_key, patch_target, input_options, expected_kwargs, expected_s3_csv_df):
+        # Given
+        # We provide options from a combination of kwargs from both aws-wrangler and pandas readers
         config = IOConfig(
             path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml"),
             env_identifier="CLOUD",
             dynamic_vars=constants,
         ).get(source_key=source_key)
 
+        # When
         with patch.object(dynamicio.mixins.with_s3.wr.s3, patch_target, return_value=expected_s3_csv_df) as mock_reader:
             ReadS3IO(source_config=config, **input_options).read()
 
+        # Then
         call_kwargs = mock_reader.call_args.kwargs
         for k, v in expected_kwargs.items():
             assert call_kwargs[k] == v
@@ -375,8 +384,13 @@ class TestAllowedArgsAreConfiguredCorrectlyForWithS3File:
         "source_key, patch_target, input_options, expected_options",
         [
             ("WRITE_TO_S3_PARQUET", "to_parquet", {"compression": "snappy", "invalid_opt": True}, {"compression": "snappy", "dataset": True}),
-            ("WRITE_TO_S3_CSV", "to_csv", {"compression": "gzip", "invalid_opt": 123}, {"compression": "gzip", "index": False}),
-            ("WRITE_TO_S3_JSON", "to_json", {"invalid": "nope"}, {}),
+            (
+                "WRITE_TO_S3_CSV",
+                "to_csv",
+                {"concurrent_partitioning": True, "compression": "gzip", "invalid_opt": 123},
+                {"concurrent_partitioning": True, "compression": "gzip", "index": False},
+            ),
+            ("WRITE_TO_S3_JSON", "to_json", {"mode": "overwrite", "date_format": "iso", "invalid": "nope"}, {"mode": "overwrite", "date_format": "iso"}),
         ],
     )
     def test_wr_s3_writers_accept_only_valid_options(self, source_key, patch_target, input_options, expected_options):
@@ -394,6 +408,56 @@ class TestAllowedArgsAreConfiguredCorrectlyForWithS3File:
         for k, v in expected_options.items():
             assert call_kwargs[k] == v
         assert all(k not in call_kwargs for k in input_options if k not in expected_options)
+
+    def test_json_writer_warns_on_invalid_orient_and_lines(self, caplog):
+        # Given
+        df = pd.DataFrame({"col_1": [1, 2], "col_2": ["a", "b"]})
+        config = IOConfig(
+            path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml"),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="WRITE_TO_S3_JSON")
+
+        input_options = {"orient": "columns", "lines": False}
+
+        # When
+        with patch("dynamicio.mixins.with_s3.wr.s3.to_json") as mock_to_json:
+            writer = WriteS3IO(source_config=config, **input_options)
+            writer.write(df)
+
+            # Then
+            call_kwargs = mock_to_json.call_args.kwargs
+            assert call_kwargs["orient"] == "records"
+            assert call_kwargs["lines"] is True
+
+        # And...
+        assert "Overriding unsupported orient='columns'" in caplog.text
+        assert "Overriding lines=False" in caplog.text
+
+    def test_json_reader_warns_on_invalid_orient_and_lines(self, caplog):
+        # Given
+        config = IOConfig(
+            path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml"),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_S3_JSON")
+
+        df_expected = pd.DataFrame({"id": [1, 2]})
+        input_options = {"orient": "split", "lines": False}
+
+        # When
+        with patch("dynamicio.mixins.with_s3.wr.s3.read_json", return_value=df_expected) as mock_reader:
+            reader = ReadS3IO(source_config=config, **input_options)
+            _ = reader.read()
+
+            # Then
+            call_kwargs = mock_reader.call_args.kwargs
+            assert call_kwargs["orient"] == "records"
+            assert call_kwargs["lines"] is True
+
+        # And...
+        assert "Ignoring orient='split'" in caplog.text
+        assert "Ignoring lines=False" in caplog.text
 
     # TODO: Fix these last two tests
     # @pytest.mark.unit
