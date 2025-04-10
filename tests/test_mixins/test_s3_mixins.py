@@ -359,6 +359,8 @@ class TestS3FileIO:
 
 
 class TestAllowedArgsAreConfiguredCorrectlyForWithS3File:
+    # How wrangler will read a json file in using orient=records by defaul
+    raw_wrangler_json_read_df = pd.DataFrame.from_dict({"data": {"release": "feb09", "timestamp": 1614268643313}}, orient="index").T
 
     @pytest.mark.unit
     @pytest.mark.parametrize(
@@ -427,43 +429,50 @@ class TestAllowedArgsAreConfiguredCorrectlyForWithS3File:
     @pytest.mark.parametrize(
         "input_options, raw_df_data, expected_df, raises_exception, io_class",
         [
+            # Sample Json Input:
+            # {
+            #   "data": {
+            #     "release": "feb09",
+            #     "timestamp": 1614268643313
+            #   }
+            # }
             # ✅ Supported: records
             (
                 {"orient": "records"},
-                pd.DataFrame([{"release": "feb09", "timestamp": 1614268643313}]),
-                pd.DataFrame([{"release": "feb09", "timestamp": 1614268643313}]),
+                raw_wrangler_json_read_df,
+                raw_wrangler_json_read_df,
                 False,
                 ReadS3JsonOrientRecordsIO,
             ),
             # ✅ Supported: index (converted internally)
             (
                 {"orient": "index"},
-                pd.DataFrame([{"release": "feb09", "timestamp": 1614268643313}]),
-                pd.DataFrame([{"release": "feb09", "timestamp": 1614268643313}]).set_index("release"),
+                raw_wrangler_json_read_df,
+                raw_wrangler_json_read_df.T,
                 False,
                 ReadS3JsonOrientIndexIO,
             ),
             # ❌ Unsupported: columns (should raise)
             (
                 {"orient": "columns"},
-                pd.DataFrame([{"release": "feb09", "timestamp": 1614268643313}]),
-                pd.DataFrame([{"release": "feb09", "timestamp": 1614268643313}]),
+                raw_wrangler_json_read_df,
+                None,
                 True,
                 ReadS3JsonOrientRecordsIO,
             ),
             # ❌ Unsupported: values (should raise)
             (
                 {"orient": "values"},
-                pd.DataFrame([{"release": "feb09", "timestamp": 1614268643313}]),
-                pd.DataFrame([{"release": "feb09", "timestamp": 1614268643313}]),
+                raw_wrangler_json_read_df,
+                None,
                 True,
                 ReadS3JsonOrientRecordsIO,
             ),
             # ❌ Unsupported: split (should raise)
             (
                 {"orient": "split"},
-                pd.DataFrame([{"release": "feb09", "timestamp": 1614268643313}]),
-                pd.DataFrame([{"release": "feb09", "timestamp": 1614268643313}]),
+                raw_wrangler_json_read_df,
+                None,
                 True,
                 ReadS3JsonOrientRecordsIO,
             ),

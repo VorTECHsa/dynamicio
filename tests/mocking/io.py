@@ -16,11 +16,11 @@ class ReadS3IO(UnifiedIO):
 
 
 class ReadS3JsonOrientIndexIO(UnifiedIO):
-    schema = {"timestamp": "int64"}
+    schema = {"release": "object", "timestamp": "int64"}
 
 
 class ReadS3JsonOrientRecordsIO(UnifiedIO):
-    schema = {"release": "object", "timestamp": "int64"}
+    schema = {"data": "float64"}
 
 
 class ReadMockS3CsvIO(UnifiedIO):

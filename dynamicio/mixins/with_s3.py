@@ -401,7 +401,7 @@ class WithS3File:
         df = wr.s3.read_json(path=s3_path, orient="records", lines=True, **kwargs)
 
         if orient == "index":
-            df = df.set_index(df.columns[0])
+            df = df.T
 
         return df[[col for col in df.columns if col in schema.columns]]
 
@@ -455,7 +455,7 @@ class WithS3File:
             raise ValueError(f"[s3-json] Unsupported orient='{user_orient}' ignored. Only 'records' and 'index' are supported.")
 
         if user_orient == "index":
-            df = df.set_index(df.columns[0])
+            df = df.T
 
         if user_lines is not None and user_lines is not True:
             logger.warning(f"[s3-json] Overriding lines={user_lines} with lines=True for JSON serialization.")
