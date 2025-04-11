@@ -1,4 +1,5 @@
 """Implements the dynamicio Command Line Interface (CLI)."""
+
 import argparse
 import glob
 import os
@@ -8,6 +9,7 @@ from typing import Mapping, MutableMapping, Optional, Sequence
 import pandas as pd  # type: ignore
 import yaml
 
+# Application Imports
 from dynamicio.errors import InvalidDatasetTypeError
 
 

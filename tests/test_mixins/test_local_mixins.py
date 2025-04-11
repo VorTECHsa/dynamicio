@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+# Application Imports
 import dynamicio
 from dynamicio.config import IOConfig
 from tests import constants
@@ -30,7 +31,7 @@ from tests.mocking.io import (
     WritePostgresIO,
     WriteS3CsvIO,
     WriteS3HdfIO,
-    WriteS3ParquetIO,
+    WriteS3IO,
 )
 from tests.mocking.models import ERModel
 
@@ -223,7 +224,7 @@ class TestLocalIO:
         ).get(source_key="READ_FROM_S3_JSON")
 
         # When
-        options = {"orient": "columns"}
+        options = {"orient": "records"}
         s3_json_df = ReadS3JsonIO(source_config=s3_json_local_config, **options).read()
 
         # Then
@@ -448,7 +449,7 @@ class TestLocalIO:
         pd.testing.assert_frame_equal(df, called_with_df)
         assert called_with_file_path == config.local.file_path.format(file_name_to_replace="some_csv_to_read")
 
-    @pytest.mark.integration
+    @pytest.mark.unit
     def test_local_writers_only_write_out_castable_columns_according_to_the_io_schema_case_float64_to_int64_id(
         self,
     ):
@@ -464,13 +465,13 @@ class TestLocalIO:
         ).get(source_key="WRITE_TO_S3_PARQUET")
 
         # When
-        # class WriteS3ParquetIO(DynamicDataIO):
+        # class WriteS3IO(DynamicDataIO):
         #     schema = {"col_1": "int64", "col_2": "object"}
         #
         #     @staticmethod
         #     def validate(df: pd.DataFrame):
         #         pass
-        write_s3_io = WriteS3ParquetIO(source_config=s3_parquet_local_config)
+        write_s3_io = WriteS3IO(source_config=s3_parquet_local_config)
         write_s3_io.write(input_df)
 
         # # Then
@@ -483,7 +484,7 @@ class TestLocalIO:
         finally:
             os.remove(s3_parquet_local_config.local.file_path)
 
-    @pytest.mark.integration
+    @pytest.mark.unit
     def test_local_writers_only_write_out_columns_in_a_provided_io_schema(self):
 
         # Given
@@ -496,13 +497,13 @@ class TestLocalIO:
         ).get(source_key="WRITE_TO_S3_PARQUET")
 
         # When
-        # class WriteS3ParquetIO(DynamicDataIO):
+        # class WriteS3IO(DynamicDataIO):
         #     schema = {"col_1": "int64", "col_2": "object"}
         #
         #     @staticmethod
         #     def validate(df: pd.DataFrame):
         #         pass
-        write_s3_io = WriteS3ParquetIO(source_config=s3_parquet_local_config)
+        write_s3_io = WriteS3IO(source_config=s3_parquet_local_config)
         write_s3_io.write(input_df)
 
         # Then
@@ -523,7 +524,7 @@ class TestLocalIO:
         # Then
         assert implementation.__class__.__name__ == "PyArrowImpl"
 
-    @pytest.mark.integration
+    @pytest.mark.unit
     def test_write_parquet_file_is_called_with_additional_pyarrow_args(self):
 
         # Given
@@ -544,13 +545,13 @@ class TestLocalIO:
 
         # When
         with patch.object(dynamicio.mixins.with_local.pd.DataFrame, "to_parquet") as mocked__to_parquet:
-            write_s3_io = WriteS3ParquetIO(source_config=s3_parquet_local_config, **to_parquet_kwargs)
+            write_s3_io = WriteS3IO(source_config=s3_parquet_local_config, **to_parquet_kwargs)
             write_s3_io.write(input_df)
 
         # Then
         mocked__to_parquet.assert_called_once_with(os.path.join(constants.TEST_RESOURCES, "data/processed/write_some_parquet.parquet"), **to_parquet_kwargs)
 
-    @pytest.mark.integration
+    @pytest.mark.unit
     @patch.object(dynamicio.mixins.with_local.pd, "read_parquet")
     def test_read_parquet_file_is_called_with_additional_pyarrow_args(self, mock__read_parquet):
 
@@ -629,7 +630,7 @@ class TestLocalIO:
 
         # When
         with patch.object(dynamicio.mixins.with_local.WithLocal, "_WithLocal__write_with_pyarrow") as mocked__write_with_pyarrow:
-            WriteS3ParquetIO(config).write(input_df)
+            WriteS3IO(config).write(input_df)
 
         # Then
         mocked__write_with_pyarrow.assert_called()
@@ -647,7 +648,7 @@ class TestLocalIO:
 
         # When
         with patch.object(dynamicio.mixins.with_local.WithLocal, "_WithLocal__write_with_pyarrow") as mocked__write_with_pyarrow:
-            WriteS3ParquetIO(config, engine="pyarrow").write(input_df)
+            WriteS3IO(config, engine="pyarrow").write(input_df)
 
         # Then
         mocked__write_with_pyarrow.assert_called()
@@ -665,7 +666,7 @@ class TestLocalIO:
 
         # When
         with patch.object(dynamicio.mixins.with_local.WithLocal, "_WithLocal__write_with_fastparquet") as mocked__write_with_fastparquet:
-            WriteS3ParquetIO(config, engine="fastparquet").write(input_df)
+            WriteS3IO(config, engine="fastparquet").write(input_df)
 
         # Then
         mocked__write_with_fastparquet.assert_called()

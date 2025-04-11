@@ -1,6 +1,7 @@
+"""This module defines Config schema for data source (pandas dataframe)."""
+
 # pylint: disable=no-member, no-self-argument, unused-argument
 
-"""This module defines Config schema for data source (pandas dataframe)"""
 
 import enum
 from typing import Mapping, Sequence
@@ -51,11 +52,11 @@ class SchemaColumn(pydantic.BaseModel):
 
     @pydantic.validator("validations", pre=True)
     def remap_validations(cls, info):
-        """Remap the yaml structure of {validation_type: <params>} to a list with validation_type as a key"""
+        """Remap the yaml structure of {validation_type: <params>} to a list with validation_type as a key."""
         if not isinstance(info, dict):
             raise ValueError(f"{info!r} should be a dict")
         out = []
-        for (key, params) in info.items():
+        for key, params in info.items():
             new_el = params.copy()
             new_el.update({"name": key})
             out.append(new_el)
@@ -79,7 +80,7 @@ class DataframeSchema(pydantic.BaseModel):
 
     @pydantic.validator("columns", pre=True)
     def supply_column_names(cls, info):
-        """Tell each column its name (the key it is listed under)"""
+        """Tell each column its name (the key it is listed under)."""
         if not isinstance(info, Mapping):
             raise ValueError(f"{info!r} shoudl be a dict.")
 
