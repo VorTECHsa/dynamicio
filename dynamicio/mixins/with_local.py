@@ -7,10 +7,12 @@ import os
 from threading import Lock
 from typing import Any, MutableMapping
 
-import pandas as pd  # type: ignore
-from fastparquet import ParquetFile, write  # type: ignore
-from pyarrow.parquet import read_table, write_table  # type: ignore # pylint: disable=no-name-in-module
+import pandas as pd
+from fastparquet import ParquetFile, write
+from magic_logger import logger
+from pyarrow.parquet import read_table, write_table
 
+# Application Imports
 from dynamicio.config.pydantic import DataframeSchema, LocalBatchDataEnvironment, LocalDataEnvironment
 from dynamicio.mixins import utils
 from dynamicio.mixins.utils import get_file_type_value
@@ -113,16 +115,27 @@ class WithLocal:
         All `options` are passed directly to `pd.read_hdf`.
 
         Args:
-            file_path:
-            options:
+            file_path: The path to the json file to be read.
+            options: The pandas `read_json` options.
 
         Returns:
-            DataFrame
+            DataFrame: The dataframe read from the json file.
         """
-        df = pd.read_json(file_path, **options)
-        columns = [column for column in df.columns.to_list() if column in schema.column_names]
-        df = df[columns]
-        return df
+        user_orient = options.pop("orient", None)
+        user_lines = options.pop("lines", None)
+
+        if user_orient is not None and user_orient != "records":
+            raise ValueError("[local-json] Unsupported orient='{user_orient}'. Only 'records' orientation is supported.")
+
+        if user_lines is not None and user_lines is not False:
+            logger.warning("[local-json-read] Overriding lines=%s with lines=False for consistency with aws-wrangler expectations.", user_lines)
+
+        if options.get("convert_dates") is True:
+            logger.warning("[local-json-read] Ignoring 'convert_dates=True'. Handle datetime parsing post-read.")
+        options.pop("convert_dates", None)
+
+        df = pd.read_json(file_path, orient="records", convert_dates=False, lines=False, **options)
+        return df[[col for col in df.columns if col in schema.column_names]]
 
     @staticmethod
     def _read_parquet_file(file_path: str, schema: DataframeSchema, **options: Any) -> pd.DataFrame:
@@ -192,7 +205,10 @@ class WithLocal:
     @staticmethod
     @utils.allow_options(pd.DataFrame.to_json)
     def _write_json_file(df: pd.DataFrame, file_path: str, **options: Any):
-        """Write a dataframe as a json file using `df.to_json`.
+        """Writes a JSON file using 'records' orientation with lines=True.
+
+        If the user provides an unsupported `orient`, raise an error.
+        This mirrors wr.s3.to_json and guarantees tabular consistency.
 
         All `options` are passed directly to `df.to_json`.
 
@@ -201,6 +217,16 @@ class WithLocal:
             file_path: The location where the file needs to be written.
             options: Options relative to writing a json file.
         """
+        user_orient = options.pop("orient", None)
+        user_lines = options.pop("lines", None)
+
+        if user_orient is not None and user_orient != "records":
+            raise ValueError(
+                f"[local-json] Unsupported orient='{user_orient}'. Only 'records' orientation is supported for tabular output (imposed for aws-wrangler consistency reasons)."
+            )
+        if user_lines is not None and user_lines is not True:
+            logger.warning("[local-json-write] Overriding lines=%s with lines=True for consistency.", user_lines)
+
         df.to_json(file_path, **options)
 
     @staticmethod

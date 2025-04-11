@@ -79,7 +79,7 @@ class TestAllowedOptions:
         # Then
         assert options == {"arg_a", "arg_b", "arg_c"}
 
-    @pytest.mark.integration
+    @pytest.mark.unit
     def test_allow_options_can_use_iterable_returned_from_args_of_to_filter_out_invalid_options(
         self,
     ):
@@ -100,7 +100,7 @@ class TestAllowedOptions:
         # Then
         assert options == ["arg_a", "arg_b", "arg_c"]
 
-    @pytest.mark.integration
+    @pytest.mark.unit
     def test_allow_options_does_not_filter_out_valid_args_when_they_are_passed_as_args_and_not_as_kwargs(
         self,
     ):
@@ -126,7 +126,7 @@ class TestAllowedOptions:
         captured = self.capsys.readouterr()
         assert (captured.out == "schema\n") and (options == ["A", 1, True])
 
-    @pytest.mark.integration  # This is an integration test as it uses `allow_options()` after `args_of()`
+    @pytest.mark.unit  # This is an integration test as it uses `allow_options()` after `args_of()`
     def test_when_reading_locally_or_from_s3_invalid_options_are_ignored(self, expected_s3_csv_df):
         # Given
         invalid_option = "INVALID_OPTION"
@@ -142,7 +142,7 @@ class TestAllowedOptions:
         # Then
         assert expected_s3_csv_df.equals(s3_csv_df)
 
-    @pytest.mark.integration
+    @pytest.mark.unit
     def test_when_reading_locally_or_from_s3_valid_options_are_considered(self, expected_s3_csv_df):
         # Given
         # VALID OPTION: dtype=None

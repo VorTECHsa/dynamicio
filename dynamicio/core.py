@@ -9,7 +9,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, List, Mapping, MutableMapping, Optional, Tuple
 
-import pandas as pd  # type: ignore
+import pandas as pd
 import pydantic
 from magic_logger import logger
 
@@ -187,7 +187,7 @@ class DynamicDataIO:
         if self.log_schema_metrics:
             self.log_metrics_from_schema(df)
 
-        getattr(self, f"_write_to_{source_name}")(self._apply_schema(df))  # this apply_schema is called before we write
+        getattr(self, f"_write_to_{source_name}")(self._apply_schema(df))
 
     def validate_from_schema(self, df: pd.DataFrame) -> "DynamicDataIO":
         """Validates a dataframe based on the validations present in its schema definition.

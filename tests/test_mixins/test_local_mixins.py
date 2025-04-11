@@ -224,7 +224,7 @@ class TestLocalIO:
         ).get(source_key="READ_FROM_S3_JSON")
 
         # When
-        options = {"orient": "columns"}
+        options = {"orient": "records"}
         s3_json_df = ReadS3JsonIO(source_config=s3_json_local_config, **options).read()
 
         # Then
@@ -449,7 +449,7 @@ class TestLocalIO:
         pd.testing.assert_frame_equal(df, called_with_df)
         assert called_with_file_path == config.local.file_path.format(file_name_to_replace="some_csv_to_read")
 
-    @pytest.mark.integration
+    @pytest.mark.unit
     def test_local_writers_only_write_out_castable_columns_according_to_the_io_schema_case_float64_to_int64_id(
         self,
     ):
@@ -484,7 +484,7 @@ class TestLocalIO:
         finally:
             os.remove(s3_parquet_local_config.local.file_path)
 
-    @pytest.mark.integration
+    @pytest.mark.unit
     def test_local_writers_only_write_out_columns_in_a_provided_io_schema(self):
 
         # Given
@@ -524,7 +524,7 @@ class TestLocalIO:
         # Then
         assert implementation.__class__.__name__ == "PyArrowImpl"
 
-    @pytest.mark.integration
+    @pytest.mark.unit
     def test_write_parquet_file_is_called_with_additional_pyarrow_args(self):
 
         # Given
@@ -551,7 +551,7 @@ class TestLocalIO:
         # Then
         mocked__to_parquet.assert_called_once_with(os.path.join(constants.TEST_RESOURCES, "data/processed/write_some_parquet.parquet"), **to_parquet_kwargs)
 
-    @pytest.mark.integration
+    @pytest.mark.unit
     @patch.object(dynamicio.mixins.with_local.pd, "read_parquet")
     def test_read_parquet_file_is_called_with_additional_pyarrow_args(self, mock__read_parquet):
 

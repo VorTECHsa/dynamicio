@@ -393,13 +393,25 @@ class WithS3File:
         lines = kwargs.pop("lines", None)
 
         if orient is not None and orient != "records":
-            raise ValueError(f"[s3-json] Unsupported orient='{orient}'. Only 'records' orientation is supported.")
+            raise ValueError("[s3-json] Unsupported orient='{orient}'. Only 'records' orientation is supported.")
 
         if lines is not None and lines is not True:
-            logger.warning("[s3-json-read] Only 'lines=True' is supported for S3 reads. Ignoring lines=%s.", lines)
+            logger.warning("[s3-json-read] Overriding lines=%s with lines=True for aws-wrangler consistency.", lines)
 
-        df = wr.s3.read_json(path=s3_path, orient="records", lines=True, **kwargs)
-        return df[[col for col in df.columns if col in schema.columns]]
+        if kwargs.get("convert_dates") is True:
+            logger.warning("[s3-json-read] Ignoring 'convert_dates=True'. Handle datetime parsing post-read.")
+        kwargs.pop("convert_dates", None)
+
+        raw_df = wr.s3.read_json(path=s3_path, orient="records", lines=True, **kwargs)
+
+        # Normalize dict in single-column (e.g. {"data": {...}})
+        if len(raw_df.columns) == 1 and raw_df.iloc[:, 0].apply(lambda x: isinstance(x, dict)).all():
+            nested_col = raw_df.columns[0]
+            normalized = pd.json_normalize(raw_df[nested_col])
+            normalized.index = [nested_col]  # Mimic structured key as index
+            raw_df = normalized.T
+
+        return raw_df[[col for col in raw_df.columns if col in schema.columns]]
 
     @staticmethod
     @utils.allow_options(pd.read_hdf)

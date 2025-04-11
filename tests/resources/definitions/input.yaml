@@ -40,6 +40,19 @@ READ_FROM_S3_JSON:
       file_path: "[[ MOCK_KEY ]]"
       file_type: "json"
 
+S3_PANDAS_READER_CONSISTENCY:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/input/{file_name}.json"
+      file_type: "json"
+  CLOUD:
+    type: "s3_file"
+    s3:
+      bucket: "[[ MOCK_BUCKET ]]"
+      file_path: "[[ MOCK_KEY ]]"
+      file_type: "json"
+
 READ_FROM_S3_HDF:
   LOCAL:
     type: "local"
