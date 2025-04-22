@@ -1035,15 +1035,15 @@ class TestConsistencyBetweenPandasAndWrangler:
 
     @pytest.mark.unit
     @pytest.mark.parametrize(
-        "file_name, wrangler_df, IOClass",
+        "file_name, is_single_record, wrangler_df, IOClass",
         [
             # ✅ Supported: Single record
-            ("single_row_json", pd.DataFrame([{"data": {"release": "feb09", "timestamp": 1614268643313}}]), ReadS3JsonOrientRecordsIO),
+            ("single_row_json", True, pd.DataFrame([{"data": {"release": "feb09", "timestamp": 1614268643313}}]), ReadS3JsonOrientRecordsIO),
             # ✅ Supported: Multi-records
-            ("multi_row_json", pd.DataFrame([{"release": "feb09", "timestamp": 1614268643313}, {"release": "feb10", "timestamp": 1614268643313}]), ReadS3JsonOrientRecordsAltIO),
+            ("multi_row_json", False, pd.DataFrame([{"release": "feb09", "timestamp": 1614268643313}, {"release": "feb10", "timestamp": 1614268643313}]), ReadS3JsonOrientRecordsAltIO),
         ],
     )
-    def test_pandas_read_json_returns_the_same_df_as_wrangler_read_json(self, file_name, wrangler_df, IOClass):
+    def test_pandas_read_json_returns_the_same_df_as_wrangler_read_json(self, file_name, is_single_record, wrangler_df, IOClass):
         # Given
         pandas_config = IOConfig(
             path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
@@ -1058,7 +1058,7 @@ class TestConsistencyBetweenPandasAndWrangler:
         ).get(source_key="S3_PANDAS_READER_CONSISTENCY")
 
         # When
-        pandas_df = IOClass(source_config=pandas_config, file_name=file_name).read()
+        pandas_df = IOClass(source_config=pandas_config, file_name=file_name, single_record=is_single_record).read()
         with patch.object(dynamicio.mixins.with_s3.wr.s3, "read_json") as mock__wr_s3_json_reader:
             mock__wr_s3_json_reader.return_value = wrangler_df
             wrangler_df = IOClass(source_config=wrangler_config).read()

@@ -135,6 +135,12 @@ class WithLocal:
         options.pop("convert_dates", None)
 
         df = pd.read_json(file_path, orient="records", convert_dates=False, lines=False, **options)
+
+        # 🧼 Check if this is a single-record json file
+        if options.pop("single_record", False):
+            # Re-wrap as single dict row — i.e., rehydrate the record
+            df = pd.DataFrame([{df.columns[0]: dict(zip(df.index, df.iloc[:, 0]))}])
+
         return df[[col for col in df.columns if col in schema.column_names]]
 
     @staticmethod
