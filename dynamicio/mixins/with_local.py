@@ -34,8 +34,10 @@ class WithLocal:
             - `file_path`
             - `file_type`
 
-        To actually read the file, a method is dynamically invoked by name, using
-        "_read_{file_type}_file".
+        To actually read the file, a method is dynamically invoked by name, using "_read_{file_type}_file".
+
+        Additional options:
+            - single_record: bool: used for json files. If True, treats the file as a single JSON object instead of a list of records.
 
         Returns:
             DataFrame
@@ -140,6 +142,14 @@ class WithLocal:
         if options.pop("single_record", False):
             # Re-wrap as single dict row — i.e., rehydrate the record
             df = pd.DataFrame([{df.columns[0]: dict(zip(df.index, df.iloc[:, 0]))}])
+        elif (
+            df.shape[1] == 1
+            and df.columns.dtype == "object"
+            and df.index.dtype == "object"
+            and all(isinstance(i, str) for i in df.index)
+            and all(isinstance(v, (str, int, float, bool, type(None))) for v in df.iloc[:, 0])
+        ):
+            logger.warning("[local-json-read] File appears to be a single-record JSON object. Pass 'single_record=True' in options to handle this case.")
 
         return df[[col for col in df.columns if col in schema.column_names]]
 
