@@ -110,7 +110,7 @@ class WithLocal:
         return pd.read_csv(file_path, **options)
 
     @staticmethod
-    @utils.allow_options(pd.read_json)
+    @utils.allow_options([*utils.args_of(pd.read_json), *["single_record"]])
     def _read_json_file(file_path: str, schema: DataframeSchema, **options: Any) -> pd.DataFrame:
         """Read a json file as a DataFrame using `pd.read_hdf`.
 
@@ -136,10 +136,11 @@ class WithLocal:
             logger.warning("[local-json-read] Ignoring 'convert_dates=True'. Handle datetime parsing post-read.")
         options.pop("convert_dates", None)
 
+        is_single_record = options.pop("single_record", False)
         df = pd.read_json(file_path, orient="records", convert_dates=False, lines=False, **options)
 
         # 🧼 Check if this is a single-record json file
-        if options.pop("single_record", False):
+        if is_single_record:
             # Re-wrap as single dict row — i.e., rehydrate the record
             df = pd.DataFrame([{df.columns[0]: dict(zip(df.index, df.iloc[:, 0]))}])
         elif (

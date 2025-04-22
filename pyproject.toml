@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dynamicio"
-version = "0.0.0"  # dummy, will be overridden by git tag
+version = "8.1.0"  # dummy, will be overridden by git tag
 description = "Panda's wrapper for IO operations"
 authors = [
     "Christos Hadjinikolis <christos.hadjinikolis@gmail.com>",

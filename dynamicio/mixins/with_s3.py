@@ -404,13 +404,6 @@ class WithS3File:
 
         raw_df = wr.s3.read_json(path=s3_path, orient="records", lines=True, **kwargs)
 
-        # Normalize dict in single-column (e.g. {"data": {...}})
-        if len(raw_df.columns) == 1 and raw_df.iloc[:, 0].apply(lambda x: isinstance(x, dict)).all():
-            nested_col = raw_df.columns[0]
-            normalized = pd.json_normalize(raw_df[nested_col])
-            normalized.index = [nested_col]  # Mimic structured key as index
-            raw_df = normalized.T
-
         return raw_df[[col for col in raw_df.columns if col in schema.columns]]
 
     @staticmethod

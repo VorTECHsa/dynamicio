@@ -53,6 +53,13 @@ S3_PANDAS_READER_CONSISTENCY:
       file_path: "[[ MOCK_KEY ]]"
       file_type: "json"
 
+CHECK_JSON_READS_RAW_TIMESTAMPS:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/input/multi_row_json.json"
+      file_type: "json"
+
 READ_FROM_S3_HDF:
   LOCAL:
     type: "local"

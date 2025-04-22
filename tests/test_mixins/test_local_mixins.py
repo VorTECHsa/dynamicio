@@ -25,6 +25,7 @@ from tests.mocking.io import (
     ReadS3DataWithLessColumnsIO,
     ReadS3HdfIO,
     ReadS3JsonIO,
+    ReadS3JsonOrientRecordsAltIO,
     ReadS3JsonOrientRecordsIO,
     ReadS3ParquetIO,
     TemplatedFile,
@@ -170,6 +171,33 @@ class TestLocalIO:
         assert "File appears to be a single-record JSON object" in caplog.text
         assert isinstance(df, pd.DataFrame)
         assert "data" in df.columns  # assuming schema = {"data": "object"}
+
+    @pytest.mark.unit
+    def test_read_json_does_not_parse_dates_by_default(self):
+        # Given
+        # [
+        #   {
+        #     "release": "feb09",
+        #     "timestamp": 1614268643313
+        #   },
+        #   {
+        #     "release": "feb10",
+        #     "timestamp": 1614268643313
+        #   }
+        # ]
+        config = IOConfig(
+            path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml"),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="CHECK_JSON_READS_RAW_TIMESTAMPS")
+
+        # When
+        df = ReadS3JsonOrientRecordsAltIO(source_config=config).read()
+
+        # Then
+        assert df["timestamp"].dtype == "int64"
+        assert isinstance(df["timestamp"].iloc[0], (int, np.integer))
+        assert df["timestamp"].iloc[0] == 1614268643313
 
     @pytest.mark.unit
     def test_read_hdf_pandas_reader_will_only_filter_out_columns_not_in_schema(self, expected_df_with_less_columns):
@@ -745,6 +773,42 @@ class TestLocalIO:
 
         # Then
         assert duration >= 0.2
+
+
+class TestConsistencyBetweenPandasAndWrangler:
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "file_name, is_single_record, wrangler_df, IOClass",
+        [
+            # ✅ Supported: Single record
+            ("single_row_json", True, pd.DataFrame([{"data": {"release": "feb09", "timestamp": 1614268643313}}]), ReadS3JsonOrientRecordsIO),
+            # ✅ Supported: Multi-records
+            ("multi_row_json", False, pd.DataFrame([{"release": "feb09", "timestamp": 1614268643313}, {"release": "feb10", "timestamp": 1614268643313}]), ReadS3JsonOrientRecordsAltIO),
+        ],
+    )
+    def test_pandas_read_json_returns_the_same_df_as_wrangler_read_json(self, file_name, is_single_record, wrangler_df, IOClass):
+        # Given
+        pandas_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="S3_PANDAS_READER_CONSISTENCY")
+
+        wrangler_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="S3_PANDAS_READER_CONSISTENCY")
+
+        # When
+        pandas_df = IOClass(source_config=pandas_config, file_name=file_name, single_record=is_single_record).read()
+        with patch.object(dynamicio.mixins.with_s3.wr.s3, "read_json") as mock__wr_s3_json_reader:
+            mock__wr_s3_json_reader.return_value = wrangler_df
+            wrangler_df = IOClass(source_config=wrangler_config).read()
+
+        # Then
+        pd.testing.assert_frame_equal(pandas_df, wrangler_df)
 
 
 class TestBatchLocal:
