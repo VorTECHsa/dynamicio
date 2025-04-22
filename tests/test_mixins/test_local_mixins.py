@@ -25,6 +25,7 @@ from tests.mocking.io import (
     ReadS3DataWithLessColumnsIO,
     ReadS3HdfIO,
     ReadS3JsonIO,
+    ReadS3JsonOrientRecordsIO,
     ReadS3ParquetIO,
     TemplatedFile,
     WriteKafkaIO,
@@ -151,6 +152,24 @@ class TestLocalIO:
 
         # Then
         assert expected_df_with_less_columns.equals(s3_json_df)
+
+    @pytest.mark.unit
+    def test_warning_is_logged_when_single_record_detected_but_option_not_passed(self, caplog):
+        # Given
+        caplog.set_level("WARNING")
+        local_json_config = IOConfig(
+            path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml"),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="S3_PANDAS_READER_CONSISTENCY")
+
+        # When
+        df = ReadS3JsonOrientRecordsIO(source_config=local_json_config, file_name="single_row_json").read()
+
+        # Then
+        assert "File appears to be a single-record JSON object" in caplog.text
+        assert isinstance(df, pd.DataFrame)
+        assert "data" in df.columns  # assuming schema = {"data": "object"}
 
     @pytest.mark.unit
     def test_read_hdf_pandas_reader_will_only_filter_out_columns_not_in_schema(self, expected_df_with_less_columns):
