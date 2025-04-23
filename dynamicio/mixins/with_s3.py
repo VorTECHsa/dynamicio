@@ -439,16 +439,43 @@ class WithS3File:
     @staticmethod
     @utils.allow_options(wr.s3.to_parquet)
     def _write_s3_parquet_file(df: pd.DataFrame, s3_path: str, **kwargs):
-        wr.s3.to_parquet(df=df, path=s3_path, dataset=True, **kwargs)
+        if kwargs.pop("dataset", False):
+            raise ValueError(
+                "[s3-parquet] dataset=True is not supported in the WithS3File mixin. Use a file path, not a directory. "
+                "Use WithS3PathPrefix if you need partitioned writes or directory-style datasets."
+            )
+
+        if s3_path.endswith("/"):
+            raise ValueError("[s3-parquet] Parquet output path must be a file, not a directory (e.g., 's3://bucket/data.parquet').")
+
+        wr.s3.to_parquet(df=df, path=s3_path, dataset=False, **kwargs)
 
     @staticmethod
     @utils.allow_options(utils.args_of(wr.s3.to_csv, pd.DataFrame.to_csv))
     def _write_s3_csv_file(df: pd.DataFrame, s3_path: str, **kwargs):
+        if kwargs.pop("dataset", False):
+            raise ValueError(
+                "[s3-csv] dataset=True is not supported in the WithS3File mixin. Use a file path, not a directory. "
+                "Use WithS3PathPrefix if you need partitioned writes or directory-style datasets."
+            )
+
+        if s3_path.endswith("/"):
+            raise ValueError("[s3-csv] CSV output path must be a file, not a directory (e.g., 's3://bucket/data.csv').")
+
         wr.s3.to_csv(df=df, path=s3_path, index=False, **kwargs)
 
     @staticmethod
     @utils.allow_options(utils.args_of(wr.s3.to_json, pd.DataFrame.to_json))
     def _write_s3_json_file(df: pd.DataFrame, s3_path: str, **kwargs):
+        if kwargs.pop("dataset", False):
+            raise ValueError(
+                "[s3-json] dataset=True is not supported in the WithS3File mixin. Use a file path, not a directory. "
+                "Use WithS3PathPrefix if you need partitioned writes or directory-style datasets."
+            )
+
+        if s3_path.endswith("/"):
+            raise ValueError("[s3-json] JSON output path must be a file, not a directory (e.g., 's3://bucket/data.json').")
+
         user_orient = kwargs.pop("orient", None)
         user_lines = kwargs.pop("lines", None)
 

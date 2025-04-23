@@ -396,7 +396,7 @@ class TestAllowedArgsAreConfiguredCorrectlyForWithS3File:
     @pytest.mark.parametrize(
         "source_key, patch_target, input_options, expected_options",
         [
-            ("WRITE_TO_S3_PARQUET", "to_parquet", {"compression": "snappy", "invalid_opt": True}, {"compression": "snappy", "dataset": True}),
+            ("WRITE_TO_S3_PARQUET", "to_parquet", {"compression": "snappy", "invalid_opt": True}, {"compression": "snappy", "dataset": False}),
             (
                 "WRITE_TO_S3_CSV",
                 "to_csv",
@@ -609,6 +609,58 @@ class TestAllowedArgsAreConfiguredCorrectlyForWithS3File:
         call_kwargs = mock_save.call_args.kwargs["options"]
         assert call_kwargs.get("key") == "my_key"
         assert "invalid_opt" not in call_kwargs
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "source_key,file_type",
+        [
+            ("WRITE_TO_S3_PARQUET", "parquet"),
+            ("WRITE_TO_S3_CSV", "csv"),
+            ("WRITE_TO_S3_JSON", "json"),
+        ],
+    )
+    def test_dataset_true_raises_value_error(self, source_key, file_type):
+        # Given
+        df = pd.DataFrame({"col_1": [1], "col_2": ["a"]})
+        config = IOConfig(
+            path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml"),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key=source_key)
+
+        # When/Then
+        # Patch wr.s3.to_{file_type} to prevent actual call
+        patch_target = f"{dynamicio.mixins.with_s3.wr.s3.__name__}.to_{file_type}"
+        with patch(patch_target):
+            with pytest.raises(ValueError, match=rf"\[s3-{file_type}\] dataset=True is not supported.*"):
+                WriteS3IO(source_config=config, dataset=True).write(df)
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "source_key,file_type",
+        [
+            ("WRITE_TO_S3_PARQUET", "parquet"),
+            ("WRITE_TO_S3_CSV", "csv"),
+            ("WRITE_TO_S3_JSON", "json"),
+        ],
+    )
+    def test_s3_path_as_directory_raises_value_error(self, source_key, file_type):
+        # Given
+        df = pd.DataFrame({"col_1": [1], "col_2": ["a"]})
+        config = IOConfig(
+            path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml"),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key=source_key)
+
+        # Force file_path to end with slash
+        config.s3.file_path = "test/some_dir/"
+
+        # Patch wr.s3.to_{file_type} to prevent actual call
+        patch_target = f"{dynamicio.mixins.with_s3.wr.s3.__name__}.to_{file_type}"
+        with patch(patch_target):
+            with pytest.raises(ValueError, match=rf"\[s3-{file_type}\] .*must be a file, not a directory.*"):
+                WriteS3IO(source_config=config).write(df)
 
 
 class TestS3PathPrefixIO:
