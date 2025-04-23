@@ -1,4 +1,5 @@
 """This module provides mixins that are providing Kafka I/O support."""
+
 # pylint: disable=no-member, protected-access, too-few-public-methods
 
 from typing import Any, Callable, Mapping, MutableMapping, Optional
@@ -68,7 +69,14 @@ class WithKafka:
         >>>     {"key": "key-02", "value": {"bar": 1000, "baz": "ABC", "foo": "id_2", "id": "cm_2", "new_field": "new_value"}},
         >>>     {"key": "key-03", "value": {"bar": 1000, "baz": "ABC", "foo": "id_3", "id": "cm_3", "new_field": "new_value"}},
         >>> ]
+
+    Note:
+        The `__abstractmethods__ = frozenset()` is used to silence false positives from pylint,
+        which might wrongly assume this class has abstract methods due to NotImplementedError.
+        This class is *not* an abstract base class and does not use `abc.ABC`.
     """
+
+    __abstractmethods__ = frozenset()
 
     sources_config: KafkaDataEnvironment
     schema: DataframeSchema

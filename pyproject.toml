@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dynamicio"
-version = "0.0.0"  # dummy, will be overridden by git tag
+version = "8.1.0"  # dummy, will be overridden by git tag
 description = "Panda's wrapper for IO operations"
 authors = [
     "Christos Hadjinikolis <christos.hadjinikolis@gmail.com>",
@@ -17,45 +17,46 @@ classifiers = [
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.10,<3.13"
+PyYAML = ">=5.4.1"
+SQLAlchemy = "~1.4.11"
 awscli = ">=1.22.24"
+awswrangler = ">=3.0.0"
 boto3 = ">=1.20.24"
-pyathena = "*"
+confluent-kafka = "~2.4.0"
 fastparquet = ">=0.8.0"
 fsspec = "==2022.11.0"
-confluent-kafka = "~2.4.0"
+libcst = "==1.5.1"
 logzero = ">=1.7.0"
 magic-logger = ">=1.0.2"
-numpy = ">=1.24.0,<2.0.0"
 no_implicit_optional = "==1.4.0"
+numpy = ">=1.24.0,<2.0.0"
 pandas = ">=1.5.1"
 psycopg2-binary = "~2.9.3"
 pyarrow = ">=10.0.1"
+pyathena = "*"
 pydantic = ">=1.9.2,<3"
+python = ">=3.10,<3.13"
 python-json-logger = "~2.0.1"
-PyYAML = ">=5.4.1"
 s3fs = "==0.4.2"
 simplejson = "~3.17.2"
-SQLAlchemy = "~1.4.11"
 tables = ">=3.10.1"
-libcst = "==1.5.1"
 
 [tool.poetry.group.dev.dependencies]
 black = "==24.3.0"
 coverage-badge = "==1.1.0"
+flake8 = "^7.2.0"
 flake8-import-order = "*"
 flake8-print = "*"
 flake8-tidy-imports = "*"
-flake8 = "^7.2.0"
 gitlint = "==0.17.0"
 mock = "==4.0.3"
 pandas-stubs = "==2.0.3.230814"
 pre-commit = "==2.20.0"
 pydocstyle = "==6.1.1"
 pylint = "==2.15.5"
+pytest = "==7.2.0"
 pytest-asyncio = "==0.20.2"
 pytest-cov = "==4.0.0"
-pytest = "==7.2.0"
 tox = "==3.27.1"
 types-PyYAML = "==6.0.12.2"
 types-setuptools = "==65.5.0.3"
@@ -89,9 +90,9 @@ style = "pep440"
 fix-shallow-repository = true
 
 [tool.black]
-py38 = true
+target-version = ["py38"]
 line-length = 185
-include = '\\.(pyi?)$'
+include = '\.pyi?$'
 exclude = '''
 (
   /(

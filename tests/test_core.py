@@ -3,6 +3,7 @@ import asyncio
 import logging
 import os
 import time
+from tempfile import NamedTemporaryFile
 from typing import Mapping, Tuple
 from unittest.mock import patch
 
@@ -28,9 +29,12 @@ from tests.mocking.io import (
     ReadS3CsvWithWrongSchemaIO,
     ReadS3DataWithFalseTypes,
     ReadS3ParquetIO,
+    ReadS3ParquetWithDifferentCastableDTypeIO,
+    ReadS3ParquetWithDifferentNonCastableDTypeIO,
     SubclassMissingMixin,
     WriteS3CsvIO,
     WriteS3CsvWithSchema,
+    WriteS3IO,
     WriteS3ParquetExternalIO,
 )
 
@@ -186,7 +190,7 @@ class TestCoreIO:
         with pytest.raises(SchemaNotFoundError):
             ReadMockS3CsvIO(source_config=read_mock_s3_cloud_config)
 
-    @pytest.mark.integration
+    @pytest.mark.unit
     def test_schema_validations_are_applied_for_an_io_class_with_a_schema_definition(self, valid_dataframe):
         # Given
         df = valid_dataframe
@@ -203,7 +207,7 @@ class TestCoreIO:
         # Then
         assert io_instance == return_value
 
-    @pytest.mark.integration
+    @pytest.mark.unit
     def test_log_metrics_from_schema_are_applied_for_an_io_class_with_a_schema_definition(self, caplog, valid_dataframe):
         # Given
         df = valid_dataframe
@@ -235,7 +239,7 @@ class TestCoreIO:
             and (getattr(caplog.records[9], "message") == '{"message": "METRIC", "dataset": "READ_FROM_S3_CSV", "column": "bar", "metric": "Variance", "value": 0.0}')
         )
 
-    @pytest.mark.integration
+    @pytest.mark.unit
     def test_schema_validations_errors_are_thrown_for_each_validation_if_df_does_not_map_to_schema_definition(self, invalid_dataframe):
         # Given
         df = invalid_dataframe
@@ -249,7 +253,7 @@ class TestCoreIO:
         with pytest.raises(SchemaValidationError):
             ReadS3CsvIO(source_config=s3_csv_cloud_config).validate_from_schema(df)
 
-    @pytest.mark.integration
+    @pytest.mark.unit
     def test_schema_validations_exception_message_is_a_dict_with_all_violated_validations(self, invalid_dataframe, expected_messages):
         # Given
         df = invalid_dataframe
@@ -266,7 +270,7 @@ class TestCoreIO:
             # Then
             assert _exception.message.keys() == expected_messages  # pylint: disable=no-member
 
-    @pytest.mark.integration
+    @pytest.mark.unit
     def test_local_writers_only_write_out_castable_columns_according_to_the_io_schema_case_float64_to_int64_id(self, dataset_with_more_columns_than_dictated_in_schema):
 
         # Given
@@ -932,7 +936,7 @@ class TestTypeCastingAndValidation:
         finally:
             os.remove(s3_parquet_with_some_bool_col_local_config.local.file_path)
 
-    @pytest.mark.integration
+    @pytest.mark.unit
     def test_show_casting_warnings_flag_default_value_prevents_showing_casting_logs(self, caplog):
         # Given
         s3_csv_cloud_config = IOConfig(
@@ -949,7 +953,7 @@ class TestTypeCastingAndValidation:
         # Then
         assert len(caplog.records) == 0
 
-    @pytest.mark.integration
+    @pytest.mark.unit
     def test_show_casting_warnings_flag_allows_casting_logs_to_be_printed_if_set_to_true(self, caplog):
         # Given
         s3_csv_cloud_config = IOConfig(
@@ -965,6 +969,90 @@ class TestTypeCastingAndValidation:
 
         # Then
         assert getattr(caplog.records[0], "message") == "Expected: 'float64' dtype for READ_S3_DATA_WITH_FALSE_TYPES['id'], found 'int64'"
+
+    @pytest.mark.unit
+    def test_write_applies_schema_before_invoking_writer(self):
+        # Given
+        # WRITE_TO_S3_PARQUET:
+        #   LOCAL:
+        #     ...
+        #   CLOUD:
+        #     type: "s3_file"
+        #     s3:
+        #       bucket: "[[ MOCK_BUCKET ]]"
+        #       file_path: "test/write_some_parquet.parquet"
+        #       file_type: "parquet"
+        input_df = pd.DataFrame.from_dict({"col_1": [3, 2, 1], "col_2": ["a", "b", "c"], "col_3": ["a", "b", "c"]})
+
+        s3_parquet_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="WRITE_TO_S3_PARQUET")
+
+        # When
+        # class WriteS3IO(DynamicDataIO):
+        #     schema = {"col_1": "int64", "col_2": "object"}
+        #
+        #     @staticmethod
+        #     def validate(df: pd.DataFrame):
+        #         pass
+        with patch.object(dynamicio.mixins.with_s3.wr.s3, "to_parquet") as mock__wr_s3_parquet_writer, patch.object(WriteS3IO, "_apply_schema") as mock__apply_schema:
+            with NamedTemporaryFile(delete=False) as temp_file:
+                mock__wr_s3_parquet_writer.return_value = temp_file
+                WriteS3IO(source_config=s3_parquet_cloud_config).write(input_df)
+
+        # Then
+        mock__apply_schema.assert_called()
+        mock__wr_s3_parquet_writer.assert_called()
+
+    @pytest.mark.unit
+    def test_columns_data_type_error_exception_is_not_generated_if_column_dtypes_can_be_casted_to_the_expected_dtypes(self, expected_s3_parquet_df):
+        # Given
+        s3_parquet_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_S3_PARQUET")
+
+        # When
+        with patch.object(dynamicio.mixins.with_s3.wr.s3, "read_parquet") as mock__wr_s3_parquet_reader:
+            mock__wr_s3_parquet_reader.return_value = expected_s3_parquet_df
+            ReadS3ParquetWithDifferentCastableDTypeIO(source_config=s3_parquet_cloud_config).read()
+
+        assert True, "No exception was raised"
+
+    @pytest.mark.unit
+    @patch.object(dynamicio.mixins.with_s3.wr.s3, "read_parquet")
+    def test_columns_data_type_error_exception_is_generated_if_column_dtypes_dont_map_to_the_expected_dtypes(self, mock__wr_s3_parquet_reader, expected_s3_parquet_df):
+        """
+        ------------------------------ Captured log call -------------------------------
+
+        WARNING  ...:dataio.py:273 Expected: 'float64' dtype for column: 'id', found: 'int64' instead.
+        WARNING  ...:dataio.py:273 Expected: 'int64' dtype for column: 'foo_name', found: 'object' instead.
+        ERROR    ...:dataio.py:277 Tried casting column: 'foo_name' to 'int64' from 'object', but failed.
+
+        =========================== short test summary info ============================
+
+        FAILED ...:test_columns_data_type_error_exception_is_generated_if_column_dtypes_dont_map_to_the_expected_dtypes
+
+        ============================== 1 failed in 0.48s ===============================
+
+        """
+        # Given
+        dataframe_returned = expected_s3_parquet_df
+        mock__wr_s3_parquet_reader.return_value = dataframe_returned
+
+        s3_parquet_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_S3_PARQUET")
+
+        # When/Then
+        with pytest.raises(ColumnsDataTypeError):
+            ReadS3ParquetWithDifferentNonCastableDTypeIO(source_config=s3_parquet_cloud_config).read()
+            mock__wr_s3_parquet_reader.assert_called()
 
 
 class TestAsyncCoreIO:

@@ -1,4 +1,5 @@
 """Implements the DynamicDataIO class which provides functionality for data: loading; sinking, and; schema validation."""
+
 # pylint: disable=no-member
 __all__ = ["DynamicDataIO", "SCHEMA_FROM_FILE", "CASTING_WARNING_MSG"]
 
@@ -8,7 +9,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, List, Mapping, MutableMapping, Optional, Tuple
 
-import pandas as pd  # type: ignore
+import pandas as pd
 import pydantic
 from magic_logger import logger
 
@@ -100,7 +101,7 @@ class DynamicDataIO:
             - CAN have `schema_validations` and `schema_metrics` attributes
         """
         col_info = {}
-        for (col_name, dtype) in target.schema.items():
+        for col_name, dtype in target.schema.items():
             col_validations = {}
             col_metrics = []
             try:
