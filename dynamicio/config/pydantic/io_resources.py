@@ -275,11 +275,7 @@ class PostgresDataEnvironment(IOEnvironment):
 class AthenaDataSubSection(BaseModel):
     """AWS Athena configuration section."""
 
-    s3_staging_dir: str
-    region_name: str
-
-    # Optional fields, one must be provided via YAML or mixin options
-    query: Optional[str] = None
+    s3_output: str
 
 
 class AthenaDataEnvironment(IOEnvironment):

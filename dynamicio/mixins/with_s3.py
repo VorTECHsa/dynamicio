@@ -22,7 +22,7 @@ from pandas import DataFrame, Series
 # Application Imports
 from dynamicio.config.pydantic import DataframeSchema, S3DataEnvironment, S3PathPrefixEnvironment
 from dynamicio.mixins import utils, with_local
-from dynamicio.mixins.utils import get_file_type_value
+from dynamicio.mixins.utils import allow_options, args_of, get_file_type_value
 
 
 class InMemStore(pd.io.pytables.HDFStore):
@@ -377,17 +377,17 @@ class WithS3File:
         return getattr(self, f"_read_s3_{file_type}_file")(s3_path, self.schema, **options)
 
     @staticmethod
-    @utils.allow_options(wr.s3.read_parquet)
+    @allow_options(wr.s3.read_parquet)
     def _read_s3_parquet_file(s3_path: str, schema: DataframeSchema, **kwargs) -> pd.DataFrame:
         return wr.s3.read_parquet(path=s3_path, columns=(list(schema.columns.keys())), **kwargs)
 
     @staticmethod
-    @utils.allow_options(utils.args_of(wr.s3.read_csv, pd.read_csv))
+    @allow_options(args_of(wr.s3.read_csv, pd.read_csv))
     def _read_s3_csv_file(s3_path: str, schema: DataframeSchema, **kwargs) -> pd.DataFrame:
         return wr.s3.read_csv(path=s3_path, usecols=(list(schema.columns.keys())), **kwargs)
 
     @staticmethod
-    @utils.allow_options(utils.args_of(wr.s3.read_json, pd.read_json))
+    @allow_options(args_of(wr.s3.read_json, pd.read_json))
     def _read_s3_json_file(s3_path: str, schema: DataframeSchema, **kwargs) -> pd.DataFrame:
         orient = kwargs.pop("orient", None)
         lines = kwargs.pop("lines", None)
@@ -407,7 +407,7 @@ class WithS3File:
         return raw_df[[col for col in raw_df.columns if col in schema.columns]]
 
     @staticmethod
-    @utils.allow_options(pd.read_hdf)
+    @allow_options(pd.read_hdf)
     def _read_s3_hdf_file(s3_path: str, schema: DataframeSchema, **kwargs) -> pd.DataFrame:
         parsed = urlparse(s3_path)
         bucket = parsed.netloc
@@ -437,7 +437,7 @@ class WithS3File:
         logger.info(f"[s3] Finished uploading: {s3_path}")
 
     @staticmethod
-    @utils.allow_options(wr.s3.to_parquet)
+    @allow_options(wr.s3.to_parquet)
     def _write_s3_parquet_file(df: pd.DataFrame, s3_path: str, **kwargs):
         if kwargs.pop("dataset", False):
             raise ValueError(
@@ -451,7 +451,7 @@ class WithS3File:
         wr.s3.to_parquet(df=df, path=s3_path, dataset=False, **kwargs)
 
     @staticmethod
-    @utils.allow_options(utils.args_of(wr.s3.to_csv, pd.DataFrame.to_csv))
+    @allow_options(args_of(wr.s3.to_csv, pd.DataFrame.to_csv))
     def _write_s3_csv_file(df: pd.DataFrame, s3_path: str, **kwargs):
         if kwargs.pop("dataset", False):
             raise ValueError(
@@ -465,7 +465,7 @@ class WithS3File:
         wr.s3.to_csv(df=df, path=s3_path, index=False, **kwargs)
 
     @staticmethod
-    @utils.allow_options(utils.args_of(wr.s3.to_json, pd.DataFrame.to_json))
+    @allow_options(args_of(wr.s3.to_json, pd.DataFrame.to_json))
     def _write_s3_json_file(df: pd.DataFrame, s3_path: str, **kwargs):
         if kwargs.pop("dataset", False):
             raise ValueError(
@@ -488,7 +488,7 @@ class WithS3File:
         wr.s3.to_json(df=df, path=s3_path, orient="records", lines=True, index=False, **kwargs)
 
     @staticmethod
-    @utils.allow_options(pd.HDFStore.put)
+    @allow_options(pd.HDFStore.put)
     def _write_s3_hdf_file(df: pd.DataFrame, s3_path: str, **kwargs):
         """Write a DataFrame to S3 as an HDF5 file, using in-memory streaming."""
         parsed = urlparse(s3_path)
