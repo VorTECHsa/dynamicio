@@ -337,5 +337,4 @@ READ_FROM_ATHENA:
   CLOUD:
     type: athena
     athena:
-      s3_staging_dir: s3://test-staging/
-      region_name: eu-west-1
+      s3_output: s3://test-staging/

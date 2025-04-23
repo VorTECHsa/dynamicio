@@ -11,7 +11,7 @@ from magic_logger import logger
 
 # Application Imports
 from dynamicio.config.pydantic import DataframeSchema, KafkaDataEnvironment
-from dynamicio.mixins import utils
+from dynamicio.mixins.utils import allow_options
 
 
 class WithKafka:
@@ -290,7 +290,7 @@ class WithKafka:
             if self.options.get("value_serializer") is not None:
                 self.__value_serializer = self.options.pop("value_serializer")
 
-    @utils.allow_options(VALID_CONFIG_KEYS)
+    @allow_options(VALID_CONFIG_KEYS)
     def _get_producer(self, server: str, **options: MutableMapping[str, Any]) -> Producer:
         """Generate and return a Kafka Producer.
 

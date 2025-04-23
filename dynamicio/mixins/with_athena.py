@@ -1,25 +1,19 @@
+"""This module provides mixins that support AWS Athena I/O."""
+
 # pylint: disable=no-member, protected-access, too-few-public-methods
 
-"""This module provides mixins that support AWS Athena I/O."""
-import inspect
-from typing import Any, MutableMapping
+from typing import Any, MutableMapping, cast
 
+import awswrangler as wr
 import pandas as pd
-from magic_logger import logger
-from pyathena import connect
-from pyathena.connection import Connection
-from pyathena.pandas.cursor import PandasCursor
-from pyathena.pandas.result_set import AthenaPandasResultSet
 
 # Application Imports
 from dynamicio.config.pydantic import AthenaDataEnvironment
 from dynamicio.mixins.utils import allow_options
 
-allowed_athena_options = set(inspect.signature(AthenaPandasResultSet.__init__).parameters.keys()) - {"self"}
-
 
 class WithAthena:
-    """Handles I/O operations for AWS Athena.
+    """Handles I/O operations for AWS Athena using AWS Wrangler.
 
     Note:
         The `__abstractmethods__ = frozenset()` is used to silence false positives from pylint,
@@ -33,31 +27,30 @@ class WithAthena:
     options: MutableMapping[str, Any]
 
     def _read_from_athena(self) -> pd.DataFrame:
-        """Reads data from AWS Athena.
+        """Reads data from AWS Athena using awswrangler with validated kwargs.
 
         Expected config:
             - query
-            - s3_staging_dir
-            - region_name
+            - s3_output
         """
         cfg = self.sources_config.athena
-        query = self.options.pop("query", None)
+        raw_query = self.options.pop("query", None)
+        if raw_query is None:
+            raise ValueError("A 'query' must be provided for Athena reads")
 
-        assert query, "A 'query' must be provided for Athena read"
+        query = cast(str, raw_query)
+        # Pull config, add required positional args back
+        return self._run_wr_athena_query_wrapped(
+            sql=query,
+            s3_output=cfg.s3_output,
+            **self.options,
+        )
 
-        conn = connect(s3_staging_dir=cfg.s3_staging_dir, region_name=cfg.region_name, cursor_class=PandasCursor)
-        return self._run_query(conn, query, **self.options)
-
-    @allow_options(allowed_athena_options)
-    def _run_query(self, conn: Connection, query: str, **options: Any) -> pd.DataFrame:
-        logger.info(f"[athena] Executing query: {query}")
-        cursor = conn.cursor()
-        cursor.execute(query)
-
-        rows = cursor.fetchall(**options)
-        columns = [col[0] for col in cursor.description]
-        return pd.DataFrame(rows, columns=columns)
+    @staticmethod
+    @allow_options(wr.athena.read_sql_query)
+    def _run_wr_athena_query_wrapped(sql: str, s3_output: str, **options: Any) -> pd.DataFrame:
+        return wr.athena.read_sql_query(sql, s3_output, **options)
 
     def _write_to_athena(self, df: pd.DataFrame):
         """Athena does not support direct writing. Raise NotImplementedError."""
-        raise NotImplementedError("Athena does not support direct writes via pandas. Consider writing to S3 or using Glue instead.")
+        raise NotImplementedError("Athena does not support direct writes. Use S3/Glue for persistence.")

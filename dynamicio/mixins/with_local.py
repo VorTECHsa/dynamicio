@@ -15,7 +15,7 @@ from pyarrow.parquet import read_table, write_table
 # Application Imports
 from dynamicio.config.pydantic import DataframeSchema, LocalBatchDataEnvironment, LocalDataEnvironment
 from dynamicio.mixins import utils
-from dynamicio.mixins.utils import get_file_type_value
+from dynamicio.mixins.utils import allow_options, get_file_type_value
 
 hdf_lock = Lock()
 
@@ -68,7 +68,7 @@ class WithLocal:
         getattr(self, f"_write_{file_type}_file")(df, file_path, **self.options)
 
     @staticmethod
-    @utils.allow_options(pd.read_hdf)
+    @allow_options(pd.read_hdf)
     def _read_hdf_file(file_path: str, schema: DataframeSchema, **options: Any) -> pd.DataFrame:
         """Read a HDF file as a DataFrame using `pd.read_hdf`.
 
@@ -93,7 +93,7 @@ class WithLocal:
         return df
 
     @staticmethod
-    @utils.allow_options(pd.read_csv)
+    @allow_options(pd.read_csv)
     def _read_csv_file(file_path: str, schema: DataframeSchema, **options: Any) -> pd.DataFrame:
         """Read a CSV file as a DataFrame using `pd.read_csv`.
 
@@ -110,7 +110,7 @@ class WithLocal:
         return pd.read_csv(file_path, **options)
 
     @staticmethod
-    @utils.allow_options([*utils.args_of(pd.read_json), *["single_record"]])
+    @allow_options([*utils.args_of(pd.read_json), *["single_record"]])
     def _read_json_file(file_path: str, schema: DataframeSchema, **options: Any) -> pd.DataFrame:
         """Read a json file as a DataFrame using `pd.read_hdf`.
 
@@ -174,17 +174,17 @@ class WithLocal:
         return WithLocal.__read_with_pyarrow(file_path, **options)
 
     @classmethod
-    @utils.allow_options([*utils.args_of(pd.read_parquet), *utils.args_of(read_table)])
+    @allow_options([*utils.args_of(pd.read_parquet), *utils.args_of(read_table)])
     def __read_with_pyarrow(cls, file_path: str, **options: Any) -> pd.DataFrame:
         return pd.read_parquet(file_path, **options)
 
     @classmethod
-    @utils.allow_options([*utils.args_of(pd.read_parquet), *utils.args_of(ParquetFile)])
+    @allow_options([*utils.args_of(pd.read_parquet), *utils.args_of(ParquetFile)])
     def __read_with_fastparquet(cls, file_path: str, **options: Any) -> pd.DataFrame:
         return pd.read_parquet(file_path, **options)
 
     @staticmethod
-    @utils.allow_options([*utils.args_of(pd.DataFrame.to_hdf), *["protocol"]])
+    @allow_options([*utils.args_of(pd.DataFrame.to_hdf), *["protocol"]])
     def _write_hdf_file(df: pd.DataFrame, file_path: str, **options: Any):
         """Write a dataframe to hdf using `df.to_hdf`.
 
@@ -206,7 +206,7 @@ class WithLocal:
             df.to_hdf(file_path, key="df", mode="w", **options)
 
     @staticmethod
-    @utils.allow_options(pd.DataFrame.to_csv)
+    @allow_options(pd.DataFrame.to_csv)
     def _write_csv_file(df: pd.DataFrame, file_path: str, **options: Any):
         """Write a dataframe as a CSV file using `df.to_csv`.
 
@@ -220,7 +220,7 @@ class WithLocal:
         df.to_csv(file_path, **options)
 
     @staticmethod
-    @utils.allow_options(pd.DataFrame.to_json)
+    @allow_options(pd.DataFrame.to_json)
     def _write_json_file(df: pd.DataFrame, file_path: str, **options: Any):
         """Writes a JSON file using 'records' orientation with lines=True.
 
@@ -262,12 +262,12 @@ class WithLocal:
         return WithLocal.__write_with_pyarrow(df, file_path, **options)
 
     @classmethod
-    @utils.allow_options([*utils.args_of(pd.DataFrame.to_parquet), *utils.args_of(write_table)])
+    @allow_options([*utils.args_of(pd.DataFrame.to_parquet), *utils.args_of(write_table)])
     def __write_with_pyarrow(cls, df: pd.DataFrame, filepath: str, **options: Any):
         return df.to_parquet(filepath, **options)
 
     @classmethod
-    @utils.allow_options([*utils.args_of(pd.DataFrame.to_parquet), *utils.args_of(write)])
+    @allow_options([*utils.args_of(pd.DataFrame.to_parquet), *utils.args_of(write)])
     def __write_with_fastparquet(cls, df: pd.DataFrame, filepath: str, **options: Any):
         return df.to_parquet(filepath, **options)
 

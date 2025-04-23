@@ -7,17 +7,18 @@ import tempfile
 from contextlib import contextmanager
 from typing import Any, Dict, Generator, MutableMapping, Union
 
-import pandas as pd  # type: ignore
+import pandas as pd
 from magic_logger import logger
-from sqlalchemy import BigInteger, Boolean, Column, create_engine, Date, DateTime, Float, Integer, String  # type: ignore
-from sqlalchemy.ext.declarative import declarative_base  # type: ignore
-from sqlalchemy.orm import Query  # type: ignore
-from sqlalchemy.orm.decl_api import DeclarativeMeta  # type: ignore
-from sqlalchemy.orm.session import Session as SqlAlchemySession  # type: ignore
-from sqlalchemy.orm.session import sessionmaker  # type: ignore
+from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, Float, Integer, String, create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import Query
+from sqlalchemy.orm.decl_api import DeclarativeMeta
+from sqlalchemy.orm.session import Session as SqlAlchemySession
+from sqlalchemy.orm.session import sessionmaker
 
+# Application Imports
 from dynamicio.config.pydantic import DataframeSchema, PostgresDataEnvironment
-from dynamicio.mixins import utils
+from dynamicio.mixins.utils import allow_options
 
 Session = sessionmaker(autoflush=True)
 
@@ -127,7 +128,7 @@ class WithPostgres:
         return tables_colums
 
     @staticmethod
-    @utils.allow_options(pd.read_sql)
+    @allow_options(pd.read_sql)
     def _read_database(session: SqlAlchemySession, query: Union[str, Query], **options: Any) -> pd.DataFrame:
         """Run `query` against active `session` and returns the result as a `DataFrame`.
 
