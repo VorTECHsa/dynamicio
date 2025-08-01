@@ -9,13 +9,14 @@ from typing import Any, Dict, Generator, MutableMapping, Union
 
 import pandas as pd  # type: ignore
 from magic_logger import logger
-from sqlalchemy import BigInteger, Boolean, Column, create_engine, Date, DateTime, Float, Integer, String  # type: ignore
+from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, Float, Integer, String, create_engine  # type: ignore
 from sqlalchemy.ext.declarative import declarative_base  # type: ignore
 from sqlalchemy.orm import Query  # type: ignore
 from sqlalchemy.orm.decl_api import DeclarativeMeta  # type: ignore
 from sqlalchemy.orm.session import Session as SqlAlchemySession  # type: ignore
 from sqlalchemy.orm.session import sessionmaker  # type: ignore
 
+# Application Imports
 from dynamicio.config.pydantic import DataframeSchema, PostgresDataEnvironment
 from dynamicio.mixins import utils
 
@@ -139,9 +140,10 @@ class WithPostgres:
         Returns:
             DataFrame
         """
-        if isinstance(query, Query):
-            query = query.with_session(session).statement
-        return pd.read_sql(sql=query, con=session.get_bind(), **options)
+        final_query = query.with_session(session).statement if isinstance(query, Query) else query
+
+        with session.get_bind().connect() as conn:
+            return pd.read_sql(sql=final_query, con=conn, **options)
 
     def _write_to_postgres(self, df: pd.DataFrame):
         """Write a dataframe to postgres based on the {file_type} of the config_io configuration.

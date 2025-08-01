@@ -1,19 +1,16 @@
 # pylint: disable=no-member, missing-module-docstring, missing-class-docstring, missing-function-docstring, too-many-public-methods, too-few-public-methods, protected-access, C0103, C0302, R0801
 import os
-from unittest.mock import ANY, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import pandas as pd
 import pytest
 from sqlalchemy.sql.base import ImmutableColumnCollection
 
+# Application Imports
 from dynamicio import WithPostgres
 from dynamicio.config import IOConfig
 from tests import constants
-from tests.mocking.io import (
-    ReadPostgresIO,
-    WriteExtendedPostgresIO,
-    WritePostgresIO,
-)
+from tests.mocking.io import ReadPostgresIO, WriteExtendedPostgresIO, WritePostgresIO
 from tests.mocking.models import ERModel, PgModel
 
 
@@ -138,9 +135,13 @@ class TestPostgresIO:
         mock__read_database.assert_called_with(ANY, "SELECT * FROM table_name_from_yaml_options")
 
     @pytest.mark.unit
+    @patch("dynamicio.mixins.with_postgres.SqlAlchemySession.get_bind")
     @patch.object(pd, "read_sql")
-    def test_read_from_postgres_with_query_and_options(self, mock__read_sql):
+    def test_read_from_postgres_with_query_and_options(self, mock_read_sql, mock_get_bind):
         # Given
+        mock_conn = MagicMock()
+        mock_get_bind.return_value.connect.return_value.__enter__.return_value = mock_conn
+
         postgres_cloud_config = IOConfig(
             path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
             env_identifier="CLOUD",
@@ -151,7 +152,7 @@ class TestPostgresIO:
         ReadPostgresIO(source_config=postgres_cloud_config, sql_query="SELECT * FROM example", parse_dates=["date"], wrong_arg="whatever").read()
 
         # Then
-        mock__read_sql.assert_called_with(sql="SELECT * FROM example", con=ANY, parse_dates=["date"])
+        mock_read_sql.assert_called_with(sql="SELECT * FROM example", con=mock_conn, parse_dates=["date"])
 
     @pytest.mark.unit
     def test_generate_model_from_schema_returns_model(self):
