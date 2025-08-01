@@ -143,7 +143,7 @@ class WithPostgres:
         final_query = query.with_session(session).statement if isinstance(query, Query) else query
 
         with session.get_bind().connect() as conn:
-            return pd.read_sql(sql=final_query, con=conn, **options)
+            return pd.read_sql(sql=final_query, con=conn.connection, **options)
 
     def _write_to_postgres(self, df: pd.DataFrame):
         """Write a dataframe to postgres based on the {file_type} of the config_io configuration.

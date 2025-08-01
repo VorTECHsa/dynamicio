@@ -140,6 +140,8 @@ class TestPostgresIO:
     def test_read_from_postgres_with_query_and_options(self, mock_read_sql, mock_get_bind):
         # Given
         mock_conn = MagicMock()
+        mock_raw_conn = MagicMock()
+        mock_conn.connection = mock_raw_conn  # <--- simulate .connection access
         mock_get_bind.return_value.connect.return_value.__enter__.return_value = mock_conn
 
         postgres_cloud_config = IOConfig(
@@ -149,10 +151,15 @@ class TestPostgresIO:
         ).get(source_key="READ_FROM_POSTGRES")
 
         # When
-        ReadPostgresIO(source_config=postgres_cloud_config, sql_query="SELECT * FROM example", parse_dates=["date"], wrong_arg="whatever").read()
+        ReadPostgresIO(
+            source_config=postgres_cloud_config,
+            sql_query="SELECT * FROM example",
+            parse_dates=["date"],
+            wrong_arg="whatever"
+        ).read()
 
         # Then
-        mock_read_sql.assert_called_with(sql="SELECT * FROM example", con=mock_conn, parse_dates=["date"])
+        mock_read_sql.assert_called_with(sql="SELECT * FROM example", con=mock_raw_conn, parse_dates=["date"])
 
     @pytest.mark.unit
     def test_generate_model_from_schema_returns_model(self):
