@@ -1,5 +1,6 @@
 # pylint: disable=no-member, missing-module-docstring, missing-class-docstring, missing-function-docstring, too-many-public-methods, too-few-public-methods, protected-access, C0103, C0302, R0801
 import os
+import types
 from unittest.mock import ANY, patch
 
 import pandas as pd
@@ -185,6 +186,73 @@ class TestPostgresIO:
         assert isinstance(model.__table__.columns, ReadOnlyColumnCollection)
         for x, y in zip(columns, [PgModel.id, PgModel.foo, PgModel.bar, PgModel.baz]):
             assert str(x) == str(y)
+
+    @pytest.mark.unit
+    def test_generate_model_from_schema_raises_on_unknown_type(self):
+        # Given
+        pg_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_POSTGRES")
+
+        schema = types.SimpleNamespace(
+            name="bad_schema",
+            columns={
+                "bad_col": types.SimpleNamespace(name="bad_col", data_type="not_a_real_type"),
+            },
+        )
+
+        # When / Then
+        with pytest.raises(ValueError, match="Unsupported data_type 'not_a_real_type' for column 'bad_col' in schema 'bad_schema'"):
+            ReadPostgresIO(source_config=pg_cloud_config)._generate_model_from_schema(schema)  # pylint: disable=protected-access
+
+    @pytest.mark.unit
+    def test_generate_model_sets_primary_key_on_first_column_only(self):
+        # Given
+        pg_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_POSTGRES")
+
+        schema = types.SimpleNamespace(
+            name="simple",
+            columns={
+                "id": types.SimpleNamespace(name="id", data_type="int64"),
+                "value": types.SimpleNamespace(name="value", data_type="float64"),
+            },
+        )
+
+        # When
+        model = ReadPostgresIO(source_config=pg_cloud_config)._generate_model_from_schema(schema)  # pylint: disable=protected-access
+
+        # Then
+        columns = model.__table__.columns
+        assert columns["id"].primary_key is True
+        assert columns["value"].primary_key is False
+
+    @pytest.mark.unit
+    def test_generate_model_classname_generation(self):
+        # Given
+        pg_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_POSTGRES")
+
+        schema = types.SimpleNamespace(
+            name="ugly_table_name",
+            columns={
+                "id": types.SimpleNamespace(name="id", data_type="int64"),
+            },
+        )
+
+        # When
+        model = ReadPostgresIO(source_config=pg_cloud_config)._generate_model_from_schema(schema)  # pylint: disable=protected-access
+
+        # Then
+        assert model.__name__ == "UglyTableNameModel"
 
     @pytest.mark.unit
     def test_to_check_if_dataframe_has_valid_data_types(self):

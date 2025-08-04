@@ -122,16 +122,16 @@ class WithPostgres:
 
         for col in schema.columns.values():
             sql_type = _type_lookup.get(col.data_type)
-            if sql_type:
-                json_cls_schema["columns"].append({"name": col.name, "type": sql_type})
+            if not sql_type:
+                raise ValueError(f"Unsupported data_type '{col.data_type}' for column '{col.name}' in schema '{schema.name}'")
+            json_cls_schema["columns"].append({"name": col.name, "type": sql_type})
 
         class_name = "".join(word.capitalize() or "_" for word in schema.name.split("_")) + "Model"
 
         class_dict = {"clsname": class_name, "__tablename__": schema.name, "__table_args__": {"extend_existing": True}}
         class_dict.update({column["name"]: Column(column["type"], primary_key=True) if idx == 0 else Column(column["type"]) for idx, column in enumerate(json_cls_schema["columns"])})
 
-        generated_model = type(class_name, (Base,), class_dict)
-        return generated_model
+        return type(class_name, (Base,), class_dict)
 
     @staticmethod
     def _get_table_columns(model):
