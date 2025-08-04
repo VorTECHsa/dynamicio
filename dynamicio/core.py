@@ -1,5 +1,6 @@
 """Implements the DynamicDataIO class which provides functionality for data: loading; sinking, and; schema validation."""
-# pylint: disable=no-member
+
+# pylint: disable=too-many-positional-arguments, disable=no-member
 __all__ = ["DynamicDataIO", "SCHEMA_FROM_FILE", "CASTING_WARNING_MSG"]
 
 import asyncio
@@ -100,7 +101,7 @@ class DynamicDataIO:
             - CAN have `schema_validations` and `schema_metrics` attributes
         """
         col_info = {}
-        for (col_name, dtype) in target.schema.items():
+        for col_name, dtype in target.schema.items():
             col_validations = {}
             col_metrics = []
             try:

@@ -1,5 +1,6 @@
 """This module provides mixins that are providing Kafka I/O support."""
-# pylint: disable=no-member, protected-access, too-few-public-methods
+
+# pylint: disable=no-member, protected-access, too-few-public-methods, broad-exception-raised
 
 from typing import Any, Callable, Mapping, MutableMapping, Optional
 

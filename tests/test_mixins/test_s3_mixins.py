@@ -10,6 +10,7 @@ import pydantic
 import pytest
 import yaml
 
+# Application Imports
 import dynamicio.mixins.with_local
 import dynamicio.mixins.with_s3
 from dynamicio.config import IOConfig
@@ -46,9 +47,10 @@ class TestS3FileIO:
         file_path = f"{constants.TEST_RESOURCES}/data/input/some_csv_to_read.csv"
 
         # When
-        with patch.object(dynamicio.mixins.with_local.WithLocal, "_read_csv_file") as mock__read_csv_file, patch.object(
-            dynamicio.mixins.with_s3.WithS3File, "_s3_named_file_reader"
-        ) as mock_s3_reader:
+        with (
+            patch.object(dynamicio.mixins.with_local.WithLocal, "_read_csv_file") as mock__read_csv_file,
+            patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_named_file_reader") as mock_s3_reader,
+        ):
             with open(file_path, "r") as file:  # pylint: disable=unspecified-encoding
                 mock_s3_reader.return_value = file
                 io_obj = TemplatedFile(source_config=config, file_name_to_replace="some_csv_to_read")
@@ -105,9 +107,10 @@ class TestS3FileIO:
         file_path = f"{constants.TEST_RESOURCES}/data/input/some_csv_to_read.csv"
 
         # When
-        with patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_reader") as mock_s3_reader, patch.object(
-            dynamicio.mixins.with_s3.WithS3File, "_read_parquet_file"
-        ) as mock_read_parquet_file:
+        with (
+            patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_reader") as mock_s3_reader,
+            patch.object(dynamicio.mixins.with_s3.WithS3File, "_read_parquet_file") as mock_read_parquet_file,
+        ):
             with open(file_path, "r") as file:  # pylint: disable=unspecified-encoding
                 mock_s3_reader.return_value = file
                 ReadS3ParquetIO(source_config=s3_parquet_cloud_config, no_disk_space=True).read()
@@ -148,9 +151,10 @@ class TestS3FileIO:
         ).get(source_key="READ_FROM_S3_JSON")
 
         # When
-        with patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_reader") as mock__s3_reader, patch.object(
-            dynamicio.mixins.with_s3.WithS3File, "_read_json_file"
-        ) as mock__read_json_file:
+        with (
+            patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_reader") as mock__s3_reader,
+            patch.object(dynamicio.mixins.with_s3.WithS3File, "_read_json_file") as mock__read_json_file,
+        ):
             ReadS3JsonIO(source_config=s3_json_cloud_config, no_disk_space=True).read()
 
         # Then
@@ -167,9 +171,10 @@ class TestS3FileIO:
         ).get(source_key="READ_FROM_S3_CSV")
 
         # When
-        with patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_reader") as mock__s3_reader, patch.object(
-            dynamicio.mixins.with_s3.WithS3File, "_read_csv_file"
-        ) as mock__read_csv_file:
+        with (
+            patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_reader") as mock__s3_reader,
+            patch.object(dynamicio.mixins.with_s3.WithS3File, "_read_csv_file") as mock__read_csv_file,
+        ):
             ReadS3CsvIO(source_config=s3_csv_cloud_config, no_disk_space=True).read()
 
         # Then
@@ -225,9 +230,11 @@ class TestS3FileIO:
         #     @staticmethod
         #     def validate(df: pd.DataFrame):
         #         pass
-        with patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_writer") as mock__s3_writer, patch.object(WriteS3ParquetIO, "_apply_schema") as mock__apply_schema, patch.object(
-            WriteS3ParquetIO, "_write_parquet_file"
-        ) as mock__write_parquet_file:
+        with (
+            patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_writer") as mock__s3_writer,
+            patch.object(WriteS3ParquetIO, "_apply_schema") as mock__apply_schema,
+            patch.object(WriteS3ParquetIO, "_write_parquet_file") as mock__write_parquet_file,
+        ):
             with NamedTemporaryFile(delete=False) as temp_file:
                 mock__s3_writer.return_value = temp_file
                 WriteS3ParquetIO(source_config=s3_parquet_cloud_config).write(input_df)
@@ -246,8 +253,9 @@ class TestS3FileIO:
         ).get(source_key="READ_FROM_S3_PARQUET")
 
         # When
-        with patch.object(dynamicio.mixins.with_s3.WithS3File, "_read_parquet_file") as mock__read_parquet_file, patch.object(
-            dynamicio.mixins.with_s3.WithS3File, "_s3_named_file_reader"
+        with (
+            patch.object(dynamicio.mixins.with_s3.WithS3File, "_read_parquet_file") as mock__read_parquet_file,
+            patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_named_file_reader"),
         ):
             mock__read_parquet_file.return_value = expected_s3_parquet_df
             ReadS3ParquetWithDifferentCastableDTypeIO(source_config=s3_parquet_cloud_config).read()
@@ -299,9 +307,10 @@ class TestS3FileIO:
         ).get(source_key="READ_FROM_S3_PARQUET")
 
         # When
-        with patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_reader") as mock__s3_reader, patch.object(
-            dynamicio.mixins.with_local.WithLocal, "_read_parquet_file"
-        ) as mock__read_parquet_file:
+        with (
+            patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_reader") as mock__s3_reader,
+            patch.object(dynamicio.mixins.with_local.WithLocal, "_read_parquet_file") as mock__read_parquet_file,
+        ):
             ReadS3ParquetIO(source_config=s3_parquet_cloud_config, no_disk_space=True).read()
 
         # Then
@@ -338,9 +347,10 @@ class TestS3FileIO:
         ).get(source_key="WRITE_TO_S3_PARQUET")
 
         # When
-        with patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_writer") as mock__s3_writer, patch.object(
-            dynamicio.mixins.with_local.WithLocal, "_write_parquet_file"
-        ) as mock__write_parquet_file:
+        with (
+            patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_writer") as mock__s3_writer,
+            patch.object(dynamicio.mixins.with_local.WithLocal, "_write_parquet_file") as mock__write_parquet_file,
+        ):
             with NamedTemporaryFile(delete=False) as temp_file:
                 mock__s3_writer.return_value = temp_file
                 WriteS3ParquetIO(source_config=s3_parquet_local_config).write(df)
@@ -360,9 +370,10 @@ class TestS3FileIO:
         ).get(source_key="WRITE_TO_S3_CSV")
 
         # When
-        with patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_writer") as mock__s3_writer, patch.object(
-            dynamicio.mixins.with_local.WithLocal, "_write_csv_file"
-        ) as mock__write_csv_file:
+        with (
+            patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_writer") as mock__s3_writer,
+            patch.object(dynamicio.mixins.with_local.WithLocal, "_write_csv_file") as mock__write_csv_file,
+        ):
             with NamedTemporaryFile(delete=False) as temp_file:
                 mock__s3_writer.return_value = temp_file
                 WriteS3CsvIO(source_config=s3_csv_local_config).write(df)
@@ -382,9 +393,10 @@ class TestS3FileIO:
         ).get(source_key="WRITE_TO_S3_JSON")
 
         # When
-        with patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_writer") as mock__s3_writer, patch.object(
-            dynamicio.mixins.with_local.WithLocal, "_write_json_file"
-        ) as mock__write_json_file:
+        with (
+            patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_writer") as mock__s3_writer,
+            patch.object(dynamicio.mixins.with_local.WithLocal, "_write_json_file") as mock__write_json_file,
+        ):
             with NamedTemporaryFile(delete=False) as temp_file:
                 mock__s3_writer.return_value = temp_file
                 WriteS3JsonIO(source_config=s3_json_local_config).write(df)
@@ -632,9 +644,10 @@ class TestS3PathPrefixIO:
         ).get(source_key="READ_FROM_S3_PATH_PREFIX_PARQUET")
 
         # When
-        with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mock__awscli_runner, patch.object(
-            dynamicio.mixins.with_local.WithLocal, "_read_parquet_file"
-        ) as mock__read_parquet_file:
+        with (
+            patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mock__awscli_runner,
+            patch.object(dynamicio.mixins.with_local.WithLocal, "_read_parquet_file") as mock__read_parquet_file,
+        ):
             ReadS3ParquetIO(source_config=s3_parquet_cloud_config, no_disk_space=True).read()
 
         # Then

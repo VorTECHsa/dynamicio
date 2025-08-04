@@ -1,4 +1,5 @@
 """A package for wrapping your I/O operations."""
+
 # pylint: disable=abstract-method
 import os
 from contextlib import suppress

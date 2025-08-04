@@ -1,10 +1,12 @@
+"""Pydantic schema for YAML files."""
+
 # pylint: disable=no-member, no-self-argument, unused-argument
-"""Pydantic schema for YAML files"""
 
 from typing import Mapping, MutableMapping
 
 import pydantic
 
+# Application Imports
 import dynamicio.config.pydantic.io_resources as env_spec
 
 
@@ -21,14 +23,15 @@ class BindingsYaml(pydantic.BaseModel):
         if not isinstance(value, Mapping):
             raise ValueError(f"Bindings must be a mapping. (got {value!r} instead).")
         # Tell each binding its name
-        for (name, sub_config) in value.items():
+        for name, sub_config in value.items():
             if not isinstance(sub_config, MutableMapping):
                 raise ValueError(f"Each element for the name binding must be a dict. (got {sub_config!r} instead)")
             sub_config["__binding_name__"] = name
         return value
 
     def update_config_refs(self) -> "BindingsYaml":
-        """Updates dynamic parts of the config:
+        """Updates dynamic parts of the config.
+
         - Configure _parent for all `IOEnvironment`s
         - Replace all IOSchemaRef with actual schema objects
         """
