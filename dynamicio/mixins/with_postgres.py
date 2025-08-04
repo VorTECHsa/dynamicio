@@ -7,18 +7,17 @@ import tempfile
 from contextlib import contextmanager
 from typing import Any, Dict, Generator, MutableMapping, Union
 
-import pandas as pd  # type: ignore
-from magic_logger import logger
-from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, Float, Integer, String, create_engine  # type: ignore
-from sqlalchemy.ext.declarative import declarative_base  # type: ignore
-from sqlalchemy.orm import Query  # type: ignore
-from sqlalchemy.orm.decl_api import DeclarativeMeta  # type: ignore
-from sqlalchemy.orm.session import Session as SqlAlchemySession  # type: ignore
-from sqlalchemy.orm.session import sessionmaker  # type: ignore
-
+import pandas as pd
 # Application Imports
 from dynamicio.config.pydantic import DataframeSchema, PostgresDataEnvironment
 from dynamicio.mixins import utils
+from magic_logger import logger
+from sqlalchemy import BigInteger, Boolean, Column, create_engine, Date, DateTime, Float, Integer, String, text
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import Query
+from sqlalchemy.orm.decl_api import DeclarativeMeta
+from sqlalchemy.orm.session import Session as SqlAlchemySession
+from sqlalchemy.orm.session import sessionmaker
 
 Session = sessionmaker(autoflush=True)
 
@@ -114,7 +113,8 @@ class WithPostgres:
         class_name = "".join(word.capitalize() or "_" for word in schema.name.split("_")) + "Model"
 
         class_dict = {"clsname": class_name, "__tablename__": schema.name, "__table_args__": {"extend_existing": True}}
-        class_dict.update({column["name"]: Column(column["type"], primary_key=True) if idx == 0 else Column(column["type"]) for idx, column in enumerate(json_cls_schema["columns"])})
+        class_dict.update(
+            {column["name"]: Column(column["type"], primary_key=True) if idx == 0 else Column(column["type"]) for idx, column in enumerate(json_cls_schema["columns"])})
 
         generated_model = type(class_name, (Base,), class_dict)
         return generated_model
@@ -127,9 +127,8 @@ class WithPostgres:
                 tables_colums.append(getattr(model, col.name))
         return tables_colums
 
-    @staticmethod
     @utils.allow_options(pd.read_sql)
-    def _read_database(session: SqlAlchemySession, query: Union[str, Query], **options: Any) -> pd.DataFrame:
+    def _read_database(self, session: SqlAlchemySession, query: Union[str, Query], **options: Any) -> pd.DataFrame:
         """Run `query` against active `session` and returns the result as a `DataFrame`.
 
         Args:
@@ -140,15 +139,18 @@ class WithPostgres:
         Returns:
             DataFrame
         """
+        postgres_config = self.sources_config.postgres
+        db_host = postgres_config.db_host
+        db_name = postgres_config.db_name
+
         if isinstance(query, Query):
             query = query.with_session(session).statement
 
         if hasattr(query, "compile"):
             # Required for compatibility with pandas >= 2.0
-            from sqlalchemy import text
-
             query = text(str(query.compile(compile_kwargs={"literal_binds": True})))
 
+        logger.info(f"[postgres] Started downloading table: {self.sources_config.dynamicio_schema.name} from: {db_host}:{db_name}")
         return pd.read_sql(sql=query, con=session.get_bind(), **options)
 
     def _write_to_postgres(self, df: pd.DataFrame):
