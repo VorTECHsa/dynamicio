@@ -1,0 +1,186 @@
+name: vessels6
+columns:
+  id:
+    metrics: []
+    type: object
+    validations: {}
+  name:
+    metrics: []
+    type: object
+    validations: {}
+  imo:
+    metrics: []
+    type: float64
+    validations: {}
+  mmsi:
+    metrics: []
+    type: int64
+    validations: {}
+  call_sign:
+    metrics: []
+    type: object
+    validations: {}
+  flag:
+    metrics: []
+    type: object
+    validations: {}
+  gross_ton:
+    metrics: []
+    type: float64
+    validations: {}
+  dead_weight:
+    metrics: []
+    type: int64
+    validations: {}
+  year:
+    metrics: []
+    type: float64
+    validations: {}
+  type:
+    metrics: []
+    type: object
+    validations: {}
+  length:
+    metrics: []
+    type: float64
+    validations: {}
+  width:
+    metrics: []
+    type: float64
+    validations: {}
+  a:
+    metrics: []
+    type: float64
+    validations: {}
+  b:
+    metrics: []
+    type: float64
+    validations: {}
+  c:
+    metrics: []
+    type: float64
+    validations: {}
+  d:
+    metrics: []
+    type: float64
+    validations: {}
+  ais_type:
+    metrics: []
+    type: float64
+    validations: {}
+  owner:
+    metrics: []
+    type: object
+    validations: {}
+  vessel_type:
+    metrics: []
+    type: object
+    validations: {}
+  owner_id:
+    metrics: []
+    type: object
+    validations: {}
+  revision:
+    metrics: []
+    type: int64
+    validations: {}
+  avoid:
+    metrics: []
+    type: object
+    validations: {}
+  computed_dwt:
+    metrics: []
+    type: bool
+    validations: {}
+  signal_imo:
+    metrics: []
+    type: float64
+    validations: {}
+  short_id:
+    metrics: []
+    type: int64
+    validations: {}
+  blacklisted:
+    metrics: []
+    type: bool
+    validations: {}
+  vessel_class:
+    metrics: []
+    type: object
+    validations: {}
+  eni:
+    metrics: []
+    type: object
+    validations: {}
+  liquid_cubic_98_percent:
+    metrics: []
+    type: float64
+    validations: {}
+  refrigeration:
+    metrics: []
+    type: object
+    validations: {}
+  cubic_capacity_source:
+    metrics: []
+    type: object
+    validations: {}
+  source_refrigeration_type:
+    metrics: []
+    type: object
+    validations: {}
+  ice_class:
+    metrics: []
+    type: object
+    validations: {}
+  propulsion_type:
+    metrics: []
+    type: object
+    validations: {}
+  ice_classed:
+    metrics: []
+    type: bool
+    validations: {}
+  source_ice_class:
+    metrics: []
+    type: object
+    validations: {}
+  source_ice_classed:
+    metrics: []
+    type: object
+    validations: {}
+  source_propulsion_type:
+    metrics: []
+    type: object
+    validations: {}
+  source_dead_weight:
+    metrics: []
+    type: object
+    validations: {}
+  source_flag:
+    metrics: []
+    type: object
+    validations: {}
+  coated:
+    metrics: []
+    type: bool
+    validations: {}
+  source_coated:
+    metrics: []
+    type: object
+    validations: {}
+  ethane_capable:
+    metrics: []
+    type: bool
+    validations: {}
+  vessel_class_group:
+    metrics: []
+    type: object
+    validations: {}
+  vessel_class_coarse:
+    metrics: []
+    type: object
+    validations: {}
+  vessel_class_granular:
+    metrics: []
+    type: object
+    validations: {}
