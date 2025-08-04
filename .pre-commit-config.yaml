@@ -15,7 +15,7 @@ repos:
     hooks:
       - id: formatting
         name: "isort and black"
-        exclude: ^(tests/conftest.py)
+        exclude: ^tests/conftest\.py$
         entry: bash -c '(isort "$@" && black "$@") || true; git add -u' --
         language: system
         types: [python]
@@ -34,7 +34,7 @@ repos:
     hooks:
       - id: pydocstyle
         name: pydocstyle
-        exclude: ^(tests/.*|demo/*)
+        exclude: ^(tests/.*|demo/.*)$
         language: system
         entry: pydocstyle
         stages: [pre-commit]
@@ -63,7 +63,7 @@ repos:
       - id: pytest-check
         name: pytest-check-src
         entry: python -m pytest tests --cov=dynamicio --cov-report=html --cov-report=xml -v
-        exclude: ^(.github|.circleci|docs|.flake8|.gitlint|.pylintrc|.docs.Dockerfile|README.md|Makefile|setup.py)
+        exclude: ^(\.github|\.circleci|docs|\.flake8|\.gitlint|\.pylintrc|\.docs\.Dockerfile|README\.md|Makefile|setup\.py)$
         language: system
         pass_filenames: false
         stages: [pre-commit]
@@ -73,7 +73,7 @@ repos:
       - id: pytest-check
         name: pytest-check-demo
         entry: python -m pytest demo/tests
-        exclude: ^(.github|.circleci|docs|.flake8|.gitlint|.pylintrc|.docs.Dockerfile|README.md|Makefile|setup.py)
+        exclude: ^(\.github|\.circleci|docs|\.flake8|\.gitlint|\.pylintrc|\.docs\.Dockerfile|README\.md|Makefile|setup\.py)$
         language: system
         pass_filenames: false
         stages: [pre-commit]
