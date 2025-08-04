@@ -1,6 +1,6 @@
 # pylint: disable=no-member, missing-module-docstring, missing-class-docstring, missing-function-docstring, too-many-public-methods, too-few-public-methods, protected-access, C0103, C0302, R0801
 import os
-from unittest.mock import ANY, MagicMock, patch
+from unittest.mock import ANY, patch
 
 import pandas as pd
 import pytest
@@ -10,7 +10,7 @@ from sqlalchemy.sql.base import ReadOnlyColumnCollection
 from dynamicio import WithPostgres
 from dynamicio.config import IOConfig
 from tests import constants
-from tests.mocking.io import ReadMockS3CsvIO, ReadPostgresIO, WriteExtendedPostgresIO, WritePostgresIO
+from tests.mocking.io import ReadPostgresIO, WriteExtendedPostgresIO, WritePostgresIO
 from tests.mocking.models import ERModel, PgModel
 
 
@@ -209,17 +209,3 @@ class TestPostgresIO:
 
         # Then
         assert is_valid is True
-
-    @pytest.mark.unit
-    def test_actual_read(self):
-        postgres_cloud_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/test_input.yaml")),
-            env_identifier="CLOUD",
-            dynamic_vars=constants,
-        ).get(source_key="VESSELS6")
-
-        v6 = ReadMockS3CsvIO(source_config=postgres_cloud_config).read()
-
-        print(v6.head().to_string())
-
-        ReadMockS3CsvIO(source_config=postgres_cloud_config).write(v6)

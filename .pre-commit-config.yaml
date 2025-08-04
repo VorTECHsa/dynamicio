@@ -19,7 +19,7 @@ repos:
         entry: bash -c '(isort "$@" && black "$@") || true; git add -u' --
         language: system
         types: [python]
-        stages: [commit]
+        stages: [pre-commit]
 
   - repo: local
     hooks:
@@ -28,7 +28,7 @@ repos:
         entry: pylint
         language: system
         types: [python]
-        stages: [commit]
+        stages: [pre-commit]
 
   - repo: local
     hooks:
@@ -37,7 +37,7 @@ repos:
         exclude: ^(tests/.*|demo/*)
         language: system
         entry: pydocstyle
-        stages: [commit]
+        stages: [pre-commit]
 
   - repo: local
     hooks:
@@ -46,7 +46,7 @@ repos:
         entry: flake8
         language: system
         types: [python]
-        stages: [commit]
+        stages: [pre-commit]
 
   - repo: local
     hooks:
@@ -56,7 +56,7 @@ repos:
         entry: yamllint
         language: python
         types: [file, yaml]
-        stages: [commit]
+        stages: [pre-commit]
 
   - repo: local
     hooks:
@@ -66,7 +66,7 @@ repos:
         exclude: ^(.github|.circleci|docs|.flake8|.gitlint|.pylintrc|.docs.Dockerfile|README.md|Makefile|setup.py)
         language: system
         pass_filenames: false
-        stages: [commit]
+        stages: [pre-commit]
 
   - repo: local
     hooks:
@@ -76,4 +76,4 @@ repos:
         exclude: ^(.github|.circleci|docs|.flake8|.gitlint|.pylintrc|.docs.Dockerfile|README.md|Makefile|setup.py)
         language: system
         pass_filenames: false
-        stages: [commit]
+        stages: [pre-commit]

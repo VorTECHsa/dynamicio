@@ -8,30 +8,44 @@ from contextlib import contextmanager
 from typing import Any, Dict, Generator, MutableMapping, Union
 
 import pandas as pd
-# Application Imports
-from dynamicio.config.pydantic import DataframeSchema, PostgresDataEnvironment
-from dynamicio.mixins import utils
 from magic_logger import logger
-from sqlalchemy import BigInteger, Boolean, Column, create_engine, Date, DateTime, Float, Integer, String, text
+from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, Float, Integer, String, create_engine, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Query
 from sqlalchemy.orm.decl_api import DeclarativeMeta
 from sqlalchemy.orm.session import Session as SqlAlchemySession
 from sqlalchemy.orm.session import sessionmaker
 
+# Application Imports
+from dynamicio.config.pydantic import DataframeSchema, PostgresDataEnvironment
+from dynamicio.mixins import utils
+
 Session = sessionmaker(autoflush=True)
 
 Base = declarative_base()
+
 _type_lookup = {
-    "bool": Boolean,
-    "boolean": Boolean,
-    "object": String(64),
-    "int64": Integer,
+    # Booleans
+    "bool": Boolean,  # native pandas (non-nullable)
+    "boolean": Boolean,  # pandas nullable boolean dtype
+    # Strings / objects
+    "object": String(255),  # general fallback for str columns
+    "string": String(255),  # newer pandas string dtype
+    # Integers (nullable or not)
+    "int": Integer,  # generic int fallback
+    "int64": BigInteger,  # standard numpy int64
+    "Int64": BigInteger,  # pandas nullable integer
+    # Floats
+    "float": Float,  # generic float fallback
     "float64": Float,
-    "int": Integer,
+    # Dates and times
     "date": Date,
-    "datetime64[ns]": DateTime,
-    "bigint": BigInteger,
+    "datetime": DateTime,
+    "datetime64[ns]": DateTime,  # pandas datetime dtype
+    # Optional extras
+    "bigint": BigInteger,  # explicit large integer support
+    "json": JSONB,  # optional if dealing with structured objects
 }
 
 
@@ -59,7 +73,9 @@ class WithPostgres:
 
     Args:
        - options:
-           - `truncate_and_append: bool`: If set to `True`, truncates the table and then appends the new rows. Otherwise, it drops the table and recreates it with the new rows.
+           - `truncate_and_append: bool`: If True, truncates the table with CASCADE and appends new rows (faster but destructive).
+                                    If False (default), safely deletes all existing rows and then appends new rows.
+                                    Use truncate only if you are certain views and FK constraints can be dropped or tolerated.
     """
 
     sources_config: PostgresDataEnvironment
@@ -96,7 +112,6 @@ class WithPostgres:
         query = Query(self._get_table_columns(model))
         if sql_query:
             query = sql_query
-
         logger.info(f"[postgres] Started downloading table: {self.sources_config.dynamicio_schema.name} from: {db_host}:{db_name}")
         with session_for(connection_string) as session:
             return self._read_database(session, query, **self.options)
@@ -113,8 +128,7 @@ class WithPostgres:
         class_name = "".join(word.capitalize() or "_" for word in schema.name.split("_")) + "Model"
 
         class_dict = {"clsname": class_name, "__tablename__": schema.name, "__table_args__": {"extend_existing": True}}
-        class_dict.update(
-            {column["name"]: Column(column["type"], primary_key=True) if idx == 0 else Column(column["type"]) for idx, column in enumerate(json_cls_schema["columns"])})
+        class_dict.update({column["name"]: Column(column["type"], primary_key=True) if idx == 0 else Column(column["type"]) for idx, column in enumerate(json_cls_schema["columns"])})
 
         generated_model = type(class_name, (Base,), class_dict)
         return generated_model
@@ -183,25 +197,24 @@ class WithPostgres:
 
         Args:
             session: Generated from a data model and a table name
-            table_name: The name of the table to read from a DB
+            table_name: The name of the table to write to
             df: The dataframe to be written out
-            is_truncate_and_append: Supply to truncate the table and append new rows to it; otherwise, delete and replace
+            is_truncate_and_append: If True, truncates the table with CASCADE and appends new rows (faster but destructive).
+                                    If False (default), safely deletes all existing rows and then appends new rows.
+                                    Use truncate only if you are certain views and FK constraints can be dropped or tolerated.
         """
         if is_truncate_and_append:
-            session.execute(f"TRUNCATE TABLE {table_name};")
-
-            # Below is a speedup hack in place of `df.to_csv` with the multipart option. As of today, even with
-            # `method="multi"`, uploading to Postgres is painfully slow. Hence, we're resorting to dumping the file as
-            # csv and using Postgres's CSV import function.
-            # https://stackoverflow.com/questions/2987433/how-to-import-csv-file-data-into-a-postgresql-table
-            with tempfile.NamedTemporaryFile(mode="r+") as temp_file:
-                df.to_csv(temp_file, index=False, header=False, sep="\t", doublequote=False, escapechar="\\", quoting=csv.QUOTE_NONE)
-                temp_file.flush()
-                temp_file.seek(0)
-
-                cur = session.connection().connection.cursor()
-                cur.copy_from(temp_file, table_name, columns=df.columns, null="")
+            session.execute(text(f"TRUNCATE TABLE {table_name} CASCADE;"))
         else:
-            df.to_sql(name=table_name, con=session.get_bind(), if_exists="replace", index=False)
+            session.execute(text(f"DELETE FROM {table_name};"))
+
+        # Upload data using PostgreSQL's COPY FROM CSV mechanism for performance
+        with tempfile.NamedTemporaryFile(mode="r+") as temp_file:
+            df.to_csv(temp_file, index=False, header=False, sep="\t", doublequote=False, escapechar="\\", quoting=csv.QUOTE_NONE)
+            temp_file.flush()
+            temp_file.seek(0)
+
+            cur = session.connection().connection.cursor()
+            cur.copy_from(temp_file, table_name, columns=df.columns, null="")
 
         session.commit()

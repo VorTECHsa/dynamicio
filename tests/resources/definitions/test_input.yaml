@@ -127,15 +127,3 @@ REPLACE_SCHEMA_WITH_DYN_VARS:
       file_type: "parquet"
   schema:
     file_path: "[[ TEST_RESOURCES ]]/schemas/bar.yaml"
-
-VESSELS6:
-  CLOUD:
-    type: "postgres"
-    postgres:
-      db_host: "dm84db.ch8fsfzkebul.eu-west-1.rds.amazonaws.com"
-      db_port: "5432"
-      db_name: "backend"
-      db_user: "pskgfe2016"
-      db_password: "pskgfe2016"
-  schema:
-    file_path: "[[ TEST_RESOURCES ]]/schemas/vessels6.yaml"
