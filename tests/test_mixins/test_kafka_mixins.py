@@ -1,4 +1,4 @@
-# pylint: disable=no-member, missing-module-docstring, missing-class-docstring, missing-function-docstring, too-many-public-methods, too-few-public-methods, protected-access, C0103, C0302, R0801
+# pylint: disable=no-member, missing-module-docstring, missing-class-docstring, missing-function-docstring, too-many-public-methods, too-few-public-methods, protected-access, C0103, C0302, R0801, broad-exception-raised
 import os
 from unittest.mock import patch
 
@@ -68,7 +68,7 @@ class TestKafkaIO:
 
         # When
         with patch("dynamicio.mixins.with_kafka.Producer", return_value=mock_kafka_producer_instance):
-            write_kafka_io = WriteKafkaIO(kafka_cloud_config, document_transformer=lambda v: dict(**v, worked=True))
+            write_kafka_io = WriteKafkaIO(kafka_cloud_config, document_transformer=lambda v: {"worked": True, **v})
             for chunk in rows_generator(_df=df, chunk_size=2):
                 write_kafka_io.write(chunk)
 
@@ -78,7 +78,7 @@ class TestKafkaIO:
             # Then
             for i in range(len(df)):
                 assert len(mock_kafka_producer_instance.my_stream) > 0, "No messages were produced"
-                assert mock_kafka_producer_instance.my_stream[i]["value"] == simplejson.dumps(dict(**df.iloc[i].to_dict(), worked=True), ignore_nan=True).encode("utf-8")
+                assert mock_kafka_producer_instance.my_stream[i]["value"] == simplejson.dumps({"worked": True, **df.iloc[i].to_dict()}, ignore_nan=True).encode("utf-8")
 
     @pytest.mark.unit
     def test_kafka_producer_default_value_serialiser_is_used_unless_alternative_is_given(self, test_df):
@@ -391,7 +391,8 @@ class TestKafkaIO:
 
         def mock_produce(*args, **kwargs):  # pylint: disable=unused-argument
             if mock_kafka_producer_instance.produce_call_count == 1:
-                raise Exception("Mock message delivery failure")
+                raise RuntimeError("Mock message delivery failure")
+
             mock_kafka_producer_instance.produce_call_count += 1
 
         # When

@@ -1,6 +1,6 @@
-# pylint: disable=no-member, no-self-argument, unused-argument
-
 """This module contains pylint models for physical data sources (places the bytes are being read from)."""
+
+# pylint: disable=no-member, no-self-argument, unused-argument, broad-exception-raised
 
 import enum
 import posixpath

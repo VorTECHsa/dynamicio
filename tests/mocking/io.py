@@ -205,3 +205,7 @@ class ParquetWithCustomValidate(UnifiedIO):
 
 class ReadAthenaIO(UnifiedIO):
     schema = {"id": "object", "foo": "object", "bar": "int64"}
+
+
+class GenericIO(UnifiedIO):
+    schema = SCHEMA_FROM_FILE

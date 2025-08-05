@@ -37,6 +37,7 @@ dev-env-setup: install-poetry install-binary-packages-Darwin
 	@pyenv exec poetry self add poetry-pre-commit-plugin
 	@pyenv exec poetry run pre-commit install
 	@pyenv exec poetry run pre-commit install --hook-type commit-msg
+	@pyenv exec poetry run pre-commit migrate-config
 
 # Checks for local development
 check-linting:

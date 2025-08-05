@@ -1,4 +1,5 @@
 """A module responsible for metrics generation and logging."""
+
 # pylint: disable=missing-function-docstring,missing-class-docstring
 import json
 import logging
