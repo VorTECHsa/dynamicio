@@ -1,0 +1,8 @@
+site_name: dynamicio
+nav:
+  - Home: index.md
+
+plugins:
+  - techdocs-core
+
+docs_dir: docs
