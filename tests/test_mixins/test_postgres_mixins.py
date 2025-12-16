@@ -1,11 +1,11 @@
 # pylint: disable=no-member, missing-module-docstring, missing-class-docstring, missing-function-docstring, too-many-public-methods, too-few-public-methods, protected-access, C0103, C0302, R0801
 import os
+import types
+from unittest.mock import ANY, MagicMock, patch
+
 import pandas as pd
 import pytest
-import types
 from sqlalchemy.sql.base import ReadOnlyColumnCollection
-from unittest.mock import ANY, MagicMock, patch
-from unittest.mock import ANY, patch
 
 # Application Imports
 from dynamicio import WithPostgres
@@ -18,17 +18,21 @@ from tests.mocking.models import ERModel, PgModel
 class TestPostgresIO:
 
     @pytest.mark.unit
-    @patch.object(pd.DataFrame, "to_sql")
-    def test_write_to_postgres_using_replace_strategy(self, mock_to_sql):
+    def test_write_to_postgres_using_replace_strategy(self):
         # Given
         session = MagicMock()
+        connection = session.connection.return_value
+        cursor = connection.connection.cursor.return_value
         df = pd.DataFrame({"id": [1], "val": ["a"]})
 
         # When
         WithPostgres._write_to_database(session, "dummy_table", df, is_truncate_and_append=False)
 
         # Then
-        mock_to_sql.assert_called_once()
+        assert session.execute.call_count == 1
+        executed_sql = str(session.execute.call_args[0][0])
+        assert "DELETE FROM dummy_table" in executed_sql
+        cursor.copy_from.assert_called_once()
         session.commit.assert_called_once()
 
     @pytest.mark.unit

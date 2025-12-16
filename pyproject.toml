@@ -17,8 +17,6 @@ classifiers = [
 ]
 
 [tool.poetry.dependencies]
-PyYAML = ">=5.4.1"
-SQLAlchemy = "~1.4.11"
 awscli = ">=1.22.24"
 awswrangler = ">=3.0.0"
 boto3 = ">=1.20.24"
@@ -37,6 +35,7 @@ pyathena = "*"
 pydantic = ">=1.9.2,<3"
 python = ">=3.10,<3.13"
 python-json-logger = "~2.0.1"
+PyYAML = ">=5.4.1"
 s3fs = "==0.4.2"
 simplejson = "~3.17.2"
 SQLAlchemy = ">=1.4.11"
