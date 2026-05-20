@@ -67,9 +67,10 @@ check-test-coverage:
 	@pyenv exec poetry run pytest -vv --cov=$(CODE_DIR) --cov-report=term-missing
 
 generate-docs:
-	@pyenv exec poetry run python -m pdoc --force --html ${CODE_DIR} -o docs
-	@mv docs/dynamicio/* docs
-	@rm -rf docs/dynamicio
+	@pyenv exec poetry run mkdocs build --strict
+
+serve-docs:
+	@pyenv exec poetry run mkdocs serve
 
 build-locally:
 	@pyenv exec poetry build

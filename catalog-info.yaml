@@ -1,0 +1,17 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: dynamicio
+  description: Python wrapper library for pandas I/O operations against S3, Postgres, Athena, Kafka, and local storage. Schema-driven IOConfig system used by bon-voyage, destination-model, and waiting-time-model.
+  tags:
+    - python
+    - library
+    - pandas
+    - io
+  annotations:
+    backstage.io/techdocs-ref: dir:.
+    github.com/project-slug: VorTECHsa/dynamicio
+spec:
+  type: library
+  lifecycle: production
+  owner: group:default/dpt-turingeries
