@@ -1,7 +1,7 @@
 # pylint: disable=no-member, missing-module-docstring, missing-class-docstring, missing-function-docstring, too-many-public-methods, too-few-public-methods, protected-access, C0103, C0302, R0801
 import os
 import types
-from unittest.mock import ANY, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import pandas as pd
 import pytest
@@ -16,6 +16,25 @@ from tests.mocking.models import ERModel, PgModel
 
 
 class TestPostgresIO:
+
+    @pytest.mark.unit
+    def test_write_to_postgres_using_replace_strategy(self):
+        # Given
+        session = MagicMock()
+        connection = session.connection.return_value
+        cursor = connection.connection.cursor.return_value
+        df = pd.DataFrame({"id": [1], "val": ["a"]})
+
+        # When
+        WithPostgres._write_to_database(session, "dummy_table", df, is_truncate_and_append=False)
+
+        # Then
+        assert session.execute.call_count == 1
+        executed_sql = str(session.execute.call_args[0][0])
+        assert "DELETE FROM dummy_table" in executed_sql
+        cursor.copy_from.assert_called_once()
+        session.commit.assert_called_once()
+
     @pytest.mark.unit
     def test_when_reading_from_postgres_with_env_as_cloud_get_table_columns_returns_valid_list_of_columns_for_a_model(self, expected_columns):
         # Given
@@ -27,6 +46,7 @@ class TestPostgresIO:
 
         # When
         columns = ReadPostgresIO(source_config=pg_cloud_config)._get_table_columns(ERModel)  # pylint: disable=protected-access
+
         # Then
         assert columns == expected_columns
 
