@@ -63,7 +63,10 @@ types-simplejson = "*"
 yamllint = "*"
 
 [tool.poetry.group.docs.dependencies]
-pdoc3 = "*"
+mkdocs = "*"
+mkdocs-material = "*"
+mkdocstrings = { version = "*", extras = ["python"] }
+mkdocs-techdocs-core = "*"
 
 [tool.poetry.group.build.dependencies]
 setuptools = "==70.0.0"

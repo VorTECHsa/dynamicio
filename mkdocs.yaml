@@ -1,0 +1,20 @@
+---
+site_name: dynamicio Documentation
+
+nav:
+  - Home: index.md
+  - API Reference: api.md
+
+plugins:
+  - techdocs-core
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            show_source: false
+            show_signature_annotations: true
+            members_order: source
+            separate_signature: true
+
+docs_dir: docs
