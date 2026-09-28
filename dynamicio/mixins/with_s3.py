@@ -379,11 +379,13 @@ class WithS3File:
     @staticmethod
     @utils.allow_options(wr.s3.read_parquet)
     def _read_s3_parquet_file(s3_path: str, schema: DataframeSchema, **kwargs) -> pd.DataFrame:
+        kwargs.pop("columns", None)
         return wr.s3.read_parquet(path=s3_path, columns=(list(schema.columns.keys())), **kwargs)
 
     @staticmethod
     @utils.allow_options(utils.args_of(wr.s3.read_csv, pd.read_csv))
     def _read_s3_csv_file(s3_path: str, schema: DataframeSchema, **kwargs) -> pd.DataFrame:
+        kwargs.pop("usecols", None)
         return wr.s3.read_csv(path=s3_path, usecols=(list(schema.columns.keys())), **kwargs)
 
     @staticmethod
@@ -393,7 +395,7 @@ class WithS3File:
         lines = kwargs.pop("lines", None)
 
         if orient is not None and orient != "records":
-            raise ValueError("[s3-json] Unsupported orient='{orient}'. Only 'records' orientation is supported.")
+            raise ValueError(f"[s3-json] Unsupported orient='{orient}'. Only 'records' orientation is supported.")
 
         if lines is not None and lines is not True:
             logger.warning("[s3-json-read] Overriding lines=%s with lines=True for aws-wrangler consistency.", lines)
@@ -448,6 +450,7 @@ class WithS3File:
         if s3_path.endswith("/"):
             raise ValueError("[s3-parquet] Parquet output path must be a file, not a directory (e.g., 's3://bucket/data.parquet').")
 
+        kwargs.setdefault("s3_additional_kwargs", {}).setdefault("ACL", "bucket-owner-full-control")
         wr.s3.to_parquet(df=df, path=s3_path, dataset=False, **kwargs)
 
     @staticmethod
@@ -462,6 +465,7 @@ class WithS3File:
         if s3_path.endswith("/"):
             raise ValueError("[s3-csv] CSV output path must be a file, not a directory (e.g., 's3://bucket/data.csv').")
 
+        kwargs.setdefault("s3_additional_kwargs", {}).setdefault("ACL", "bucket-owner-full-control")
         wr.s3.to_csv(df=df, path=s3_path, index=False, **kwargs)
 
     @staticmethod
@@ -485,6 +489,7 @@ class WithS3File:
         if user_lines is not None and user_lines is not True:
             logger.warning(f"[s3-json] Overriding lines={user_lines} with lines=True for JSON serialization.")
 
+        kwargs.setdefault("s3_additional_kwargs", {}).setdefault("ACL", "bucket-owner-full-control")
         wr.s3.to_json(df=df, path=s3_path, orient="records", lines=True, index=False, **kwargs)
 
     @staticmethod
