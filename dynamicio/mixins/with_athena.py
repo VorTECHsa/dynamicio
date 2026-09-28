@@ -1,6 +1,7 @@
 # pylint: disable=no-member, protected-access, too-few-public-methods
 
 """This module provides mixins that support AWS Athena I/O."""
+
 import inspect
 from typing import Any, MutableMapping
 

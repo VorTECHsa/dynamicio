@@ -227,7 +227,7 @@ class S3PathPrefixSubSection(BaseModel):
         bucket = values.get("bucket")
         path_prefix = values.get("path_prefix")
         if (bucket and isinstance(bucket, str) and posixpath.sep in bucket) and (not path_prefix):
-            (new_bucket, new_path_prefix) = bucket.split(posixpath.sep, 1)
+            new_bucket, new_path_prefix = bucket.split(posixpath.sep, 1)
             values.update(
                 {
                     "bucket": new_bucket,

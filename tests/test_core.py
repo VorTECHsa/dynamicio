@@ -977,7 +977,7 @@ class TestTypeCastingAndValidation:
         #   LOCAL:
         #     ...
         #   CLOUD:
-        #     type: "s3_file"
+        # type: "s3_file"
         #     s3:
         #       bucket: "[[ MOCK_BUCKET ]]"
         #       file_path: "test/write_some_parquet.parquet"

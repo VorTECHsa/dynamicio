@@ -1,4 +1,5 @@
 # pylint: disable=no-member, too-many-positional-arguments, missing-module-docstring, missing-class-docstring, missing-function-docstring, too-many-public-methods, too-few-public-methods, protected-access, C0103, C0302, R0801
+import io
 import os
 import shutil
 from tempfile import NamedTemporaryFile
@@ -32,6 +33,38 @@ from tests.mocking.io import (
 )
 
 
+class TestHdfIO:
+    @pytest.mark.unit
+    def test_save_then_load_round_trips_a_dataframe_through_in_memory_hdf(self):
+        # Given
+        df = pd.DataFrame({"id": [1, 2], "foo_name": ["a", "b"], "bar": [3, 4]})
+        hdf_io = dynamicio.mixins.with_s3.HdfIO()
+        fobj = io.BytesIO()
+
+        # When
+        hdf_io.save(df, fobj, label="round_trip_test")
+        fobj.seek(0)
+        loaded_df = hdf_io.load(fobj, label="round_trip_test")
+
+        # Then
+        pd.testing.assert_frame_equal(loaded_df.reset_index(drop=True), df)
+
+    @pytest.mark.unit
+    def test_save_accepts_a_custom_key_via_options(self):
+        # Given
+        df = pd.DataFrame({"id": [1], "foo_name": ["a"], "bar": [2]})
+        hdf_io = dynamicio.mixins.with_s3.HdfIO()
+        fobj = io.BytesIO()
+
+        # When
+        hdf_io.save(df, fobj, label="custom_key_test", options={"key": "custom"})
+        fobj.seek(0)
+        loaded_df = hdf_io.load(fobj, label="custom_key_test", options={"key": "custom"})
+
+        # Then
+        pd.testing.assert_frame_equal(loaded_df.reset_index(drop=True), df)
+
+
 class TestS3FileIO:
     @pytest.mark.unit
     def test_read_resolves_file_path_if_templated(self):
@@ -40,7 +73,7 @@ class TestS3FileIO:
         #   LOCAL:
         #     ...
         #   CLOUD:
-        #     type: "s3_file"
+        # type: "s3_file"
         #     s3:
         #       bucket: "[[ MOCK_BUCKET ]]"
         #       file_path: "path/to/{file_name_to_replace}.csv"
@@ -74,7 +107,7 @@ class TestS3FileIO:
         #   LOCAL:
         #     ...
         #   CLOUD:
-        #     type: "s3_file"
+        # type: "s3_file"
         #     s3:
         #       bucket: "[[ MOCK_BUCKET ]]"
         #       file_path: "path/to/{file_name_to_replace}.csv"
@@ -251,7 +284,7 @@ class TestS3FileIO:
         #   LOCAL:
         #     ...
         #   CLOUD:
-        #     type: "s3_file"
+        # type: "s3_file"
         #     s3:
         #       bucket: "[[ MOCK_BUCKET ]]"
         #       file_path: "test/write_some_parquet.parquet"
@@ -293,7 +326,7 @@ class TestS3FileIO:
         #   LOCAL:
         #     ...
         #   CLOUD:
-        #     type: "s3_file"
+        # type: "s3_file"
         #     s3:
         #       bucket: "[[ MOCK_BUCKET ]]"
         #       file_path: "test/write_some_csv.csv"
@@ -320,7 +353,7 @@ class TestS3FileIO:
         #   LOCAL:
         #     ...
         #   CLOUD:
-        #     type: "s3_file"
+        # type: "s3_file"
         #     s3:
         #       bucket: "[[ MOCK_BUCKET ]]"
         #       file_path: "test/write_some_json.json"
@@ -349,7 +382,7 @@ class TestS3FileIO:
         #   LOCAL:
         #     ...
         #   CLOUD:
-        #     type: "s3_file"
+        # type: "s3_file"
         #     s3:
         #       bucket: "[[ MOCK_BUCKET ]]"
         #       file_path: "test/write_some_h5.h5"
@@ -539,6 +572,44 @@ class TestAllowedArgsAreConfiguredCorrectlyForWithS3File:
                 assert call_kwargs["orient"] == "records"
                 assert call_kwargs["lines"] is True
                 pd.testing.assert_frame_equal(df, expected_df)
+
+    @pytest.mark.unit
+    def test_json_reader_warns_and_overrides_lines_false(self, caplog):
+        # Given
+        config = IOConfig(
+            path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml"),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_S3_JSON")
+        raw_df_data = pd.DataFrame([{"data": {"release": "current", "timestamp": 1744281068}}])
+
+        # When
+        with patch("dynamicio.mixins.with_s3.wr.s3.read_json", return_value=raw_df_data) as mock_reader:
+            ReadS3JsonOrientRecordsIO(source_config=config, orient="records", lines=False).read()
+
+        # Then
+        call_kwargs = mock_reader.call_args.kwargs
+        assert call_kwargs["lines"] is True
+        assert "Overriding lines=False with lines=True" in caplog.text
+
+    @pytest.mark.unit
+    def test_json_reader_warns_and_ignores_convert_dates_true(self, caplog):
+        # Given
+        config = IOConfig(
+            path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml"),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_S3_JSON")
+        raw_df_data = pd.DataFrame([{"data": {"release": "current", "timestamp": 1744281068}}])
+
+        # When
+        with patch("dynamicio.mixins.with_s3.wr.s3.read_json", return_value=raw_df_data) as mock_reader:
+            ReadS3JsonOrientRecordsIO(source_config=config, orient="records", convert_dates=True).read()
+
+        # Then
+        call_kwargs = mock_reader.call_args.kwargs
+        assert "convert_dates" not in call_kwargs
+        assert "Ignoring 'convert_dates=True'" in caplog.text
 
     @pytest.mark.unit
     @pytest.mark.parametrize(

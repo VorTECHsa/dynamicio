@@ -492,7 +492,7 @@ class TestLocalIO:
             io_object.write(df)
 
         mocked__write_csv_file.assert_called_once()
-        (called_with_df, called_with_file_path) = mocked__write_csv_file.call_args[0]
+        called_with_df, called_with_file_path = mocked__write_csv_file.call_args[0]
         pd.testing.assert_frame_equal(df, called_with_df)
         assert called_with_file_path == config.local.file_path.format(file_name_to_replace="some_csv_to_read")
 
