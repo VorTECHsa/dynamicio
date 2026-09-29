@@ -1,6 +1,7 @@
 """Hosts exception implementations for different errors."""
 
 # pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring, super-init-not-called
+
 __all__ = [
     "DynamicIOError",
     "DataSourceError",

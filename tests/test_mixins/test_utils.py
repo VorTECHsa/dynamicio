@@ -5,6 +5,7 @@ from typing import Any
 
 import pytest
 
+# Application Imports
 from dynamicio.config import IOConfig
 from dynamicio.mixins.utils import allow_options, args_of, get_file_type_value, get_string_template_field_names, resolve_template
 from tests import constants
@@ -78,7 +79,7 @@ class TestAllowedOptions:
         # Then
         assert options == {"arg_a", "arg_b", "arg_c"}
 
-    @pytest.mark.integration
+    @pytest.mark.unit
     def test_allow_options_can_use_iterable_returned_from_args_of_to_filter_out_invalid_options(
         self,
     ):
@@ -99,7 +100,7 @@ class TestAllowedOptions:
         # Then
         assert options == ["arg_a", "arg_b", "arg_c"]
 
-    @pytest.mark.integration
+    @pytest.mark.unit
     def test_allow_options_does_not_filter_out_valid_args_when_they_are_passed_as_args_and_not_as_kwargs(
         self,
     ):
@@ -125,7 +126,7 @@ class TestAllowedOptions:
         captured = self.capsys.readouterr()
         assert (captured.out == "schema\n") and (options == ["A", 1, True])
 
-    @pytest.mark.integration  # This is an integration test as it uses `allow_options()` after `args_of()`
+    @pytest.mark.unit  # This is an integration test as it uses `allow_options()` after `args_of()`
     def test_when_reading_locally_or_from_s3_invalid_options_are_ignored(self, expected_s3_csv_df):
         # Given
         invalid_option = "INVALID_OPTION"
@@ -141,7 +142,7 @@ class TestAllowedOptions:
         # Then
         assert expected_s3_csv_df.equals(s3_csv_df)
 
-    @pytest.mark.integration
+    @pytest.mark.unit
     def test_when_reading_locally_or_from_s3_valid_options_are_considered(self, expected_s3_csv_df):
         # Given
         # VALID OPTION: dtype=None
@@ -156,6 +157,30 @@ class TestAllowedOptions:
 
         # Then
         assert expected_s3_csv_df.equals(s3_csv_df)
+
+    def test_args_of_combines_args_from_multiple_functions(self):
+        # Given
+        def a(_: int):
+            pass
+
+        def b(__: str):
+            pass
+
+        # When/Then
+        assert args_of(a, b) == {"_", "__"}
+
+    def test_invalid_options_emit_warning_log(self, caplog):
+        # Given
+        @allow_options(["a", "b"])
+        def method(**_):
+            pass
+
+        # When
+        with caplog.at_level("WARNING"):
+            method(a=1, b=2, x="invalid")
+
+        # Then
+        assert "Options {'x': 'invalid'} were not used" in caplog.text
 
 
 class DummyFileType(str, Enum):
