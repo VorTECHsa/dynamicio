@@ -519,36 +519,12 @@ class TestAllowedArgsAreConfiguredCorrectlyForWithS3File:
                 False,
                 ReadS3JsonOrientRecordsAltIO,
             ),
-            # ❌ Unsupported: index (should raise)
+            # ✅ Supported: index orientation, passed through as-is
             (
                 {"orient": "index"},
                 pd.DataFrame([{"data": {"release": "current", "timestamp": 1744281068}}]),
-                None,
-                True,
-                ReadS3JsonOrientRecordsIO,
-            ),
-            # ❌ Unsupported: columns (should raise)
-            (
-                {"orient": "columns"},
                 pd.DataFrame([{"data": {"release": "current", "timestamp": 1744281068}}]),
-                None,
-                True,
-                ReadS3JsonOrientRecordsIO,
-            ),
-            # ❌ Unsupported: values (should raise)
-            (
-                {"orient": "values"},
-                pd.DataFrame([{"data": {"release": "current", "timestamp": 1744281068}}]),
-                None,
-                True,
-                ReadS3JsonOrientRecordsIO,
-            ),
-            # ❌ Unsupported: split (should raise)
-            (
-                {"orient": "split"},
-                pd.DataFrame([{"data": {"release": "current", "timestamp": 1744281068}}]),
-                None,
-                True,
+                False,
                 ReadS3JsonOrientRecordsIO,
             ),
         ],
@@ -569,12 +545,12 @@ class TestAllowedArgsAreConfiguredCorrectlyForWithS3File:
             else:
                 df = io_class(source_config=config, **input_options).read()
                 call_kwargs = mock_reader.call_args.kwargs
-                assert call_kwargs["orient"] == "records"
-                assert call_kwargs["lines"] is True
+                assert call_kwargs["orient"] == input_options["orient"]
+                assert call_kwargs["lines"] == (input_options["orient"] == "records")
                 pd.testing.assert_frame_equal(df, expected_df)
 
     @pytest.mark.unit
-    def test_json_reader_warns_and_overrides_lines_false(self, caplog):
+    def test_json_reader_honours_explicit_lines_false(self, caplog):
         # Given
         config = IOConfig(
             path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml"),
@@ -589,8 +565,7 @@ class TestAllowedArgsAreConfiguredCorrectlyForWithS3File:
 
         # Then
         call_kwargs = mock_reader.call_args.kwargs
-        assert call_kwargs["lines"] is True
-        assert "Overriding lines=False with lines=True" in caplog.text
+        assert call_kwargs["lines"] is False
 
     @pytest.mark.unit
     def test_json_reader_warns_and_ignores_convert_dates_true(self, caplog):
@@ -613,21 +588,21 @@ class TestAllowedArgsAreConfiguredCorrectlyForWithS3File:
 
     @pytest.mark.unit
     @pytest.mark.parametrize(
-        "input_options, io_class, should_raise, expected_warning",
+        "input_options, io_class, expected_lines",
         [
-            # ✅ Supported: records
-            ({"orient": "records", "lines": True}, WriteS3JsonOrientRecordsIO, False, None),
-            # ✅ Supported: records with overridden lines
-            ({"orient": "records", "lines": False}, WriteS3JsonOrientRecordsIO, False, "[s3-json] Overriding lines=False with lines=True for JSON serialization."),
-            # ❌ Unsupported: index
-            ({"orient": "index", "lines": True}, WriteS3JsonOrientRecordsIO, True, None),
-            # ❌ Unsupported: values
-            ({"orient": "values", "lines": True}, WriteS3JsonOrientRecordsIO, True, None),
-            # ❌ Unsupported: split
-            ({"orient": "split", "lines": True}, WriteS3JsonOrientRecordsIO, True, None),
+            # records, default lines
+            ({"orient": "records"}, WriteS3JsonOrientRecordsIO, True),
+            # records, explicit lines override honoured as given
+            ({"orient": "records", "lines": False}, WriteS3JsonOrientRecordsIO, False),
+            # index, defaults lines to False (not records)
+            ({"orient": "index"}, WriteS3JsonOrientRecordsIO, False),
+            # values, explicit lines honoured
+            ({"orient": "values", "lines": True}, WriteS3JsonOrientRecordsIO, True),
+            # split, defaults lines to False
+            ({"orient": "split"}, WriteS3JsonOrientRecordsIO, False),
         ],
     )
-    def test_json_writer_enforces_orient_restrictions(self, input_options, io_class, should_raise, expected_warning, caplog):
+    def test_json_writer_passes_orient_and_lines_through(self, input_options, io_class, expected_lines):
         df_input = pd.DataFrame([{"release": "feb09", "timestamp": 1614268643313}])
 
         config = IOConfig(
@@ -637,16 +612,14 @@ class TestAllowedArgsAreConfiguredCorrectlyForWithS3File:
         ).get(source_key="WRITE_TO_S3_JSON")
 
         # When
-        caplog.set_level("WARNING")
         with patch.object(dynamicio.mixins.with_s3.wr.s3, "to_json") as mock_to_json:
-            if should_raise:
-                with pytest.raises(ValueError):
-                    io_class(source_config=config, **input_options).write(df_input)
-            else:
-                io_class(source_config=config, **input_options).write(df_input)
-                mock_to_json.assert_called()
-                if expected_warning:
-                    assert expected_warning in caplog.text
+            io_class(source_config=config, **input_options).write(df_input)
+
+        # Then
+        mock_to_json.assert_called()
+        call_kwargs = mock_to_json.call_args.kwargs
+        assert call_kwargs["orient"] == input_options["orient"]
+        assert call_kwargs["lines"] == expected_lines
 
     @pytest.mark.unit
     def test_hdf_writer_accepts_only_valid_options(self):

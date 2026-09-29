@@ -216,27 +216,23 @@ class WithLocal:
     @staticmethod
     @utils.allow_options(pd.DataFrame.to_json)
     def _write_json_file(df: pd.DataFrame, file_path: str, **options: Any):
-        """Writes a JSON file using 'records' orientation with lines=True.
+        """Writes a JSON file, defaulting to 'records' orientation with lines=True.
 
-        If the user provides an unsupported `orient`, raise an error.
-        This mirrors wr.s3.to_json and guarantees tabular consistency.
-
-        All `options` are passed directly to `df.to_json`.
+        All `options` are passed directly to `df.to_json`, so any `orient`
+        supported by pandas (e.g. "index") is honoured as given.
 
         Args:
             df: A dataframe write out.
             file_path: The location where the file needs to be written.
             options: Options relative to writing a json file.
         """
-        user_orient = options.pop("orient", None)
+        user_orient = options.pop("orient", "records")
         user_lines = options.pop("lines", None)
+        if user_lines is None:
+            user_lines = user_orient == "records"
 
-        if user_orient is not None and user_orient != "records":
-            raise ValueError(
-                f"[local-json] Unsupported orient='{user_orient}'. Only 'records' orientation is supported for tabular output (imposed for aws-wrangler consistency reasons)."
-            )
-        if user_lines is not None and user_lines is not True:
-            logger.warning("[local-json-write] Overriding lines=%s with lines=True for consistency.", user_lines)
+        options["orient"] = user_orient
+        options["lines"] = user_lines
 
         df.to_json(file_path, **options)
 

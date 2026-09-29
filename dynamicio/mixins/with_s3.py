@@ -391,20 +391,16 @@ class WithS3File:
     @staticmethod
     @utils.allow_options(utils.args_of(wr.s3.read_json, pd.read_json))
     def _read_s3_json_file(s3_path: str, schema: DataframeSchema, **kwargs) -> pd.DataFrame:
-        orient = kwargs.pop("orient", None)
+        orient = kwargs.pop("orient", "records")
         lines = kwargs.pop("lines", None)
-
-        if orient is not None and orient != "records":
-            raise ValueError(f"[s3-json] Unsupported orient='{orient}'. Only 'records' orientation is supported.")
-
-        if lines is not None and lines is not True:
-            logger.warning("[s3-json-read] Overriding lines=%s with lines=True for aws-wrangler consistency.", lines)
+        if lines is None:
+            lines = orient == "records"
 
         if kwargs.get("convert_dates") is True:
             logger.warning("[s3-json-read] Ignoring 'convert_dates=True'. Handle datetime parsing post-read.")
         kwargs.pop("convert_dates", None)
 
-        raw_df = wr.s3.read_json(path=s3_path, orient="records", lines=True, **kwargs)
+        raw_df = wr.s3.read_json(path=s3_path, orient=orient, lines=lines, **kwargs)
 
         return raw_df[[col for col in raw_df.columns if col in schema.columns]]
 
@@ -480,17 +476,14 @@ class WithS3File:
         if s3_path.endswith("/"):
             raise ValueError("[s3-json] JSON output path must be a file, not a directory (e.g., 's3://bucket/data.json').")
 
-        user_orient = kwargs.pop("orient", None)
+        user_orient = kwargs.pop("orient", "records")
         user_lines = kwargs.pop("lines", None)
-
-        if user_orient is not None and user_orient != "records":
-            raise ValueError(f"[s3-json] Unsupported orient='{user_orient}'. Only 'records' orientation is supported.")
-
-        if user_lines is not None and user_lines is not True:
-            logger.warning(f"[s3-json] Overriding lines={user_lines} with lines=True for JSON serialization.")
+        if user_lines is None:
+            user_lines = user_orient == "records"
+        user_index = kwargs.pop("index", False)
 
         kwargs.setdefault("s3_additional_kwargs", {}).setdefault("ACL", "bucket-owner-full-control")
-        wr.s3.to_json(df=df, path=s3_path, orient="records", lines=True, index=False, **kwargs)
+        wr.s3.to_json(df=df, path=s3_path, orient=user_orient, lines=user_lines, index=user_index, **kwargs)
 
     @staticmethod
     @utils.allow_options(pd.HDFStore.put)
