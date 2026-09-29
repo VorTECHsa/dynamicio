@@ -216,24 +216,16 @@ class WithLocal:
     @staticmethod
     @utils.allow_options(pd.DataFrame.to_json)
     def _write_json_file(df: pd.DataFrame, file_path: str, **options: Any):
-        """Writes a JSON file, defaulting to 'records' orientation with lines=True.
+        """Writes a JSON file using `df.to_json`.
 
-        All `options` are passed directly to `df.to_json`, so any `orient`
-        supported by pandas (e.g. "index") is honoured as given.
+        All `options` (including `orient`/`lines`) are passed through as given,
+        falling back to pandas' own defaults when not specified.
 
         Args:
             df: A dataframe write out.
             file_path: The location where the file needs to be written.
             options: Options relative to writing a json file.
         """
-        user_orient = options.pop("orient", "records")
-        user_lines = options.pop("lines", None)
-        if user_lines is None:
-            user_lines = user_orient == "records"
-
-        options["orient"] = user_orient
-        options["lines"] = user_lines
-
         df.to_json(file_path, **options)
 
     @staticmethod
