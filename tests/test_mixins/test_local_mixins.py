@@ -173,7 +173,7 @@ class TestLocalIO:
         assert "data" in df.columns  # assuming schema = {"data": "object"}
 
     @pytest.mark.unit
-    def test_read_json_does_not_parse_dates_by_default(self):
+    def test_read_json_honors_convert_dates_false(self):
         # Given
         # [
         #   {
@@ -185,6 +185,8 @@ class TestLocalIO:
         #     "timestamp": 1614268643313
         #   }
         # ]
+        # `convert_dates` is passed through to pandas' own `read_json` rather than being
+        # forced off, so callers who want raw ints back must opt out explicitly.
         config = IOConfig(
             path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml"),
             env_identifier="LOCAL",
@@ -192,7 +194,7 @@ class TestLocalIO:
         ).get(source_key="CHECK_JSON_READS_RAW_TIMESTAMPS")
 
         # When
-        df = ReadS3JsonOrientRecordsAltIO(source_config=config).read()
+        df = ReadS3JsonOrientRecordsAltIO(source_config=config, convert_dates=False).read()
 
         # Then
         assert df["timestamp"].dtype == "int64"
@@ -802,7 +804,10 @@ class TestConsistencyBetweenPandasAndWrangler:
         ).get(source_key="S3_PANDAS_READER_CONSISTENCY")
 
         # When
-        pandas_df = IOClass(source_config=pandas_config, file_name=file_name, single_record=is_single_record).read()
+        # `convert_dates=False` keeps the local pandas read from auto-parsing the "timestamp"
+        # column, matching the literal (already-typed) `wrangler_df` fixture used to mock the
+        # S3 read below - real S3 reads which want date parsing must opt in explicitly too.
+        pandas_df = IOClass(source_config=pandas_config, file_name=file_name, single_record=is_single_record, convert_dates=False).read()
         with patch.object(dynamicio.mixins.with_s3.wr.s3, "read_json") as mock__wr_s3_json_reader:
             mock__wr_s3_json_reader.return_value = wrangler_df
             wrangler_df = IOClass(source_config=wrangler_config).read()
