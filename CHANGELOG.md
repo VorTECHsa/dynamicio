@@ -1,5 +1,9 @@
 # Changelog
 
+## v8.1.0-rc.4
+
+- fix: stop forcing `convert_dates=False` on local JSON reads, letting pandas' own date auto-detection run unless the caller opts out explicitly (fixes datetime dtype regression for consumers relying on auto-parsed dates, e.g. Bon Voyage reference-data JSON)
+
 ## v8.1.0-rc.3
 
 - fix: honor caller-supplied `orient`/`lines` for S3 and local JSON reads/writes instead of hardcoding `orient="records"` (fixes regression for consumers using `orient="index"`, e.g. Bon Voyage reference-data JSON)
