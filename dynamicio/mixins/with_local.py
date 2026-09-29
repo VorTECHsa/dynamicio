@@ -123,21 +123,15 @@ class WithLocal:
         Returns:
             DataFrame: The dataframe read from the json file.
         """
-        user_orient = options.pop("orient", None)
-        user_lines = options.pop("lines", None)
-
-        if user_orient is not None and user_orient != "records":
-            raise ValueError("[local-json] Unsupported orient='{user_orient}'. Only 'records' orientation is supported.")
-
-        if user_lines is not None and user_lines is not False:
-            logger.warning("[local-json-read] Overriding lines=%s with lines=False for consistency with aws-wrangler expectations.", user_lines)
-
         if options.get("convert_dates") is True:
             logger.warning("[local-json-read] Ignoring 'convert_dates=True'. Handle datetime parsing post-read.")
-        options.pop("convert_dates", None)
+        options["convert_dates"] = False
+        options.setdefault("lines", False)
 
+        # Local reads go through pandas' own `read_json` (no aws-wrangler involved), which natively
+        # supports every `orient` value, so it's passed through as-is instead of being restricted to "records".
         is_single_record = options.pop("single_record", False)
-        df = pd.read_json(file_path, orient="records", convert_dates=False, lines=False, **options)
+        df = pd.read_json(file_path, **options)
 
         # 🧼 Check if this is a single-record json file
         if is_single_record:
