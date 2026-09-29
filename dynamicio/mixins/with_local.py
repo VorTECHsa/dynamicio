@@ -123,13 +123,12 @@ class WithLocal:
         Returns:
             DataFrame: The dataframe read from the json file.
         """
-        if options.get("convert_dates") is True:
-            logger.warning("[local-json-read] Ignoring 'convert_dates=True'. Handle datetime parsing post-read.")
-        options["convert_dates"] = False
         options.setdefault("lines", False)
 
         # Local reads go through pandas' own `read_json` (no aws-wrangler involved), which natively
         # supports every `orient` value, so it's passed through as-is instead of being restricted to "records".
+        # `convert_dates` is likewise left to pandas' own default (auto-detection) unless the caller
+        # overrides it, since some callers rely on that auto-parsing for datetime columns.
         is_single_record = options.pop("single_record", False)
         df = pd.read_json(file_path, **options)
 
