@@ -550,7 +550,7 @@ class TestAllowedArgsAreConfiguredCorrectlyForWithS3File:
                 pd.testing.assert_frame_equal(df, expected_df)
 
     @pytest.mark.unit
-    def test_json_reader_honours_explicit_lines_false(self, caplog):
+    def test_json_reader_honours_explicit_lines_false(self):
         # Given
         config = IOConfig(
             path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml"),
