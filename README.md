@@ -49,7 +49,7 @@ a big part of your code be concerned with I/O operations.
 ### Managing various Resources
 First, it's the various type of resources you need to interact with; object storage (S3 or GCS)
 databases (Athena, Big Query, Postgres), Kafka and many more. For each of these, you have 
-dependencies on various libraries such as `s3fs`, `fsspec`, `gcfs`, `boto3`, `awscli`, `aws-wrangler`,
+dependencies on various libraries such as `fsspec`, `gcfs`, `boto3`, `aws-wrangler`,
 `sql-alchemy`, `tables`, `kafka-python` and many more. 
 
 ### Managing Various Data Types

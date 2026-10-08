@@ -1,5 +1,13 @@
 # Changelog
 
+## v8.1.0-rc.5
+
+- perf: reuse one boto3 session/client per process (fork-safe) instead of building a new one per awswrangler call
+- perf: single-file S3 parquet reads/writes use one `GetObject`/`PutObject` over the shared client and parse in memory with the same pandas/pyarrow options as local I/O; awswrangler is only used when a wrangler-only option is passed (fixes the ~2.6x read slowdown seen in rc.1-rc.4)
+- feat!: remove `awscli` and `s3fs` dependencies; `WithS3PathPrefix` now syncs with a boto3 thread pool (one request per file, concurrency 32) instead of the in-process `aws s3 sync`. No `aws` console script is installed into consumer venvs any more
+- fix: S3 HDF writer honours `pickle_protocol`
+- fix: S3 JSON reader supports `single_record`
+
 ## v8.1.0-rc.4
 
 - fix: stop forcing `convert_dates=False` on local JSON reads, letting pandas' own date auto-detection run unless the caller opts out explicitly (fixes datetime dtype regression for consumers relying on auto-parsed dates, e.g. Bon Voyage reference-data JSON)

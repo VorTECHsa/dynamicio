@@ -1,3 +1,5 @@
+> **Superseded.** The write comparison below was raw wrangler vs pandas/s3fs on small files, and the "aws-cli is faster" conclusion no longer applies: `awscli` and `s3fs` are removed and S3 transfers use a shared boto3 client. See the v8.1.0-rc.5 CHANGELOG entry and `docs/.temp/` benchmark harness.
+
 # dynamicio: awswrangler vs AWS CLI — Performance Report
 
 ## Context

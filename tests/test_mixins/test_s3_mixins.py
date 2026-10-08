@@ -1181,3 +1181,48 @@ class TestS3ParquetTransferPaths:
         ReadS3ParquetIO(source_config=config, boto3_session=custom).read()
 
         assert mock_reader.call_args.kwargs["boto3_session"] is custom
+
+
+class TestS3CopilotRegressions:
+    """S3 HDF `pickle_protocol` must reach the writer, S3 JSON must honour `single_record`, prefix sync fans out per file."""
+
+    def test_s3_hdf_write_honours_pickle_protocol(self):
+        df = pd.DataFrame({"a": [1, 2]})
+        seen = {}
+
+        class _Pickle:
+            def __init__(self, protocol):
+                seen["protocol"] = protocol
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        with patch.object(dynamicio.mixins.with_s3.utils, "pickle_protocol", _Pickle), patch.object(dynamicio.mixins.with_s3, "boto3") as boto:
+            dynamicio.mixins.with_s3.WithS3File._write_s3_hdf_file(df, "s3://b/k.h5", pickle_protocol=4)
+        assert seen["protocol"] == 4
+        boto.client.return_value.upload_fileobj.assert_called_once()
+
+    def test_s3_json_read_supports_single_record(self):
+        schema = MagicMock()
+        schema.columns = {"a": None}
+        raw = pd.DataFrame({"a": [1, 2]}, index=["x", "y"])
+        with patch.object(dynamicio.mixins.with_s3.wr.s3, "read_json", return_value=raw) as read_json:
+            df = dynamicio.mixins.with_s3.WithS3File._read_s3_json_file("s3://b/k.json", schema, orient="index", single_record=True)
+        assert "single_record" not in read_json.call_args.kwargs
+        assert df.iloc[0, 0] == {"x": 1, "y": 2}
+
+    def test_sync_down_and_up_use_one_request_per_file(self, tmp_path):
+        client = MagicMock()
+        client.get_paginator.return_value.paginate.return_value = [{"Contents": [{"Key": "p/a.parquet"}, {"Key": "p/sub/b.parquet"}, {"Key": "p/sub/"}]}]
+        client.get_object.side_effect = lambda **kw: {"ContentLength": 3, "Body": io.BytesIO(b"abc")}
+        with patch.object(dynamicio.mixins.with_s3, "_shared_s3_client", return_value=client):
+            dynamicio.mixins.with_s3.s3_sync_down("s3://b/p/", str(tmp_path))
+            assert (tmp_path / "a.parquet").read_bytes() == b"abc" and (tmp_path / "sub" / "b.parquet").read_bytes() == b"abc"
+            client.head_object.assert_not_called()
+            dynamicio.mixins.with_s3.s3_sync_up(str(tmp_path), "s3://b/q/", acl="private")
+        keys = sorted(c.kwargs["Key"] for c in client.put_object.call_args_list)
+        assert keys == ["q/a.parquet", "q/sub/b.parquet"]
+        assert all(c.kwargs["ACL"] == "private" for c in client.put_object.call_args_list)

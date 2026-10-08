@@ -4,10 +4,12 @@ import dataclasses
 import fnmatch
 import io
 import os
+import shutil
 import tempfile
 import threading
 import urllib.parse
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from typing import IO, Dict, Generator, List, Optional, Union
 from urllib.parse import urlparse
@@ -19,6 +21,7 @@ import pandas as pd
 import pyarrow.parquet as pq
 import s3transfer.futures
 import tables
+from botocore.config import Config
 from magic_logger import logger
 from pandas import DataFrame, Series
 
@@ -148,7 +151,7 @@ def _shared_s3_client():
     with _SESSION_LOCK:
         if pid not in _CLIENT:
             _CLIENT.clear()
-            _CLIENT[pid] = session.client("s3")
+            _CLIENT[pid] = session.client("s3", config=Config(max_pool_connections=64))  # pool must cover the sync thread pools
         return _CLIENT[pid]
 
 
@@ -158,14 +161,30 @@ def _split_s3_url(url: str):
     return parsed.netloc, parsed.path.lstrip("/")
 
 
-def s3_sync_down(source_url: str, dest_dir: str, include_pattern: Optional[str] = None, max_concurrency: int = 10):
+_SYNC_MAX_CONCURRENCY = 32  # measured best/flat from 32 up for 200-5000 files; the old 10 was up to 2x slower on small prefixes
+
+
+def _download_file(client, bucket: str, key: str, local_path: str):
+    """Download one object: a single GetObject for small ones, the multipart transfer manager for large ones."""
+    response = client.get_object(Bucket=bucket, Key=key)
+    if response["ContentLength"] > _DIRECT_TRANSFER_MAX_BYTES:
+        response["Body"].close()
+        client.download_file(bucket, key, local_path)
+        return
+    with open(local_path, "wb") as fobj:
+        shutil.copyfileobj(response["Body"], fobj)
+
+
+def s3_sync_down(source_url: str, dest_dir: str, include_pattern: Optional[str] = None, max_concurrency: int = _SYNC_MAX_CONCURRENCY):
     """Download every object under an S3 prefix into `dest_dir`, preserving the relative key layout.
+
+    One `GetObject` per file (no `HeadObject`), issued from a thread pool while the listing is still paginating.
 
     Args:
         source_url: `s3://bucket/prefix` to download from.
         dest_dir: Local directory to download into.
         include_pattern: Optional `fnmatch` pattern matched against each key relative to the prefix.
-        max_concurrency: Number of concurrent transfer threads.
+        max_concurrency: Number of concurrent download threads.
 
     Raises:
         Whatever boto3 raises if listing or any download fails.
@@ -174,8 +193,8 @@ def s3_sync_down(source_url: str, dest_dir: str, include_pattern: Optional[str] 
     key_prefix = f"{key_prefix.rstrip('/')}/" if key_prefix else ""
     client = _shared_s3_client()
 
-    futures = []
-    with boto3.s3.transfer.create_transfer_manager(client, boto3.s3.transfer.TransferConfig(max_concurrency=max_concurrency)) as transfer_manager:
+    with ThreadPoolExecutor(max_workers=max_concurrency) as pool:
+        futures = []
         for page in client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=key_prefix):
             for obj in page.get("Contents", []):
                 relative_key = obj["Key"][len(key_prefix) :]
@@ -185,34 +204,42 @@ def s3_sync_down(source_url: str, dest_dir: str, include_pattern: Optional[str] 
                     continue
                 local_path = os.path.join(dest_dir, *relative_key.split("/"))
                 os.makedirs(os.path.dirname(local_path), exist_ok=True)
-                futures.append(transfer_manager.download(bucket, obj["Key"], local_path))
-        # Leaving the context waits for all transfers; surface any failure
-    for future in futures:
-        future.result()
+                futures.append(pool.submit(_download_file, client, bucket, obj["Key"], local_path))
+        for future in futures:
+            future.result()
 
 
-def s3_sync_up(source_dir: str, dest_url: str, acl: str = "bucket-owner-full-control", max_concurrency: int = 10):
+def _upload_file(client, local_path: str, bucket: str, key: str, acl: str):
+    """Upload one file: a single PutObject for small ones, the multipart transfer manager for large ones."""
+    if os.path.getsize(local_path) > _DIRECT_TRANSFER_MAX_BYTES:
+        client.upload_file(local_path, bucket, key, ExtraArgs={"ACL": acl})
+        return
+    with open(local_path, "rb") as fobj:
+        client.put_object(Bucket=bucket, Key=key, Body=fobj, ACL=acl)
+
+
+def s3_sync_up(source_dir: str, dest_url: str, acl: str = "bucket-owner-full-control", max_concurrency: int = _SYNC_MAX_CONCURRENCY):
     """Upload every file under `source_dir` to an S3 prefix, preserving the relative layout.
 
     Args:
         source_dir: Local directory to upload.
         dest_url: `s3://bucket/prefix` to upload into.
         acl: Canned ACL applied to every uploaded object.
-        max_concurrency: Number of concurrent transfer threads.
+        max_concurrency: Number of concurrent upload threads.
     """
     bucket, key_prefix = _split_s3_url(dest_url)
     key_prefix = f"{key_prefix.rstrip('/')}/" if key_prefix else ""
     client = _shared_s3_client()
 
-    futures = []
-    with boto3.s3.transfer.create_transfer_manager(client, boto3.s3.transfer.TransferConfig(max_concurrency=max_concurrency)) as transfer_manager:
+    with ThreadPoolExecutor(max_workers=max_concurrency) as pool:
+        futures = []
         for root, _, files in os.walk(source_dir):
             for name in files:
                 local_path = os.path.join(root, name)
                 relative_key = os.path.relpath(local_path, source_dir).replace(os.sep, "/")
-                futures.append(transfer_manager.upload(local_path, bucket, f"{key_prefix}{relative_key}", extra_args={"ACL": acl}))
-    for future in futures:
-        future.result()
+                futures.append(pool.submit(_upload_file, client, local_path, bucket, f"{key_prefix}{relative_key}", acl))
+        for future in futures:
+            future.result()
 
 
 _DIRECT_TRANSFER_MAX_BYTES = 16 * 1024**2  # larger objects use the multipart transfer manager
@@ -485,8 +512,9 @@ class WithS3File:
         return wr.s3.read_csv(path=s3_path, usecols=(list(schema.columns.keys())), **kwargs)
 
     @staticmethod
-    @utils.allow_options(utils.args_of(wr.s3.read_json, pd.read_json))
+    @utils.allow_options([*utils.args_of(wr.s3.read_json, pd.read_json), "single_record"])
     def _read_s3_json_file(s3_path: str, schema: DataframeSchema, **kwargs) -> pd.DataFrame:
+        is_single_record = kwargs.pop("single_record", False)
         orient = kwargs.pop("orient", "records")
         lines = kwargs.pop("lines", None)
         if lines is None:
@@ -497,6 +525,10 @@ class WithS3File:
         kwargs.pop("convert_dates", None)
 
         raw_df = wr.s3.read_json(path=s3_path, orient=orient, lines=lines, **kwargs)
+
+        if is_single_record:
+            # Re-wrap as a single dict row, mirroring the local JSON reader
+            raw_df = pd.DataFrame([{raw_df.columns[0]: dict(zip(raw_df.index, raw_df.iloc[:, 0]))}])
 
         return raw_df[[col for col in raw_df.columns if col in schema.columns]]
 
@@ -598,7 +630,7 @@ class WithS3File:
         wr.s3.to_json(df=df, path=s3_path, orient=user_orient, lines=user_lines, index=user_index, **kwargs)
 
     @staticmethod
-    @utils.allow_options(pd.HDFStore.put)
+    @utils.allow_options([*utils.args_of(pd.HDFStore.put), "pickle_protocol"])
     def _write_s3_hdf_file(df: pd.DataFrame, s3_path: str, **kwargs):
         """Write a DataFrame to S3 as an HDF5 file, using in-memory streaming."""
         parsed = urlparse(s3_path)
