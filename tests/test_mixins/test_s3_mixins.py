@@ -809,7 +809,7 @@ class TestS3PathPrefixIO:
     @pytest.mark.unit
     @patch.object(WriteS3IO, "_write_parquet_file")
     # pylint: disable=unused-argument
-    def test_awscli_runner_is_called_with_correct_s3_path_and_aws_command_when_uploading_a_path_prefix_with_env_as_cloud_s3(self, mock__write_parquet_file, mock_temporary_directory):
+    def test_s3_sync_is_called_with_correct_s3_path_and_aws_command_when_uploading_a_path_prefix_with_env_as_cloud_s3(self, mock__write_parquet_file, mock_temporary_directory):
         # Given
         input_df = pd.DataFrame.from_dict({"col_1": [3, 2, 1], "col_2": ["a", "b", "c"], "col_3": ["a", "b", "c"]})
         s3_parquet_cloud_config = IOConfig(
@@ -819,17 +819,15 @@ class TestS3PathPrefixIO:
         ).get(source_key="WRITE_TO_S3_PATH_PREFIX_PARQUET")
 
         # When
-        with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mocked__awscli_runner:
+        with patch.object(dynamicio.mixins.with_s3, "s3_sync_up") as mocked__s3_sync:
             WriteS3IO(source_config=s3_parquet_cloud_config, partition_cols="col_2").write(input_df)
 
         # Then
-        mocked__awscli_runner.assert_called_with(
-            "s3", "sync", "temp", "s3://mock-bucket/data/some_dir/", "--acl", "bucket-owner-full-control", "--only-show-errors", "--exact-timestamps"
-        )
+        mocked__s3_sync.assert_called_with("temp", "s3://mock-bucket/data/some_dir/")
 
     @pytest.mark.unit
     # pylint: disable=unused-argument
-    def test_awscli_runner_is_called_with_correct_s3_path_and_aws_command_when_loading_a_path_prefix_with_env_as_cloud_s3(
+    def test_s3_sync_is_called_with_correct_s3_path_and_aws_command_when_loading_a_path_prefix_with_env_as_cloud_s3(
         self, mock_listdir, mock_temporary_directory, mock__read_hdf_file
     ):
         # Given
@@ -840,13 +838,11 @@ class TestS3PathPrefixIO:
         ).get(source_key="READ_FROM_S3_PATH_PREFIX_HDF")
 
         # When
-        with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mocked__awscli_runner:
+        with patch.object(dynamicio.mixins.with_s3, "s3_sync_down") as mocked__s3_sync:
             ReadS3HdfIO(source_config=s3_hdf_cloud_config).read()
 
         # Then
-        mocked__awscli_runner.assert_called_with(
-            "s3", "sync", "s3://mock-bucket/data/some_dir/", "temp", "--acl", "bucket-owner-full-control", "--only-show-errors", "--exact-timestamps"
-        )
+        mocked__s3_sync.assert_called_with("s3://mock-bucket/data/some_dir/", "temp")
 
     @pytest.mark.unit
     # pylint: disable=unused-argument
@@ -861,8 +857,8 @@ class TestS3PathPrefixIO:
         ).get(source_key="READ_FROM_S3_PATH_PREFIX_HDF")
 
         # When
-        with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mocked__awscli_runner:
-            mocked__awscli_runner.return_value = True
+        with patch.object(dynamicio.mixins.with_s3, "s3_sync_down") as mocked__s3_sync:
+            mocked__s3_sync.return_value = True
             read_obj = ReadS3HdfIO(source_config=s3_hdf_cloud_config)
             actual_schema = read_obj.schema
             read_obj.read()
@@ -890,8 +886,8 @@ class TestS3PathPrefixIO:
         ).get(source_key="READ_FROM_S3_PATH_PREFIX_PARQUET")
 
         # When
-        with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mocked__awscli_runner:
-            mocked__awscli_runner.return_value = True
+        with patch.object(dynamicio.mixins.with_s3, "s3_sync_down") as mocked__s3_sync:
+            mocked__s3_sync.return_value = True
             read_obj = ReadS3ParquetIO(source_config=s3_parquet_cloud_config)
             actual_schema = read_obj.schema
             read_obj.read()
@@ -907,7 +903,7 @@ class TestS3PathPrefixIO:
         )
 
     @pytest.mark.unit
-    def test_read_parquet_file_is_called_while_awscli_runner_is_not_for_loading_a_parquet_with_env_as_cloud_s3_and_type_as_parquet_with_no_disk_space_option(
+    def test_read_parquet_file_is_called_while_s3_sync_is_not_for_loading_a_parquet_with_env_as_cloud_s3_and_type_as_parquet_with_no_disk_space_option(
         self,
     ):
         # Given
@@ -919,14 +915,15 @@ class TestS3PathPrefixIO:
 
         # When
         with (
-            patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mock__awscli_runner,
-            patch.object(dynamicio.mixins.with_local.WithLocal, "_read_parquet_file") as mock__read_parquet_file,
+            patch.object(dynamicio.mixins.with_s3, "s3_sync_down") as mock__s3_sync,
+            patch.object(dynamicio.mixins.with_s3.WithS3PathPrefix, "_iter_s3_files", return_value=[io.BytesIO(b"1")]),
+            patch.object(dynamicio.mixins.with_local.WithLocal, "_read_parquet_file", return_value=pd.DataFrame({"id": [1], "foo_name": ["a"], "bar": [1]})) as mock__read_parquet_file,
         ):
             ReadS3ParquetIO(source_config=s3_parquet_cloud_config, no_disk_space=True).read()
 
         # Then
         mock__read_parquet_file.assert_called()
-        mock__awscli_runner.assert_not_called()
+        mock__s3_sync.assert_not_called()
 
     @pytest.mark.unit
     # pylint: disable=unused-argument
@@ -939,8 +936,8 @@ class TestS3PathPrefixIO:
         ).get(source_key="READ_FROM_S3_PATH_PREFIX_PARQUET")
 
         # When
-        with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mocked__awscli_runner:
-            mocked__awscli_runner.return_value = True
+        with patch.object(dynamicio.mixins.with_s3, "s3_sync_down") as mocked__s3_sync:
+            mocked__s3_sync.return_value = True
             df = ReadS3ParquetWithLessColumnsIO(source_config=s3_parquet_cloud_config).read()
 
         # Then
@@ -957,8 +954,8 @@ class TestS3PathPrefixIO:
         ).get(source_key="READ_FROM_S3_PATH_PREFIX_PARQUET")
 
         # When
-        with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mocked__awscli_runner:
-            mocked__awscli_runner.return_value = True
+        with patch.object(dynamicio.mixins.with_s3, "s3_sync_down") as mocked__s3_sync:
+            mocked__s3_sync.return_value = True
             df = ReadS3ParquetIO(source_config=s3_parquet_cloud_config, filters=[[("foo_name", "==", "name_a")]]).read()
 
         # Then
@@ -980,8 +977,8 @@ class TestS3PathPrefixIO:
         ).get(source_key="READ_FROM_S3_PATH_PREFIX_CSV")
 
         # When
-        with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mocked__awscli_runner:
-            mocked__awscli_runner.return_value = True
+        with patch.object(dynamicio.mixins.with_s3, "s3_sync_down") as mocked__s3_sync:
+            mocked__s3_sync.return_value = True
             read_obj = ReadS3ParquetIO(source_config=s3_csv_cloud_config)
             actual_schema = read_obj.schema
             read_obj.read()
@@ -1012,8 +1009,8 @@ class TestS3PathPrefixIO:
         ).get(source_key="READ_FROM_S3_PATH_PREFIX_JSON")
 
         # When
-        with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mocked__awscli_runner:
-            mocked__awscli_runner.return_value = True
+        with patch.object(dynamicio.mixins.with_s3, "s3_sync_down") as mocked__s3_sync:
+            mocked__s3_sync.return_value = True
             read_obj = ReadS3ParquetIO(source_config=s3_csv_cloud_config)
             actual_schema = read_obj.schema
             read_obj.read()
@@ -1044,8 +1041,8 @@ class TestS3PathPrefixIO:
         ).get(source_key="READ_FROM_S3_PATH_PREFIX_HDF")
 
         # When
-        with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mocked__awscli_runner:
-            mocked__awscli_runner.return_Value = True
+        with patch.object(dynamicio.mixins.with_s3, "s3_sync_down") as mocked__s3_sync:
+            mocked__s3_sync.return_Value = True
             h5_df = ReadS3HdfIO(source_config=s3_hdf_cloud_config).read()
 
         # Then
@@ -1110,8 +1107,8 @@ class TestS3PathPrefixIO:
         ).get(source_key="READ_FROM_S3_PATH_PREFIX_PARQUET")
 
         # When
-        with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mocked__awscli_runner:
-            mocked__awscli_runner.return_value = True
+        with patch.object(dynamicio.mixins.with_s3, "s3_sync_down") as mocked__s3_sync:
+            mocked__s3_sync.return_value = True
             df = ReadS3ParquetWEmptyFilesIO(source_config=s3_parquet_cloud_config).read()
 
         # Then

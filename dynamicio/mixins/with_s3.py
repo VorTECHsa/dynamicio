@@ -1,6 +1,7 @@
 """This module provides mixins that are providing S3 I/O support."""
 
 import dataclasses
+import fnmatch
 import io
 import os
 import tempfile
@@ -13,10 +14,10 @@ from urllib.parse import urlparse
 
 import awswrangler as wr
 import boto3
+import boto3.s3.transfer
 import pandas as pd
 import s3transfer.futures
 import tables
-from awscli.clidriver import create_clidriver
 from magic_logger import logger
 from pandas import DataFrame, Series
 
@@ -28,6 +29,7 @@ from dynamicio.mixins.utils import get_file_type_value
 
 _SESSION_LOCK = threading.Lock()
 _SESSION: Dict[int, boto3.Session] = {}
+_CLIENT: Dict[int, object] = {}
 
 
 def _shared_boto3_session() -> boto3.Session:
@@ -138,37 +140,91 @@ class HdfIO:
             fobj.write(file_handle.get_file_image())
 
 
-def awscli_runner(*cmd: str):
-    """Runs the awscli command provided.
+def _shared_s3_client():
+    """Return a per-process S3 client built from the shared session (thread-safe, keeps connections alive)."""
+    session = _shared_boto3_session()
+    pid = os.getpid()
+    with _SESSION_LOCK:
+        if pid not in _CLIENT:
+            _CLIENT.clear()
+            _CLIENT[pid] = session.client("s3")
+        return _CLIENT[pid]
+
+
+def _split_s3_url(url: str):
+    parsed = urlparse(url)
+    assert parsed.scheme == "s3", f"{url!r} should be an s3 url"
+    return parsed.netloc, parsed.path.lstrip("/")
+
+
+def s3_sync_down(source_url: str, dest_dir: str, include_pattern: Optional[str] = None, max_concurrency: int = 10):
+    """Download every object under an S3 prefix into `dest_dir`, preserving the relative key layout.
 
     Args:
-        *cmd: A list of args used in the command.
+        source_url: `s3://bucket/prefix` to download from.
+        dest_dir: Local directory to download into.
+        include_pattern: Optional `fnmatch` pattern matched against each key relative to the prefix.
+        max_concurrency: Number of concurrent transfer threads.
 
     Raises:
-        A runtime error exception is raised if download fails.
-
-    Example:
-
-        >>> awscli_runner("s3", "sync", "s3://mock-bucket/mock-key", ".")
+        Whatever boto3 raises if listing or any download fails.
     """
-    # Run
-    exit_code = create_clidriver().main(cmd)
+    bucket, key_prefix = _split_s3_url(source_url)
+    key_prefix = f"{key_prefix.rstrip('/')}/" if key_prefix else ""
+    client = _shared_s3_client()
 
-    if exit_code > 0:
-        raise RuntimeError(f"AWS CLI exited with code {exit_code}")
+    futures = []
+    with boto3.s3.transfer.create_transfer_manager(client, boto3.s3.transfer.TransferConfig(max_concurrency=max_concurrency)) as transfer_manager:
+        for page in client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=key_prefix):
+            for obj in page.get("Contents", []):
+                relative_key = obj["Key"][len(key_prefix) :]
+                if not relative_key or relative_key.endswith("/"):
+                    continue
+                if include_pattern and not fnmatch.fnmatch(relative_key, include_pattern):
+                    continue
+                local_path = os.path.join(dest_dir, *relative_key.split("/"))
+                os.makedirs(os.path.dirname(local_path), exist_ok=True)
+                futures.append(transfer_manager.download(bucket, obj["Key"], local_path))
+        # Leaving the context waits for all transfers; surface any failure
+    for future in futures:
+        future.result()
+
+
+def s3_sync_up(source_dir: str, dest_url: str, acl: str = "bucket-owner-full-control", max_concurrency: int = 10):
+    """Upload every file under `source_dir` to an S3 prefix, preserving the relative layout.
+
+    Args:
+        source_dir: Local directory to upload.
+        dest_url: `s3://bucket/prefix` to upload into.
+        acl: Canned ACL applied to every uploaded object.
+        max_concurrency: Number of concurrent transfer threads.
+    """
+    bucket, key_prefix = _split_s3_url(dest_url)
+    key_prefix = f"{key_prefix.rstrip('/')}/" if key_prefix else ""
+    client = _shared_s3_client()
+
+    futures = []
+    with boto3.s3.transfer.create_transfer_manager(client, boto3.s3.transfer.TransferConfig(max_concurrency=max_concurrency)) as transfer_manager:
+        for root, _, files in os.walk(source_dir):
+            for name in files:
+                local_path = os.path.join(root, name)
+                relative_key = os.path.relpath(local_path, source_dir).replace(os.sep, "/")
+                futures.append(transfer_manager.upload(local_path, bucket, f"{key_prefix}{relative_key}", extra_args={"ACL": acl}))
+    for future in futures:
+        future.result()
 
 
 @dataclasses.dataclass
 class S3TransferHandle:
     """A dataclass used to track an ongoing data download from the s3."""
 
-    s3_object: object  # boto3.resource('s3').ObjectSummary
+    s3_object: dict  # an entry of the `Contents` list returned by `list_objects_v2`
     fobj: IO[bytes]  # file-like object the data is being downloaded to
     done_future: s3transfer.futures.BaseTransferFuture
 
 
 class WithS3PathPrefix(with_local.WithLocal):
-    """Handles I/O operations for AWS S3; implements read operations only.
+    """Handles I/O operations for AWS S3 path prefixes (reads, and partitioned parquet writes), using boto3 transfers.
 
     This mixin assumes that the directories it reads from will only contain a single file-type.
     """
@@ -176,8 +232,10 @@ class WithS3PathPrefix(with_local.WithLocal):
     sources_config: S3PathPrefixEnvironment  # type: ignore
     schema: DataframeSchema
 
-    boto3_resource = boto3.resource("s3")
-    boto3_client = boto3.client("s3")
+    @property
+    def boto3_client(self):
+        """Per-process shared S3 client."""
+        return _shared_s3_client()
 
     def _write_to_s3_path_prefix(self, df: pd.DataFrame):
         """Write a DataFrame to an S3 path prefix.
@@ -207,16 +265,7 @@ class WithS3PathPrefix(with_local.WithLocal):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             self._write_parquet_file(df, temp_dir, **self.options)
-            awscli_runner(
-                "s3",
-                "sync",
-                temp_dir,
-                full_path_prefix,
-                "--acl",
-                "bucket-owner-full-control",
-                "--only-show-errors",
-                "--exact-timestamps",
-            )
+            s3_sync_up(temp_dir, full_path_prefix)
 
     def _read_from_s3_path_prefix(self) -> pd.DataFrame:
         """Read files from an S3 bucket based on a path_prefix/dynamic_file_path and return a concatenated DataFrame.
@@ -275,7 +324,8 @@ class WithS3PathPrefix(with_local.WithLocal):
         # The `no_disk_space` option should be used only when reading a subset of columns from S3
         if self.options.pop("no_disk_space", False) and path_prefix:
             if file_type == "parquet":
-                return self._read_parquet_file(full_path, self.schema, **self.options)
+                parquet_dfs = [self._read_parquet_file(fobj, self.schema, **self.options) for fobj in self._iter_s3_files(full_path, file_ext=".parquet", max_memory_use=1024**3)]
+                return pd.concat(parquet_dfs, ignore_index=True)
             if file_type == "hdf":
                 dfs: List[DataFrame] = []
                 for fobj in self._iter_s3_files(full_path, file_ext=".h5", max_memory_use=1024**3):  # 1 gib
@@ -285,36 +335,11 @@ class WithS3PathPrefix(with_local.WithLocal):
                 return df[columns]
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            # aws-cli is shown to be up to 6 times faster when downloading the complete dataset from S3 than using the boto3
-            # client or pandas directly. This is because aws-cli uses the parallel downloader, which is much faster than the
-            # boto3 client.
             if dynamic_file_path:
                 prefix, suffix = full_path.rsplit("/**/", 1)
-                awscli_runner(
-                    "s3",
-                    "sync",
-                    prefix,
-                    temp_dir,
-                    "--exclude",
-                    "*",
-                    "--include",
-                    f"**/{suffix}",
-                    "--acl",
-                    "bucket-owner-full-control",
-                    "--only-show-errors",
-                    "--exact-timestamps",
-                )
+                s3_sync_down(prefix, temp_dir, include_pattern=f"**/{suffix}")
             else:
-                awscli_runner(
-                    "s3",
-                    "sync",
-                    full_path,
-                    temp_dir,
-                    "--acl",
-                    "bucket-owner-full-control",
-                    "--only-show-errors",
-                    "--exact-timestamps",
-                )
+                s3_sync_down(full_path, temp_dir)
 
             dfs: List[DataFrame] = []
             for file in os.listdir(temp_dir):
@@ -338,14 +363,14 @@ class WithS3PathPrefix(with_local.WithLocal):
         file_prefix = f"{parsed_url.path.strip('/')}/"
         s3_objects_to_fetch = []
         # Collect objects to be loaded
-        for s3_object in self.boto3_resource.Bucket(bucket_name).objects.filter(Prefix=file_prefix):
-            good_object = (not file_ext) or (s3_object.key.endswith(file_ext))
-            if good_object:
-                s3_objects_to_fetch.append(s3_object)
+        for page in self.boto3_client.get_paginator("list_objects_v2").paginate(Bucket=bucket_name, Prefix=file_prefix):
+            for s3_object in page.get("Contents", []):
+                if (not file_ext) or s3_object["Key"].endswith(file_ext):
+                    s3_objects_to_fetch.append(s3_object)
 
         if max_memory_use < 0:
             # Unlimited memory use - fetch ALL
-            max_memory_use = sum(s3_obj.size for s3_obj in s3_objects_to_fetch) * 2
+            max_memory_use = sum(s3_obj["Size"] for s3_obj in s3_objects_to_fetch) * 2
         transfer_config = boto3.s3.transfer.TransferConfig(max_concurrency=20)
         while s3_objects_to_fetch:
             mem_use_left = max_memory_use
@@ -354,9 +379,9 @@ class WithS3PathPrefix(with_local.WithLocal):
                 while mem_use_left > 0 and s3_objects_to_fetch:
                     s3_object = s3_objects_to_fetch.pop()
                     fobj = io.BytesIO()
-                    future = transfer_manager.download(bucket_name, s3_object.key, fobj)
+                    future = transfer_manager.download(bucket_name, s3_object["Key"], fobj)
                     handles.append(S3TransferHandle(s3_object, fobj, future))
-                    mem_use_left -= s3_object.size
+                    mem_use_left -= s3_object["Size"]
                 # Leaving the `transfer_manager` context implicitly waits for all downloads to complete
             # Rewind and yield all fobjs
             for handle in handles:
