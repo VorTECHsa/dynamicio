@@ -1,7 +1,7 @@
 # pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring, too-many-public-methods, R0801
 import asyncio
-import logging
 import io
+import logging
 import os
 import time
 from typing import Mapping, Tuple
