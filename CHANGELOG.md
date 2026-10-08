@@ -1,6 +1,8 @@
 # Changelog
 
-## v8.1.0-rc.5
+## v8.1.0-rc.6
+
+(rc.5 was tagged but never published: black/pylint style checks failed. Contents are identical apart from formatting.)
 
 - perf: reuse one boto3 session/client per process (fork-safe) instead of building a new one per awswrangler call
 - perf: single-file S3 parquet reads/writes use one `GetObject`/`PutObject` over the shared client and parse in memory with the same pandas/pyarrow options as local I/O; awswrangler is only used when a wrangler-only option is passed (fixes the ~2.6x read slowdown seen in rc.1-rc.4)

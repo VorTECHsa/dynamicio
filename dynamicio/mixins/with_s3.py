@@ -30,7 +30,6 @@ from dynamicio.config.pydantic import DataframeSchema, S3DataEnvironment, S3Path
 from dynamicio.mixins import utils, with_local
 from dynamicio.mixins.utils import get_file_type_value
 
-
 _SESSION_LOCK = threading.Lock()
 _SESSION: Dict[int, boto3.Session] = {}
 _CLIENT: Dict[int, object] = {}
@@ -245,12 +244,8 @@ def s3_sync_up(source_dir: str, dest_url: str, acl: str = "bucket-owner-full-con
 _DIRECT_TRANSFER_MAX_BYTES = 16 * 1024**2  # larger objects use the multipart transfer manager
 
 # Options only awswrangler understands; if any is given we defer to awswrangler to keep its semantics.
-_WRANGLER_ONLY_READ_PARQUET = (
-    utils.args_of(wr.s3.read_parquet) - utils.args_of(pd.read_parquet) - utils.args_of(pq.read_table) - {"path"}
-)
-_WRANGLER_ONLY_WRITE_PARQUET = (
-    utils.args_of(wr.s3.to_parquet) - utils.args_of(pd.DataFrame.to_parquet) - utils.args_of(pq.write_table) - {"df", "path", "dataset", "use_threads"}
-)
+_WRANGLER_ONLY_READ_PARQUET = utils.args_of(wr.s3.read_parquet) - utils.args_of(pd.read_parquet) - utils.args_of(pq.read_table) - {"path"}
+_WRANGLER_ONLY_WRITE_PARQUET = utils.args_of(wr.s3.to_parquet) - utils.args_of(pd.DataFrame.to_parquet) - utils.args_of(pq.write_table) - {"df", "path", "dataset", "use_threads"}
 
 
 def _download_to_memory(bucket: str, key: str) -> io.BytesIO:
@@ -330,7 +325,7 @@ class WithS3PathPrefix(with_local.WithLocal):
             self._write_parquet_file(df, temp_dir, **self.options)
             s3_sync_up(temp_dir, full_path_prefix)
 
-    def _read_from_s3_path_prefix(self) -> pd.DataFrame:
+    def _read_from_s3_path_prefix(self) -> pd.DataFrame:  # pylint: disable=too-many-locals
         """Read files from an S3 bucket based on a path_prefix/dynamic_file_path and return a concatenated DataFrame.
 
         This function supports two types of file paths from the S3 configuration:
@@ -495,7 +490,7 @@ class WithS3File:
         if _WRANGLER_ONLY_READ_PARQUET & kwargs.keys():
             return WithS3File._read_s3_parquet_file_with_wrangler(s3_path, schema, **kwargs)
         bucket, key = _split_s3_url(s3_path)
-        return with_local.WithLocal._read_parquet_file(_download_to_memory(bucket, key), schema, **kwargs)  # type: ignore[arg-type]
+        return with_local.WithLocal._read_parquet_file(_download_to_memory(bucket, key), schema, **kwargs)  # type: ignore[arg-type] # pylint: disable=protected-access
 
     @staticmethod
     @utils.allow_options(wr.s3.read_parquet)
@@ -579,10 +574,11 @@ class WithS3File:
             raise ValueError("[s3-parquet] Parquet output path must be a file, not a directory (e.g., 's3://bucket/data.parquet').")
 
         if _WRANGLER_ONLY_WRITE_PARQUET & kwargs.keys():
-            return WithS3File._write_s3_parquet_file_with_wrangler(df, s3_path, **kwargs)
+            WithS3File._write_s3_parquet_file_with_wrangler(df, s3_path, **kwargs)
+            return
         kwargs.pop("use_threads", None)
         fobj = io.BytesIO()
-        with_local.WithLocal._write_parquet_file(df, fobj, **kwargs)  # type: ignore[arg-type]
+        with_local.WithLocal._write_parquet_file(df, fobj, **kwargs)  # type: ignore[arg-type] # pylint: disable=protected-access
         bucket, key = _split_s3_url(s3_path)
         _upload_from_memory(fobj, bucket, key)
 

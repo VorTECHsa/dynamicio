@@ -454,7 +454,12 @@ class TestAllowedArgsAreConfiguredCorrectlyForWithS3File:
     @pytest.mark.parametrize(
         "source_key, patch_target, input_options, expected_options",
         [
-            ("WRITE_TO_S3_PARQUET", "to_parquet", {"compression": "snappy", "sanitize_columns": False, "invalid_opt": True}, {"compression": "snappy", "sanitize_columns": False, "dataset": False}),
+            (
+                "WRITE_TO_S3_PARQUET",
+                "to_parquet",
+                {"compression": "snappy", "sanitize_columns": False, "invalid_opt": True},
+                {"compression": "snappy", "sanitize_columns": False, "dataset": False},
+            ),
             (
                 "WRITE_TO_S3_CSV",
                 "to_csv",
@@ -830,9 +835,7 @@ class TestS3PathPrefixIO:
 
     @pytest.mark.unit
     # pylint: disable=unused-argument
-    def test_s3_sync_is_called_with_correct_s3_path_and_aws_command_when_loading_a_path_prefix_with_env_as_cloud_s3(
-        self, mock_listdir, mock_temporary_directory, mock__read_hdf_file
-    ):
+    def test_s3_sync_is_called_with_correct_s3_path_and_aws_command_when_loading_a_path_prefix_with_env_as_cloud_s3(self, mock_listdir, mock_temporary_directory, mock__read_hdf_file):
         # Given
         s3_hdf_cloud_config = IOConfig(
             path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),

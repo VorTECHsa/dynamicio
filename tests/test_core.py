@@ -4,7 +4,6 @@ import logging
 import io
 import os
 import time
-from tempfile import NamedTemporaryFile
 from typing import Mapping, Tuple
 from unittest.mock import patch
 
