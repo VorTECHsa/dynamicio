@@ -1,10 +1,10 @@
-# S3 I/O performance: v4.4.1 vs v8.1.0-rc.7
+# S3 I/O performance: master vs branch (v8.1.0-rc.7)
 
-Decision record: [ADR 0001](adr/0001-direct-boto3-s3-io.md). This replaces the earlier awswrangler-vs-awscli report (rc.1-rc.4 numbers are obsolete).
+Baseline is `master`'s S3 I/O (benchmarked as release v4.4.1, whose S3 code path is the same). Decision record: [ADR 0001](adr/0001-direct-boto3-s3-io.md). This replaces the earlier awswrangler-vs-awscli report (rc.1-rc.4 numbers are obsolete).
 
 ## What changed
 
-| Path | v4.4.1 (vessel-state today) | rc.7 |
+| Path | master | branch (rc.7) |
 |---|---|---|
 | Single-file parquet read | boto3 `download_fileobj` (HEAD + GET) to temp file, then pandas | one `GetObject`, parsed in memory |
 | Single-file parquet write | `df.to_parquet("s3://")` via s3fs | pyarrow to `BytesIO`, one `PutObject` |
@@ -20,14 +20,14 @@ Laptop to S3 (dev bucket) over WAN, 12 CPUs, medians. Uploads are uplink-bound (
 
 ### Single-file I/O, 10 processes (vessel-state `run_parallel` shape)
 
-| Scenario | v4.4.1 | rc.7 | Speedup |
+| Scenario | master | rc.7 | Speedup |
 |---|---|---|---|
 | Read, 300 files | 13.3 s | 5.5 s | 2.4x |
 | Write, 200 files | 36.7 s | 28.5 s | 1.3x |
 
 ### Fixed worker budget (apples to apples, 200 files; wall s / CPU-s)
 
-| Workers | Read v4.4.1 | Read rc.7 | Write v4.4.1 | Write rc.7 |
+| Workers | Read master | Read rc.7 | Write master | Write rc.7 |
 |---|---|---|---|---|
 | 2 | 37.8 / 7.1 | 8.8 / 2.2 | 119.7 / 10.1 | 47.6 / 5.5 |
 | 4 | 18.8 / 4.5 | 5.4 / 1.7 | 68.0 / 8.3 | 30.6 / 4.5 |
@@ -38,7 +38,7 @@ rc.7 is faster at every worker count and uses less CPU per call: no extra pod CP
 
 ### Prefix sync at equal worker count (10), wall s
 
-| Files | Direction | aws-cli sync (v4.4.1) | rc.7 at 10 | rc.7 at 32 (default) |
+| Files | Direction | aws-cli sync (master) | rc.7 at 10 | rc.7 at 32 (default) |
 |---|---|---|---|---|
 | 200 | down | 3.4 | 3.2 | 2.9 |
 | 500 | down | 7.6 | 7.1 | 6.6 |
