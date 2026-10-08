@@ -4,6 +4,7 @@ import dataclasses
 import io
 import os
 import tempfile
+import threading
 import urllib.parse
 import uuid
 from contextlib import contextmanager
@@ -23,6 +24,25 @@ from pandas import DataFrame, Series
 from dynamicio.config.pydantic import DataframeSchema, S3DataEnvironment, S3PathPrefixEnvironment
 from dynamicio.mixins import utils, with_local
 from dynamicio.mixins.utils import get_file_type_value
+
+
+_SESSION_LOCK = threading.Lock()
+_SESSION: Dict[int, boto3.Session] = {}
+
+
+def _shared_boto3_session() -> boto3.Session:
+    """Return a per-process boto3 Session.
+
+    Called without a session, awswrangler builds a brand-new `boto3.Session` (and re-resolves credentials) on
+    every call, which dominates the cost of reading or writing many small files. The session is keyed by PID so a
+    forked worker never shares one with its parent.
+    """
+    pid = os.getpid()
+    with _SESSION_LOCK:
+        if pid not in _SESSION:
+            _SESSION.clear()
+            _SESSION[pid] = boto3.Session()
+        return _SESSION[pid]
 
 
 class InMemStore(pd.io.pytables.HDFStore):
@@ -380,7 +400,9 @@ class WithS3File:
     @utils.allow_options(wr.s3.read_parquet)
     def _read_s3_parquet_file(s3_path: str, schema: DataframeSchema, **kwargs) -> pd.DataFrame:
         kwargs.pop("columns", None)
-        return wr.s3.read_parquet(path=s3_path, columns=(list(schema.columns.keys())), **kwargs)
+        kwargs.setdefault("boto3_session", _shared_boto3_session())
+        # A one-element list is read as-is; a bare string is treated as a prefix and costs an extra ListObjectsV2.
+        return wr.s3.read_parquet(path=[s3_path], columns=(list(schema.columns.keys())), **kwargs)
 
     @staticmethod
     @utils.allow_options(utils.args_of(wr.s3.read_csv, pd.read_csv))
@@ -447,6 +469,7 @@ class WithS3File:
             raise ValueError("[s3-parquet] Parquet output path must be a file, not a directory (e.g., 's3://bucket/data.parquet').")
 
         kwargs.setdefault("s3_additional_kwargs", {}).setdefault("ACL", "bucket-owner-full-control")
+        kwargs.setdefault("boto3_session", _shared_boto3_session())
         wr.s3.to_parquet(df=df, path=s3_path, dataset=False, **kwargs)
 
     @staticmethod
