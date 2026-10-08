@@ -1,5 +1,9 @@
 # Changelog
 
+## v8.1.0-rc.8
+
+- perf: parquet `WithS3PathPrefix` reads fetch and parse each object in memory on the download threads (no temp dir, parsing overlaps the network); ~15% faster on ~1000 files over WAN, same rows. Files are now concatenated in listing order instead of arbitrary `os.listdir` order
+
 ## v8.1.0-rc.7
 
 (rc.5 and rc.6 were tagged but never published: black/pylint/flake8 style checks failed. Contents are identical apart from formatting.)

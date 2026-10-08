@@ -11,7 +11,7 @@ import urllib.parse
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
-from typing import IO, Dict, Generator, List, Optional, Union
+from typing import IO, Any, Callable, Dict, Generator, List, Optional, Union
 from urllib.parse import urlparse
 
 import awswrangler as wr
@@ -208,6 +208,41 @@ def s3_sync_down(source_url: str, dest_dir: str, include_pattern: Optional[str] 
             future.result()
 
 
+def s3_read_down(source_url: str, reader: Callable[[io.BytesIO], Any], include_pattern: Optional[str] = None, max_concurrency: int = _SYNC_MAX_CONCURRENCY) -> List[Any]:
+    """Fetch every object under an S3 prefix into memory and parse it with `reader`, overlapping network and parsing.
+
+    Unlike `s3_sync_down` there is no temp-dir round trip: each worker thread does a `GetObject` and parses the bytes
+    straight away, so parsing of early files overlaps with the download of later ones.
+
+    Args:
+        source_url: `s3://bucket/prefix` to read from.
+        reader: Called with an in-memory file object for each object.
+        include_pattern: Optional `fnmatch` pattern matched against each key relative to the prefix.
+        max_concurrency: Number of concurrent worker threads.
+
+    Returns:
+        The `reader` results, in listing (lexicographic key) order.
+    """
+    bucket, key_prefix = _split_s3_url(source_url)
+    key_prefix = f"{key_prefix.rstrip('/')}/" if key_prefix else ""
+    client = _shared_s3_client()
+
+    def fetch_and_parse(key: str):
+        return reader(_download_to_memory(bucket, key))
+
+    with ThreadPoolExecutor(max_workers=max_concurrency) as pool:
+        futures = []
+        for page in client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=key_prefix):
+            for obj in page.get("Contents", []):
+                relative_key = obj["Key"][len(key_prefix) :]
+                if not relative_key or relative_key.endswith("/"):
+                    continue
+                if include_pattern and not fnmatch.fnmatch(relative_key, include_pattern):
+                    continue
+                futures.append(pool.submit(fetch_and_parse, obj["Key"]))
+        return [future.result() for future in futures]
+
+
 def _upload_file(client, local_path: str, bucket: str, key: str, acl: str):
     """Upload one file: a single PutObject for small ones, the multipart transfer manager for large ones."""
     if os.path.getsize(local_path) > _DIRECT_TRANSFER_MAX_BYTES:
@@ -325,7 +360,7 @@ class WithS3PathPrefix(with_local.WithLocal):
             self._write_parquet_file(df, temp_dir, **self.options)
             s3_sync_up(temp_dir, full_path_prefix)
 
-    def _read_from_s3_path_prefix(self) -> pd.DataFrame:  # pylint: disable=too-many-locals
+    def _read_from_s3_path_prefix(self) -> pd.DataFrame:  # pylint: disable=too-many-locals,too-many-branches
         """Read files from an S3 bucket based on a path_prefix/dynamic_file_path and return a concatenated DataFrame.
 
         This function supports two types of file paths from the S3 configuration:
@@ -391,6 +426,18 @@ class WithS3PathPrefix(with_local.WithLocal):
                 df = pd.concat(dfs, ignore_index=True)
                 columns = [column for column in df.columns.to_list() if column in self.schema.columns.keys()]
                 return df[columns]
+
+        if file_type == "parquet":
+            # Parquet is parsed straight from memory by the download threads: no temp dir, and parsing overlaps the network.
+            def reader(fobj: io.BytesIO) -> pd.DataFrame:
+                return self._read_parquet_file(fobj, self.schema, **self.options)  # type: ignore[arg-type]
+
+            if dynamic_file_path:
+                prefix, suffix = full_path.rsplit("/**/", 1)
+                results = s3_read_down(prefix, reader, include_pattern=f"**/{suffix}")
+            else:
+                results = s3_read_down(full_path, reader)
+            return pd.concat([df for df in results if len(df) > 0], ignore_index=True)
 
         with tempfile.TemporaryDirectory() as temp_dir:
             if dynamic_file_path:

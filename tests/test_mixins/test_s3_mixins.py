@@ -34,6 +34,20 @@ from tests.mocking.io import (
 )
 
 
+def _fake_s3_read_down(local_dir):
+    """Stand-in for `s3_read_down` that feeds the parquet files in `local_dir` to the reader, as the real one would from S3."""
+
+    def fake(_source_url, reader, include_pattern=None, **_):  # pylint: disable=unused-argument
+        results = []
+        for root, _, names in sorted(os.walk(local_dir)):
+            for name in sorted(names):
+                with open(os.path.join(root, name), "rb") as fobj:
+                    results.append(reader(io.BytesIO(fobj.read())))
+        return results
+
+    return fake
+
+
 class TestHdfIO:
     @pytest.mark.unit
     def test_save_then_load_round_trips_a_dataframe_through_in_memory_hdf(self):
@@ -880,33 +894,29 @@ class TestS3PathPrefixIO:
         )
 
     @pytest.mark.unit
-    # pylint: disable=unused-argument
-    def test__read_parquet_file_is_called_with_correct_local_file_path_when_loading_a_path_prefix_with_env_as_cloud_s3_and_type_as_parquet(
-        self, mock_listdir, mock_temporary_directory, mock__read_parquet_file
-    ):
+    def test__read_parquet_file_is_called_once_per_object_when_loading_a_path_prefix_with_env_as_cloud_s3_and_type_as_parquet(self):
         # Given
         s3_parquet_cloud_config = IOConfig(
             path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
             env_identifier="CLOUD",
             dynamic_vars=constants,
         ).get(source_key="READ_FROM_S3_PATH_PREFIX_PARQUET")
+        fobjs = [io.BytesIO(b"1"), io.BytesIO(b"2"), io.BytesIO(b"3")]
+        df = pd.DataFrame({"id": [1], "foo_name": ["a"], "bar": [1]})
 
         # When
-        with patch.object(dynamicio.mixins.with_s3, "s3_sync_down") as mocked__s3_sync:
-            mocked__s3_sync.return_value = True
+        with (
+            patch.object(dynamicio.mixins.with_s3, "s3_read_down", side_effect=lambda _url, reader, **_: [reader(f) for f in fobjs]),
+            patch.object(dynamicio.mixins.with_local.WithLocal, "_read_parquet_file", return_value=df) as mock__read_parquet_file,
+        ):
             read_obj = ReadS3ParquetIO(source_config=s3_parquet_cloud_config)
             actual_schema = read_obj.schema
-            read_obj.read()
+            result = read_obj.read()
 
         # Then
         assert len(mock__read_parquet_file.mock_calls) == 3
-        mock__read_parquet_file.assert_has_calls(
-            [
-                mock.call("temp/obj_1.h5", actual_schema),
-                mock.call("temp/obj_2.h5", actual_schema),
-                mock.call("temp/obj_3.h5", actual_schema),
-            ]
-        )
+        mock__read_parquet_file.assert_has_calls([mock.call(f, actual_schema) for f in fobjs])
+        assert len(result) == 3
 
     @pytest.mark.unit
     def test_read_parquet_file_is_called_while_s3_sync_is_not_for_loading_a_parquet_with_env_as_cloud_s3_and_type_as_parquet_with_no_disk_space_option(
@@ -942,8 +952,7 @@ class TestS3PathPrefixIO:
         ).get(source_key="READ_FROM_S3_PATH_PREFIX_PARQUET")
 
         # When
-        with patch.object(dynamicio.mixins.with_s3, "s3_sync_down") as mocked__s3_sync:
-            mocked__s3_sync.return_value = True
+        with patch.object(dynamicio.mixins.with_s3, "s3_read_down", side_effect=_fake_s3_read_down(os.path.join(constants.TEST_RESOURCES, "data/input/batch/parquet"))):
             df = ReadS3ParquetWithLessColumnsIO(source_config=s3_parquet_cloud_config).read()
 
         # Then
@@ -960,8 +969,7 @@ class TestS3PathPrefixIO:
         ).get(source_key="READ_FROM_S3_PATH_PREFIX_PARQUET")
 
         # When
-        with patch.object(dynamicio.mixins.with_s3, "s3_sync_down") as mocked__s3_sync:
-            mocked__s3_sync.return_value = True
+        with patch.object(dynamicio.mixins.with_s3, "s3_read_down", side_effect=_fake_s3_read_down(os.path.join(constants.TEST_RESOURCES, "data/input/batch/parquet"))):
             df = ReadS3ParquetIO(source_config=s3_parquet_cloud_config, filters=[[("foo_name", "==", "name_a")]]).read()
 
         # Then
@@ -1113,8 +1121,7 @@ class TestS3PathPrefixIO:
         ).get(source_key="READ_FROM_S3_PATH_PREFIX_PARQUET")
 
         # When
-        with patch.object(dynamicio.mixins.with_s3, "s3_sync_down") as mocked__s3_sync:
-            mocked__s3_sync.return_value = True
+        with patch.object(dynamicio.mixins.with_s3, "s3_read_down", side_effect=_fake_s3_read_down(os.path.join(constants.TEST_RESOURCES, "data/input/batch/parquet_w_empty_files"))):
             df = ReadS3ParquetWEmptyFilesIO(source_config=s3_parquet_cloud_config).read()
 
         # Then
@@ -1229,3 +1236,13 @@ class TestS3CopilotRegressions:
         keys = sorted(c.kwargs["Key"] for c in client.put_object.call_args_list)
         assert keys == ["q/a.parquet", "q/sub/b.parquet"]
         assert all(c.kwargs["ACL"] == "private" for c in client.put_object.call_args_list)
+
+    def test_read_down_parses_in_memory_in_key_order_with_one_request_per_file(self):
+        client = MagicMock()
+        client.get_paginator.return_value.paginate.return_value = [{"Contents": [{"Key": "p/b.parquet"}, {"Key": "p/a.parquet"}, {"Key": "p/skip.csv"}, {"Key": "p/sub/"}]}]
+        client.get_object.side_effect = lambda **kw: {"ContentLength": 1, "Body": io.BytesIO(kw["Key"].encode())}
+        with patch.object(dynamicio.mixins.with_s3, "_shared_s3_client", return_value=client):
+            results = dynamicio.mixins.with_s3.s3_read_down("s3://b/p/", lambda fobj: fobj.read(), include_pattern="*.parquet")
+        assert results == [b"p/b.parquet", b"p/a.parquet"]
+        assert client.get_object.call_count == 2
+        client.head_object.assert_not_called()
