@@ -1,6 +1,7 @@
 # pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring, too-many-public-methods, R0801
 import asyncio
 import logging
+import io
 import os
 import time
 from tempfile import NamedTemporaryFile
@@ -997,10 +998,8 @@ class TestTypeCastingAndValidation:
         #     @staticmethod
         #     def validate(df: pd.DataFrame):
         #         pass
-        with patch.object(dynamicio.mixins.with_s3.wr.s3, "to_parquet") as mock__wr_s3_parquet_writer, patch.object(WriteS3IO, "_apply_schema") as mock__apply_schema:
-            with NamedTemporaryFile(delete=False) as temp_file:
-                mock__wr_s3_parquet_writer.return_value = temp_file
-                WriteS3IO(source_config=s3_parquet_cloud_config).write(input_df)
+        with patch.object(dynamicio.mixins.with_s3, "_upload_from_memory") as mock__wr_s3_parquet_writer, patch.object(WriteS3IO, "_apply_schema") as mock__apply_schema:
+            WriteS3IO(source_config=s3_parquet_cloud_config).write(input_df)
 
         # Then
         mock__apply_schema.assert_called()
@@ -1016,14 +1015,14 @@ class TestTypeCastingAndValidation:
         ).get(source_key="READ_FROM_S3_PARQUET")
 
         # When
-        with patch.object(dynamicio.mixins.with_s3.wr.s3, "read_parquet") as mock__wr_s3_parquet_reader:
-            mock__wr_s3_parquet_reader.return_value = expected_s3_parquet_df
+        with patch.object(dynamicio.mixins.with_s3, "_download_to_memory") as mock__wr_s3_parquet_reader:
+            mock__wr_s3_parquet_reader.side_effect = lambda *_: _parquet_buffer(expected_s3_parquet_df)
             ReadS3ParquetWithDifferentCastableDTypeIO(source_config=s3_parquet_cloud_config).read()
 
         assert True, "No exception was raised"
 
     @pytest.mark.unit
-    @patch.object(dynamicio.mixins.with_s3.wr.s3, "read_parquet")
+    @patch.object(dynamicio.mixins.with_s3, "_download_to_memory")
     def test_columns_data_type_error_exception_is_generated_if_column_dtypes_dont_map_to_the_expected_dtypes(self, mock__wr_s3_parquet_reader, expected_s3_parquet_df):
         """
         ------------------------------ Captured log call -------------------------------
@@ -1041,7 +1040,7 @@ class TestTypeCastingAndValidation:
         """
         # Given
         dataframe_returned = expected_s3_parquet_df
-        mock__wr_s3_parquet_reader.return_value = dataframe_returned
+        mock__wr_s3_parquet_reader.side_effect = lambda *_: _parquet_buffer(dataframe_returned)
 
         s3_parquet_cloud_config = IOConfig(
             path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
@@ -1053,6 +1052,13 @@ class TestTypeCastingAndValidation:
         with pytest.raises(ColumnsDataTypeError):
             ReadS3ParquetWithDifferentNonCastableDTypeIO(source_config=s3_parquet_cloud_config).read()
             mock__wr_s3_parquet_reader.assert_called()
+
+
+def _parquet_buffer(df):
+    buffer = io.BytesIO()
+    df.to_parquet(buffer)
+    buffer.seek(0)
+    return buffer
 
 
 class TestAsyncCoreIO:

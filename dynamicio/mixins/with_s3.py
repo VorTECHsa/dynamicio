@@ -16,6 +16,7 @@ import awswrangler as wr
 import boto3
 import boto3.s3.transfer
 import pandas as pd
+import pyarrow.parquet as pq
 import s3transfer.futures
 import tables
 from magic_logger import logger
@@ -212,6 +213,41 @@ def s3_sync_up(source_dir: str, dest_url: str, acl: str = "bucket-owner-full-con
                 futures.append(transfer_manager.upload(local_path, bucket, f"{key_prefix}{relative_key}", extra_args={"ACL": acl}))
     for future in futures:
         future.result()
+
+
+_DIRECT_TRANSFER_MAX_BYTES = 16 * 1024**2  # larger objects use the multipart transfer manager
+
+# Options only awswrangler understands; if any is given we defer to awswrangler to keep its semantics.
+_WRANGLER_ONLY_READ_PARQUET = (
+    utils.args_of(wr.s3.read_parquet) - utils.args_of(pd.read_parquet) - utils.args_of(pq.read_table) - {"path"}
+)
+_WRANGLER_ONLY_WRITE_PARQUET = (
+    utils.args_of(wr.s3.to_parquet) - utils.args_of(pd.DataFrame.to_parquet) - utils.args_of(pq.write_table) - {"df", "path", "dataset", "use_threads"}
+)
+
+
+def _download_to_memory(bucket: str, key: str) -> io.BytesIO:
+    """Download an S3 object into memory over the shared client (one round trip for small objects)."""
+    client = _shared_s3_client()
+    response = client.get_object(Bucket=bucket, Key=key)
+    if response["ContentLength"] <= _DIRECT_TRANSFER_MAX_BYTES:
+        return io.BytesIO(response["Body"].read())
+    response["Body"].close()
+    fobj = io.BytesIO()
+    client.download_fileobj(bucket, key, fobj)
+    fobj.seek(0)
+    return fobj
+
+
+def _upload_from_memory(fobj: io.BytesIO, bucket: str, key: str, acl: str = "bucket-owner-full-control") -> None:
+    """Upload an in-memory buffer over the shared client (single PUT for small objects)."""
+    client = _shared_s3_client()
+    size = fobj.getbuffer().nbytes
+    fobj.seek(0)
+    if size <= _DIRECT_TRANSFER_MAX_BYTES:
+        client.put_object(Bucket=bucket, Key=key, Body=fobj.getvalue(), ACL=acl)
+    else:
+        client.upload_fileobj(fobj, bucket, key, ExtraArgs={"ACL": acl})
 
 
 @dataclasses.dataclass
@@ -422,8 +458,21 @@ class WithS3File:
         return getattr(self, f"_read_s3_{file_type}_file")(s3_path, self.schema, **options)
 
     @staticmethod
-    @utils.allow_options(wr.s3.read_parquet)
     def _read_s3_parquet_file(s3_path: str, schema: DataframeSchema, **kwargs) -> pd.DataFrame:
+        """Read a single parquet file.
+
+        By default the object is fetched in a single round trip over a shared boto3 client and parsed in memory with
+        the same pandas/pyarrow options as local reads. If options only awswrangler understands are given (e.g.
+        `s3_additional_kwargs`, `pyarrow_additional_kwargs`), awswrangler does the read instead.
+        """
+        if _WRANGLER_ONLY_READ_PARQUET & kwargs.keys():
+            return WithS3File._read_s3_parquet_file_with_wrangler(s3_path, schema, **kwargs)
+        bucket, key = _split_s3_url(s3_path)
+        return with_local.WithLocal._read_parquet_file(_download_to_memory(bucket, key), schema, **kwargs)  # type: ignore[arg-type]
+
+    @staticmethod
+    @utils.allow_options(wr.s3.read_parquet)
+    def _read_s3_parquet_file_with_wrangler(s3_path: str, schema: DataframeSchema, **kwargs) -> pd.DataFrame:
         kwargs.pop("columns", None)
         kwargs.setdefault("boto3_session", _shared_boto3_session())
         # A one-element list is read as-is; a bare string is treated as a prefix and costs an extra ListObjectsV2.
@@ -482,8 +531,12 @@ class WithS3File:
         logger.info(f"[s3] Finished uploading: {s3_path}")
 
     @staticmethod
-    @utils.allow_options(wr.s3.to_parquet)
     def _write_s3_parquet_file(df: pd.DataFrame, s3_path: str, **kwargs):
+        """Write a single parquet file.
+
+        By default the file is serialised in memory with the same pandas/pyarrow options as local writes and uploaded
+        over a shared boto3 client. If options only awswrangler understands are given, awswrangler does the write.
+        """
         if kwargs.pop("dataset", False):
             raise ValueError(
                 "[s3-parquet] dataset=True is not supported in the WithS3File mixin. Use a file path, not a directory. "
@@ -493,6 +546,17 @@ class WithS3File:
         if s3_path.endswith("/"):
             raise ValueError("[s3-parquet] Parquet output path must be a file, not a directory (e.g., 's3://bucket/data.parquet').")
 
+        if _WRANGLER_ONLY_WRITE_PARQUET & kwargs.keys():
+            return WithS3File._write_s3_parquet_file_with_wrangler(df, s3_path, **kwargs)
+        kwargs.pop("use_threads", None)
+        fobj = io.BytesIO()
+        with_local.WithLocal._write_parquet_file(df, fobj, **kwargs)  # type: ignore[arg-type]
+        bucket, key = _split_s3_url(s3_path)
+        _upload_from_memory(fobj, bucket, key)
+
+    @staticmethod
+    @utils.allow_options(wr.s3.to_parquet)
+    def _write_s3_parquet_file_with_wrangler(df: pd.DataFrame, s3_path: str, **kwargs):
         kwargs.setdefault("s3_additional_kwargs", {}).setdefault("ACL", "bucket-owner-full-control")
         kwargs.setdefault("boto3_session", _shared_boto3_session())
         wr.s3.to_parquet(df=df, path=s3_path, dataset=False, **kwargs)

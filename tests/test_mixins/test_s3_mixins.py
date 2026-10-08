@@ -7,6 +7,7 @@ from unittest import mock
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
+import pyarrow.parquet as pq
 import pydantic
 import pytest
 import yaml
@@ -204,7 +205,7 @@ class TestS3FileIO:
         mock_wrangler_parquet_reader.return_value = expected_s3_parquet_df
 
         # When
-        ReadS3ParquetIO(source_config=cloud_config).read()
+        ReadS3ParquetIO(source_config=cloud_config, pyarrow_additional_kwargs={}).read()
 
         # Then
         mock_wrangler_parquet_reader.assert_called()
@@ -299,16 +300,18 @@ class TestS3FileIO:
 
         # When
         with patch.object(dynamicio.mixins.with_s3.wr.s3, "to_parquet") as mock__wr_s3_parquet_writer:
-            WriteS3IO(source_config=cloud_config).write(df)
+            WriteS3IO(source_config=cloud_config, sanitize_columns=False).write(df)
 
         # Then
         mock__wr_s3_parquet_writer.assert_called_once()
 
     @pytest.mark.unit
-    @patch.object(dynamicio.mixins.with_s3.wr.s3, "read_parquet")
+    @patch.object(dynamicio.mixins.with_s3, "_download_to_memory")
     def test_columns_data_type_error_exception_is_generated_if_column_dtypes_dont_map_to_the_expected_dtypes(self, mock__wr_read_parquet, expected_s3_parquet_df):
         # Given
-        mock__wr_read_parquet.return_value = expected_s3_parquet_df
+        buffer = io.BytesIO()
+        expected_s3_parquet_df.to_parquet(buffer)
+        mock__wr_read_parquet.side_effect = lambda *_: io.BytesIO(buffer.getvalue())
         s3_parquet_cloud_config = IOConfig(
             path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
             env_identifier="CLOUD",
@@ -451,7 +454,7 @@ class TestAllowedArgsAreConfiguredCorrectlyForWithS3File:
     @pytest.mark.parametrize(
         "source_key, patch_target, input_options, expected_options",
         [
-            ("WRITE_TO_S3_PARQUET", "to_parquet", {"compression": "snappy", "invalid_opt": True}, {"compression": "snappy", "dataset": False}),
+            ("WRITE_TO_S3_PARQUET", "to_parquet", {"compression": "snappy", "sanitize_columns": False, "invalid_opt": True}, {"compression": "snappy", "sanitize_columns": False, "dataset": False}),
             (
                 "WRITE_TO_S3_CSV",
                 "to_csv",
@@ -1115,8 +1118,8 @@ class TestS3PathPrefixIO:
         assert df.shape == (10, 2) and df.columns.tolist() == ["id", "bar"]
 
 
-class TestS3WranglerSessionReuse:
-    """Wrangler builds a brand-new boto3 Session (and resolves credentials) on every call unless handed one."""
+class TestS3ParquetTransferPaths:
+    """Single-file parquet goes through one shared boto3 client by default; awswrangler only on request."""
 
     @staticmethod
     def _config(source_key, yaml_file):
@@ -1127,16 +1130,44 @@ class TestS3WranglerSessionReuse:
         ).get(source_key=source_key)
 
     @pytest.mark.unit
+    def test_default_parquet_read_uses_one_get_object_and_never_awswrangler(self, expected_s3_parquet_df):
+        body = io.BytesIO()
+        expected_s3_parquet_df.to_parquet(body)
+        client = MagicMock()
+        client.get_object.return_value = {"ContentLength": body.tell(), "Body": io.BytesIO(body.getvalue())}
+        config = self._config("READ_FROM_S3_PARQUET", "definitions/input.yaml")
+
+        with patch.object(dynamicio.mixins.with_s3, "_shared_s3_client", return_value=client), patch.object(dynamicio.mixins.with_s3.wr.s3, "read_parquet") as mock_wr:
+            df = ReadS3ParquetIO(source_config=config, use_threads=True).read()
+
+        client.get_object.assert_called_once()
+        mock_wr.assert_not_called()
+        assert len(df) == len(expected_s3_parquet_df)
+
+    @pytest.mark.unit
+    def test_default_parquet_write_is_one_put_object_with_acl_and_honours_pyarrow_options(self):
+        df = pd.DataFrame.from_dict({"col_1": [3, 2, 1, 0], "col_2": ["a", "b", "c", "d"]})
+        client = MagicMock()
+        config = self._config("WRITE_TO_S3_PARQUET", "definitions/processed.yaml")
+
+        with patch.object(dynamicio.mixins.with_s3, "_shared_s3_client", return_value=client), patch.object(dynamicio.mixins.with_s3.wr.s3, "to_parquet") as mock_wr:
+            WriteS3IO(source_config=config, use_threads=True, coerce_timestamps="ms", allow_truncated_timestamps=True, row_group_size=2).write(df)
+
+        mock_wr.assert_not_called()
+        kwargs = client.put_object.call_args.kwargs
+        assert kwargs["ACL"] == "bucket-owner-full-control"
+        assert pq.ParquetFile(io.BytesIO(kwargs["Body"])).metadata.num_row_groups == 2
+
+    @pytest.mark.unit
     @patch("dynamicio.mixins.with_s3.wr.s3.read_parquet")
-    def test_parquet_reads_share_one_boto3_session_and_skip_prefix_listing(self, mock_reader, expected_s3_parquet_df):
+    def test_wrangler_reads_share_one_boto3_session_and_skip_prefix_listing(self, mock_reader, expected_s3_parquet_df):
         mock_reader.return_value = expected_s3_parquet_df
         config = self._config("READ_FROM_S3_PARQUET", "definitions/input.yaml")
 
-        ReadS3ParquetIO(source_config=config).read()
-        ReadS3ParquetIO(source_config=config).read()
+        ReadS3ParquetIO(source_config=config, pyarrow_additional_kwargs={}).read()
+        ReadS3ParquetIO(source_config=config, pyarrow_additional_kwargs={}).read()
 
         first, second = (call.kwargs for call in mock_reader.call_args_list)
-        assert first["boto3_session"] is not None
         assert first["boto3_session"] is second["boto3_session"]
         assert isinstance(first["path"], list) and len(first["path"]) == 1
 
@@ -1150,15 +1181,3 @@ class TestS3WranglerSessionReuse:
         ReadS3ParquetIO(source_config=config, boto3_session=custom).read()
 
         assert mock_reader.call_args.kwargs["boto3_session"] is custom
-
-    @pytest.mark.unit
-    def test_parquet_writes_share_the_same_boto3_session(self, expected_s3_parquet_df):
-        df = pd.DataFrame.from_dict({"col_1": [3, 2, 1, 0], "col_2": ["a", "b", "c", "d"]})
-        config = self._config("WRITE_TO_S3_PARQUET", "definitions/processed.yaml")
-
-        with patch.object(dynamicio.mixins.with_s3.wr.s3, "to_parquet") as mock_writer, patch.object(dynamicio.mixins.with_s3.wr.s3, "read_parquet") as mock_reader:
-            mock_reader.return_value = expected_s3_parquet_df
-            WriteS3IO(source_config=config).write(df)
-            ReadS3ParquetIO(source_config=self._config("READ_FROM_S3_PARQUET", "definitions/input.yaml")).read()
-
-        assert mock_writer.call_args.kwargs["boto3_session"] is mock_reader.call_args.kwargs["boto3_session"]
