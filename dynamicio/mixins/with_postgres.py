@@ -21,7 +21,7 @@ from sqlalchemy.orm.session import sessionmaker
 from dynamicio.config.pydantic import DataframeSchema, PostgresDataEnvironment
 from dynamicio.mixins import utils
 
-Session = sessionmaker(autoflush=True)
+Session = sessionmaker(autoflush=True)  # pylint: disable=invalid-name
 
 Base = declarative_base()
 

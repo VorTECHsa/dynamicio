@@ -7,10 +7,12 @@ import os
 from threading import Lock
 from typing import Any, MutableMapping
 
-import pandas as pd  # type: ignore
-from fastparquet import ParquetFile, write  # type: ignore
-from pyarrow.parquet import read_table, write_table  # type: ignore # pylint: disable=no-name-in-module
+import pandas as pd
+from fastparquet import ParquetFile, write
+from magic_logger import logger
+from pyarrow.parquet import read_table, write_table
 
+# Application Imports
 from dynamicio.config.pydantic import DataframeSchema, LocalBatchDataEnvironment, LocalDataEnvironment
 from dynamicio.mixins import utils
 from dynamicio.mixins.utils import get_file_type_value
@@ -32,8 +34,10 @@ class WithLocal:
             - `file_path`
             - `file_type`
 
-        To actually read the file, a method is dynamically invoked by name, using
-        "_read_{file_type}_file".
+        To actually read the file, a method is dynamically invoked by name, using "_read_{file_type}_file".
+
+        Additional options:
+            - single_record: bool: used for json files. If True, treats the file as a single JSON object instead of a list of records.
 
         Returns:
             DataFrame
@@ -106,23 +110,42 @@ class WithLocal:
         return pd.read_csv(file_path, **options)
 
     @staticmethod
-    @utils.allow_options(pd.read_json)
+    @utils.allow_options([*utils.args_of(pd.read_json), *["single_record"]])
     def _read_json_file(file_path: str, schema: DataframeSchema, **options: Any) -> pd.DataFrame:
         """Read a json file as a DataFrame using `pd.read_hdf`.
 
         All `options` are passed directly to `pd.read_hdf`.
 
         Args:
-            file_path:
-            options:
+            file_path: The path to the json file to be read.
+            options: The pandas `read_json` options.
 
         Returns:
-            DataFrame
+            DataFrame: The dataframe read from the json file.
         """
+        options.setdefault("lines", False)
+
+        # Local reads go through pandas' own `read_json` (no aws-wrangler involved), which natively
+        # supports every `orient` value, so it's passed through as-is instead of being restricted to "records".
+        # `convert_dates` is likewise left to pandas' own default (auto-detection) unless the caller
+        # overrides it, since some callers rely on that auto-parsing for datetime columns.
+        is_single_record = options.pop("single_record", False)
         df = pd.read_json(file_path, **options)
-        columns = [column for column in df.columns.to_list() if column in schema.column_names]
-        df = df[columns]
-        return df
+
+        # 🧼 Check if this is a single-record json file
+        if is_single_record:
+            # Re-wrap as single dict row — i.e., rehydrate the record
+            df = pd.DataFrame([{df.columns[0]: dict(zip(df.index, df.iloc[:, 0]))}])
+        elif (
+            df.shape[1] == 1
+            and df.columns.dtype == "object"
+            and df.index.dtype == "object"
+            and all(isinstance(i, str) for i in df.index)
+            and all(isinstance(v, (str, int, float, bool, type(None))) for v in df.iloc[:, 0])
+        ):
+            logger.warning("[local-json-read] File appears to be a single-record JSON object. Pass 'single_record=True' in options to handle this case.")
+
+        return df[[col for col in df.columns if col in schema.column_names]]
 
     @staticmethod
     def _read_parquet_file(file_path: str, schema: DataframeSchema, **options: Any) -> pd.DataFrame:
@@ -192,9 +215,10 @@ class WithLocal:
     @staticmethod
     @utils.allow_options(pd.DataFrame.to_json)
     def _write_json_file(df: pd.DataFrame, file_path: str, **options: Any):
-        """Write a dataframe as a json file using `df.to_json`.
+        """Writes a JSON file using `df.to_json`.
 
-        All `options` are passed directly to `df.to_json`.
+        All `options` (including `orient`/`lines`) are passed through as given,
+        falling back to pandas' own defaults when not specified.
 
         Args:
             df: A dataframe write out.
@@ -283,6 +307,6 @@ class WithLocalBatch(WithLocal):
         dfs_to_concatenate = []
         for file in files:
             file_to_load = os.path.join(file_path, file)
-            dfs_to_concatenate.append(getattr(self, f"_read_{file_type}_file")(file_to_load, self.schema, **self.options))  # type: ignore
+            dfs_to_concatenate.append(getattr(self, f"_read_{file_type}_file")(file_to_load, self.schema, **self.options))
 
         return pd.concat(dfs_to_concatenate).reset_index(drop=True)

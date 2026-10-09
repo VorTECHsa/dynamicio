@@ -1,185 +1,246 @@
-# pylint: disable=no-member, missing-module-docstring, missing-class-docstring, missing-function-docstring, too-many-public-methods, too-few-public-methods, protected-access, C0103, C0302, R0801
+# pylint: disable=no-member, too-many-positional-arguments, missing-module-docstring, missing-class-docstring, missing-function-docstring, too-many-public-methods, too-few-public-methods, protected-access, C0103, C0302, R0801
+import io
 import os
 import shutil
 from tempfile import NamedTemporaryFile
 from unittest import mock
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pandas as pd
+import pyarrow.parquet as pq
 import pydantic
 import pytest
 import yaml
 
 # Application Imports
+import dynamicio.errors
 import dynamicio.mixins.with_local
 import dynamicio.mixins.with_s3
 from dynamicio.config import IOConfig
-from dynamicio.errors import ColumnsDataTypeError
 from tests import constants
-from tests.constants import TEST_RESOURCES
 from tests.mocking.io import (
     ReadS3CsvIO,
     ReadS3HdfIO,
     ReadS3JsonIO,
+    ReadS3JsonOrientRecordsAltIO,
+    ReadS3JsonOrientRecordsIO,
     ReadS3ParquetIO,
     ReadS3ParquetWEmptyFilesIO,
-    ReadS3ParquetWithDifferentCastableDTypeIO,
     ReadS3ParquetWithDifferentNonCastableDTypeIO,
     ReadS3ParquetWithLessColumnsIO,
     TemplatedFile,
-    WriteS3CsvIO,
-    WriteS3HdfIO,
-    WriteS3JsonIO,
-    WriteS3ParquetIO,
+    WriteS3IO,
+    WriteS3JsonOrientRecordsIO,
 )
+
+
+def _fake_s3_read_down(local_dir):
+    """Stand-in for `s3_read_down` that feeds the parquet files in `local_dir` to the reader, as the real one would from S3."""
+
+    def fake(_source_url, reader, include_pattern=None, **_):  # pylint: disable=unused-argument
+        results = []
+        for root, _, names in sorted(os.walk(local_dir)):
+            for name in sorted(names):
+                with open(os.path.join(root, name), "rb") as fobj:
+                    results.append(reader(io.BytesIO(fobj.read())))
+        return results
+
+    return fake
+
+
+class TestHdfIO:
+    @pytest.mark.unit
+    def test_save_then_load_round_trips_a_dataframe_through_in_memory_hdf(self):
+        # Given
+        df = pd.DataFrame({"id": [1, 2], "foo_name": ["a", "b"], "bar": [3, 4]})
+        hdf_io = dynamicio.mixins.with_s3.HdfIO()
+        fobj = io.BytesIO()
+
+        # When
+        hdf_io.save(df, fobj, label="round_trip_test")
+        fobj.seek(0)
+        loaded_df = hdf_io.load(fobj, label="round_trip_test")
+
+        # Then
+        pd.testing.assert_frame_equal(loaded_df.reset_index(drop=True), df)
+
+    @pytest.mark.unit
+    def test_save_accepts_a_custom_key_via_options(self):
+        # Given
+        df = pd.DataFrame({"id": [1], "foo_name": ["a"], "bar": [2]})
+        hdf_io = dynamicio.mixins.with_s3.HdfIO()
+        fobj = io.BytesIO()
+
+        # When
+        hdf_io.save(df, fobj, label="custom_key_test", options={"key": "custom"})
+        fobj.seek(0)
+        loaded_df = hdf_io.load(fobj, label="custom_key_test", options={"key": "custom"})
+
+        # Then
+        pd.testing.assert_frame_equal(loaded_df.reset_index(drop=True), df)
 
 
 class TestS3FileIO:
     @pytest.mark.unit
     def test_read_resolves_file_path_if_templated(self):
-        # source data read from: "[[ TEST_RESOURCES ]]/data/input/some_csv_to_read.parquet"
-        config = IOConfig(
+        # Given
+        # TEMPLATED_FILE_PATH:
+        #   LOCAL:
+        #     ...
+        #   CLOUD:
+        # type: "s3_file"
+        #     s3:
+        #       bucket: "[[ MOCK_BUCKET ]]"
+        #       file_path: "path/to/{file_name_to_replace}.csv"
+        #       file_type: "csv"
+        cloud_config = IOConfig(
             path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
             env_identifier="CLOUD",
             dynamic_vars=constants,
         ).get(source_key="TEMPLATED_FILE_PATH")
 
         file_path = f"{constants.TEST_RESOURCES}/data/input/some_csv_to_read.csv"
+        expected_df = pd.read_csv(file_path)
 
         # When
-        with (
-            patch.object(dynamicio.mixins.with_local.WithLocal, "_read_csv_file") as mock__read_csv_file,
-            patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_named_file_reader") as mock_s3_reader,
-        ):
-            with open(file_path, "r") as file:  # pylint: disable=unspecified-encoding
-                mock_s3_reader.return_value = file
-                io_obj = TemplatedFile(source_config=config, file_name_to_replace="some_csv_to_read")
-                final_schema = io_obj.schema
-                io_obj.read()
+        with patch.object(dynamicio.mixins.with_s3.WithS3File, "_read_s3_csv_file") as mock__read_csv_file:
+            mock__read_csv_file.return_value = expected_df
+            io_obj = TemplatedFile(source_config=cloud_config, file_name_to_replace="some_csv_to_read")
+            final_schema = io_obj.schema
+            io_obj.read()
 
-        mock__read_csv_file.assert_called_once_with(file_path, final_schema)
+        # Then
+        mock__read_csv_file.assert_called_once()
+        called_args = mock__read_csv_file.call_args[0]
+        assert called_args[0] == "s3://mock-bucket/path/to/some_csv_to_read.csv"
+        assert called_args[1] == final_schema
 
     @pytest.mark.unit
     def test_write_resolves_file_path_if_templated(self):
         # Given
-        # source data read from: "[[ TEST_RESOURCES ]]/data/input/some_csv_to_read.parquet"
-        config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+        # TEMPLATED_FILE_PATH:
+        #   LOCAL:
+        #     ...
+        #   CLOUD:
+        # type: "s3_file"
+        #     s3:
+        #       bucket: "[[ MOCK_BUCKET ]]"
+        #       file_path: "path/to/{file_name_to_replace}.csv"
+        #       file_type: "csv"
+        cloud_config = IOConfig(
+            path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml"),
             env_identifier="CLOUD",
             dynamic_vars=constants,
         ).get(source_key="TEMPLATED_FILE_PATH")
 
         # When
-        with patch.object(dynamicio.mixins.with_local.WithLocal, "_write_csv_file") as mock__write_csv_file:
-            df = pd.read_csv(os.path.join(TEST_RESOURCES, "data/input/some_csv_to_read.csv"))
-            TemplatedFile(source_config=config, file_name_to_replace="some_csv_to_read").write(df)
+        file_path = os.path.join(constants.TEST_RESOURCES, "data/input/some_csv_to_read.csv")
+        df = pd.read_csv(file_path)
+
+        # Patch S3 write method instead of local one
+        with patch.object(dynamicio.mixins.with_s3.WithS3File, "_write_s3_csv_file") as mock__write_csv_file:
+            TemplatedFile(source_config=cloud_config, file_name_to_replace="some_csv_to_read").write(df)
 
         # Then
         args, _ = mock__write_csv_file.call_args
-        assert "s3://mock-bucket/path/to/some_csv_to_read.csv" == args[1]
+        assert args[0].equals(df)
+        assert args[1] == "s3://mock-bucket/path/to/some_csv_to_read.csv"
 
     @pytest.mark.unit
     @patch.object(dynamicio.mixins.with_s3.WithS3File, "_read_from_s3_file")
     def test_read_from_s3_file_is_called_for_loading_a_file_with_env_as_cloud_s3(self, mock__read_from_s3_file, expected_s3_csv_df):
         # Given
         mock__read_from_s3_file.return_value = expected_s3_csv_df
-        s3_csv_cloud_config = IOConfig(
+        cloud_config = IOConfig(
             path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
             env_identifier="CLOUD",
             dynamic_vars=constants,
         ).get(source_key="READ_FROM_S3_CSV")
 
         # When
-        ReadS3CsvIO(source_config=s3_csv_cloud_config).read()
+        ReadS3CsvIO(source_config=cloud_config).read()
 
         # Then
         mock__read_from_s3_file.assert_called()
 
     @pytest.mark.unit
-    def test_s3_reader_is_not_called_for_loading_a_parquet_with_env_as_cloud_s3_and_type_as_parquet_and_no_disk_space_flag(self):
+    @patch("dynamicio.mixins.with_s3.boto3.client")
+    def test_boto3_client_is_used_for_loading_a_hdf_with_env_as_cloud_s3_and_type_as_hdf(self, mock_boto3_client, expected_s3_hdf_file_path):
         # Given
-        s3_parquet_cloud_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
-            env_identifier="CLOUD",
-            dynamic_vars=constants,
-        ).get(source_key="READ_FROM_S3_PARQUET")
-
-        file_path = f"{constants.TEST_RESOURCES}/data/input/some_csv_to_read.csv"
-
-        # When
-        with (
-            patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_reader") as mock_s3_reader,
-            patch.object(dynamicio.mixins.with_s3.WithS3File, "_read_parquet_file") as mock_read_parquet_file,
-        ):
-            with open(file_path, "r") as file:  # pylint: disable=unspecified-encoding
-                mock_s3_reader.return_value = file
-                ReadS3ParquetIO(source_config=s3_parquet_cloud_config, no_disk_space=True).read()
-
-        # Then
-        mock_s3_reader.assert_not_called()
-        mock_read_parquet_file.assert_called()
-
-    @pytest.mark.unit
-    def test_s3_reader_is_called_for_loading_a_hdf_with_env_as_cloud_s3_and_type_as_hdf(self, expected_s3_hdf_file_path, expected_s3_hdf_df):
-        # Given
-        s3_hdf_cloud_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+        cloud_config = IOConfig(
+            path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml"),
             env_identifier="CLOUD",
             dynamic_vars=constants,
         ).get(source_key="READ_FROM_S3_HDF")
 
-        # When
-        with patch.object(dynamicio.mixins.with_s3.WithS3File, "boto3_client") as mock__boto3_client:
+        def mock_download_fobj(_, __, fobj):
+            with open(expected_s3_hdf_file_path, "rb") as fin:
+                shutil.copyfileobj(fin, fobj)
 
-            def mock_download_fobj(s3_bucket, s3_key, target_file):  # pylint: disable=unused-argument
-                with open(expected_s3_hdf_file_path, "rb") as fin:
-                    shutil.copyfileobj(fin, target_file)
-
-            mock__boto3_client.download_fileobj.side_effect = mock_download_fobj
-            loaded_hdf_pd = ReadS3HdfIO(source_config=s3_hdf_cloud_config, no_disk_space=True).read()
-
-        # Then
-        pd.testing.assert_frame_equal(loaded_hdf_pd, expected_s3_hdf_df)
-
-    @pytest.mark.unit
-    def test_s3_reader_is_not_called_for_loading_a_json_with_env_as_cloud_s3_and_type_as_json_and_no_disk_space_flag(self):
-        # Given
-        s3_json_cloud_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
-            env_identifier="CLOUD",
-            dynamic_vars=constants,
-        ).get(source_key="READ_FROM_S3_JSON")
+        mock_boto3_client.return_value.download_fileobj.side_effect = mock_download_fobj
 
         # When
-        with (
-            patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_reader") as mock__s3_reader,
-            patch.object(dynamicio.mixins.with_s3.WithS3File, "_read_json_file") as mock__read_json_file,
-        ):
-            ReadS3JsonIO(source_config=s3_json_cloud_config, no_disk_space=True).read()
+        with patch.object(dynamicio.mixins.with_s3.HdfIO, "load") as mock_hdf_load:
+            # match schema columns to avoid filtering errors
+            mock_hdf_load.return_value = pd.DataFrame({"id": [1], "foo_name": ["a"], "bar": [1]})
+            ReadS3HdfIO(source_config=cloud_config).read()
 
         # Then
-        mock__s3_reader.assert_not_called()
-        mock__read_json_file.assert_called()
+        mock_boto3_client.return_value.download_fileobj.assert_called_once()
 
     @pytest.mark.unit
-    def test_s3_reader_is_not_called_for_loading_a_csv_with_env_as_cloud_s3_and_type_as_csv_and_no_disk_space_flag(self):
+    @patch("dynamicio.mixins.with_s3.wr.s3.read_csv")
+    def test_wrangler_csv_reader_is_used_for_loading_a_csv_with_env_as_cloud_s3_and_file_type_csv(self, mock_wrangler_csv_reader, expected_s3_csv_df):
         # Given
-        s3_csv_cloud_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+        cloud_config = IOConfig(
+            path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml"),
             env_identifier="CLOUD",
             dynamic_vars=constants,
         ).get(source_key="READ_FROM_S3_CSV")
 
+        mock_wrangler_csv_reader.return_value = expected_s3_csv_df
+
         # When
-        with (
-            patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_reader") as mock__s3_reader,
-            patch.object(dynamicio.mixins.with_s3.WithS3File, "_read_csv_file") as mock__read_csv_file,
-        ):
-            ReadS3CsvIO(source_config=s3_csv_cloud_config, no_disk_space=True).read()
+        ReadS3CsvIO(source_config=cloud_config).read()
 
         # Then
-        mock__s3_reader.assert_not_called()
-        mock__read_csv_file.assert_called()
+        mock_wrangler_csv_reader.assert_called()
+
+    @pytest.mark.unit
+    @patch("dynamicio.mixins.with_s3.wr.s3.read_parquet")
+    def test_wrangler_parquet_reader_is_used_for_loading_a_csv_with_env_as_cloud_s3_and_file_type_parquet(self, mock_wrangler_parquet_reader, expected_s3_parquet_df):
+        # Given
+        cloud_config = IOConfig(
+            path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml"),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_S3_PARQUET")
+
+        mock_wrangler_parquet_reader.return_value = expected_s3_parquet_df
+
+        # When
+        ReadS3ParquetIO(source_config=cloud_config, pyarrow_additional_kwargs={}).read()
+
+        # Then
+        mock_wrangler_parquet_reader.assert_called()
+
+    @pytest.mark.unit
+    @patch("dynamicio.mixins.with_s3.wr.s3.read_json")
+    def test_wrangler_json_reader_is_used_for_loading_a_csv_with_env_as_cloud_s3_and_file_type_json(self, mock_wrangler_json_reader, expected_s3_json_df):
+        # Given
+        cloud_config = IOConfig(
+            path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml"),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_S3_JSON")
+
+        mock_wrangler_json_reader.return_value = expected_s3_json_df
+
+        # When
+        ReadS3JsonIO(source_config=cloud_config).read()
+
+        # Then
+        mock_wrangler_json_reader.assert_called()
 
     @pytest.mark.unit
     def test_ValueError_is_raised_if_file_path_missing_from_config(self, tmp_path):
@@ -198,6 +259,7 @@ class TestS3FileIO:
                         "CLOUD": {
                             "type": "s3_file",
                             "s3": {"bucket": "[[ MOCK_BUCKET ]]", "file_type": "csv"},
+                            # The file path should have been defined here...
                         },
                         "schema": {"file_path": "[[ TEST_RESOURCES ]]/schemas/read_from_s3_csv.yaml"},
                     }
@@ -213,115 +275,10 @@ class TestS3FileIO:
             )
 
     @pytest.mark.unit
-    def test_s3_writers_only_validate_schema_prior_writing_out_the_dataframe(self):
-        # Given
-        input_df = pd.DataFrame.from_dict({"col_1": [3, 2, 1], "col_2": ["a", "b", "c"], "col_3": ["a", "b", "c"]})
-
-        s3_parquet_cloud_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
-            env_identifier="CLOUD",
-            dynamic_vars=constants,
-        ).get(source_key="WRITE_TO_S3_PARQUET")
-
-        # When
-        # class WriteS3ParquetIO(DynamicDataIO):
-        #     schema = {"col_1": "int64", "col_2": "object"}
-        #
-        #     @staticmethod
-        #     def validate(df: pd.DataFrame):
-        #         pass
-        with (
-            patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_writer") as mock__s3_writer,
-            patch.object(WriteS3ParquetIO, "_apply_schema") as mock__apply_schema,
-            patch.object(WriteS3ParquetIO, "_write_parquet_file") as mock__write_parquet_file,
-        ):
-            with NamedTemporaryFile(delete=False) as temp_file:
-                mock__s3_writer.return_value = temp_file
-                WriteS3ParquetIO(source_config=s3_parquet_cloud_config).write(input_df)
-
-        # Then
-        mock__apply_schema.assert_called()
-        mock__write_parquet_file.assert_called()
-
-    @pytest.mark.unit
-    def test_columns_data_type_error_exception_is_not_generated_if_column_dtypes_can_be_casted_to_the_expected_dtypes(self, expected_s3_parquet_df):
-        # Given
-        s3_parquet_cloud_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
-            env_identifier="CLOUD",
-            dynamic_vars=constants,
-        ).get(source_key="READ_FROM_S3_PARQUET")
-
-        # When
-        with (
-            patch.object(dynamicio.mixins.with_s3.WithS3File, "_read_parquet_file") as mock__read_parquet_file,
-            patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_named_file_reader"),
-        ):
-            mock__read_parquet_file.return_value = expected_s3_parquet_df
-            ReadS3ParquetWithDifferentCastableDTypeIO(source_config=s3_parquet_cloud_config).read()
-
-        assert True, "No exception was raised"
-
-    @pytest.mark.unit
-    @patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_named_file_reader")
-    @patch.object(dynamicio.mixins.with_s3.WithS3File, "_read_parquet_file")
-    def test_columns_data_type_error_exception_is_generated_if_column_dtypes_dont_map_to_the_expected_dtypes(self, mock__s3_reader, moc__read_parquet_file, expected_s3_parquet_df):
-        """
-        ------------------------------ Captured log call -------------------------------
-
-        WARNING  ...:dataio.py:273 Expected: 'float64' dtype for column: 'id', found: 'int64' instead.
-        WARNING  ...:dataio.py:273 Expected: 'int64' dtype for column: 'foo_name', found: 'object' instead.
-        ERROR    ...:dataio.py:277 Tried casting column: 'foo_name' to 'int64' from 'object', but failed.
-
-        =========================== short test summary info ============================
-
-        FAILED ...:test_columns_data_type_error_exception_is_generated_if_column_dtypes_dont_map_to_the_expected_dtypes
-
-        ============================== 1 failed in 0.48s ===============================
-
-        """
-        # Given
-        dataframe_returned = expected_s3_parquet_df
-        mock__s3_reader.return_value = dataframe_returned
-
-        s3_parquet_cloud_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
-            env_identifier="CLOUD",
-            dynamic_vars=constants,
-        ).get(source_key="READ_FROM_S3_PARQUET")
-
-        # When/Then
-        with pytest.raises(ColumnsDataTypeError):
-            ReadS3ParquetWithDifferentNonCastableDTypeIO(source_config=s3_parquet_cloud_config).read()
-            moc__read_parquet_file.assert_called()
-
-    @pytest.mark.unit
-    def test_read_parquet_file_is_called_while_s3_reader_is_not_for_loading_a_parquet_with_env_as_cloud_s3_and_type_as_parquet_with_no_disk_space_option(
-        self,
-    ):
-        # Given
-        s3_parquet_cloud_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
-            env_identifier="CLOUD",
-            dynamic_vars=constants,
-        ).get(source_key="READ_FROM_S3_PARQUET")
-
-        # When
-        with (
-            patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_reader") as mock__s3_reader,
-            patch.object(dynamicio.mixins.with_local.WithLocal, "_read_parquet_file") as mock__read_parquet_file,
-        ):
-            ReadS3ParquetIO(source_config=s3_parquet_cloud_config, no_disk_space=True).read()
-
-        # Then
-        mock__s3_reader.assert_not_called()
-        mock__read_parquet_file.assert_called()
-
-    @pytest.mark.unit
     @patch.object(dynamicio.mixins.with_s3.WithS3File, "_write_to_s3_file")
     def test_s3_writer_is_called_for_writing_a_file_with_env_is_set_to_cloud_s3(self, mock__write_to_s3_file):
         # Given
-        df = pd.DataFrame.from_dict({"id": [3, 2, 1, 0], "foo_name": ["a", "b", "c", "d"], "bar": [1, 2, 3, 4]})
+        df = pd.DataFrame.from_dict({"col_1": [3, 2, 1, 0], "col_2": ["a", "b", "c", "d"]})
 
         s3_json_local_config = IOConfig(
             path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
@@ -330,101 +287,440 @@ class TestS3FileIO:
         ).get(source_key="WRITE_TO_S3_JSON")
 
         # When
-        ReadS3HdfIO(source_config=s3_json_local_config).write(df)
+        WriteS3IO(source_config=s3_json_local_config).write(df)
 
         # Then
-        mock__write_to_s3_file.assert_called()
+        mock__write_to_s3_file.assert_called_once()
 
     @pytest.mark.unit
-    def test_write_parquet_file_is_called_for_writing_a_parquet_with_env_as_cloud_s3_and_type_as_s3(self):
+    def test_wrangler_to_parquet_is_called_for_writing_a_parquet_with_env_as_cloud_s3_and_file_type_as_parquet(self):
         # Given
+        # WRITE_TO_S3_PARQUET:
+        #   LOCAL:
+        #     ...
+        #   CLOUD:
+        # type: "s3_file"
+        #     s3:
+        #       bucket: "[[ MOCK_BUCKET ]]"
+        #       file_path: "test/write_some_parquet.parquet"
+        #       file_type: "parquet"
         df = pd.DataFrame.from_dict({"col_1": [3, 2, 1, 0], "col_2": ["a", "b", "c", "d"]})
 
-        s3_parquet_local_config = IOConfig(
+        cloud_config = IOConfig(
             path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
             env_identifier="CLOUD",
             dynamic_vars=constants,
         ).get(source_key="WRITE_TO_S3_PARQUET")
 
         # When
-        with (
-            patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_writer") as mock__s3_writer,
-            patch.object(dynamicio.mixins.with_local.WithLocal, "_write_parquet_file") as mock__write_parquet_file,
-        ):
-            with NamedTemporaryFile(delete=False) as temp_file:
-                mock__s3_writer.return_value = temp_file
-                WriteS3ParquetIO(source_config=s3_parquet_local_config).write(df)
+        with patch.object(dynamicio.mixins.with_s3.wr.s3, "to_parquet") as mock__wr_s3_parquet_writer:
+            WriteS3IO(source_config=cloud_config, sanitize_columns=False).write(df)
 
         # Then
-        mock__write_parquet_file.assert_called()
+        mock__wr_s3_parquet_writer.assert_called_once()
 
     @pytest.mark.unit
-    def test_write_csv_file_is_called_for_writing_a_parquet_with_env_as_cloud_s3_and_type_as_csv(self):
+    @patch.object(dynamicio.mixins.with_s3, "_download_to_memory")
+    def test_columns_data_type_error_exception_is_generated_if_column_dtypes_dont_map_to_the_expected_dtypes(self, mock__wr_read_parquet, expected_s3_parquet_df):
         # Given
-        df = pd.DataFrame.from_dict({"id": [3, 2, 1, 0], "foo_name": ["a", "b", "c", "d"], "bar": [1, 2, 3, 4]})
+        buffer = io.BytesIO()
+        expected_s3_parquet_df.to_parquet(buffer)
+        mock__wr_read_parquet.side_effect = lambda *_: io.BytesIO(buffer.getvalue())
+        s3_parquet_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_S3_PARQUET")
 
-        s3_csv_local_config = IOConfig(
+        # When / Then
+        with pytest.raises(dynamicio.errors.ColumnsDataTypeError):
+            ReadS3ParquetWithDifferentNonCastableDTypeIO(source_config=s3_parquet_cloud_config).read()
+
+    @pytest.mark.unit
+    def test_wrangler_to_csv_is_called_for_writing_a_csv_with_env_as_cloud_s3_and_file_type_as_csv(self):
+        # Given
+        # WRITE_TO_S3_CSV:
+        #   LOCAL:
+        #     ...
+        #   CLOUD:
+        # type: "s3_file"
+        #     s3:
+        #       bucket: "[[ MOCK_BUCKET ]]"
+        #       file_path: "test/write_some_csv.csv"
+        #       file_type: "csv"
+        df = pd.DataFrame.from_dict({"col_1": [3, 2, 1, 0], "col_2": ["a", "b", "c", "d"]})
+
+        cloud_config = IOConfig(
             path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
             env_identifier="CLOUD",
             dynamic_vars=constants,
         ).get(source_key="WRITE_TO_S3_CSV")
 
         # When
-        with (
-            patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_writer") as mock__s3_writer,
-            patch.object(dynamicio.mixins.with_local.WithLocal, "_write_csv_file") as mock__write_csv_file,
-        ):
-            with NamedTemporaryFile(delete=False) as temp_file:
-                mock__s3_writer.return_value = temp_file
-                WriteS3CsvIO(source_config=s3_csv_local_config).write(df)
+        with patch.object(dynamicio.mixins.with_s3.wr.s3, "to_csv") as mock__wr_s3_csv_writer:
+            WriteS3IO(source_config=cloud_config).write(df)
 
         # Then
-        mock__write_csv_file.assert_called()
+        mock__wr_s3_csv_writer.assert_called_once()
 
     @pytest.mark.unit
-    def test_write_json_file_is_called_for_writing_a_parquet_with_env_as_cloud_s3_and_type_as_json(self):
+    def test_wrangler_to_json_is_called_for_writing_a_json_with_env_as_cloud_s3_and_file_type_as_json(self):
         # Given
+        # WRITE_TO_S3_JSON:
+        #   LOCAL:
+        #     ...
+        #   CLOUD:
+        # type: "s3_file"
+        #     s3:
+        #       bucket: "[[ MOCK_BUCKET ]]"
+        #       file_path: "test/write_some_json.json"
+        #       file_type: "json"
         df = pd.DataFrame.from_dict({"col_1": [3, 2, 1, 0], "col_2": ["a", "b", "c", "d"]})
 
-        s3_json_local_config = IOConfig(
+        cloud_config = IOConfig(
             path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
             env_identifier="CLOUD",
             dynamic_vars=constants,
         ).get(source_key="WRITE_TO_S3_JSON")
 
         # When
-        with (
-            patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_writer") as mock__s3_writer,
-            patch.object(dynamicio.mixins.with_local.WithLocal, "_write_json_file") as mock__write_json_file,
-        ):
+        with patch.object(dynamicio.mixins.with_s3.wr.s3, "to_json") as mock__wr_s3_json_writer:
             with NamedTemporaryFile(delete=False) as temp_file:
-                mock__s3_writer.return_value = temp_file
-                WriteS3JsonIO(source_config=s3_json_local_config).write(df)
+                mock__wr_s3_json_writer.return_value = temp_file
+                WriteS3IO(source_config=cloud_config).write(df)
 
         # Then
-        mock__write_json_file.assert_called()
+        mock__wr_s3_json_writer.assert_called()
 
     @pytest.mark.unit
-    def test_write_hdf_file_is_called_for_writing_a_parquet_with_env_as_cloud_s3_and_type_as_hdf(self):
+    def test_boto3_client_is_used_for_uploading_a_hdf_with_env_as_cloud_s3_and_file_type_as_hdf(self):
         # Given
+        # WRITE_TO_S3_HDF:
+        #   LOCAL:
+        #     ...
+        #   CLOUD:
+        # type: "s3_file"
+        #     s3:
+        #       bucket: "[[ MOCK_BUCKET ]]"
+        #       file_path: "test/write_some_h5.h5"
+        #       file_type: "hdf"
         df = pd.DataFrame.from_dict({"col_1": [3, 2, 1, 0], "col_2": ["a", "b", "c", "d"]})
-        s3_hdf_local_config = IOConfig(
+
+        cloud_config = IOConfig(
             path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(
+            source_key="WRITE_TO_S3_HDF"
+        )  # ✅ fix: this should be HDF not JSON
+
+        mock_boto3_client = MagicMock()
+
+        # When
+        with patch("dynamicio.mixins.with_s3.boto3.client", return_value=mock_boto3_client), patch.object(dynamicio.mixins.with_s3.HdfIO, "save") as mock_save:
+            WriteS3IO(source_config=cloud_config).write(df)
+
+        # Then
+        mock_save.assert_called_once()
+        mock_boto3_client.upload_fileobj.assert_called_once()
+
+
+class TestAllowedArgsAreConfiguredCorrectlyForWithS3File:
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "source_key, patch_target, input_options, expected_kwargs",
+        [
+            ("READ_FROM_S3_PARQUET", "read_parquet", {"ignore_empty": True, "invalid_opt": True}, {"ignore_empty": True}),
+            (
+                "READ_FROM_S3_CSV",
+                "read_csv",
+                {"compression": "gzip", "dataset": True, "skipinitialspace": True, "invalid_opt": 123},
+                {"compression": "gzip", "dataset": True, "skipinitialspace": True},
+            ),
+            ("READ_FROM_S3_JSON", "read_json", {"version_id": "1.0.1", "orient": "records", "invalid": "nope"}, {"version_id": "1.0.1", "orient": "records"}),
+        ],
+    )
+    def test_wr_s3_readers_accept_only_valid_options(self, source_key, patch_target, input_options, expected_kwargs):
+        # Given
+        # We provide options from a combination of kwargs from both aws-wrangler and pandas readers
+        config = IOConfig(
+            path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml"),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key=source_key)
+
+        sample_df = pd.DataFrame({"id": [1], "foo_name": ["a"], "bar": [1]})
+
+        # When
+        with patch.object(dynamicio.mixins.with_s3.wr.s3, patch_target) as mock_reader:
+            mock_reader.return_value = sample_df
+            io_cls = {"READ_FROM_S3_PARQUET": ReadS3ParquetIO, "READ_FROM_S3_CSV": ReadS3CsvIO, "READ_FROM_S3_JSON": ReadS3JsonIO}[source_key]
+            io_cls(source_config=config, **input_options).read()
+
+        # Then
+        call_kwargs = mock_reader.call_args.kwargs
+        for k, v in expected_kwargs.items():
+            assert call_kwargs[k] == v
+        assert all(k not in call_kwargs for k in input_options if k not in expected_kwargs)
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "source_key, patch_target, input_options, expected_options",
+        [
+            (
+                "WRITE_TO_S3_PARQUET",
+                "to_parquet",
+                {"compression": "snappy", "sanitize_columns": False, "invalid_opt": True},
+                {"compression": "snappy", "sanitize_columns": False, "dataset": False},
+            ),
+            (
+                "WRITE_TO_S3_CSV",
+                "to_csv",
+                {"concurrent_partitioning": True, "compression": "gzip", "invalid_opt": 123},
+                {"concurrent_partitioning": True, "compression": "gzip", "index": False},
+            ),
+            ("WRITE_TO_S3_JSON", "to_json", {"mode": "overwrite", "date_format": "iso", "invalid": "nope"}, {"mode": "overwrite", "date_format": "iso"}),
+        ],
+    )
+    def test_wr_s3_writers_accept_only_valid_options(self, source_key, patch_target, input_options, expected_options):
+        df = pd.DataFrame({"col_1": [1, 2], "col_2": ["a", "b"]})
+        config = IOConfig(
+            path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml"),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key=source_key)
+
+        with patch.object(dynamicio.mixins.with_s3.wr.s3, patch_target) as mock_writer:
+            WriteS3IO(source_config=config, **input_options).write(df)
+
+        call_kwargs = mock_writer.call_args.kwargs
+        for k, v in expected_options.items():
+            assert call_kwargs[k] == v
+        assert all(k not in call_kwargs for k in input_options if k not in expected_options)
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "input_options, raw_df_data, expected_df, raises_exception, io_class",
+        [
+            # ✅ Supported: Single record json
+            # Sample Json Input:
+            # {
+            #   "data": {
+            #     "release": "feb09",
+            #     "timestamp": 1614268643313
+            #   }
+            # }
+            (
+                {"orient": "records"},
+                pd.DataFrame([{"data": {"release": "current", "timestamp": 1744281068}}]),  # raw_wrangler_json_read_df
+                pd.DataFrame([{"data": {"release": "current", "timestamp": 1744281068}}]),  # expected_df
+                False,
+                ReadS3JsonOrientRecordsIO,
+            ),
+            # ✅ Supported: Multiple records
+            # Sample Json Input:
+            # [
+            #   { "release": "feb09", "timestamp": 1614268643313 },
+            #   { "release": "feb10", "timestamp": 1614268643313 }
+            # ]
+            (
+                {"orient": "records"},
+                pd.DataFrame(
+                    [
+                        {"release": "feb09", "timestamp": 1614268643313},
+                        {"release": "feb10", "timestamp": 1614268643313},
+                    ]
+                ),
+                pd.DataFrame(
+                    [
+                        {"release": "feb09", "timestamp": 1614268643313},
+                        {"release": "feb10", "timestamp": 1614268643313},
+                    ]
+                ),
+                False,
+                ReadS3JsonOrientRecordsAltIO,
+            ),
+            # ✅ Supported: index orientation, passed through as-is
+            (
+                {"orient": "index"},
+                pd.DataFrame([{"data": {"release": "current", "timestamp": 1744281068}}]),
+                pd.DataFrame([{"data": {"release": "current", "timestamp": 1744281068}}]),
+                False,
+                ReadS3JsonOrientRecordsIO,
+            ),
+        ],
+    )
+    def test_json_reader_applies_postprocessing_for_unsupported_orientations(self, input_options, raw_df_data, expected_df, raises_exception, io_class):
+        # Given
+        config = IOConfig(
+            path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml"),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_S3_JSON")
+
+        # When
+        with patch("dynamicio.mixins.with_s3.wr.s3.read_json", return_value=raw_df_data) as mock_reader:
+            if raises_exception:
+                with pytest.raises(ValueError):
+                    io_class(source_config=config, **input_options).read()
+            else:
+                df = io_class(source_config=config, **input_options).read()
+                call_kwargs = mock_reader.call_args.kwargs
+                assert call_kwargs["orient"] == input_options["orient"]
+                assert call_kwargs["lines"] == (input_options["orient"] == "records")
+                pd.testing.assert_frame_equal(df, expected_df)
+
+    @pytest.mark.unit
+    def test_json_reader_honours_explicit_lines_false(self):
+        # Given
+        config = IOConfig(
+            path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml"),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_S3_JSON")
+        raw_df_data = pd.DataFrame([{"data": {"release": "current", "timestamp": 1744281068}}])
+
+        # When
+        with patch("dynamicio.mixins.with_s3.wr.s3.read_json", return_value=raw_df_data) as mock_reader:
+            ReadS3JsonOrientRecordsIO(source_config=config, orient="records", lines=False).read()
+
+        # Then
+        call_kwargs = mock_reader.call_args.kwargs
+        assert call_kwargs["lines"] is False
+
+    @pytest.mark.unit
+    def test_json_reader_warns_and_ignores_convert_dates_true(self, caplog):
+        # Given
+        config = IOConfig(
+            path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml"),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_S3_JSON")
+        raw_df_data = pd.DataFrame([{"data": {"release": "current", "timestamp": 1744281068}}])
+
+        # When
+        with patch("dynamicio.mixins.with_s3.wr.s3.read_json", return_value=raw_df_data) as mock_reader:
+            ReadS3JsonOrientRecordsIO(source_config=config, orient="records", convert_dates=True).read()
+
+        # Then
+        call_kwargs = mock_reader.call_args.kwargs
+        assert "convert_dates" not in call_kwargs
+        assert "Ignoring 'convert_dates=True'" in caplog.text
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "input_options, io_class, expected_lines",
+        [
+            # records, default lines
+            ({"orient": "records"}, WriteS3JsonOrientRecordsIO, True),
+            # records, explicit lines override honoured as given
+            ({"orient": "records", "lines": False}, WriteS3JsonOrientRecordsIO, False),
+            # index, defaults lines to False (not records)
+            ({"orient": "index"}, WriteS3JsonOrientRecordsIO, False),
+            # values, explicit lines honoured
+            ({"orient": "values", "lines": True}, WriteS3JsonOrientRecordsIO, True),
+            # split, defaults lines to False
+            ({"orient": "split"}, WriteS3JsonOrientRecordsIO, False),
+        ],
+    )
+    def test_json_writer_passes_orient_and_lines_through(self, input_options, io_class, expected_lines):
+        df_input = pd.DataFrame([{"release": "feb09", "timestamp": 1614268643313}])
+
+        config = IOConfig(
+            path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml"),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="WRITE_TO_S3_JSON")
+
+        # When
+        with patch.object(dynamicio.mixins.with_s3.wr.s3, "to_json") as mock_to_json:
+            io_class(source_config=config, **input_options).write(df_input)
+
+        # Then
+        mock_to_json.assert_called()
+        call_kwargs = mock_to_json.call_args.kwargs
+        assert call_kwargs["orient"] == input_options["orient"]
+        assert call_kwargs["lines"] == expected_lines
+
+    @pytest.mark.unit
+    def test_hdf_writer_accepts_only_valid_options(self):
+        # Given
+        df = pd.DataFrame({"col_1": [1, 2], "col_2": ["x", "y"]})
+        config = IOConfig(
+            path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml"),
             env_identifier="CLOUD",
             dynamic_vars=constants,
         ).get(source_key="WRITE_TO_S3_HDF")
 
-        # When
-        with patch.object(dynamicio.mixins.with_s3.WithS3File, "_s3_writer") as mock__s3_writer:
-            with NamedTemporaryFile(delete=False) as temp_file:
-                mock__s3_writer.return_value = temp_file
-                WriteS3HdfIO(source_config=s3_hdf_local_config).write(df)
+        mock_boto3 = MagicMock()
+        with patch("dynamicio.mixins.with_s3.boto3.client", return_value=mock_boto3):
+            with patch("dynamicio.mixins.with_s3.HdfIO.save") as mock_save:
+                mock_save.return_value = None
+
+                # When
+                WriteS3IO(source_config=config, key="my_key", invalid_opt="nope").write(df)
 
         # Then
-        assert os.stat(temp_file.name).st_size == 1064192, "Confirm that the output file size did not change"
+        call_kwargs = mock_save.call_args.kwargs["options"]
+        assert call_kwargs.get("key") == "my_key"
+        assert "invalid_opt" not in call_kwargs
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "source_key,file_type",
+        [
+            ("WRITE_TO_S3_PARQUET", "parquet"),
+            ("WRITE_TO_S3_CSV", "csv"),
+            ("WRITE_TO_S3_JSON", "json"),
+        ],
+    )
+    def test_dataset_true_raises_value_error(self, source_key, file_type):
+        # Given
+        df = pd.DataFrame({"col_1": [1], "col_2": ["a"]})
+        config = IOConfig(
+            path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml"),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key=source_key)
+
+        # When/Then
+        # Patch wr.s3.to_{file_type} to prevent actual call
+        patch_target = f"{dynamicio.mixins.with_s3.wr.s3.__name__}.to_{file_type}"
+        with patch(patch_target):
+            with pytest.raises(ValueError, match=rf"\[s3-{file_type}\] dataset=True is not supported.*"):
+                WriteS3IO(source_config=config, dataset=True).write(df)
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "source_key,file_type",
+        [
+            ("WRITE_TO_S3_PARQUET", "parquet"),
+            ("WRITE_TO_S3_CSV", "csv"),
+            ("WRITE_TO_S3_JSON", "json"),
+        ],
+    )
+    def test_s3_path_as_directory_raises_value_error(self, source_key, file_type):
+        # Given
+        df = pd.DataFrame({"col_1": [1], "col_2": ["a"]})
+        config = IOConfig(
+            path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml"),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key=source_key)
+
+        # Force file_path to end with slash
+        config.s3.file_path = "test/some_dir/"
+
+        # Patch wr.s3.to_{file_type} to prevent actual call
+        patch_target = f"{dynamicio.mixins.with_s3.wr.s3.__name__}.to_{file_type}"
+        with patch(patch_target):
+            with pytest.raises(ValueError, match=rf"\[s3-{file_type}\] .*must be a file, not a directory.*"):
+                WriteS3IO(source_config=config).write(df)
 
 
 class TestS3PathPrefixIO:
+
     @pytest.mark.unit
     def test_error_is_raised_if_path_prefix_missing_from_config(self, tmp_path):
         tmp_yaml = tmp_path / "test.yaml"
@@ -468,7 +764,7 @@ class TestS3PathPrefixIO:
 
         # When / Then
         with pytest.raises(ValueError):
-            WriteS3ParquetIO(source_config=s3_parquet_cloud_config).write(input_df)
+            WriteS3IO(source_config=s3_parquet_cloud_config).write(input_df)
 
     @pytest.mark.unit
     def test_error_is_raised_if_file_type_not_parquet_when_uploading(self, tmp_path):
@@ -527,15 +823,15 @@ class TestS3PathPrefixIO:
         ).get(source_key="WRITE_TO_S3_PATH_PREFIX_PARQUET")
 
         # When
-        WriteS3ParquetIO(source_config=s3_parquet_cloud_config).write(input_df)
+        WriteS3IO(source_config=s3_parquet_cloud_config).write(input_df)
 
         # Then
         mock__write_to_s3_path_prefix.assert_called()
 
     @pytest.mark.unit
-    @patch.object(WriteS3ParquetIO, "_write_parquet_file")
+    @patch.object(WriteS3IO, "_write_parquet_file")
     # pylint: disable=unused-argument
-    def test_awscli_runner_is_called_with_correct_s3_path_and_aws_command_when_uploading_a_path_prefix_with_env_as_cloud_s3(self, mock__write_parquet_file, mock_temporary_directory):
+    def test_s3_sync_is_called_with_correct_s3_path_and_aws_command_when_uploading_a_path_prefix_with_env_as_cloud_s3(self, mock__write_parquet_file, mock_temporary_directory):
         # Given
         input_df = pd.DataFrame.from_dict({"col_1": [3, 2, 1], "col_2": ["a", "b", "c"], "col_3": ["a", "b", "c"]})
         s3_parquet_cloud_config = IOConfig(
@@ -545,19 +841,15 @@ class TestS3PathPrefixIO:
         ).get(source_key="WRITE_TO_S3_PATH_PREFIX_PARQUET")
 
         # When
-        with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mocked__awscli_runner:
-            WriteS3ParquetIO(source_config=s3_parquet_cloud_config, partition_cols="col_2").write(input_df)
+        with patch.object(dynamicio.mixins.with_s3, "s3_sync_up") as mocked__s3_sync:
+            WriteS3IO(source_config=s3_parquet_cloud_config, partition_cols="col_2").write(input_df)
 
         # Then
-        mocked__awscli_runner.assert_called_with(
-            "s3", "sync", "temp", "s3://mock-bucket/data/some_dir/", "--acl", "bucket-owner-full-control", "--only-show-errors", "--exact-timestamps"
-        )
+        mocked__s3_sync.assert_called_with("temp", "s3://mock-bucket/data/some_dir/")
 
     @pytest.mark.unit
     # pylint: disable=unused-argument
-    def test_awscli_runner_is_called_with_correct_s3_path_and_aws_command_when_loading_a_path_prefix_with_env_as_cloud_s3(
-        self, mock_listdir, mock_temporary_directory, mock__read_hdf_file
-    ):
+    def test_s3_sync_is_called_with_correct_s3_path_and_aws_command_when_loading_a_path_prefix_with_env_as_cloud_s3(self, mock_listdir, mock_temporary_directory, mock__read_hdf_file):
         # Given
         s3_hdf_cloud_config = IOConfig(
             path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
@@ -566,13 +858,11 @@ class TestS3PathPrefixIO:
         ).get(source_key="READ_FROM_S3_PATH_PREFIX_HDF")
 
         # When
-        with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mocked__awscli_runner:
+        with patch.object(dynamicio.mixins.with_s3, "s3_sync_down") as mocked__s3_sync:
             ReadS3HdfIO(source_config=s3_hdf_cloud_config).read()
 
         # Then
-        mocked__awscli_runner.assert_called_with(
-            "s3", "sync", "s3://mock-bucket/data/some_dir/", "temp", "--acl", "bucket-owner-full-control", "--only-show-errors", "--exact-timestamps"
-        )
+        mocked__s3_sync.assert_called_with("s3://mock-bucket/data/some_dir/", "temp")
 
     @pytest.mark.unit
     # pylint: disable=unused-argument
@@ -587,8 +877,8 @@ class TestS3PathPrefixIO:
         ).get(source_key="READ_FROM_S3_PATH_PREFIX_HDF")
 
         # When
-        with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mocked__awscli_runner:
-            mocked__awscli_runner.return_value = True
+        with patch.object(dynamicio.mixins.with_s3, "s3_sync_down") as mocked__s3_sync:
+            mocked__s3_sync.return_value = True
             read_obj = ReadS3HdfIO(source_config=s3_hdf_cloud_config)
             actual_schema = read_obj.schema
             read_obj.read()
@@ -604,36 +894,32 @@ class TestS3PathPrefixIO:
         )
 
     @pytest.mark.unit
-    # pylint: disable=unused-argument
-    def test__read_parquet_file_is_called_with_correct_local_file_path_when_loading_a_path_prefix_with_env_as_cloud_s3_and_type_as_parquet(
-        self, mock_listdir, mock_temporary_directory, mock__read_parquet_file
-    ):
+    def test__read_parquet_file_is_called_once_per_object_when_loading_a_path_prefix_with_env_as_cloud_s3_and_type_as_parquet(self):
         # Given
         s3_parquet_cloud_config = IOConfig(
             path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
             env_identifier="CLOUD",
             dynamic_vars=constants,
         ).get(source_key="READ_FROM_S3_PATH_PREFIX_PARQUET")
+        fobjs = [io.BytesIO(b"1"), io.BytesIO(b"2"), io.BytesIO(b"3")]
+        df = pd.DataFrame({"id": [1], "foo_name": ["a"], "bar": [1]})
 
         # When
-        with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mocked__awscli_runner:
-            mocked__awscli_runner.return_value = True
+        with (
+            patch.object(dynamicio.mixins.with_s3, "s3_read_down", side_effect=lambda _url, reader, **_: [reader(f) for f in fobjs]),
+            patch.object(dynamicio.mixins.with_local.WithLocal, "_read_parquet_file", return_value=df) as mock__read_parquet_file,
+        ):
             read_obj = ReadS3ParquetIO(source_config=s3_parquet_cloud_config)
             actual_schema = read_obj.schema
-            read_obj.read()
+            result = read_obj.read()
 
         # Then
         assert len(mock__read_parquet_file.mock_calls) == 3
-        mock__read_parquet_file.assert_has_calls(
-            [
-                mock.call("temp/obj_1.h5", actual_schema),
-                mock.call("temp/obj_2.h5", actual_schema),
-                mock.call("temp/obj_3.h5", actual_schema),
-            ]
-        )
+        mock__read_parquet_file.assert_has_calls([mock.call(f, actual_schema) for f in fobjs])
+        assert len(result) == 3
 
     @pytest.mark.unit
-    def test_read_parquet_file_is_called_while_awscli_runner_is_not_for_loading_a_parquet_with_env_as_cloud_s3_and_type_as_parquet_with_no_disk_space_option(
+    def test_read_parquet_file_is_called_while_s3_sync_is_not_for_loading_a_parquet_with_env_as_cloud_s3_and_type_as_parquet_with_no_disk_space_option(
         self,
     ):
         # Given
@@ -645,14 +931,15 @@ class TestS3PathPrefixIO:
 
         # When
         with (
-            patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mock__awscli_runner,
-            patch.object(dynamicio.mixins.with_local.WithLocal, "_read_parquet_file") as mock__read_parquet_file,
+            patch.object(dynamicio.mixins.with_s3, "s3_sync_down") as mock__s3_sync,
+            patch.object(dynamicio.mixins.with_s3.WithS3PathPrefix, "_iter_s3_files", return_value=[io.BytesIO(b"1")]),
+            patch.object(dynamicio.mixins.with_local.WithLocal, "_read_parquet_file", return_value=pd.DataFrame({"id": [1], "foo_name": ["a"], "bar": [1]})) as mock__read_parquet_file,
         ):
             ReadS3ParquetIO(source_config=s3_parquet_cloud_config, no_disk_space=True).read()
 
         # Then
         mock__read_parquet_file.assert_called()
-        mock__awscli_runner.assert_not_called()
+        mock__s3_sync.assert_not_called()
 
     @pytest.mark.unit
     # pylint: disable=unused-argument
@@ -665,8 +952,7 @@ class TestS3PathPrefixIO:
         ).get(source_key="READ_FROM_S3_PATH_PREFIX_PARQUET")
 
         # When
-        with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mocked__awscli_runner:
-            mocked__awscli_runner.return_value = True
+        with patch.object(dynamicio.mixins.with_s3, "s3_read_down", side_effect=_fake_s3_read_down(os.path.join(constants.TEST_RESOURCES, "data/input/batch/parquet"))):
             df = ReadS3ParquetWithLessColumnsIO(source_config=s3_parquet_cloud_config).read()
 
         # Then
@@ -683,8 +969,7 @@ class TestS3PathPrefixIO:
         ).get(source_key="READ_FROM_S3_PATH_PREFIX_PARQUET")
 
         # When
-        with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mocked__awscli_runner:
-            mocked__awscli_runner.return_value = True
+        with patch.object(dynamicio.mixins.with_s3, "s3_read_down", side_effect=_fake_s3_read_down(os.path.join(constants.TEST_RESOURCES, "data/input/batch/parquet"))):
             df = ReadS3ParquetIO(source_config=s3_parquet_cloud_config, filters=[[("foo_name", "==", "name_a")]]).read()
 
         # Then
@@ -706,8 +991,8 @@ class TestS3PathPrefixIO:
         ).get(source_key="READ_FROM_S3_PATH_PREFIX_CSV")
 
         # When
-        with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mocked__awscli_runner:
-            mocked__awscli_runner.return_value = True
+        with patch.object(dynamicio.mixins.with_s3, "s3_sync_down") as mocked__s3_sync:
+            mocked__s3_sync.return_value = True
             read_obj = ReadS3ParquetIO(source_config=s3_csv_cloud_config)
             actual_schema = read_obj.schema
             read_obj.read()
@@ -738,8 +1023,8 @@ class TestS3PathPrefixIO:
         ).get(source_key="READ_FROM_S3_PATH_PREFIX_JSON")
 
         # When
-        with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mocked__awscli_runner:
-            mocked__awscli_runner.return_value = True
+        with patch.object(dynamicio.mixins.with_s3, "s3_sync_down") as mocked__s3_sync:
+            mocked__s3_sync.return_value = True
             read_obj = ReadS3ParquetIO(source_config=s3_csv_cloud_config)
             actual_schema = read_obj.schema
             read_obj.read()
@@ -770,8 +1055,8 @@ class TestS3PathPrefixIO:
         ).get(source_key="READ_FROM_S3_PATH_PREFIX_HDF")
 
         # When
-        with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mocked__awscli_runner:
-            mocked__awscli_runner.return_Value = True
+        with patch.object(dynamicio.mixins.with_s3, "s3_sync_down") as mocked__s3_sync:
+            mocked__s3_sync.return_Value = True
             h5_df = ReadS3HdfIO(source_config=s3_hdf_cloud_config).read()
 
         # Then
@@ -836,9 +1121,128 @@ class TestS3PathPrefixIO:
         ).get(source_key="READ_FROM_S3_PATH_PREFIX_PARQUET")
 
         # When
-        with patch.object(dynamicio.mixins.with_s3, "awscli_runner") as mocked__awscli_runner:
-            mocked__awscli_runner.return_value = True
+        with patch.object(dynamicio.mixins.with_s3, "s3_read_down", side_effect=_fake_s3_read_down(os.path.join(constants.TEST_RESOURCES, "data/input/batch/parquet_w_empty_files"))):
             df = ReadS3ParquetWEmptyFilesIO(source_config=s3_parquet_cloud_config).read()
 
         # Then
         assert df.shape == (10, 2) and df.columns.tolist() == ["id", "bar"]
+
+
+class TestS3ParquetTransferPaths:
+    """Single-file parquet goes through one shared boto3 client by default; awswrangler only on request."""
+
+    @staticmethod
+    def _config(source_key, yaml_file):
+        return IOConfig(
+            path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, yaml_file),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key=source_key)
+
+    @pytest.mark.unit
+    def test_default_parquet_read_uses_one_get_object_and_never_awswrangler(self, expected_s3_parquet_df):
+        body = io.BytesIO()
+        expected_s3_parquet_df.to_parquet(body)
+        client = MagicMock()
+        client.get_object.return_value = {"ContentLength": body.tell(), "Body": io.BytesIO(body.getvalue())}
+        config = self._config("READ_FROM_S3_PARQUET", "definitions/input.yaml")
+
+        with patch.object(dynamicio.mixins.with_s3, "_shared_s3_client", return_value=client), patch.object(dynamicio.mixins.with_s3.wr.s3, "read_parquet") as mock_wr:
+            df = ReadS3ParquetIO(source_config=config, use_threads=True).read()
+
+        client.get_object.assert_called_once()
+        mock_wr.assert_not_called()
+        assert len(df) == len(expected_s3_parquet_df)
+
+    @pytest.mark.unit
+    def test_default_parquet_write_is_one_put_object_with_acl_and_honours_pyarrow_options(self):
+        df = pd.DataFrame.from_dict({"col_1": [3, 2, 1, 0], "col_2": ["a", "b", "c", "d"]})
+        client = MagicMock()
+        config = self._config("WRITE_TO_S3_PARQUET", "definitions/processed.yaml")
+
+        with patch.object(dynamicio.mixins.with_s3, "_shared_s3_client", return_value=client), patch.object(dynamicio.mixins.with_s3.wr.s3, "to_parquet") as mock_wr:
+            WriteS3IO(source_config=config, use_threads=True, coerce_timestamps="ms", allow_truncated_timestamps=True, row_group_size=2).write(df)
+
+        mock_wr.assert_not_called()
+        kwargs = client.put_object.call_args.kwargs
+        assert kwargs["ACL"] == "bucket-owner-full-control"
+        assert pq.ParquetFile(io.BytesIO(kwargs["Body"])).metadata.num_row_groups == 2
+
+    @pytest.mark.unit
+    @patch("dynamicio.mixins.with_s3.wr.s3.read_parquet")
+    def test_wrangler_reads_share_one_boto3_session_and_skip_prefix_listing(self, mock_reader, expected_s3_parquet_df):
+        mock_reader.return_value = expected_s3_parquet_df
+        config = self._config("READ_FROM_S3_PARQUET", "definitions/input.yaml")
+
+        ReadS3ParquetIO(source_config=config, pyarrow_additional_kwargs={}).read()
+        ReadS3ParquetIO(source_config=config, pyarrow_additional_kwargs={}).read()
+
+        first, second = (call.kwargs for call in mock_reader.call_args_list)
+        assert first["boto3_session"] is second["boto3_session"]
+        assert isinstance(first["path"], list) and len(first["path"]) == 1
+
+    @pytest.mark.unit
+    @patch("dynamicio.mixins.with_s3.wr.s3.read_parquet")
+    def test_caller_supplied_boto3_session_is_respected(self, mock_reader, expected_s3_parquet_df):
+        mock_reader.return_value = expected_s3_parquet_df
+        config = self._config("READ_FROM_S3_PARQUET", "definitions/input.yaml")
+        custom = object()
+
+        ReadS3ParquetIO(source_config=config, boto3_session=custom).read()
+
+        assert mock_reader.call_args.kwargs["boto3_session"] is custom
+
+
+class TestS3CopilotRegressions:
+    """S3 HDF `pickle_protocol` must reach the writer, S3 JSON must honour `single_record`, prefix sync fans out per file."""
+
+    def test_s3_hdf_write_honours_pickle_protocol(self):
+        df = pd.DataFrame({"a": [1, 2]})
+        seen = {}
+
+        class _Pickle:
+            def __init__(self, protocol):
+                seen["protocol"] = protocol
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        with patch.object(dynamicio.mixins.with_s3.utils, "pickle_protocol", _Pickle), patch.object(dynamicio.mixins.with_s3, "boto3") as boto:
+            dynamicio.mixins.with_s3.WithS3File._write_s3_hdf_file(df, "s3://b/k.h5", pickle_protocol=4)
+        assert seen["protocol"] == 4
+        boto.client.return_value.upload_fileobj.assert_called_once()
+
+    def test_s3_json_read_supports_single_record(self):
+        schema = MagicMock()
+        schema.columns = {"a": None}
+        raw = pd.DataFrame({"a": [1, 2]}, index=["x", "y"])
+        with patch.object(dynamicio.mixins.with_s3.wr.s3, "read_json", return_value=raw) as read_json:
+            df = dynamicio.mixins.with_s3.WithS3File._read_s3_json_file("s3://b/k.json", schema, orient="index", single_record=True)
+        assert "single_record" not in read_json.call_args.kwargs
+        assert df.iloc[0, 0] == {"x": 1, "y": 2}
+
+    def test_sync_down_and_up_use_one_request_per_file(self, tmp_path):
+        client = MagicMock()
+        client.get_paginator.return_value.paginate.return_value = [{"Contents": [{"Key": "p/a.parquet"}, {"Key": "p/sub/b.parquet"}, {"Key": "p/sub/"}]}]
+        client.get_object.side_effect = lambda **kw: {"ContentLength": 3, "Body": io.BytesIO(b"abc")}
+        with patch.object(dynamicio.mixins.with_s3, "_shared_s3_client", return_value=client):
+            dynamicio.mixins.with_s3.s3_sync_down("s3://b/p/", str(tmp_path))
+            assert (tmp_path / "a.parquet").read_bytes() == b"abc" and (tmp_path / "sub" / "b.parquet").read_bytes() == b"abc"
+            client.head_object.assert_not_called()
+            dynamicio.mixins.with_s3.s3_sync_up(str(tmp_path), "s3://b/q/", acl="private")
+        keys = sorted(c.kwargs["Key"] for c in client.put_object.call_args_list)
+        assert keys == ["q/a.parquet", "q/sub/b.parquet"]
+        assert all(c.kwargs["ACL"] == "private" for c in client.put_object.call_args_list)
+
+    def test_read_down_parses_in_memory_in_key_order_with_one_request_per_file(self):
+        client = MagicMock()
+        client.get_paginator.return_value.paginate.return_value = [{"Contents": [{"Key": "p/b.parquet"}, {"Key": "p/a.parquet"}, {"Key": "p/skip.csv"}, {"Key": "p/sub/"}]}]
+        client.get_object.side_effect = lambda **kw: {"ContentLength": 1, "Body": io.BytesIO(kw["Key"].encode())}
+        with patch.object(dynamicio.mixins.with_s3, "_shared_s3_client", return_value=client):
+            results = dynamicio.mixins.with_s3.s3_read_down("s3://b/p/", lambda fobj: fobj.read(), include_pattern="*.parquet")
+        assert results == [b"p/b.parquet", b"p/a.parquet"]
+        assert client.get_object.call_count == 2
+        client.head_object.assert_not_called()
