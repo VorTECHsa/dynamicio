@@ -124,6 +124,26 @@ class TestPostgresIO:
         mock__read_from_postgres.assert_called()
 
     @pytest.mark.unit
+    @patch("dynamicio.mixins.with_postgres.logger")
+    @patch.object(pd, "read_sql")
+    def test_read_from_postgres_logs_started_downloading_once(self, mock__read_sql, mock__logger):
+        # Given
+        postgres_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_POSTGRES")
+
+        # When
+        with patch("dynamicio.mixins.with_postgres.session_for"):
+            ReadPostgresIO(source_config=postgres_cloud_config).read()
+
+        # Then
+        started = [c for c in mock__logger.info.call_args_list if "Started downloading" in c.args[0]]
+        assert len(started) == 1
+        mock__read_sql.assert_called_once()
+
+    @pytest.mark.unit
     @patch.object(WithPostgres, "_read_database")
     def test_read_from_postgres_with_query(self, mock__read_database):
         # Given
