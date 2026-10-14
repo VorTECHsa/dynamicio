@@ -385,7 +385,7 @@ class WithS3PathPrefix(with_local.WithLocal):
 
         The function also includes an option to minimize disk space usage (`no_disk_space`). This is particularly
         useful when needing to read a subset of columns from large files, thereby reducing the overall disk footprint.
-        Parquet objects are read in memory on every path, so for parquet it only bounds how many are held at once.
+        For parquet it has no effect: objects are always parsed in memory, a few at a time, on the download threads.
 
         Parameters:
         - None
@@ -427,12 +427,9 @@ class WithS3PathPrefix(with_local.WithLocal):
         else:
             full_path = utils.resolve_template(f"s3://{bucket}/{path_prefix}", self.options)
 
-        # The `no_disk_space` option should be used only when reading a subset of columns from S3
+        # The `no_disk_space` option should be used only when reading a subset of columns from S3. Parquet needs no special
+        # handling: it is always parsed in memory, a few objects at a time, on the download threads.
         if self.options.pop("no_disk_space", False) and path_prefix:
-            if file_type == "parquet":
-                absent: List[str] = []
-                parquet_dfs = [self._read_parquet_object(fobj, absent) for fobj in self._iter_s3_files(full_path, file_ext=".parquet", max_memory_use=1024**3, listing_order=True)]
-                return self._concat_parquet_objects(parquet_dfs, absent, full_path)
             if file_type == "hdf":
                 dfs: List[DataFrame] = []
                 for fobj in self._iter_s3_files(full_path, file_ext=".h5", max_memory_use=1024**3):  # 1 gib
@@ -511,16 +508,13 @@ class WithS3PathPrefix(with_local.WithLocal):
                     df[column] = df[column].where(df[column].notna(), None)
         return df
 
-    def _iter_s3_files(  # pylint: disable=too-many-locals
-        self, s3_prefix: str, file_ext: Optional[str] = None, max_memory_use: int = -1, listing_order: bool = False
-    ) -> Generator[IO[bytes], None, None]:
+    def _iter_s3_files(self, s3_prefix: str, file_ext: Optional[str] = None, max_memory_use: int = -1) -> Generator[IO[bytes], None, None]:  # pylint: disable=too-many-locals
         """Download sways of S3 objects.
 
         Args:
             s3_prefix: s3 url to fetch objects with
             file_ext: extension of s3 objects to allow through
             max_memory_use: The approximate number of bytes to allocate on each yield of Generator
-            listing_order: Yield objects in S3 listing (lexicographic key) order instead of reverse listing order
         """
         parsed_url = urllib.parse.urlparse(s3_prefix)
         assert parsed_url.scheme == "s3", f"{s3_prefix!r} should be an s3 url"
@@ -533,8 +527,6 @@ class WithS3PathPrefix(with_local.WithLocal):
                 if (not file_ext) or s3_object["Key"].endswith(file_ext):
                     s3_objects_to_fetch.append(s3_object)
 
-        if listing_order:
-            s3_objects_to_fetch.reverse()  # objects are popped from the end
         if max_memory_use < 0:
             # Unlimited memory use - fetch ALL
             max_memory_use = sum(s3_obj["Size"] for s3_obj in s3_objects_to_fetch) * 2
