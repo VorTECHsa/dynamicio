@@ -1,4 +1,4 @@
-# S3 I/O performance: master vs branch (v8.1.0-rc.7)
+# S3 I/O performance: master vs branch (v8.1.0-rc.7/rc.8)
 
 Baseline is `master`'s S3 I/O (benchmarked as release v4.4.1, whose S3 code path is the same). Decision record: [ADR 0001](adr/0001-direct-boto3-s3-io.md). This replaces the earlier awswrangler-vs-awscli report (rc.1-rc.4 numbers are obsolete).
 
@@ -47,6 +47,22 @@ rc.7 is faster at every worker count and uses less CPU per call: no extra pod CP
 | 500 | up | 65.3 | 67.9 | 75.1 |
 
 Prefix sync is on par with the aws-cli sync it replaces; earlier larger gains came mostly from more workers. Uploads are uplink-bound and noisy (500-file runs at 32 workers ranged 64-86 s), so no upload gain is claimed.
+
+### Parquet prefix reads in memory (rc.8)
+
+Parquet prefixes are fetched and parsed on the download threads instead of syncing to a temp dir first: about 15% faster on ~1000 files over WAN, same rows.
+
+### Schema-evolution fallback cost (rc.8)
+
+[ADR 0002](adr/0002-tolerate-missing-columns-in-parquet-prefix-reads.md): objects lacking a requested column are re-read with the columns they have. Local microbenchmark, one 92 MB object (2M rows, 7 columns), medians of 5:
+
+| Case | Time |
+|---|---|
+| All columns present (no change; the check only runs on failure) | 19 ms |
+| One column absent (rejected read + schema footer + re-read) | 18 ms |
+| The rejected attempt alone | 0.1 ms |
+
+pyarrow rejects an unknown column at projection, before decoding any data, so the fallback costs one extra footer read per affected object; network fetch time dominates in practice because the object is downloaded once and re-parsed from memory.
 
 ## Further options (not implemented; behaviour-changing)
 

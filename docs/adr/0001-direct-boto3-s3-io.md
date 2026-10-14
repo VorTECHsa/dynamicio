@@ -21,7 +21,7 @@ Constraint: promoting the branch must not change dynamicio behaviour for existin
 1. One shared boto3 session and client per process (fork-safe, pool of 64).
 2. Single-file parquet: `get_object` / `put_object` in memory, parsed and written with the same pandas/pyarrow options as local I/O. Objects over 16 MiB use multipart.
 3. awswrangler stays only as a fallback when a wrangler-only kwarg is passed, and for CSV/JSON.
-4. `WithS3PathPrefix` syncs with a `ThreadPoolExecutor` (default concurrency 32), one request per file, no `HeadObject`.
+4. `WithS3PathPrefix` fetches with a `ThreadPoolExecutor` (default concurrency 32), one request per file, no `HeadObject`. Parquet objects are parsed in memory on the download threads; other file types are synced to a temp dir first. Missing-column handling for parquet prefixes is in [ADR 0002](0002-tolerate-missing-columns-in-parquet-prefix-reads.md).
 5. Remove the `awscli` and `s3fs` dependencies.
 
 ## Consequences

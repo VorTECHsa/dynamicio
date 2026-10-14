@@ -322,6 +322,12 @@ class WithS3PathPrefix(with_local.WithLocal):
     """Handles I/O operations for AWS S3 path prefixes (reads, and partitioned parquet writes), using boto3 transfers.
 
     This mixin assumes that the directories it reads from will only contain a single file-type.
+
+    Parquet prefixes are read one object at a time, in memory, on the download threads, and concatenated in listing
+    order. Prefixes accumulate objects over years, so an object may predate a column that was added to the schema
+    later: such an object is read with the columns it has, the missing column is null-filled on concatenation, and a
+    warning counts the objects that lacked it. A column that no object has still raises a `ValueError`. Other file
+    types are unchanged.
     """
 
     sources_config: S3PathPrefixEnvironment  # type: ignore
@@ -379,6 +385,7 @@ class WithS3PathPrefix(with_local.WithLocal):
 
         The function also includes an option to minimize disk space usage (`no_disk_space`). This is particularly
         useful when needing to read a subset of columns from large files, thereby reducing the overall disk footprint.
+        Parquet objects are read in memory on every path, so for parquet it only bounds how many are held at once.
 
         Parameters:
         - None
@@ -387,7 +394,8 @@ class WithS3PathPrefix(with_local.WithLocal):
         - DataFrame: A pandas DataFrame concatenated from the read files.
 
         Raises:
-        - ValueError: If the `file_type` specified in the configuration is not supported.
+        - ValueError: If the `file_type` specified in the configuration is not supported, or (parquet) if a schema column
+        is missing from every object under the prefix.
 
         Configuration Keys:
         - `bucket` (str): Name of the S3 bucket.
@@ -399,6 +407,9 @@ class WithS3PathPrefix(with_local.WithLocal):
         - Only one of `path_prefix` and `dynamic_file_path` can be provided.
         - The function intelligently handles the download of files by synchronizing only those that match the specified
         pattern in `dynamic_file_path`.
+        - Parquet only: objects that lack some schema columns (e.g. written before the column was added) are tolerated.
+        The column is null-filled for them and a warning lists the columns and how many objects lacked them. Nulls
+        cannot be held by non-nullable dtypes (e.g. `int64`), so such a column still fails when cast to the schema.
         - e.g. a `runner_id` or any other variable used in `dynamic_file_path` for pattern matching should be specified
         in the `options` of the configuration.
         """
