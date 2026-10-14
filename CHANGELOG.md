@@ -1,5 +1,10 @@
 # Changelog
 
+## v8.1.0-rc.10
+
+- fix: S3 CSV writes accept a caller-supplied `index` option (`TypeError: to_csv() got multiple values for keyword argument 'index'` since rc.1, hit by vessel-state's `IO(..., index=False)`), and default to `index=True` like `DataFrame.to_csv` and the s3fs writer on master, instead of the hard-coded `index=False` of the wrangler writer
+- fix: the awswrangler parquet fallback tolerates a caller-supplied `dataset` option instead of raising a duplicate-keyword `TypeError`
+
 ## v8.1.0-rc.9
 
 - perf: parquet `no_disk_space` prefix reads use the same in-memory thread pool as the default path (~4x faster on a 3.7M-row prefix, 199s to 46s, lower peak memory); rows, order and dtypes unchanged

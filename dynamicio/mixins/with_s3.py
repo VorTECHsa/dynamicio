@@ -688,6 +688,7 @@ class WithS3File:
     def _write_s3_parquet_file_with_wrangler(df: pd.DataFrame, s3_path: str, **kwargs):
         kwargs.setdefault("s3_additional_kwargs", {}).setdefault("ACL", "bucket-owner-full-control")
         kwargs.setdefault("boto3_session", _shared_boto3_session())
+        kwargs.pop("dataset", None)  # a single file is always written; passing it too would raise a duplicate-keyword TypeError
         wr.s3.to_parquet(df=df, path=s3_path, dataset=False, **kwargs)
 
     @staticmethod
@@ -703,7 +704,9 @@ class WithS3File:
             raise ValueError("[s3-csv] CSV output path must be a file, not a directory (e.g., 's3://bucket/data.csv').")
 
         kwargs.setdefault("s3_additional_kwargs", {}).setdefault("ACL", "bucket-owner-full-control")
-        wr.s3.to_csv(df=df, path=s3_path, index=False, **kwargs)
+        # Same default as `DataFrame.to_csv` (and the s3fs-based writer this replaced): write the index unless told not to.
+        kwargs.setdefault("index", True)
+        wr.s3.to_csv(df=df, path=s3_path, **kwargs)
 
     @staticmethod
     @utils.allow_options(utils.args_of(wr.s3.to_json, pd.DataFrame.to_json))

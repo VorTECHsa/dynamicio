@@ -365,6 +365,24 @@ class TestS3FileIO:
         mock__wr_s3_csv_writer.assert_called_once()
 
     @pytest.mark.unit
+    @pytest.mark.parametrize("options, expected_index", [({}, True), ({"index": False}, False), ({"index": True}, True)])
+    def test_s3_csv_write_honours_the_callers_index_option_and_defaults_to_pandas(self, options, expected_index):
+        # Given
+        df = pd.DataFrame.from_dict({"col_1": [3, 2], "col_2": ["a", "b"]})
+        cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="WRITE_TO_S3_CSV")
+
+        # When (used to raise "got multiple values for keyword argument 'index'" when index was passed)
+        with patch.object(dynamicio.mixins.with_s3.wr.s3, "to_csv") as mock__wr_s3_csv_writer:
+            WriteS3IO(source_config=cloud_config, **options).write(df)
+
+        # Then
+        assert mock__wr_s3_csv_writer.call_args.kwargs["index"] is expected_index
+
+    @pytest.mark.unit
     def test_wrangler_to_json_is_called_for_writing_a_json_with_env_as_cloud_s3_and_file_type_as_json(self):
         # Given
         # WRITE_TO_S3_JSON:
@@ -479,7 +497,7 @@ class TestAllowedArgsAreConfiguredCorrectlyForWithS3File:
                 "WRITE_TO_S3_CSV",
                 "to_csv",
                 {"concurrent_partitioning": True, "compression": "gzip", "invalid_opt": 123},
-                {"concurrent_partitioning": True, "compression": "gzip", "index": False},
+                {"concurrent_partitioning": True, "compression": "gzip", "index": True},
             ),
             ("WRITE_TO_S3_JSON", "to_json", {"mode": "overwrite", "date_format": "iso", "invalid": "nope"}, {"mode": "overwrite", "date_format": "iso"}),
         ],
