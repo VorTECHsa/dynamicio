@@ -1,5 +1,10 @@
 # Changelog
 
+## v8.1.0-rc.9
+
+- perf: parquet `no_disk_space` prefix reads use the same in-memory thread pool as the default path (~4x faster on a 3.7M-row prefix, 199s to 46s, lower peak memory); rows, order and dtypes unchanged
+- fix: parquet prefix reads return rows in S3 listing order and null-filled object columns hold `None`, as `master`'s `no_disk_space` dataset read did (see rc.8 notes)
+
 ## v8.1.0-rc.8
 
 - perf: parquet `WithS3PathPrefix` reads fetch and parse each object in memory on the download threads (no temp dir, parsing overlaps the network); ~15% faster on ~1000 files over WAN, same rows. Files are now concatenated in listing order instead of arbitrary `os.listdir` order
