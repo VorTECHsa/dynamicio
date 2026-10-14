@@ -27,6 +27,7 @@ from tests.mocking.io import (
     ReadS3ParquetIO,
     ReadS3ParquetWEmptyFilesIO,
     ReadS3ParquetWithDifferentNonCastableDTypeIO,
+    ReadS3ParquetWithLateColumnIO,
     ReadS3ParquetWithLessColumnsIO,
     TemplatedFile,
     WriteS3IO,
@@ -1126,6 +1127,102 @@ class TestS3PathPrefixIO:
 
         # Then
         assert df.shape == (10, 2) and df.columns.tolist() == ["id", "bar"]
+
+
+class TestS3PathPrefixParquetSchemaEvolution:
+    """Prefixes accumulate files over years: objects written before a column was added must not break reads."""
+
+    @staticmethod
+    def _config():
+        return IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_S3_PATH_PREFIX_PARQUET")
+
+    @staticmethod
+    def _parquet(df):
+        buffer = io.BytesIO()
+        df.to_parquet(buffer)
+        buffer.seek(0)
+        return buffer
+
+    @classmethod
+    def _old_and_new(cls):
+        old = pd.DataFrame({"id": [1, 2], "foo_name": ["a", "b"]})  # predates `model_action`
+        new = pd.DataFrame({"id": [3], "foo_name": ["c"], "model_action": ["x"]})
+        return old, new
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("old_first", [True, False])
+    def test_objects_lacking_a_schema_column_are_filled_with_nulls_whatever_the_listing_order(self, old_first):
+        # Given
+        old, new = self._old_and_new()
+        frames = [old, new] if old_first else [new, old]
+
+        # When
+        with patch.object(dynamicio.mixins.with_s3, "s3_read_down", side_effect=lambda _url, reader, **_: [reader(self._parquet(df)) for df in frames]):
+            df = ReadS3ParquetWithLateColumnIO(source_config=self._config()).read()
+
+        # Then
+        assert df.columns.tolist() == ["id", "foo_name", "model_action"]
+        assert sorted(df["id"].tolist()) == [1, 2, 3]
+        assert df.loc[df["id"] == 3, "model_action"].iloc[0] == "x"
+        assert df.loc[df["id"].isin([1, 2]), "model_action"].isna().all()
+
+    @pytest.mark.unit
+    def test_objects_lacking_a_schema_column_are_filled_with_nulls_with_no_disk_space_option(self):
+        # Given
+        old, new = self._old_and_new()
+
+        # When
+        with patch.object(dynamicio.mixins.with_s3.WithS3PathPrefix, "_iter_s3_files", return_value=[self._parquet(old), self._parquet(new)]):
+            df = ReadS3ParquetWithLateColumnIO(source_config=self._config(), no_disk_space=True).read()
+
+        # Then
+        assert df.columns.tolist() == ["id", "foo_name", "model_action"]
+        assert len(df) == 3 and df["model_action"].isna().sum() == 2
+
+    @pytest.mark.unit
+    def test_a_warning_names_the_columns_missing_from_some_objects(self):
+        # Given
+        old, new = self._old_and_new()
+
+        # When
+        with (
+            patch.object(dynamicio.mixins.with_s3, "s3_read_down", side_effect=lambda _url, reader, **_: [reader(self._parquet(df)) for df in (old, old, new)]),
+            patch.object(dynamicio.mixins.with_s3, "logger") as mock_logger,
+        ):
+            ReadS3ParquetWithLateColumnIO(source_config=self._config()).read()
+
+        # Then
+        (message,) = [c.args[0] for c in mock_logger.warning.call_args_list]
+        assert "'model_action': 2" in message
+
+    @pytest.mark.unit
+    def test_no_warning_is_logged_when_every_object_has_all_columns(self):
+        # Given
+        _, new = self._old_and_new()
+
+        # When
+        with (
+            patch.object(dynamicio.mixins.with_s3, "s3_read_down", side_effect=lambda _url, reader, **_: [reader(self._parquet(new))]),
+            patch.object(dynamicio.mixins.with_s3, "logger") as mock_logger,
+        ):
+            ReadS3ParquetWithLateColumnIO(source_config=self._config()).read()
+
+        # Then
+        mock_logger.warning.assert_not_called()
+
+    @pytest.mark.unit
+    def test_a_column_missing_from_every_object_still_raises(self):
+        # Given
+        old, _ = self._old_and_new()
+
+        # When / Then
+        with patch.object(dynamicio.mixins.with_s3, "s3_read_down", side_effect=lambda _url, reader, **_: [reader(self._parquet(old)), reader(self._parquet(old))]):
+            with pytest.raises(ValueError, match="missing from every parquet object"):
+                ReadS3ParquetWithLateColumnIO(source_config=self._config()).read()
 
 
 class TestS3ParquetTransferPaths:

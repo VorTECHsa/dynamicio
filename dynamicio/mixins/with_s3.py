@@ -1,5 +1,6 @@
 """This module provides mixins that are providing S3 I/O support."""
 
+import collections
 import dataclasses
 import fnmatch
 import io
@@ -18,6 +19,7 @@ import awswrangler as wr
 import boto3
 import boto3.s3.transfer
 import pandas as pd
+import pyarrow as pa
 import pyarrow.parquet as pq
 import s3transfer.futures
 import tables
@@ -417,8 +419,9 @@ class WithS3PathPrefix(with_local.WithLocal):
         # The `no_disk_space` option should be used only when reading a subset of columns from S3
         if self.options.pop("no_disk_space", False) and path_prefix:
             if file_type == "parquet":
-                parquet_dfs = [self._read_parquet_file(fobj, self.schema, **self.options) for fobj in self._iter_s3_files(full_path, file_ext=".parquet", max_memory_use=1024**3)]
-                return pd.concat(parquet_dfs, ignore_index=True)
+                absent: List[str] = []
+                parquet_dfs = [self._read_parquet_object(fobj, absent) for fobj in self._iter_s3_files(full_path, file_ext=".parquet", max_memory_use=1024**3)]
+                return self._concat_parquet_objects(parquet_dfs, absent, full_path)
             if file_type == "hdf":
                 dfs: List[DataFrame] = []
                 for fobj in self._iter_s3_files(full_path, file_ext=".h5", max_memory_use=1024**3):  # 1 gib
@@ -429,15 +432,17 @@ class WithS3PathPrefix(with_local.WithLocal):
 
         if file_type == "parquet":
             # Parquet is parsed straight from memory by the download threads: no temp dir, and parsing overlaps the network.
+            absent: List[str] = []
+
             def reader(fobj: io.BytesIO) -> pd.DataFrame:
-                return self._read_parquet_file(fobj, self.schema, **self.options)  # type: ignore[arg-type]
+                return self._read_parquet_object(fobj, absent)
 
             if dynamic_file_path:
                 prefix, suffix = full_path.rsplit("/**/", 1)
                 results = s3_read_down(prefix, reader, include_pattern=f"**/{suffix}")
             else:
                 results = s3_read_down(full_path, reader)
-            return pd.concat([df for df in results if len(df) > 0], ignore_index=True)
+            return self._concat_parquet_objects([df for df in results if len(df) > 0], absent, full_path)
 
         with tempfile.TemporaryDirectory() as temp_dir:
             if dynamic_file_path:
@@ -453,6 +458,43 @@ class WithS3PathPrefix(with_local.WithLocal):
                     dfs.append(df)
 
             return pd.concat(dfs, ignore_index=True)
+
+    def _read_parquet_object(self, fobj: IO[bytes], absent: List[str]) -> pd.DataFrame:
+        """Read one parquet object of a prefix, tolerating requested columns that this object does not contain.
+
+        Prefixes accumulate files over years, so older objects may predate columns added to the schema later. Such
+        columns are left out of that object's frame (pandas fills them with nulls on concatenation) and recorded in
+        `absent` so the caller can warn and still fail if a column is missing from every object.
+        """
+        try:
+            return self._read_parquet_file(fobj, self.schema, **self.options)  # type: ignore[arg-type]
+        except pa.ArrowInvalid:
+            fobj.seek(0)
+            available = set(pq.read_schema(fobj).names)
+            requested = list(self.options.get("columns") or self.schema.column_names)
+            missing = [column for column in requested if column not in available]
+            if not missing:
+                raise
+            fobj.seek(0)
+            absent.extend(missing)
+            options = {**self.options, "columns": [column for column in requested if column in available]}
+            return self._read_parquet_file(fobj, self.schema, **options)  # type: ignore[arg-type]
+
+    def _concat_parquet_objects(self, dfs: List[DataFrame], absent: List[str], source: str) -> DataFrame:
+        """Concatenate the frames of a prefix, warning about columns some objects lack and failing on columns none have."""
+        df = pd.concat(dfs, ignore_index=True)
+        if absent:
+            logger.warning(
+                f"[s3] Some objects under {source} lack columns that are filled with nulls: {dict(sorted(collections.Counter(absent).items()))} (objects lacking each column)"
+            )
+        requested = list(self.options.get("columns") or self.schema.column_names)
+        never_present = [column for column in requested if column not in df.columns]
+        if never_present:
+            raise ValueError(f"Columns {never_present} are missing from every parquet object under {source}")
+        if absent:
+            # Concatenation appends late-appearing columns at the end; restore the requested order.
+            df = df[[*requested, *(column for column in df.columns if column not in requested)]]
+        return df
 
     def _iter_s3_files(self, s3_prefix: str, file_ext: Optional[str] = None, max_memory_use: int = -1) -> Generator[IO[bytes], None, None]:  # pylint: disable=too-many-locals
         """Download sways of S3 objects.
