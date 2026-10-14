@@ -1,4 +1,4 @@
-# S3 I/O performance: master vs branch (v8.1.0-rc.7/rc.8)
+# S3 I/O performance: master vs branch (v8.1.0-rc.7 to rc.9)
 
 Baseline is `master`'s S3 I/O (benchmarked as release v4.4.1, whose S3 code path is the same). Decision record: [ADR 0001](adr/0001-direct-boto3-s3-io.md). This replaces the earlier awswrangler-vs-awscli report (rc.1-rc.4 numbers are obsolete).
 
@@ -63,6 +63,18 @@ Parquet prefixes are fetched and parsed on the download threads instead of synci
 | The rejected attempt alone | 0.1 ms |
 
 pyarrow rejects an unknown column at projection, before decoding any data, so the fallback costs one extra footer read per affected object; network fetch time dominates in practice because the object is downloaded once and re-parsed from memory.
+
+### Real-data prefix and large-object reads (rc.9)
+
+Dev bucket, laptop over WAN, static prefix `input/state/external_data_outcome/` (3,726,997 rows, 5 columns; some objects have null-typed columns). Output of every branch run is identical to an independent pyarrow read (values, dtypes, row order).
+
+| Read | master | rc.8 | rc.9 |
+|---|---|---|---|
+| `no_disk_space: true` prefix | 654 s, 2.9 GB peak RSS | 199 s, 1.9 GB | **46 s, 1.5 GB** |
+| default prefix | fails (`ArrowInvalid: No match for FieldRef.Name(record_type)`) | 45 s, 1.6 GB | 45 s, 1.6 GB |
+| single 1.8 GB object, 32.8M rows, 1 column | 64 s, 8.5 GB | 65 s, 7.5 GB | 65 s, 7.5 GB |
+
+rc.9 routes parquet `no_disk_space` prefix reads through the same in-memory thread pool as the default path (rc.8 fetched them in sequential transfer-manager batches and parsed serially). Single-file reads are unchanged from master in speed and identical in result, with lower peak memory.
 
 ## Further options (not implemented; behaviour-changing)
 
