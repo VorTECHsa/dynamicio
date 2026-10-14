@@ -1184,6 +1184,46 @@ class TestS3PathPrefixParquetSchemaEvolution:
         assert len(df) == 3 and df["model_action"].isna().sum() == 2
 
     @pytest.mark.unit
+    def test_null_filled_object_columns_hold_none_like_a_pyarrow_dataset_read(self):
+        # Given
+        old, new = self._old_and_new()
+
+        # When
+        with patch.object(dynamicio.mixins.with_s3, "s3_read_down", side_effect=lambda _url, reader, **_: [reader(self._parquet(old)), reader(self._parquet(new))]):
+            df = ReadS3ParquetWithLateColumnIO(source_config=self._config()).read()
+
+        # Then
+        assert df["model_action"].tolist() == [None, None, "x"]
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("listing_order, expected", [(True, ["a", "b", "c"]), (False, ["c", "b", "a"])])
+    def test_iter_s3_files_yields_objects_in_listing_order_only_when_asked(self, listing_order, expected):
+        # Given objects a, b, c in S3 listing order
+        objects = {f"p/{name}.parquet": name.encode() for name in "abc"}
+        client = MagicMock()
+        client.get_paginator.return_value.paginate.return_value = [{"Contents": [{"Key": key, "Size": 1} for key in objects]}]
+
+        class FakeTransferManager:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return False
+
+            @staticmethod
+            def download(_bucket, key, fobj):
+                fobj.write(objects[key])
+
+        io_object = ReadS3ParquetIO(source_config=self._config())
+
+        # When
+        with patch.object(dynamicio.mixins.with_s3.WithS3PathPrefix, "boto3_client", client), patch("boto3.s3.transfer.create_transfer_manager", return_value=FakeTransferManager()):
+            fobjs = list(io_object._iter_s3_files("s3://bucket/p/", file_ext=".parquet", max_memory_use=1024, listing_order=listing_order))
+
+        # Then
+        assert [fobj.read().decode() for fobj in fobjs] == expected
+
+    @pytest.mark.unit
     def test_a_warning_names_the_columns_missing_from_some_objects(self):
         # Given
         old, new = self._old_and_new()

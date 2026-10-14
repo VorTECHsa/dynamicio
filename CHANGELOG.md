@@ -4,6 +4,7 @@
 
 - perf: parquet `WithS3PathPrefix` reads fetch and parse each object in memory on the download threads (no temp dir, parsing overlaps the network); ~15% faster on ~1000 files over WAN, same rows. Files are now concatenated in listing order instead of arbitrary `os.listdir` order
 - fix: `WithS3PathPrefix` parquet reads no longer fail with `ArrowInvalid: No match for FieldRef.Name(<col>)` when some objects under the prefix predate a schema column. Such objects get nulls for that column (as master's `no_disk_space` dataset read did when the first listed file had the column), a warning lists the columns and how many objects lacked them, and a column missing from every object still raises `ValueError`
+- fix: parquet `no_disk_space` prefix reads return rows in S3 listing order again, as `master` did (the branch had reversed it); null-filled object columns hold `None` like `master`'s dataset read, not `NaN`
 - fix: `WithPostgres` logged `Started downloading table` twice per read (the query itself ran once); now logged once
 
 ## v8.1.0-rc.7

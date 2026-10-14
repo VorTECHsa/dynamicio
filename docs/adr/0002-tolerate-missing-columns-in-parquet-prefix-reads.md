@@ -19,7 +19,7 @@ The branch reads every object separately (in memory), which made the order-depen
 For parquet `WithS3PathPrefix` reads (both paths):
 
 1. Read each object with the schema columns. If pyarrow raises `ArrowInvalid`, read the object's schema, and if requested columns are absent, re-read it with the columns it has. Any other error is re-raised.
-2. Concatenate; absent columns become nulls and the schema column order is restored.
+2. Concatenate; absent columns become nulls (`None` in object columns, as a pyarrow dataset read yields) and the schema column order is restored. Rows come back in S3 listing order, also on the `no_disk_space` path, matching `master`.
 3. Log one warning with the per-column count of objects that lacked the column.
 4. Raise `ValueError` if a requested column is missing from every object.
 
@@ -32,3 +32,4 @@ Not changed: single-file reads, `local_batch`, CSV (`usecols` stays strict, as o
 - Non-nullable dtypes (`int64`) cannot hold the nulls and still fail at the schema cast, which is correct.
 - Cost: no overhead when every object has all columns (the check runs only on failure). When it triggers, the failed attempt is rejected at column projection before any decoding (about 0.1 ms on a 90 MB object), plus a footer read; the re-read costs the same as a normal read.
 - Parity gap: `local_batch` (local environment) is strict, so a local sample containing a stale object would fail where S3 would not. Sample data should mirror current schemas.
+- Verified against dev S3 with `master` (pandas 2.3.3, pyarrow 25.0.1) on the same objects: wherever `master` succeeds, rc.8 returns an identical frame (values, dtypes, row order, `None` fills); where `master` raised (old object listed first, or the default path), rc.8 returns the data.
