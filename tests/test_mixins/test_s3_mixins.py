@@ -1202,6 +1202,18 @@ class TestS3PathPrefixParquetSchemaEvolution:
         assert len(df) == 3 and df["model_action"].isna().sum() == 2
 
     @pytest.mark.unit
+    def test_prefix_whose_objects_are_all_empty_returns_an_empty_frame_with_schema_columns(self):
+        # Given
+        _, new = self._old_and_new()
+
+        # When
+        with patch.object(dynamicio.mixins.with_s3, "s3_read_down", side_effect=lambda _url, reader, **_: [reader(self._parquet(new.iloc[0:0]))]):
+            df = ReadS3ParquetWithLateColumnIO(source_config=self._config(), no_disk_space=True).read()
+
+        # Then
+        assert df.empty and "id" in df.columns
+
+    @pytest.mark.unit
     def test_null_filled_object_columns_hold_none_like_a_pyarrow_dataset_read(self):
         # Given
         old, new = self._old_and_new()

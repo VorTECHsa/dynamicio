@@ -194,6 +194,8 @@ def s3_sync_down(source_url: str, dest_dir: str, include_pattern: Optional[str] 
     key_prefix = f"{key_prefix.rstrip('/')}/" if key_prefix else ""
     client = _shared_s3_client()
 
+    # TODO(post-release): on the first failed download/parse, cancel the queued futures so a large prefix fails fast instead of
+    # fetching every remaining object before the exception surfaces (exiting the `with` block waits for all of them).
     with ThreadPoolExecutor(max_workers=max_concurrency) as pool:
         futures = []
         for page in client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=key_prefix):
@@ -232,6 +234,8 @@ def s3_read_down(source_url: str, reader: Callable[[io.BytesIO], Any], include_p
     def fetch_and_parse(key: str):
         return reader(_download_to_memory(bucket, key))
 
+    # TODO(post-release): on the first failed download/parse, cancel the queued futures so a large prefix fails fast instead of
+    # fetching every remaining object before the exception surfaces (exiting the `with` block waits for all of them).
     with ThreadPoolExecutor(max_workers=max_concurrency) as pool:
         futures = []
         for page in client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=key_prefix):
@@ -491,7 +495,7 @@ class WithS3PathPrefix(with_local.WithLocal):
                 results = s3_read_down(prefix, reader, include_pattern=f"**/{suffix}")
             else:
                 results = s3_read_down(full_path, reader)
-            return self._concat_parquet_objects([df for df in results if len(df) > 0], absent, full_path)
+            return self._concat_parquet_objects([df for df in results if len(df) > 0] or results, absent, full_path)
 
         with tempfile.TemporaryDirectory() as temp_dir:
             if dynamic_file_path:
