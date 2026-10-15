@@ -1215,7 +1215,7 @@ class TestS3PathPrefixParquetSchemaEvolution:
 
     @pytest.mark.unit
     def test_s3_file_path_ending_in_a_slash_reads_all_objects_under_it_like_a_dataset(self):
-        # Given a single-file source whose file_path is a "directory" (vessel-state's monitor reads one this way)
+        # Given a single-file source whose file_path is a "directory" (downstream pipelines read one this way)
         old, new = self._old_and_new()
         schema = ReadS3ParquetWithLateColumnIO(source_config=self._config()).schema
 

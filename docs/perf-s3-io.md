@@ -16,9 +16,9 @@ Why faster: one S3 request per file instead of two, one shared session/TLS conne
 
 ## Results
 
-Laptop to S3 (dev bucket) over WAN, 12 CPUs, medians. Uploads are uplink-bound (~3.7 MB/s). Pod numbers may differ; validate in the dev pod.
+Laptop to S3 (dev bucket) over WAN, 12 CPUs, medians. Uploads are uplink-bound (~3.7 MB/s). Pod numbers may differ; validate in the target container.
 
-### Single-file I/O, 10 processes (vessel-state `run_parallel` shape)
+### Single-file I/O, 10 processes (multi-process `run_parallel` shape)
 
 | Scenario | master | rc.7 | Speedup |
 |---|---|---|---|
@@ -66,7 +66,7 @@ pyarrow rejects an unknown column at projection, before decoding any data, so th
 
 ### Real-data prefix and large-object reads (rc.9)
 
-Dev bucket, laptop over WAN, static prefix `input/state/external_data_outcome/` (3,726,997 rows, 5 columns; some objects have null-typed columns). Output of every branch run is identical to an independent pyarrow read (values, dtypes, row order).
+Test bucket, laptop over WAN, static prefix (3,726,997 rows, 5 columns; some objects have null-typed columns). Output of every branch run is identical to an independent pyarrow read (values, dtypes, row order).
 
 | Read | master | rc.8 | rc.9 |
 |---|---|---|---|

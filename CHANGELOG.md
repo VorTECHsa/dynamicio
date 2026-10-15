@@ -2,11 +2,11 @@
 
 ## v8.1.0-rc.11
 
-- fix: an `s3_file` parquet source whose `file_path` ends in `/` (a directory of parquet objects, e.g. vessel-state's `VISIT_STS_OUTCOME`) is read as a dataset again: all objects under it are concatenated in listing order, with the same missing-column tolerance as `s3_path_prefix`. Since rc.7 it failed with `NoSuchKey` because the single-file reader issued a `GetObject` on the `.../` key
+- fix: an `s3_file` parquet source whose `file_path` ends in `/` (a directory of parquet objects, e.g. a downstream pipeline's outcome dataset) is read as a dataset again: all objects under it are concatenated in listing order, with the same missing-column tolerance as `s3_path_prefix`. Since rc.7 it failed with `NoSuchKey` because the single-file reader issued a `GetObject` on the `.../` key
 
 ## v8.1.0-rc.10
 
-- fix: S3 CSV writes accept a caller-supplied `index` option (`TypeError: to_csv() got multiple values for keyword argument 'index'` since rc.1, hit by vessel-state's `IO(..., index=False)`), and default to `index=True` like `DataFrame.to_csv` and the s3fs writer on master, instead of the hard-coded `index=False` of the wrangler writer
+- fix: S3 CSV writes accept a caller-supplied `index` option (`TypeError: to_csv() got multiple values for keyword argument 'index'` since rc.1, hit by a downstream pipeline's `IO(..., index=False)`), and default to `index=True` like `DataFrame.to_csv` and the s3fs writer on master, instead of the hard-coded `index=False` of the wrangler writer
 - fix: the awswrangler parquet fallback tolerates a caller-supplied `dataset` option instead of raising a duplicate-keyword `TypeError`
 
 ## v8.1.0-rc.9
@@ -33,11 +33,11 @@
 
 ## v8.1.0-rc.4
 
-- fix: stop forcing `convert_dates=False` on local JSON reads, letting pandas' own date auto-detection run unless the caller opts out explicitly (fixes datetime dtype regression for consumers relying on auto-parsed dates, e.g. Bon Voyage reference-data JSON)
+- fix: stop forcing `convert_dates=False` on local JSON reads, letting pandas' own date auto-detection run unless the caller opts out explicitly (fixes datetime dtype regression for consumers relying on auto-parsed dates, e.g. reference-data JSON)
 
 ## v8.1.0-rc.3
 
-- fix: honor caller-supplied `orient`/`lines` for S3 and local JSON reads/writes instead of hardcoding `orient="records"` (fixes regression for consumers using `orient="index"`, e.g. Bon Voyage reference-data JSON)
+- fix: honor caller-supplied `orient`/`lines` for S3 and local JSON reads/writes instead of hardcoding `orient="records"` (fixes regression for consumers using `orient="index"`, e.g. reference-data JSON)
 - fix: re-apply popped `orient`/`lines` options before `df.to_json` in the local JSON writer (previously silently discarded)
 
 ## v8.1.0-rc.2

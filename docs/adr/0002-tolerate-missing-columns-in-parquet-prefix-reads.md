@@ -5,14 +5,14 @@
 
 ## Context
 
-`vessel-state` reads `s3_path_prefix` parquet prefixes (e.g. `live/state/visit_sts_outcome/`) with `no_disk_space: true`. Some objects there predate columns added to the schema years ago (`model_action`). On the branch the read failed with `pyarrow.lib.ArrowInvalid: No match for FieldRef.Name(model_action) in id: string`.
+A downstream pipeline reads `s3_path_prefix` parquet prefixes with `no_disk_space: true`. Some objects there predate columns added to the schema years ago (`model_action`). On the branch the read failed with `pyarrow.lib.ArrowInvalid: No match for FieldRef.Name(model_action) in id: string`.
 
 How `master` behaves:
 
 - `no_disk_space: true`, parquet: `pd.read_parquet("s3://bucket/prefix/", columns=[...])` reads the prefix as one pyarrow dataset. The dataset schema comes from the first listed object, so an old object lacking a column is nulled **only if the first listed object has it**. If the first one is old, the same `ArrowInvalid` is raised. Tolerance was an accident of listing order.
 - Default path: objects are synced to a temp dir and read one by one with `columns=[...]`, so any object lacking a column fails.
 
-The branch reads every object separately (in memory), which made the order-dependent behaviour into always-fail. For `vessel-state` that is a regression.
+The branch reads every object separately (in memory), which made the order-dependent behaviour into always-fail. For that pipeline that is a regression.
 
 ## Decision
 
