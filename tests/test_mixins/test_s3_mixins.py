@@ -1214,6 +1214,30 @@ class TestS3PathPrefixParquetSchemaEvolution:
         assert df["model_action"].tolist() == [None, None, "x"]
 
     @pytest.mark.unit
+    def test_s3_file_path_ending_in_a_slash_reads_all_objects_under_it_like_a_dataset(self):
+        # Given a single-file source whose file_path is a "directory" (vessel-state's monitor reads one this way)
+        old, new = self._old_and_new()
+        schema = ReadS3ParquetWithLateColumnIO(source_config=self._config()).schema
+
+        # When
+        with (
+            patch.object(dynamicio.mixins.with_s3, "s3_read_down", side_effect=lambda _url, reader, **_: [reader(self._parquet(old)), reader(self._parquet(new))]) as mock_read_down,
+            patch.object(dynamicio.mixins.with_s3, "_download_to_memory") as mock_download,
+        ):
+            df = dynamicio.mixins.with_s3.WithS3File._read_s3_parquet_file("s3://bucket/dir/", schema)
+
+        # Then no GetObject on the "dir/" key, objects concatenated in listing order, missing columns null-filled
+        mock_download.assert_not_called()
+        mock_read_down.assert_called_once()
+        assert df["id"].tolist() == [1, 2, 3] and df["model_action"].tolist() == [None, None, "x"]
+
+    @pytest.mark.unit
+    def test_s3_file_path_ending_in_a_slash_with_no_objects_raises(self):
+        schema = ReadS3ParquetWithLateColumnIO(source_config=self._config()).schema
+        with patch.object(dynamicio.mixins.with_s3, "s3_read_down", return_value=[]), pytest.raises(FileNotFoundError, match="No objects found under s3://bucket/dir/"):
+            dynamicio.mixins.with_s3.WithS3File._read_s3_parquet_file("s3://bucket/dir/", schema)
+
+    @pytest.mark.unit
     def test_a_warning_names_the_columns_missing_from_some_objects(self):
         # Given
         old, new = self._old_and_new()

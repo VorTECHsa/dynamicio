@@ -12,7 +12,7 @@ import urllib.parse
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
-from typing import IO, Any, Callable, Dict, Generator, List, Optional, Union
+from typing import IO, Any, Callable, Dict, Generator, List, Mapping, Optional, Union
 from urllib.parse import urlparse
 
 import awswrangler as wr
@@ -309,6 +309,47 @@ def _upload_from_memory(fobj: io.BytesIO, bucket: str, key: str, acl: str = "buc
         client.upload_fileobj(fobj, bucket, key, ExtraArgs={"ACL": acl})
 
 
+def _read_parquet_object(fobj: IO[bytes], schema: DataframeSchema, options: Mapping[str, Any], absent: List[str]) -> pd.DataFrame:
+    """Read one parquet object of a prefix, tolerating requested columns that this object does not contain.
+
+    Prefixes accumulate files over years, so older objects may predate columns added to the schema later. Such
+    columns are left out of that object's frame (pandas fills them with nulls on concatenation) and recorded in
+    `absent` so the caller can warn and still fail if a column is missing from every object.
+    """
+    read_parquet_file = with_local.WithLocal._read_parquet_file  # pylint: disable=protected-access
+    try:
+        return read_parquet_file(fobj, schema, **options)  # type: ignore[arg-type]
+    except pa.ArrowInvalid:
+        fobj.seek(0)
+        available = set(pq.read_schema(fobj).names)
+        requested = list(options.get("columns") or schema.column_names)
+        missing = [column for column in requested if column not in available]
+        if not missing:
+            raise
+        fobj.seek(0)
+        absent.extend(missing)
+        return read_parquet_file(fobj, schema, **{**options, "columns": [column for column in requested if column in available]})  # type: ignore[arg-type]
+
+
+def _concat_parquet_objects(dfs: List[DataFrame], absent: List[str], source: str, schema: DataframeSchema, options: Mapping[str, Any]) -> DataFrame:
+    """Concatenate the frames of a prefix, warning about columns some objects lack and failing on columns none have."""
+    df = pd.concat(dfs, ignore_index=True)
+    if absent:
+        logger.warning(f"[s3] Some objects under {source} lack columns that are filled with nulls: {dict(sorted(collections.Counter(absent).items()))} (objects lacking each column)")
+    requested = list(options.get("columns") or schema.column_names)
+    never_present = [column for column in requested if column not in df.columns]
+    if never_present:
+        raise ValueError(f"Columns {never_present} are missing from every parquet object under {source}")
+    if absent:
+        # Concatenation appends late-appearing columns at the end; restore the requested order.
+        df = df[[*requested, *(column for column in df.columns if column not in requested)]]
+        # Object columns hold `None` for missing values (as a pyarrow dataset read yields), not the `NaN` concat inserts.
+        for column in set(absent):
+            if df[column].dtype == object:
+                df[column] = df[column].where(df[column].notna(), None)
+    return df
+
+
 @dataclasses.dataclass
 class S3TransferHandle:
     """A dataclass used to track an ongoing data download from the s3."""
@@ -468,45 +509,12 @@ class WithS3PathPrefix(with_local.WithLocal):
             return pd.concat(dfs, ignore_index=True)
 
     def _read_parquet_object(self, fobj: IO[bytes], absent: List[str]) -> pd.DataFrame:
-        """Read one parquet object of a prefix, tolerating requested columns that this object does not contain.
-
-        Prefixes accumulate files over years, so older objects may predate columns added to the schema later. Such
-        columns are left out of that object's frame (pandas fills them with nulls on concatenation) and recorded in
-        `absent` so the caller can warn and still fail if a column is missing from every object.
-        """
-        try:
-            return self._read_parquet_file(fobj, self.schema, **self.options)  # type: ignore[arg-type]
-        except pa.ArrowInvalid:
-            fobj.seek(0)
-            available = set(pq.read_schema(fobj).names)
-            requested = list(self.options.get("columns") or self.schema.column_names)
-            missing = [column for column in requested if column not in available]
-            if not missing:
-                raise
-            fobj.seek(0)
-            absent.extend(missing)
-            options = {**self.options, "columns": [column for column in requested if column in available]}
-            return self._read_parquet_file(fobj, self.schema, **options)  # type: ignore[arg-type]
+        """Read one parquet object of a prefix, tolerating requested columns that this object does not contain."""
+        return _read_parquet_object(fobj, self.schema, self.options, absent)
 
     def _concat_parquet_objects(self, dfs: List[DataFrame], absent: List[str], source: str) -> DataFrame:
         """Concatenate the frames of a prefix, warning about columns some objects lack and failing on columns none have."""
-        df = pd.concat(dfs, ignore_index=True)
-        if absent:
-            logger.warning(
-                f"[s3] Some objects under {source} lack columns that are filled with nulls: {dict(sorted(collections.Counter(absent).items()))} (objects lacking each column)"
-            )
-        requested = list(self.options.get("columns") or self.schema.column_names)
-        never_present = [column for column in requested if column not in df.columns]
-        if never_present:
-            raise ValueError(f"Columns {never_present} are missing from every parquet object under {source}")
-        if absent:
-            # Concatenation appends late-appearing columns at the end; restore the requested order.
-            df = df[[*requested, *(column for column in df.columns if column not in requested)]]
-            # Object columns hold `None` for missing values (as a pyarrow dataset read yields), not the `NaN` concat inserts.
-            for column in set(absent):
-                if df[column].dtype == object:
-                    df[column] = df[column].where(df[column].notna(), None)
-        return df
+        return _concat_parquet_objects(dfs, absent, source, self.schema, self.options)
 
     def _iter_s3_files(self, s3_prefix: str, file_ext: Optional[str] = None, max_memory_use: int = -1) -> Generator[IO[bytes], None, None]:  # pylint: disable=too-many-locals
         """Download sways of S3 objects.
@@ -590,8 +598,21 @@ class WithS3File:
         """
         if _WRANGLER_ONLY_READ_PARQUET & kwargs.keys():
             return WithS3File._read_s3_parquet_file_with_wrangler(s3_path, schema, **kwargs)
+        if s3_path.endswith("/"):
+            # A "directory" is read as a dataset of all its objects, as pandas/pyarrow did before.
+            return WithS3File._read_s3_parquet_directory(s3_path, schema, **kwargs)
         bucket, key = _split_s3_url(s3_path)
         return with_local.WithLocal._read_parquet_file(_download_to_memory(bucket, key), schema, **kwargs)  # type: ignore[arg-type] # pylint: disable=protected-access
+
+    @staticmethod
+    def _read_s3_parquet_directory(s3_path: str, schema: DataframeSchema, **kwargs) -> pd.DataFrame:
+        """Read every object under `s3_path/` and concatenate them in listing order (a `file_path` ending in `/`)."""
+        absent: List[str] = []
+        results = s3_read_down(s3_path, lambda fobj: _read_parquet_object(fobj, schema, kwargs, absent))
+        dfs = [df for df in results if len(df) > 0] or results
+        if not dfs:
+            raise FileNotFoundError(f"No objects found under {s3_path}")
+        return _concat_parquet_objects(dfs, absent, s3_path, schema, kwargs)
 
     @staticmethod
     @utils.allow_options(wr.s3.read_parquet)

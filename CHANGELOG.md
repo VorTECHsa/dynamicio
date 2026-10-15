@@ -1,5 +1,9 @@
 # Changelog
 
+## v8.1.0-rc.11
+
+- fix: an `s3_file` parquet source whose `file_path` ends in `/` (a directory of parquet objects, e.g. vessel-state's `VISIT_STS_OUTCOME`) is read as a dataset again: all objects under it are concatenated in listing order, with the same missing-column tolerance as `s3_path_prefix`. Since rc.7 it failed with `NoSuchKey` because the single-file reader issued a `GetObject` on the `.../` key
+
 ## v8.1.0-rc.10
 
 - fix: S3 CSV writes accept a caller-supplied `index` option (`TypeError: to_csv() got multiple values for keyword argument 'index'` since rc.1, hit by vessel-state's `IO(..., index=False)`), and default to `index=True` like `DataFrame.to_csv` and the s3fs writer on master, instead of the hard-coded `index=False` of the wrangler writer
