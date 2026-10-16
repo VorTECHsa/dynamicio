@@ -21,7 +21,7 @@ from sqlalchemy.orm.session import sessionmaker
 from dynamicio.config.pydantic import DataframeSchema, PostgresDataEnvironment
 from dynamicio.mixins import utils
 
-Session = sessionmaker(autoflush=True)
+Session = sessionmaker(autoflush=True)  # pylint: disable=invalid-name
 
 Base = declarative_base()
 
@@ -153,10 +153,6 @@ class WithPostgres:
         Returns:
             DataFrame
         """
-        postgres_config = self.sources_config.postgres
-        db_host = postgres_config.db_host
-        db_name = postgres_config.db_name
-
         if isinstance(query, Query):
             query = query.with_session(session).statement
 
@@ -164,7 +160,6 @@ class WithPostgres:
             # Required for compatibility with pandas >= 2.0
             query = text(str(query.compile(compile_kwargs={"literal_binds": True})))
 
-        logger.info(f"[postgres] Started downloading table: {self.sources_config.dynamicio_schema.name} from: {db_host}:{db_name}")
         return pd.read_sql(sql=query, con=session.get_bind(), **options)
 
     def _write_to_postgres(self, df: pd.DataFrame):

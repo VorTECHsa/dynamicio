@@ -3,6 +3,7 @@ import os
 
 import pytest
 
+# Application Imports
 from dynamicio.config import IOConfig
 from dynamicio.validations import (
     has_acceptable_percentage_of_nulls,
@@ -399,7 +400,7 @@ class TestIsLowerThanOrEqual:
 
 
 class TestIsBetween:
-    @pytest.mark.integration
+    @pytest.mark.unit
     def test_returns_true_if_all_column_values_are_between_upper_and_lower_bounds(self, input_df):
         # Given
         df = input_df
@@ -410,7 +411,7 @@ class TestIsBetween:
         # Then
         assert validation.valid is True and validation.value == 0 and validation.message == "All values of TEST[weight_a] is between 4 and 10 thresholds"
 
-    @pytest.mark.integration
+    @pytest.mark.unit
     def test_returns_false_if_any_column_values_are_below_the_lower_bound(self, input_df):
         # Given
         df = input_df
@@ -421,7 +422,7 @@ class TestIsBetween:
         # Then
         assert not validation.valid and validation.value == 0.5 and validation.message == "5 cell values for TEST[weight_a] are either below 6 or above 10"
 
-    @pytest.mark.integration
+    @pytest.mark.unit
     def test_returns_false_if_any_column_values_are_above_the_upper_bound(self, input_df):
         # Given
         df = input_df
@@ -432,7 +433,7 @@ class TestIsBetween:
         # Then
         assert not validation.valid and validation.value == 0.3 and validation.message == "3 cell values for TEST[weight_a] are either below 4 or above 8"
 
-    @pytest.mark.integration
+    @pytest.mark.unit
     def test_returns_true_if_all_column_values_are_within_bounds_bounds_included(self, input_df):
         # Given
         df = input_df
@@ -443,7 +444,7 @@ class TestIsBetween:
         # Then
         assert validation.valid is True and validation.value == 0 and validation.message == "All values of TEST[weight_a] is between 5 and 9 thresholds"
 
-    @pytest.mark.integration
+    @pytest.mark.unit
     def test_returns_true_if_all_column_values_are_between_upper_and_lower_bounds_irrespective_of_nulls(self, input_df):
         # Given
         df = input_df

@@ -1,0 +1,85 @@
+# S3 I/O performance: master vs branch (v8.1.0-rc.7 to rc.9)
+
+Baseline is `master`'s S3 I/O (benchmarked as release v4.4.1, whose S3 code path is the same). Decision record: [ADR 0001](adr/0001-direct-boto3-s3-io.md). This replaces the earlier awswrangler-vs-awscli report (rc.1-rc.4 numbers are obsolete).
+
+## What changed
+
+| Path | master | branch (rc.7) |
+|---|---|---|
+| Single-file parquet read | boto3 `download_fileobj` (HEAD + GET) to temp file, then pandas | one `GetObject`, parsed in memory |
+| Single-file parquet write | `df.to_parquet("s3://")` via s3fs | pyarrow to `BytesIO`, one `PutObject` |
+| Prefix read / write | in-process `aws s3 sync` (10 workers) | boto3 thread pool, 32 workers, no HEAD |
+| awswrangler | not used | fallback only (wrangler-only kwargs), plus CSV/JSON |
+| `awscli`, `s3fs` | dependencies | removed |
+
+Why faster: one S3 request per file instead of two, one shared session/TLS connection per process instead of per call, no temp file on reads.
+
+## Results
+
+Laptop to S3 (dev bucket) over WAN, 12 CPUs, medians. Uploads are uplink-bound (~3.7 MB/s). Pod numbers may differ; validate in the target container.
+
+### Single-file I/O, 10 processes (multi-process `run_parallel` shape)
+
+| Scenario | master | rc.7 | Speedup |
+|---|---|---|---|
+| Read, 300 files | 13.3 s | 5.5 s | 2.4x |
+| Write, 200 files | 36.7 s | 28.5 s | 1.3x |
+
+### Fixed worker budget (apples to apples, 200 files; wall s / CPU-s)
+
+| Workers | Read master | Read rc.7 | Write master | Write rc.7 |
+|---|---|---|---|---|
+| 2 | 37.8 / 7.1 | 8.8 / 2.2 | 119.7 / 10.1 | 47.6 / 5.5 |
+| 4 | 18.8 / 4.5 | 5.4 / 1.7 | 68.0 / 8.3 | 30.6 / 4.5 |
+| 8 | 10.4 / 4.3 | 3.7 / 1.6 | not run | not run |
+| 10 | 8.5 / 3.9 | 3.7 / 1.5 | not run | not run |
+
+rc.7 is faster at every worker count and uses less CPU per call: no extra pod CPU is needed. It is network-bound, not CPU-bound. (Write runs at 8 and 10 workers were aborted by an expired SSO session.)
+
+### Prefix sync at equal worker count (10), wall s
+
+| Files | Direction | aws-cli sync (master) | rc.7 at 10 | rc.7 at 32 (default) |
+|---|---|---|---|---|
+| 200 | down | 3.4 | 3.2 | 2.9 |
+| 500 | down | 7.6 | 7.1 | 6.6 |
+| 1000 | down | 14.4 | 14.4 | 13.3 |
+| 200 | up | 26.3 | 25.5 | 25.2 |
+| 500 | up | 65.3 | 67.9 | 75.1 |
+
+Prefix sync is on par with the aws-cli sync it replaces; earlier larger gains came mostly from more workers. Uploads are uplink-bound and noisy (500-file runs at 32 workers ranged 64-86 s), so no upload gain is claimed.
+
+### Parquet prefix reads in memory (rc.8)
+
+Parquet prefixes are fetched and parsed on the download threads instead of syncing to a temp dir first: about 15% faster on ~1000 files over WAN, same rows.
+
+### Schema-evolution fallback cost (rc.8)
+
+[ADR 0002](adr/0002-tolerate-missing-columns-in-parquet-prefix-reads.md): objects lacking a requested column are re-read with the columns they have. Local microbenchmark, one 92 MB object (2M rows, 7 columns), medians of 5:
+
+| Case | Time |
+|---|---|
+| All columns present (no change; the check only runs on failure) | 19 ms |
+| One column absent (rejected read + schema footer + re-read) | 18 ms |
+| The rejected attempt alone | 0.1 ms |
+
+pyarrow rejects an unknown column at projection, before decoding any data, so the fallback costs one extra footer read per affected object; network fetch time dominates in practice because the object is downloaded once and re-parsed from memory.
+
+### Real-data prefix and large-object reads (rc.9)
+
+Test bucket, laptop over WAN, static prefix (3,726,997 rows, 5 columns; some objects have null-typed columns). Output of every branch run is identical to an independent pyarrow read (values, dtypes, row order).
+
+| Read | master | rc.8 | rc.9 |
+|---|---|---|---|
+| `no_disk_space: true` prefix | 654 s, 2.9 GB peak RSS | 199 s, 1.9 GB | **46 s, 1.5 GB** |
+| default prefix | fails (`ArrowInvalid: No match for FieldRef.Name(record_type)`) | 45 s, 1.6 GB | 45 s, 1.6 GB |
+| single 1.8 GB object, 32.8M rows, 1 column | 64 s, 8.5 GB | 65 s, 7.5 GB | 65 s, 7.5 GB |
+
+rc.9 routes parquet `no_disk_space` prefix reads through the same in-memory thread pool as the default path (rc.8 fetched them in sequential transfer-manager batches and parsed serially). Single-file reads are unchanged from master in speed and identical in result, with lower peak memory.
+
+## Further options (not implemented; behaviour-changing)
+
+Fewer/larger files, compression choice, skipping unchanged files in sync, prefetching next inputs. Small non-breaking candidates: botocore `standard` retry mode, avoiding the bytes-to-`BytesIO` copy.
+
+## Reproducing
+
+The harness (bench, profile, deck builder) is kept locally under `docs/.temp/perf/` and is not versioned; it needs a dev bucket and credentials.

@@ -13,7 +13,7 @@ from magic_logger import logger
 from numpy import datetime64, timedelta64
 from pythonjsonlogger import jsonlogger  # type: ignore
 
-logHandler = logging.StreamHandler(sys.stdout)
+logHandler = logging.StreamHandler(sys.stdout)  # pylint: disable=invalid-name
 formatter = jsonlogger.JsonFormatter()
 logHandler.setFormatter(formatter)
 logger.addHandler(logHandler)

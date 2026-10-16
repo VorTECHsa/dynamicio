@@ -32,6 +32,7 @@ class BindingsYaml(pydantic.BaseModel):
     def update_config_refs(self) -> "BindingsYaml":
         """Updates dynamic parts of the config.
 
+        Specifically:
         - Configure _parent for all `IOEnvironment`s
         - Replace all IOSchemaRef with actual schema objects
         """

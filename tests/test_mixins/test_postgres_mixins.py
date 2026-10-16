@@ -1,7 +1,7 @@
 # pylint: disable=no-member, missing-module-docstring, missing-class-docstring, missing-function-docstring, too-many-public-methods, too-few-public-methods, protected-access, C0103, C0302, R0801
 import os
 import types
-from unittest.mock import ANY, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import pandas as pd
 import pytest
@@ -16,6 +16,25 @@ from tests.mocking.models import ERModel, PgModel
 
 
 class TestPostgresIO:
+
+    @pytest.mark.unit
+    def test_write_to_postgres_using_replace_strategy(self):
+        # Given
+        session = MagicMock()
+        connection = session.connection.return_value
+        cursor = connection.connection.cursor.return_value
+        df = pd.DataFrame({"id": [1], "val": ["a"]})
+
+        # When
+        WithPostgres._write_to_database(session, "dummy_table", df, is_truncate_and_append=False)
+
+        # Then
+        assert session.execute.call_count == 1
+        executed_sql = str(session.execute.call_args[0][0])
+        assert "DELETE FROM dummy_table" in executed_sql
+        cursor.copy_from.assert_called_once()
+        session.commit.assert_called_once()
+
     @pytest.mark.unit
     def test_when_reading_from_postgres_with_env_as_cloud_get_table_columns_returns_valid_list_of_columns_for_a_model(self, expected_columns):
         # Given
@@ -27,6 +46,7 @@ class TestPostgresIO:
 
         # When
         columns = ReadPostgresIO(source_config=pg_cloud_config)._get_table_columns(ERModel)  # pylint: disable=protected-access
+
         # Then
         assert columns == expected_columns
 
@@ -102,6 +122,26 @@ class TestPostgresIO:
         # When / Then
         ReadPostgresIO(source_config=postgres_cloud_config).read()
         mock__read_from_postgres.assert_called()
+
+    @pytest.mark.unit
+    @patch("dynamicio.mixins.with_postgres.logger")
+    @patch.object(pd, "read_sql")
+    def test_read_from_postgres_logs_started_downloading_once(self, mock__read_sql, mock__logger):
+        # Given
+        postgres_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_POSTGRES")
+
+        # When
+        with patch("dynamicio.mixins.with_postgres.session_for"):
+            ReadPostgresIO(source_config=postgres_cloud_config).read()
+
+        # Then
+        started = [c for c in mock__logger.info.call_args_list if "Started downloading" in c.args[0]]
+        assert len(started) == 1
+        mock__read_sql.assert_called_once()
 
     @pytest.mark.unit
     @patch.object(WithPostgres, "_read_database")

@@ -1,4 +1,4 @@
-[![Build Status](https://github.com/VorTECHsa/dynamicio/actions/workflows/build_and_publish.yml/badge.svg?branch=master)](https://github.com/VorTECHsa/dynamicio/actions/workflows/build_and_publish.yml)
+[![Build and Publish](https://github.com/VorTECHsa/dynamicio/actions/workflows/build_and_publish.yml/badge.svg)](https://github.com/VorTECHsa/dynamicio/actions/workflows/build_and_publish.yml)
 [![codecov](https://codecov.io/gh/VorTECHsa/dynamicio/graph/badge.svg?token=McZFwD2QPh)](https://codecov.io/gh/VorTECHsa/dynamicio)
 [<img src="https://img.shields.io/badge/slack-@vortexa/dynamicio_public-purple.svg?logo=slack">](https://join.slack.com/share/enQtMzg2Nzk3ODY3MzEzNi0yNTU1ZmIyN2JkMGFhZjhhZWVjNzA2OWUzNWIyMjMyYmYzZmE4MzBjYWQ3YjdhNjU1MGU2NjFkNzMyZDllMzE2?raw=True)
 
@@ -18,6 +18,7 @@ A repository for hosting the `dynamicio` library, used as a wrapper for `pandas`
   * [The Solution](https://github.com/VorTECHsa/dynamicio/tree/master#the-solution)
   * [Main features](https://github.com/VorTECHsa/dynamicio/tree/master#main-features)
 - [Supported sources and data formats:](https://github.com/VorTECHsa/dynamicio/tree/master#supported-sources-and-data-formats)
+  * [S3 I/O](https://github.com/VorTECHsa/dynamicio/tree/master#s3-i-o)
   * [Coming soon](https://github.com/VorTECHsa/dynamicio/tree/master#coming-soon)
 - [Installation](https://github.com/VorTECHsa/dynamicio/tree/master#installation)
 - [API Documentation](https://github.com/VorTECHsa/dynamicio/tree/master#api-documentation)
@@ -49,7 +50,7 @@ a big part of your code be concerned with I/O operations.
 ### Managing various Resources
 First, it's the various type of resources you need to interact with; object storage (S3 or GCS)
 databases (Athena, Big Query, Postgres), Kafka and many more. For each of these, you have 
-dependencies on various libraries such as `s3fs`, `fsspec`, `gcfs`, `boto3`, `awscli`, `aws-wrangler`,
+dependencies on various libraries such as `fsspec`, `gcfs`, `boto3`, `aws-wrangler`,
 `sql-alchemy`, `tables`, `kafka-python` and many more. 
 
 ### Managing Various Data Types
@@ -119,13 +120,46 @@ decoupling business logic from the I/O layer.
 
 <img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/supported_sources.png?raw=True" width="600">
 
-- **S3** (or local) Input & Output:
+- **S3** (or local) Input & Output, for single files (`type: s3`) and for prefixes holding many files (`type: s3_path_prefix`):
   - `parquet`
   - `h5`
   - `json`
   - `csv`
 - **Postgres** Input & Output
 - **Kafka** Output
+
+### S3 I/O
+
+S3 is accessed directly through `boto3`, with one client shared per process (safe across forked workers):
+
+* **Single files** (`type: s3`): parquet is read with one `GetObject` and parsed in memory, and written with one
+  `PutObject` (multipart above 16 MiB), using the same `pandas`/`pyarrow` options as local I/O. `awswrangler` is only
+  used when you pass an option that only it supports, and for `csv`/`json`.
+* **Prefixes** (`type: s3_path_prefix`): objects are listed and fetched by a pool of 32 threads, one request per object.
+  Parquet objects are parsed in memory as they arrive, so parsing overlaps the download. `no_disk_space: true` is still
+  accepted.
+* **No `awscli` or `s3fs`**: they are no longer dependencies, so installing `dynamicio` no longer puts an `aws` command
+  in your environment. Credentials come from the usual `boto3` chain (environment, profile, IAM role).
+
+Compared with the previous implementation, single-file reads are about 2.4x faster and writes about 1.3x faster, and
+prefix reads/writes are on par or better, using less CPU per call
+([benchmarks](https://github.com/VorTECHsa/dynamicio/blob/master/docs/perf-s3-io.md),
+[design decision](https://github.com/VorTECHsa/dynamicio/blob/master/docs/adr/0001-direct-boto3-s3-io.md)).
+
+#### Parquet prefixes that changed schema over time
+
+Prefixes accumulate objects over the years, so older objects may lack columns that were added to the schema later.
+When reading a parquet `s3_path_prefix`, such objects are read with the columns they do have and the missing columns
+are filled with nulls; a warning lists each column and how many objects lacked it:
+
+```text
+[s3] Some objects under s3://bucket/live/state/ lack columns that are filled with nulls: {'model_action': 2} (objects lacking each column)
+```
+
+This tolerance is deliberate and bounded: a column that is missing from *every* object raises a `ValueError`, and a
+schema column typed as a non-nullable dtype (e.g. `int64`) still fails, because nulls cannot be represented. Single-file
+reads and `local_batch` are strict. Watch the warning if the missing data would indicate a real upstream problem rather
+than an old schema ([design decision](https://github.com/VorTECHsa/dynamicio/blob/master/docs/adr/0002-tolerate-missing-columns-in-parquet-prefix-reads.md)).
 
 ### Coming soon
 - **Athena** (pending)

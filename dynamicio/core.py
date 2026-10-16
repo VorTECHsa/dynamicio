@@ -1,6 +1,6 @@
 """Implements the DynamicDataIO class which provides functionality for data: loading; sinking, and; schema validation."""
 
-# pylint: disable=too-many-positional-arguments, disable=no-member
+# pylint: disable=no-member
 __all__ = ["DynamicDataIO", "SCHEMA_FROM_FILE", "CASTING_WARNING_MSG"]
 
 import asyncio
@@ -9,7 +9,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, List, Mapping, MutableMapping, Optional, Tuple
 
-import pandas as pd  # type: ignore
+import pandas as pd
 import pydantic
 from magic_logger import logger
 

@@ -30,3 +30,18 @@ BAR:
       db_password: "[[ DB_PASS ]]"
   schema:
     file_path: "[[ RESOURCES ]]/schemas/input/bar.yaml"
+
+EVENTS:
+  sample:
+    type: "local_batch"
+    local:
+      path_prefix: "[[ TEST_RESOURCES ]]/data/input/events/"
+      file_type: "parquet"
+  actual:
+    type: "s3_path_prefix"
+    s3:
+      bucket: "[[ S3_YOUR_INPUT_BUCKET ]]"
+      path_prefix: "data/events/"
+      file_type: "parquet"
+  schema:
+    file_path: "[[ RESOURCES ]]/schemas/input/events.yaml"

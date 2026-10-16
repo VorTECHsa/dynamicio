@@ -15,6 +15,14 @@ class ReadS3IO(UnifiedIO):
     schema = {"id": "int64"}
 
 
+class ReadS3JsonOrientRecordsIO(UnifiedIO):
+    schema = {"data": "object"}
+
+
+class ReadS3JsonOrientRecordsAltIO(UnifiedIO):
+    schema = {"release": "object", "timestamp": "int64"}
+
+
 class ReadMockS3CsvIO(UnifiedIO):
     schema = SCHEMA_FROM_FILE
 
@@ -57,6 +65,10 @@ class ReadS3ParquetIO(UnifiedIO):
     schema = {"id": "int64", "foo_name": "object", "bar": "int64"}
 
 
+class ReadS3ParquetWithLateColumnIO(UnifiedIO):
+    schema = {"id": "int64", "foo_name": "object", "model_action": "object"}
+
+
 class ReadS3ParquetWEmptyFilesIO(UnifiedIO):
     schema = {"id": "object", "bar": "int64"}
 
@@ -77,8 +89,12 @@ class ReadS3JsonIO(UnifiedIO):
     schema = {"id": "int64", "foo_name": "object", "bar": "int64"}
 
 
-class WriteS3ParquetIO(UnifiedIO):
+class WriteS3IO(UnifiedIO):
     schema = {"col_1": "int64", "col_2": "object"}
+
+
+class WriteS3JsonOrientRecordsIO(UnifiedIO):
+    schema = {"release": "object", "timestamp": "int64"}
 
 
 class WriteS3ParquetExternalIO(UnifiedIO):
