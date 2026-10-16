@@ -1,8 +1,8 @@
 # pylint: disable=no-member, too-many-positional-arguments, missing-module-docstring, missing-class-docstring, missing-function-docstring, too-many-public-methods, too-few-public-methods, protected-access, C0103, C0302, R0801
 import io
 import os
-from io import StringIO
 import shutil
+from io import StringIO
 from tempfile import NamedTemporaryFile
 from unittest import mock
 from unittest.mock import MagicMock, patch
