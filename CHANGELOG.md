@@ -1,5 +1,10 @@
 # Changelog
 
+## v8.1.1
+
+- fix: S3 JSON reads and writes use pandas' defaults again: `lines=False` (a JSON array for `orient="records"`, as written by 7.x and earlier) unless the caller passes `lines`. 8.1.0 defaulted to JSON Lines for `orient="records"`, which could not read existing files and wrote files that 7.x readers cannot parse. Set `lines: true` in the resource `options` to opt in to JSON Lines
+- fix: S3 JSON writes default `index` per orient as pandas does (`True` for `index`/`columns`/`split`/`table`, `False` for `records`/`values`) instead of always `False`, which made `orient="index"` and `orient="columns"` writes fail or drop the index
+
 ## v8.1.0-rc.11
 
 - fix: an `s3_file` parquet source whose `file_path` ends in `/` (a directory of parquet objects, e.g. a downstream pipeline's outcome dataset) is read as a dataset again: all objects under it are concatenated in listing order, with the same missing-column tolerance as `s3_path_prefix`. Since rc.7 it failed with `NoSuchKey` because the single-file reader issued a `GetObject` on the `.../` key
