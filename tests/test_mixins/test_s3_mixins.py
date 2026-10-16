@@ -631,7 +631,7 @@ class TestAllowedArgsAreConfiguredCorrectlyForWithS3File:
             env_identifier="CLOUD",
             dynamic_vars=constants,
         ).get(source_key="READ_FROM_S3_JSON")
-        store, to_json, read_json = self._json_object_store()
+        store, _, read_json = self._json_object_store()
         store[f"s3://{config.s3.bucket}/{config.s3.file_path}"] = expected.to_json(orient="records")
 
         # When
@@ -658,7 +658,7 @@ class TestAllowedArgsAreConfiguredCorrectlyForWithS3File:
             WriteS3JsonOrientRecordsIO(source_config=config, orient=orient).write(df_input)
 
         # Then
-        (written,) = store.values()
+        written = next(iter(store.values()))
         assert written == df_input.to_json(orient=orient)
 
     @pytest.mark.unit
