@@ -587,7 +587,7 @@ class TestAllowedArgsAreConfiguredCorrectlyForWithS3File:
                 df = io_class(source_config=config, **input_options).read()
                 call_kwargs = mock_reader.call_args.kwargs
                 assert call_kwargs["orient"] == input_options["orient"]
-                assert call_kwargs["lines"] == (input_options["orient"] == "records")
+                assert call_kwargs["lines"] is False  # pandas default: a JSON array, as written by earlier releases
                 pd.testing.assert_frame_equal(df, expected_df)
 
     @pytest.mark.unit
@@ -631,15 +631,15 @@ class TestAllowedArgsAreConfiguredCorrectlyForWithS3File:
     @pytest.mark.parametrize(
         "input_options, io_class, expected_lines",
         [
-            # records, default lines
-            ({"orient": "records"}, WriteS3JsonOrientRecordsIO, True),
+            # records, default lines (a JSON array, as pandas writes it)
+            ({"orient": "records"}, WriteS3JsonOrientRecordsIO, False),
             # records, explicit lines override honoured as given
             ({"orient": "records", "lines": False}, WriteS3JsonOrientRecordsIO, False),
-            # index, defaults lines to False (not records)
+            # index, lines False
             ({"orient": "index"}, WriteS3JsonOrientRecordsIO, False),
             # values, explicit lines honoured
             ({"orient": "values", "lines": True}, WriteS3JsonOrientRecordsIO, True),
-            # split, defaults lines to False
+            # split, lines False
             ({"orient": "split"}, WriteS3JsonOrientRecordsIO, False),
         ],
     )
@@ -661,6 +661,36 @@ class TestAllowedArgsAreConfiguredCorrectlyForWithS3File:
         call_kwargs = mock_to_json.call_args.kwargs
         assert call_kwargs["orient"] == input_options["orient"]
         assert call_kwargs["lines"] == expected_lines
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "input_options, expected_index",
+        [
+            ({"orient": "records"}, False),
+            ({"orient": "values"}, False),
+            ({"orient": "index"}, True),
+            ({"orient": "columns"}, True),
+            ({"orient": "split"}, True),
+            ({"orient": "split", "index": False}, False),
+        ],
+    )
+    def test_json_writer_index_defaults_to_what_pandas_accepts_for_the_orient(self, input_options, expected_index):
+        # Given
+        df_input = pd.DataFrame({"release": ["feb09"], "timestamp": [1614268643313]}, index=["a"])
+        config = IOConfig(
+            path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml"),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="WRITE_TO_S3_JSON")
+
+        # When
+        with patch.object(dynamicio.mixins.with_s3.wr.s3, "to_json") as mock_to_json:
+            WriteS3JsonOrientRecordsIO(source_config=config, **input_options).write(df_input)
+
+        # Then the kwargs are valid for pandas itself (orient=index with index=False raises)
+        call_kwargs = mock_to_json.call_args.kwargs
+        assert call_kwargs["index"] is expected_index
+        df_input.to_json(orient=call_kwargs["orient"], index=call_kwargs["index"], lines=call_kwargs["lines"] and call_kwargs["orient"] in ("records", "values"))
 
     @pytest.mark.unit
     def test_hdf_writer_accepts_only_valid_options(self):

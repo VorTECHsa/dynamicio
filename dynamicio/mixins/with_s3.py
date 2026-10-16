@@ -637,9 +637,7 @@ class WithS3File:
     def _read_s3_json_file(s3_path: str, schema: DataframeSchema, **kwargs) -> pd.DataFrame:
         is_single_record = kwargs.pop("single_record", False)
         orient = kwargs.pop("orient", "records")
-        lines = kwargs.pop("lines", None)
-        if lines is None:
-            lines = orient == "records"
+        lines = kwargs.pop("lines", False)  # pandas default; JSON-array files are what `pd.DataFrame.to_json(orient="records")` writes
 
         if kwargs.get("convert_dates") is True:
             logger.warning("[s3-json-read] Ignoring 'convert_dates=True'. Handle datetime parsing post-read.")
@@ -746,10 +744,9 @@ class WithS3File:
             raise ValueError("[s3-json] JSON output path must be a file, not a directory (e.g., 's3://bucket/data.json').")
 
         user_orient = kwargs.pop("orient", "records")
-        user_lines = kwargs.pop("lines", None)
-        if user_lines is None:
-            user_lines = user_orient == "records"
-        user_index = kwargs.pop("index", False)
+        user_lines = kwargs.pop("lines", False)
+        # wrangler defaults to index=True, which pandas rejects for records/values; mirror pandas' own per-orient default.
+        user_index = kwargs.pop("index", user_orient not in ("records", "values"))
 
         kwargs.setdefault("s3_additional_kwargs", {}).setdefault("ACL", "bucket-owner-full-control")
         wr.s3.to_json(df=df, path=s3_path, orient=user_orient, lines=user_lines, index=user_index, **kwargs)
