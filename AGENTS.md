@@ -15,7 +15,7 @@ uv run pytest              # always prefix commands with `uv run`, never activat
 
 - Python `>=3.10,<3.13`; CI runs 3.10, 3.11 and 3.12. `.python-version` is the local default.
 - Dependencies: `uv add <pkg>` / `uv add --group dev <pkg>` / `uv remove <pkg>`. Commit `pyproject.toml` and `uv.lock` together.
-  CI uses `uv sync --frozen`, so a stale lock fails.
+  CI uses `uv sync --locked`, so a stale lock fails.
 - `[tool.uv] constraint-dependencies` keeps the dev environment on pandas 2 / SQLAlchemy 2.0 (not yet supported on 3 / 2.1).
 
 ## Checks (all must pass before you push)

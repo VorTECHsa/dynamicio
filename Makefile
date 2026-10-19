@@ -58,16 +58,18 @@ check-test-coverage:
 	@uv run pytest -vv --cov=$(CODE_DIR) --cov-report=term-missing
 
 generate-docs:
-	@uv run mkdocs build --strict
+	@uv run --group docs mkdocs build --strict
 
 serve-docs:
-	@uv run mkdocs serve
+	@uv run --group docs mkdocs serve
 
 build-locally:
 	@uv build
 
 upload-package:
-	@uv build && uv publish
+	@dist_dir=$$(mktemp -d) || exit 1; \
+	trap 'rm -rf "$$dist_dir"' 0; \
+	uv build --out-dir "$$dist_dir" && uv publish "$$dist_dir"/*
 
 # Git tagging
 
