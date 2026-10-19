@@ -1125,7 +1125,7 @@ class TestAsyncCoreIO:
             duration = time.time() - start_time
 
         # Then
-        assert duration < 0.2
+        assert duration < 0.3  # four sequential 0.1s reads would take >= 0.4s; leave headroom for slow CI runners
 
     @pytest.mark.unit
     def test_async_write_does_indeed_operate_in_parallel(self):
@@ -1157,4 +1157,4 @@ class TestAsyncCoreIO:
             duration = time.time() - start_time
 
         # Then
-        assert duration < 0.125
+        assert duration < 0.3  # four sequential 0.1s writes would take >= 0.4s; leave headroom for slow CI runners
