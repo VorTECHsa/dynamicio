@@ -39,7 +39,8 @@ class WithAthena:
             - query (or the `query` option)
 
         `ctas_approach` defaults to `False` (the query's own result file is read, column names keep the case used in the query);
-        pass `ctas_approach=True` in the resource `options` for large results.
+        pass `ctas_approach=True` in the resource `options` for large results. `chunksize` is rejected: wrangler would return an
+        iterator of frames, which schema validation cannot process.
 
         Returns:
             DataFrame. awswrangler returns pandas nullable dtypes (e.g. `Int64`, `string`); declare the column dtypes in the
@@ -51,6 +52,8 @@ class WithAthena:
             raise ValueError("A 'query' must be provided for Athena reads")
 
         options = dict(self.options)
+        if options.get("chunksize"):
+            raise ValueError("Athena reads return a single DataFrame, so the 'chunksize' option is not supported; remove it from the resource options")
         options.setdefault("database", cfg.database)
         options.setdefault("s3_output", cfg.s3_output)
         # PyAthena read the query's CSV result. wrangler defaults to CTAS, which lower-cases column names and creates (and
