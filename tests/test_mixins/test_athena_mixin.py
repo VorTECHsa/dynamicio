@@ -85,7 +85,7 @@ class TestAthenaIO:
 
 
 def _athena_config(source_key):
-    yaml_file = "athena_legacy.yaml" if source_key == "READ_FROM_ATHENA_LEGACY_CONFIG" else "input.yaml"
+    yaml_file = "input.yaml"
     return IOConfig(
         path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions", yaml_file),
         env_identifier="CLOUD",
@@ -124,7 +124,7 @@ class TestAthenaWranglerArguments:
     def test_database_defaults_to_athenas_default_database(self, mock_wr_read, test_df):
         mock_wr_read.return_value = test_df
 
-        ReadAthenaIO(source_config=_athena_config("READ_FROM_ATHENA_LEGACY_CONFIG")).read()
+        ReadAthenaIO(source_config=_athena_config("READ_FROM_ATHENA_NO_DB"), query="SELECT 1").read()
 
         kwargs = mock_wr_read.call_args.kwargs
         assert kwargs["database"] == "default"
@@ -141,16 +141,14 @@ class TestAthenaWranglerArguments:
         assert kwargs["workgroup"] == "other_wg"
 
     @patch("dynamicio.mixins.with_athena.wr.athena.read_sql_query")
-    def test_legacy_s3_staging_dir_region_and_query_still_work(self, mock_wr_read, test_df):
+    def test_region_and_query_from_the_resource_config_are_used(self, mock_wr_read, test_df):
         mock_wr_read.return_value = test_df
-        config = _athena_config("READ_FROM_ATHENA_LEGACY_CONFIG")
 
-        ReadAthenaIO(source_config=config).read()
+        ReadAthenaIO(source_config=_athena_config("READ_FROM_ATHENA_WITH_REGION")).read()
 
         args, kwargs = mock_wr_read.call_args
-        assert config.athena.s3_output == "s3://test-staging-legacy/"
         assert args == ("SELECT * FROM from_yaml",)
-        assert kwargs["s3_output"] == "s3://test-staging-legacy/"
+        assert kwargs["s3_output"] == "s3://test-staging-region/"
         assert kwargs["boto3_session"].region_name == "eu-west-1"
 
     @patch("dynamicio.mixins.with_athena.wr.athena.read_sql_query")
@@ -161,12 +159,13 @@ class TestAthenaWranglerArguments:
 
         assert mock_wr_read.call_args.kwargs["boto3_session"] is _shared_boto3_session()
 
-    def test_s3_staging_dir_is_an_alias_of_s3_output(self):
-        assert AthenaDataSubSection(s3_staging_dir="s3://a/").s3_output == "s3://a/"
+    def test_removed_s3_staging_dir_fails_with_a_message_saying_what_to_change(self):
+        with pytest.raises(ValueError, match="rename `s3_staging_dir` to `s3_output`"):
+            AthenaDataSubSection(s3_staging_dir="s3://a/")
 
-    def test_conflicting_s3_staging_dir_and_s3_output_are_rejected(self):
-        with pytest.raises(ValueError, match="both set"):
-            AthenaDataSubSection(s3_staging_dir="s3://a/", s3_output="s3://b/")
+    def test_removed_s3_staging_dir_is_rejected_even_next_to_s3_output(self):
+        with pytest.raises(ValueError, match="was removed in dynamicio 9.0"):
+            AthenaDataSubSection(s3_staging_dir="s3://a/", s3_output="s3://a/")
 
     def test_missing_output_location_is_rejected(self):
         with pytest.raises(ValueError):
@@ -175,3 +174,10 @@ class TestAthenaWranglerArguments:
     def test_athena_writes_are_not_supported(self, test_df):
         with pytest.raises(NotImplementedError):
             ReadAthenaIO(source_config=_athena_config("READ_FROM_ATHENA"))._write_to_athena(test_df)  # pylint: disable=protected-access
+
+    def test_a_resource_definition_still_using_s3_staging_dir_fails_to_load_with_the_fix(self, tmp_path):
+        yaml_file = tmp_path / "athena.yaml"
+        yaml_file.write_text("OLD:\n  CLOUD:\n    type: athena\n    athena:\n      s3_staging_dir: s3://a/\n      region_name: eu-west-1\n")
+
+        with pytest.raises(ValueError, match="rename `s3_staging_dir` to `s3_output`"):
+            IOConfig(path_to_source_yaml=str(yaml_file), env_identifier="CLOUD", dynamic_vars=constants).get(source_key="OLD")

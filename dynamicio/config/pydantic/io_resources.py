@@ -7,7 +7,6 @@ import posixpath
 from typing import Mapping, Optional, Union
 
 import pydantic
-from magic_logger import logger
 from pydantic import BaseModel
 
 # Application Imports
@@ -274,10 +273,7 @@ class PostgresDataEnvironment(IOEnvironment):
 
 
 class AthenaDataSubSection(BaseModel):
-    """AWS Athena configuration section.
-
-    `s3_staging_dir` is the name used before the move to AWS Wrangler and is still accepted as a deprecated alias of `s3_output`.
-    """
+    """AWS Athena configuration section."""
 
     s3_output: str
     database: str = "default"
@@ -288,16 +284,14 @@ class AthenaDataSubSection(BaseModel):
     query: Optional[str] = None
 
     @pydantic.root_validator(pre=True)
-    def support_legacy_s3_staging_dir(cls, values):
-        """Accept the deprecated `s3_staging_dir` key as an alias of `s3_output`."""
-        values = dict(values)
-        legacy = values.pop("s3_staging_dir", None)
-        if legacy is not None:
-            if values.get("s3_output") is None:
-                logger.warning("[athena] 's3_staging_dir' is deprecated, use 's3_output' instead")
-                values["s3_output"] = legacy
-            elif values["s3_output"] != legacy:
-                raise ValueError("'s3_staging_dir' (deprecated) and 's3_output' are both set with different values")
+    def reject_removed_s3_staging_dir(cls, values):
+        """Fail with an actionable message for the `s3_staging_dir` key removed when Athena moved from PyAthena to AWS Wrangler."""
+        if "s3_staging_dir" in values:
+            raise ValueError(
+                "Athena resource option 's3_staging_dir' was removed in dynamicio 9.0 (Athena now reads through AWS Wrangler). "
+                "Fix: in the resource definition's `athena:` section, rename `s3_staging_dir` to `s3_output` (same value). "
+                "`region_name` and `query` are still accepted; `database` and `workgroup` are new optional keys."
+            )
         return values
 
 

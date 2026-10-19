@@ -340,3 +340,27 @@ READ_FROM_ATHENA:
       s3_output: s3://test-staging/
       database: test_db
       workgroup: test_wg
+
+READ_FROM_ATHENA_NO_DB:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/input/some_parquet_to_read.parquet"
+      file_type: "parquet"
+  CLOUD:
+    type: athena
+    athena:
+      s3_output: s3://test-staging-nodb/
+
+READ_FROM_ATHENA_WITH_REGION:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/input/some_parquet_to_read.parquet"
+      file_type: "parquet"
+  CLOUD:
+    type: athena
+    athena:
+      s3_output: s3://test-staging-region/
+      region_name: eu-west-1
+      query: SELECT * FROM from_yaml
