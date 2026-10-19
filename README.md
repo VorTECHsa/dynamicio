@@ -169,11 +169,13 @@ than an old schema ([design decision](https://github.com/VorTECHsa/dynamicio/blo
 
 ## Installation
 
-To install `dynamic(i/o)` you need to first authenticate with AWS Code Artifact. Just follow the below steps:
-
 ```shell
 >> pip install dynamicio
+# or, in a uv project
+>> uv add dynamicio
 ```
+
+To contribute, see [CONTRIBUTING.md](CONTRIBUTING.md) (the project is managed with [uv](https://docs.astral.sh/uv/)).
 
 ## API Documentation
 Read our docs here: https://vortechsa.github.io/dynamicio/

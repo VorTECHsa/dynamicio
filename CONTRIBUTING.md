@@ -1,36 +1,33 @@
-## 1. Local interpreter Setup
+## 1. Local environment setup
 
-## 1.1. `venv` setup (for MacOS and Linux)
-1. Install `pyenv` by following [these instructions](https://github.com/pyenv/pyenv) and the `pyenv-virtualenv`
-([instructions](https://github.com/pyenv/pyenv-virtualenv)) plugin. Once you do this then run:
-```shell
->> pyenv install
-```
-This should install the python version contained in the `.python-version` file, on your machine. 
+`dynamicio` uses [uv](https://docs.astral.sh/uv/) for Python, virtual environment and dependency management.
 
-Then run: 
+1. Install `uv` ([instructions](https://docs.astral.sh/uv/getting-started/installation/)), e.g. `brew install uv`.
+2. From the repo root run:
 ```shell
 >> make dev-env-setup
 ```
-This should automatically generate a `dynamicio`(for `.python-version`) virtual environment `venv` in the repo's root directory with all necessary requirements. 
-It will also install and setup `pre-commit` hooks for the repo.
+This installs the OS libraries needed on macOS (via `brew`), creates a `.venv` in the repo's root directory from `uv.lock`
+with the `dev` and `docs` dependency groups, and installs the `pre-commit` hooks. uv downloads the Python version named
+in `.python-version` if you do not already have it. The supported range is `>=3.10,<3.13`.
 
-Activate with:
-```shell script
->> source venv/bin/activate
-```
-To deactivate the environment, do:
-```shell script
+You do not need to activate the environment: prefix commands with `uv run` (e.g. `uv run pytest`). To activate it anyway:
+```shell
+>> source .venv/bin/activate
 >> deactivate
 ```
 
-### 2.1. PyCharm (venv):
-1. Run `make dev-env-setup`, which will set up a python dev venv for you in your root directory.
-2. Go to `Preferences > Search for `Python Interpreter`.
-3. Next to the drop-down list select the three dots sign and choose `Add...`
-4. Select `Existing environment option` and provide the path to the venvs python file, which should be something like:
+### Managing dependencies
+- Runtime dependencies live in `[project] dependencies` and tooling in `[dependency-groups]` in `pyproject.toml`.
+- Add or remove with `uv add <pkg>` / `uv remove <pkg>` (`--group dev` for tooling), which also updates `uv.lock`.
+  Always commit `pyproject.toml` and `uv.lock` together.
+- `make update-lock` re-resolves everything to the latest allowed versions. CI installs with the lock, so a stale lock is a CI failure.
+
+### 1.1. PyCharm
+1. Run `make dev-env-setup`.
+2. Go to `Preferences > Python Interpreter`, choose `Add Interpreter > Existing` and select:
 ```shell
->> /Users/{your-pc-name}/path/to/dynamicio/venv/bin/python
+>> /Users/{your-pc-name}/path/to/dynamicio/.venv/bin/python
 ```
 
 ## 2. Committing
@@ -72,3 +69,7 @@ This script will:
 3. Create a new tag adding a changelog-message based on the semantic commits in the branch that are ahead of master, and;
 4. Push your tag to be built into an official release.
 
+
+Versions are not stored in the repo: the package version is derived from the git tag at build time (`hatch-vcs`), so a pushed
+`vX.Y.Z` tag is all the "Build and Publish" workflow needs to build and publish to PyPI. Pull requests that change code
+should add a `CHANGELOG.md` entry.

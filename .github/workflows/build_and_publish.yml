@@ -10,27 +10,23 @@ jobs:
   style-checks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.10"
-
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
+          enable-cache: true
 
       - name: Install dependencies
-        run: |
-          poetry config virtualenvs.create false
-          poetry install --no-interaction
+        run: uv sync --frozen
 
       - name: Run style checks
         run: |
-          poetry run black --check dynamicio tests
-          poetry run flake8 --verbose dynamicio tests
-          poetry run pylint -v dynamicio tests
-          poetry run yamllint -v dynamicio tests
+          uv run --frozen black --check dynamicio tests
+          uv run --frozen flake8 --verbose dynamicio tests
+          uv run --frozen pylint -v dynamicio tests
+          uv run --frozen yamllint -v dynamicio tests
 
   test:
     runs-on: ubuntu-latest
@@ -38,25 +34,21 @@ jobs:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
         with:
           python-version: ${{ matrix.python-version }}
-
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
+          enable-cache: true
 
       - name: Install dependencies
-        run: |
-          poetry config virtualenvs.create false
-          poetry install --no-interaction
+        run: uv sync --frozen
 
       - name: Run tests
         run: |
           mkdir -p test-results
-          poetry run pytest -vv --junitxml=test-results/junit.xml
+          uv run --frozen pytest -vv --junitxml=test-results/junit.xml
 
       - name: Upload test results
         if: always()
@@ -68,25 +60,20 @@ jobs:
   codecov:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v4
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.11"
-
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
+          enable-cache: true
 
       - name: Install dependencies
-        run: |
-          poetry config virtualenvs.create false
-          poetry install --no-interaction
-          poetry add --group dev pytest-cov
+        run: uv sync --frozen
 
       - name: Run tests with coverage
         run: |
-          poetry run pytest -vv --cov=dynamicio --cov-branch --cov-report=xml
+          uv run --frozen pytest -vv --cov=dynamicio --cov-branch --cov-report=xml
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -100,29 +87,20 @@ jobs:
     needs: ["style-checks", "test"]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Important: fetch full history so dunamai works
+          fetch-depth: 0  # Important: full history and tags so hatch-vcs can derive the version
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.10"
-
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
-
-      - name: Install poetry-dynamic-versioning plugin
-        run: poetry self add poetry-dynamic-versioning
-
-      - name: Install dependencies
-        run: |
-          poetry config virtualenvs.create false
-          poetry install --no-interaction
+          enable-cache: true
 
       - name: Build and Publish to PyPI
         env:
-          POETRY_PYPI_TOKEN_PYPI: ${{ secrets.PYPI_API_TOKEN }}
+          PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
         run: |
-          poetry publish --no-interaction --build --username __token__ --password "$POETRY_PYPI_TOKEN_PYPI"
+          uv build
+          uv publish --token "$PYPI_TOKEN"
 

@@ -5,10 +5,6 @@ ARCH := $(shell arch)
 # Project Config
 CODE_DIR = dynamicio
 TESTS = tests
-POETRY_VERSION ?= 1.7.1
-VENV_DIR = .venv
-VENV_VERSION = $(shell head -n 1 .python-version)
-VENV_BIN_PATH = ${VENV_DIR}/bin
 
 # Mac-specific binaries (optional)
 install-binary-packages-Darwin:
@@ -18,65 +14,60 @@ install-binary-packages-Darwin:
 	@brew list hdf5 > /dev/null || brew install hdf5
 	@brew list postgresql@14 > /dev/null || brew install postgresql@14
 
-# Install Poetry if not present
-install-poetry:
-	@echo "# Ensure correct Python version"
-	@pyenv local $(VENV_VERSION)
-	@if ! pyenv which poetry > /dev/null 2>&1; then \
-		echo "Installing poetry for Python version $$(cat .python-version)..."; \
-		pyenv exec pip install --upgrade pip "poetry==$(POETRY_VERSION)" --index-url 'https://pypi.python.org/simple'; \
-	else \
-		echo "Poetry is already installed."; \
-	fi
+# Install uv if not present (https://docs.astral.sh/uv/getting-started/installation/)
+install-uv:
+	@command -v uv > /dev/null 2>&1 || { echo "uv not found. Install it: curl -LsSf https://astral.sh/uv/install.sh | sh  (or: brew install uv)"; exit 1; }
 
-# Full dev setup (OS deps + poetry + pre-commit)
-dev-env-setup: install-poetry install-binary-packages-Darwin
-	@echo "Installing Poetry dependencies..."
-	@pyenv exec poetry install --sync
+# Full dev setup (OS deps + uv environment + pre-commit)
+dev-env-setup: install-uv install-binary-packages-Darwin
+	@echo "Creating the virtual environment (.venv) from uv.lock..."
+	@uv sync --group dev --group docs
 	@echo "Setting up pre-commit hooks..."
-	@pyenv exec poetry self add poetry-pre-commit-plugin
-	@pyenv exec poetry run pre-commit install
-	@pyenv exec poetry run pre-commit install --hook-type commit-msg
-	@pyenv exec poetry run pre-commit migrate-config
+	@uv run pre-commit install
+	@uv run pre-commit install --hook-type commit-msg
+
+# Re-resolve dependencies and refresh uv.lock
+update-lock:
+	@uv lock --upgrade
 
 # Checks for local development
 check-linting:
-	@pyenv exec poetry run black ${CODE_DIR}
-	@pyenv exec poetry run flake8 --verbose ${CODE_DIR}
-	@pyenv exec poetry run pylint -v ${CODE_DIR}
-	@pyenv exec poetry run yamllint -v ${CODE_DIR}
+	@uv run black ${CODE_DIR}
+	@uv run flake8 --verbose ${CODE_DIR}
+	@uv run pylint -v ${CODE_DIR}
+	@uv run yamllint -v ${CODE_DIR}
 
 check-docstring:
-	@pyenv exec poetry run pydocstyle -e --count $(file)
+	@uv run pydocstyle -e --count $(file)
 
 create-jupyter-kernel:
-	@pyenv exec poetry run python -m ipykernel install --user --name=dynamicio
+	@uv run python -m ipykernel install --user --name=dynamicio
 
 # Tests
 run-tests:
-	@pyenv exec poetry run pytest --cache-clear --cov=${CODE_DIR} ${TESTS}
-	@pyenv exec poetry run pytest --cache-clear --cov=demo/src demo/tests
+	@uv run pytest --cache-clear --cov=${CODE_DIR} ${TESTS}
+	@uv run pytest --cache-clear --cov=demo/src demo/tests
 
 run-unit-tests:
-	@pyenv exec poetry run pytest -v -m unit ${TESTS}
+	@uv run pytest -v -m unit ${TESTS}
 
 run-integration-tests:
-	@pyenv exec poetry run pytest -v -m integration ${TESTS}
+	@uv run pytest -v -m integration ${TESTS}
 
 check-test-coverage:
-	@pyenv exec poetry run pytest -vv --cov=$(CODE_DIR) --cov-report=term-missing
+	@uv run pytest -vv --cov=$(CODE_DIR) --cov-report=term-missing
 
 generate-docs:
-	@pyenv exec poetry run mkdocs build --strict
+	@uv run mkdocs build --strict
 
 serve-docs:
-	@pyenv exec poetry run mkdocs serve
+	@uv run mkdocs serve
 
 build-locally:
-	@pyenv exec poetry build
+	@uv build
 
 upload-package:
-	@pyenv exec poetry publish --build
+	@uv build && uv publish
 
 # Git tagging
 
