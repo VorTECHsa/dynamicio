@@ -1,0 +1,12 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: dynamicio
+  description: A pandas I/O wrapper.
+  annotations:
+    backstage.io/techdocs-ref: dir:.   # enables TechDocs for the repo
+    github.com/project-slug: "VorTECHsa/dynamicio"
+spec:
+  type: library
+  lifecycle: production
+  owner: group:default/dpt-turingeries
