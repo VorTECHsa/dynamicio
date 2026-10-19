@@ -33,7 +33,7 @@ class WithAthena:
         """Reads data from AWS Athena using awswrangler with validated kwargs.
 
         Expected config:
-            - s3_output (or the deprecated `s3_staging_dir`)
+            - s3_output
             - database (defaults to Athena's `default` database)
             - region_name, workgroup (optional)
             - query (or the `query` option)
