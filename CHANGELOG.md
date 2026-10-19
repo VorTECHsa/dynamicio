@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- chore: migrate project and dependency management from Poetry to uv (PEP 621 `pyproject.toml`, `uv.lock`, `hatchling` + `hatch-vcs` build backend). The version is still derived from the git tag and the published wheel is unchanged apart from standard metadata. Contributors now use `make dev-env-setup` / `uv sync`; see `CONTRIBUTING.md` and `AGENTS.md`
+
 ## v8.1.1
 
 - fix: S3 JSON reads and writes use pandas' defaults again: `lines=False` (a JSON array for `orient="records"`, as written by 7.x and earlier) unless the caller passes `lines`. 8.1.0 defaulted to JSON Lines for `orient="records"`, which could not read existing files and wrote files that 7.x readers cannot parse. Set `lines: true` in the resource `options` to opt in to JSON Lines

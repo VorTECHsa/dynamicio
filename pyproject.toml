@@ -1,93 +1,94 @@
-[tool.poetry]
+[project]
 name = "dynamicio"
-version = "0.0.0"  # dummy, will be overridden by git tag
+dynamic = ["version"]  # derived from the git tag at build time (hatch-vcs)
 description = "Panda's wrapper for IO operations"
-authors = [
-    "Christos Hadjinikolis <christos.hadjinikolis@gmail.com>",
-    "Radu Ghitescu <radu.ghitescu@gmail.com>"
-]
 readme = "README.md"
-packages = [{ include = "dynamicio" }]
 license = "Apache-2.0"
+requires-python = ">=3.10,<3.13"
+authors = [
+    { name = "Christos Hadjinikolis", email = "christos.hadjinikolis@gmail.com" },
+    { name = "Radu Ghitescu", email = "radu.ghitescu@gmail.com" },
+]
 keywords = ["data", "pandas", "io"]
 classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
 ]
+dependencies = [
+    "awswrangler>=3.0.0",
+    "boto3>=1.20.24",
+    "confluent-kafka~=2.4.0",
+    "fastparquet>=0.8.0",
+    "fsspec==2022.11.0",
+    "libcst==1.5.1",
+    "logzero>=1.7.0",
+    "magic-logger>=1.0.2",
+    "no_implicit_optional==1.4.0",
+    "numpy>=1.24.0,<2.0.0",
+    "pandas>=1.5.1",
+    "psycopg2-binary~=2.9.3",
+    "pyarrow>=10.0.1",
+    "pyathena",
+    "pydantic>=1.9.2,<3",
+    "python-json-logger~=2.0.1",
+    "PyYAML>=5.4.1",
+    "simplejson~=3.17.2",
+    "SQLAlchemy>=1.4.11",
+    "tables>=3.10.1",
+]
 
-[tool.poetry.dependencies]
-awswrangler = ">=3.0.0"
-boto3 = ">=1.20.24"
-confluent-kafka = "~2.4.0"
-fastparquet = ">=0.8.0"
-fsspec = "==2022.11.0"
-libcst = "==1.5.1"
-logzero = ">=1.7.0"
-magic-logger = ">=1.0.2"
-no_implicit_optional = "==1.4.0"
-numpy = ">=1.24.0,<2.0.0"
-pandas = ">=1.5.1"
-psycopg2-binary = "~2.9.3"
-pyarrow = ">=10.0.1"
-pyathena = "*"
-pydantic = ">=1.9.2,<3"
-python = ">=3.10,<3.13"
-python-json-logger = "~2.0.1"
-PyYAML = ">=5.4.1"
-simplejson = "~3.17.2"
-SQLAlchemy = ">=1.4.11"
-tables = ">=3.10.1"
-
-[tool.poetry.group.dev.dependencies]
-black = "*"
-flake8-import-order = "*"
-flake8-print = "*"
-flake8-tidy-imports = "*"
-flake8 = "*"
-gitlint = "*"
-mock = "*"
-pandas-stubs = "*"
-pre-commit = "*"
-pydocstyle = "*"
-pylint = "*"
-pytest-asyncio = "*"
-pytest-cov = "*"
-pytest = "*"
-tox = "*"
-types-PyYAML = "*"
-types-setuptools = "*"
-types-simplejson = "*"
-yamllint = "*"
-
-[tool.poetry.group.docs.dependencies]
-mkdocs = "*"
-mkdocs-material = "*"
-mkdocstrings = { version = "*", extras = ["python"] }
-mkdocs-techdocs-core = "*"
-
-[tool.poetry.group.build.dependencies]
-setuptools = "==70.0.0"
-twine = "==4.0.1"
-wheel = "==0.38.4"
-
-[tool.poetry.scripts]
+[project.scripts]
 dynamicio = "dynamicio.cli:run"
 
-[build-system]
-requires = [
-  "setuptools>=69.0.3",
-  "wheel",
-  "poetry-core>=1.0.0",
-  "poetry-dynamic-versioning"
+[dependency-groups]
+dev = [
+    "black",
+    "flake8-import-order",
+    "flake8-print",
+    "flake8-tidy-imports",
+    "flake8",
+    "gitlint",
+    "isort",
+    "mock",
+    "pandas-stubs",
+    "pre-commit",
+    "pydocstyle",
+    "pylint",
+    "pytest-asyncio",
+    "pytest-cov",
+    "pytest",
+    "tox",
+    "types-PyYAML",
+    "types-setuptools",
+    "types-simplejson",
+    "yamllint",
 ]
-build-backend = "poetry_dynamic_versioning.backend"
+docs = [
+    "mkdocs",
+    "mkdocs-material",
+    "mkdocstrings[python]",
+    "mkdocs-techdocs-core",
+]
 
-[tool.poetry-dynamic-versioning]
-enable = true
-vcs = "git"
-style = "pep440"
-fix-shallow-repository = true
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+local_scheme = "no-local-version"
+
+[tool.hatch.build.targets.wheel]
+packages = ["dynamicio"]
+
+[tool.uv]
+default-groups = ["dev"]
+# Keep the dev/CI environment on the pandas 2 and SQLAlchemy 2.0 lines the project was validated on (pandas 3 / SQLAlchemy 2.1 are not supported yet).
+# Constraints do not change the published package metadata.
+constraint-dependencies = ["pandas<3", "sqlalchemy<2.1"]
 
 [tool.black]
 target-version = ['py310']
