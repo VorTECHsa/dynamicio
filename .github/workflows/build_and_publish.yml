@@ -81,7 +81,6 @@ jobs:
 
       - name: Install runtime dependencies (${{ matrix.name }})
         run: |
-          uv venv
           uv pip install ${{ matrix.install-args }} -e .
           uv pip install pytest pytest-asyncio mock
 
