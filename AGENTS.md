@@ -51,6 +51,23 @@ Downstream pipelines upgrade by a **version bump only**, so I/O behaviour must s
   (see `_json_object_store` in `tests/test_mixins/test_s3_mixins.py`). `ENVIRONMENT=LOCAL` tests do not exercise the S3 paths.
 - Add a `CHANGELOG.md` entry for every user-visible change, and update README/docs when options change.
 
+## Testing against real AWS locally (no release needed)
+
+Unit tests mock AWS, so they cannot prove an I/O change works. Verify with the working tree itself, against a real
+account (Athena, S3), before opening or updating a PR:
+
+- Run a script with the checkout on the path, e.g. `uv run python my_check.py` from the repo root (the project is
+  installed editable), or from another project `uv run --with /path/to/dynamicio python my_check.py`.
+- Authenticate with a development profile (`AWS_PROFILE=<dev profile>`, plus region). Never use production credentials.
+- Build a small resource YAML (`type: athena`, `s3_output`, `database`, a partition-filtered query with a `LIMIT` and a full
+  `ORDER BY` so results are deterministic) and call `.read()`. Compare with the previous implementation's frame
+  (columns, dtypes, values), and check column-name case and dtypes with and without a schema.
+- Keep scratch scripts and results outside the repo, and keep account ids, bucket names and real table names out of
+  commits, PR text and docs.
+
+Do not publish a release candidate just to test locally. Release candidates are for remote or post-deployment runs
+(consumer pipelines running the published package).
+
 ## Releases
 
 - The version comes from the git tag (`hatch-vcs`); `pyproject.toml` has no version. Never edit a version by hand.
