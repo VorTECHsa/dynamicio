@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- chore(deps): dependency audit, ranges widened to what the code needs and CI proves. Removed packages the code never imports (`fsspec`, `libcst`, `logzero`, `no_implicit_optional`); dropped exact pins (`confluent-kafka>=2.4.0,<3`, `psycopg2-binary>=2.9.3,<3`, `python-json-logger>=2.0.1`, `simplejson>=3.17.2`); lifted the `numpy<2` ceiling (numpy 2.x passes the suite) and the `python<3.13` ceiling (3.13 and 3.14 pass; added to CI and classifiers). Raised floors that did not work: `pandas>=2.1.0` (JSON writes with `index=False` for `records`/`values`, relied on since 8.1.1, need pandas 2.1) and `PyYAML>=6.0` (5.4.1 does not build with current toolchains). New CI job `dependency-ranges` tests the minimums (Python 3.10) and the newest releases (Python 3.14)
+- fix: `python-json-logger` 3.1+ import path (`pythonjsonlogger.json`) with fallback to the old module, avoiding a `DeprecationWarning` on import
+
 ## v9.0.0
 
 **Breaking:** Athena resources must rename `s3_staging_dir` to `s3_output` (see the first Athena entry below).

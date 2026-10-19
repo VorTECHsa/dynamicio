@@ -11,10 +11,14 @@ from typing import Any, Dict, Mapping, Type, Union
 import pandas as pd
 from magic_logger import logger
 from numpy import datetime64, timedelta64
-from pythonjsonlogger import jsonlogger  # type: ignore
+
+try:
+    from pythonjsonlogger.json import JsonFormatter  # type: ignore  # python-json-logger >= 3.1
+except ImportError:  # pragma: no cover
+    from pythonjsonlogger.jsonlogger import JsonFormatter  # type: ignore  # python-json-logger < 3.1
 
 logHandler = logging.StreamHandler(sys.stdout)  # pylint: disable=invalid-name
-formatter = jsonlogger.JsonFormatter()
+formatter = JsonFormatter()
 logHandler.setFormatter(formatter)
 logger.addHandler(logHandler)
 

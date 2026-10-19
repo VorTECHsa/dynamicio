@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v4
 
@@ -56,6 +56,40 @@ jobs:
         with:
           name: test-results-${{ matrix.python-version }}
           path: test-results
+
+  dependency-ranges:
+    # `pyproject.toml` declares wide ranges for users; these jobs prove both ends: the declared minimums and the newest releases.
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: lowest
+            python-version: "3.10"
+            install-args: "--resolution lowest-direct"
+          - name: newest
+            python-version: "3.14"
+            install-args: --upgrade "pandas<3" "sqlalchemy<2.1"
+    name: dependency-ranges (${{ matrix.name }})
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+
+      - name: Install runtime dependencies (${{ matrix.name }})
+        run: |
+          uv venv
+          uv pip install ${{ matrix.install-args }} -e .
+          uv pip install pytest pytest-asyncio mock
+
+      - name: Show resolved versions
+        run: uv pip list
+
+      - name: Run tests
+        run: uv run --no-sync pytest -vv
 
   codecov:
     runs-on: ubuntu-latest

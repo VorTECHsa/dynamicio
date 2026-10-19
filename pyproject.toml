@@ -4,7 +4,7 @@ dynamic = ["version"]  # derived from the git tag at build time (hatch-vcs)
 description = "Panda's wrapper for IO operations"
 readme = "README.md"
 license = "Apache-2.0"
-requires-python = ">=3.10,<3.13"
+requires-python = ">=3.10"
 authors = [
     { name = "Christos Hadjinikolis", email = "christos.hadjinikolis@gmail.com" },
     { name = "Radu Ghitescu", email = "radu.ghitescu@gmail.com" },
@@ -14,25 +14,23 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
     "awswrangler>=3.0.0",
     "boto3>=1.20.24",
-    "confluent-kafka~=2.4.0",
+    "confluent-kafka>=2.4.0,<3",
     "fastparquet>=0.8.0",
-    "fsspec==2022.11.0",
-    "libcst==1.5.1",
-    "logzero>=1.7.0",
     "magic-logger>=1.0.2",
-    "no_implicit_optional==1.4.0",
-    "numpy>=1.24.0,<2.0.0",
-    "pandas>=1.5.1",
-    "psycopg2-binary~=2.9.3",
+    "numpy>=1.24.0",
+    "pandas>=2.1.0",
+    "psycopg2-binary>=2.9.3,<3",
     "pyarrow>=10.0.1",
     "pydantic>=1.9.2,<3",
-    "python-json-logger~=2.0.1",
-    "PyYAML>=5.4.1",
-    "simplejson~=3.17.2",
+    "python-json-logger>=2.0.1",
+    "PyYAML>=6.0",
+    "simplejson>=3.17.2",
     "SQLAlchemy>=1.4.11",
     "tables>=3.10.1",
 ]
