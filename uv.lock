@@ -998,15 +998,15 @@ docs = [
 
 [package.metadata]
 requires-dist = [
-    { name = "awswrangler", specifier = ">=3.0.0" },
+    { name = "awswrangler", specifier = ">=3.9.0" },
     { name = "boto3", specifier = ">=1.20.24" },
     { name = "confluent-kafka", specifier = ">=2.4.0,<3" },
-    { name = "fastparquet", specifier = ">=0.8.0" },
+    { name = "fastparquet", specifier = ">=2024.5.0" },
     { name = "magic-logger", specifier = ">=1.0.2" },
     { name = "numpy", specifier = ">=1.24.0" },
-    { name = "pandas", specifier = ">=2.1.0" },
+    { name = "pandas", specifier = ">=2.2.2" },
     { name = "psycopg2-binary", specifier = ">=2.9.3,<3" },
-    { name = "pyarrow", specifier = ">=10.0.1" },
+    { name = "pyarrow", specifier = ">=16.0.0" },
     { name = "pydantic", specifier = ">=1.9.2,<3" },
     { name = "python-json-logger", specifier = ">=2.0.1" },
     { name = "pyyaml", specifier = ">=6.0" },
