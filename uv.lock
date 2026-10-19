@@ -603,7 +603,6 @@ dependencies = [
     { name = "pandas" },
     { name = "psycopg2-binary" },
     { name = "pyarrow" },
-    { name = "pyathena" },
     { name = "pydantic" },
     { name = "python-json-logger" },
     { name = "pyyaml" },
@@ -662,7 +661,6 @@ requires-dist = [
     { name = "pandas", specifier = ">=1.5.1" },
     { name = "psycopg2-binary", specifier = "~=2.9.3" },
     { name = "pyarrow", specifier = ">=10.0.1" },
-    { name = "pyathena" },
     { name = "pydantic", specifier = ">=1.9.2,<3" },
     { name = "python-json-logger", specifier = "~=2.0.1" },
     { name = "pyyaml", specifier = ">=5.4.1" },
@@ -2001,22 +1999,6 @@ wheels = [
 ]
 
 [[package]]
-name = "pyathena"
-version = "3.40.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "boto3" },
-    { name = "botocore" },
-    { name = "fsspec" },
-    { name = "python-dateutil" },
-    { name = "tenacity" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/f5/f1/d95dcb3be123d24ff4186d49274b504457a75c615e5b69b0c91f98cba362/pyathena-3.40.0.tar.gz", hash = "sha256:a0b3438e56ea9769d9de45616994d9574e52ce9569f07920d4069fc934512ab1", size = 173906, upload-time = "2026-10-16T15:24:54.896Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/6b/81/037695f75380cfcb36392401c9f42bebd868f6f522036b419a88551f66a7/pyathena-3.40.0-py3-none-any.whl", hash = "sha256:128ca4bc9a6081a740ae6e8bdec5d73ea2d6a589b83eeaa4288ade8075bebcc5", size = 236026, upload-time = "2026-10-16T15:24:53.001Z" },
-]
-
-[[package]]
 name = "pycodestyle"
 version = "2.15.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2569,15 +2551,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/cc/a3/ec228901fca4c996306b17f5c60a4105144df0bbd07b3a4a816f91f37b4a/tables-3.11.1-cp311-abi3-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:56bf6fb9132ead989b7e76695d7613d6d08f071a8019038d6565ba90c66b9f3e", size = 6903733, upload-time = "2026-03-01T11:42:58.349Z" },
     { url = "https://files.pythonhosted.org/packages/99/29/c2dc674ea70fa9a4819417289a9c0d3e4780835beeed573eb66964cfb763/tables-3.11.1-cp311-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:1e78fe190fdeb4afe430b79651bae2a4f341904eb85aa8dbafe5f1caee1c7f67", size = 7241357, upload-time = "2026-03-01T11:43:03.938Z" },
     { url = "https://files.pythonhosted.org/packages/60/b5/a59b62af4127790c618eb11c06c106706e07509a3fb9e346b2a3ffa74419/tables-3.11.1-cp311-abi3-win_amd64.whl", hash = "sha256:7fa6cb03f6fe55ae4f85e89ec5450e5c40cc4c52d8c3b60eb157a445c2219e89", size = 6526565, upload-time = "2026-03-01T11:43:08.58Z" },
-]
-
-[[package]]
-name = "tenacity"
-version = "9.2.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/82/9e/497c1c8ebe5a5b5d1d4a7511aea22c0bb1a97e3170d98abdef0e1b34265a/tenacity-9.2.1.tar.gz", hash = "sha256:a606b5c808d0cded4a359d5b9932d867ff2a6a6b64d37350260fd01bbdf83839", size = 58261, upload-time = "2026-10-07T12:13:01.633Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/d6/26/1ff2b0721ac66a3ec5b1402b333110b352ab0a8724052ac279a7b82d40c4/tenacity-9.2.1-py3-none-any.whl", hash = "sha256:9e56f17539296baab7beabb08b92f6ee3d7be92d8be72d763360677c2ad6580e", size = 32310, upload-time = "2026-10-07T12:13:00.102Z" },
 ]
 
 [[package]]

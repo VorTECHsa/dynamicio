@@ -29,7 +29,6 @@ dependencies = [
     "pandas>=1.5.1",
     "psycopg2-binary~=2.9.3",
     "pyarrow>=10.0.1",
-    "pyathena",
     "pydantic>=1.9.2,<3",
     "python-json-logger~=2.0.1",
     "PyYAML>=5.4.1",
