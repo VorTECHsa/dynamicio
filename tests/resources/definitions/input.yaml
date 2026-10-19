@@ -338,3 +338,5 @@ READ_FROM_ATHENA:
     type: athena
     athena:
       s3_output: s3://test-staging/
+      database: test_db
+      workgroup: test_wg

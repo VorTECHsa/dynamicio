@@ -3,6 +3,10 @@
 ## Unreleased
 
 - chore: migrate project and dependency management from Poetry to uv (PEP 621 `pyproject.toml`, `uv.lock`, `hatchling` + `hatch-vcs` build backend). The version is still derived from the git tag and the published wheel is unchanged apart from standard metadata. Contributors now use `make dev-env-setup` / `uv sync`; see `CONTRIBUTING.md` and `AGENTS.md`
+- feat(RND-13624): `WithAthena` reads through AWS Data Wrangler (`wr.athena.read_sql_query`) instead of PyAthena. Resource config is backwards compatible: `s3_staging_dir` is still accepted as a deprecated alias of `s3_output` (a warning is logged; setting both to different values is an error), `region_name` and `query` stay optional, and the new optional `database` (default `default`, Athena's own default) and `workgroup` are passed through. Reads use the shared per-process boto3 session unless `region_name` is set. Extra `options` are filtered to what `read_sql_query` accepts (e.g. `ctas_approach`, `unload_approach`, `chunksize`, `athena_cache_settings`)
+- note: results now come back with pandas nullable dtypes (`Int64`, `string`, `boolean`) and `date` as Python dates, as returned by awswrangler; declare the dtypes in the resource schema to cast them on read, as for any other source
+- fix: the Athena `s3_output` was passed positionally as `database` in the first wrangler draft; all arguments are now passed by keyword
+- chore: drop the `pyathena` dependency
 
 ## v8.1.1
 

@@ -7,6 +7,7 @@ import posixpath
 from typing import Mapping, Optional, Union
 
 import pydantic
+from magic_logger import logger
 from pydantic import BaseModel
 
 # Application Imports
@@ -273,9 +274,31 @@ class PostgresDataEnvironment(IOEnvironment):
 
 
 class AthenaDataSubSection(BaseModel):
-    """AWS Athena configuration section."""
+    """AWS Athena configuration section.
+
+    `s3_staging_dir` is the name used before the move to AWS Wrangler and is still accepted as a deprecated alias of `s3_output`.
+    """
 
     s3_output: str
+    database: str = "default"
+    region_name: Optional[str] = None
+    workgroup: Optional[str] = None
+
+    # Optional field, a query must be provided via YAML or mixin options
+    query: Optional[str] = None
+
+    @pydantic.root_validator(pre=True)
+    def support_legacy_s3_staging_dir(cls, values):
+        """Accept the deprecated `s3_staging_dir` key as an alias of `s3_output`."""
+        values = dict(values)
+        legacy = values.pop("s3_staging_dir", None)
+        if legacy is not None:
+            if values.get("s3_output") is None:
+                logger.warning("[athena] 's3_staging_dir' is deprecated, use 's3_output' instead")
+                values["s3_output"] = legacy
+            elif values["s3_output"] != legacy:
+                raise ValueError("'s3_staging_dir' (deprecated) and 's3_output' are both set with different values")
+        return values
 
 
 class AthenaDataEnvironment(IOEnvironment):

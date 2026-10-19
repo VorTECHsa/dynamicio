@@ -2,14 +2,17 @@
 
 # pylint: disable=no-member, protected-access, too-few-public-methods
 
-from typing import Any, MutableMapping, cast
+from typing import Any, MutableMapping
 
 import awswrangler as wr
+import boto3
 import pandas as pd
+from magic_logger import logger
 
 # Application Imports
 from dynamicio.config.pydantic import AthenaDataEnvironment
 from dynamicio.mixins.utils import allow_options
+from dynamicio.mixins.with_s3 import _shared_boto3_session
 
 
 class WithAthena:
@@ -30,26 +33,35 @@ class WithAthena:
         """Reads data from AWS Athena using awswrangler with validated kwargs.
 
         Expected config:
-            - query
-            - s3_output
+            - s3_output (or the deprecated `s3_staging_dir`)
+            - database (defaults to Athena's `default` database)
+            - region_name, workgroup (optional)
+            - query (or the `query` option)
+
+        Returns:
+            DataFrame. awswrangler returns pandas nullable dtypes (e.g. `Int64`, `string`); declare the column dtypes in the
+            resource schema to have them cast on read.
         """
         cfg = self.sources_config.athena
-        raw_query = self.options.pop("query", None)
-        if raw_query is None:
+        query = self.options.pop("query", None) or cfg.query
+        if not query:
             raise ValueError("A 'query' must be provided for Athena reads")
 
-        query = cast(str, raw_query)
-        # Pull config, add required positional args back
-        return self._run_wr_athena_query_wrapped(
-            sql=query,
-            s3_output=cfg.s3_output,
-            **self.options,
-        )
+        options = dict(self.options)
+        options.setdefault("database", cfg.database)
+        options.setdefault("s3_output", cfg.s3_output)
+        if cfg.workgroup:
+            options.setdefault("workgroup", cfg.workgroup)
+        if "boto3_session" not in options:
+            options["boto3_session"] = boto3.Session(region_name=cfg.region_name) if cfg.region_name else _shared_boto3_session()
+
+        logger.info(f"[athena] Executing query on database '{options['database']}': {query}")
+        return self._run_wr_athena_query_wrapped(sql=query, **options)
 
     @staticmethod
     @allow_options(wr.athena.read_sql_query)
-    def _run_wr_athena_query_wrapped(sql: str, s3_output: str, **options: Any) -> pd.DataFrame:
-        return wr.athena.read_sql_query(sql, s3_output, **options)
+    def _run_wr_athena_query_wrapped(sql: str, **options: Any) -> pd.DataFrame:
+        return wr.athena.read_sql_query(sql, **options)
 
     def _write_to_athena(self, df: pd.DataFrame):
         """Athena does not support direct writing. Raise NotImplementedError."""
