@@ -195,7 +195,15 @@ class ReadAthenaDecodedIO(ReadAthenaIO):
 
 
 _ATHENA_COLUMNS = [("Id", "bigint"), ("Name", "varchar"), ("IsActive", "boolean"), ("Amount", "double"), ("CreatedOn", "date")]
-_QUOTE_ALL_CSV = '"Id","Name","IsActive","Amount","CreatedOn"\n' '"1","alpha","true","1.5","2024-01-02"\n' '"2","","false","","2024-02-03"\n' '"3","gamma","true","3.25","2024-03-04"\n'
+_QUOTE_ALL_CSV = "\n".join(
+    [
+        '"Id","Name","IsActive","Amount","CreatedOn"',
+        '"1","alpha","true","1.5","2024-01-02"',
+        '"2","","false","","2024-02-03"',
+        '"3","gamma","true","3.25","2024-03-04"',
+        "",
+    ]
+)
 
 
 def _athena_session_returning(csv_text, columns):
