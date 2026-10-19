@@ -110,6 +110,17 @@ class TestAthenaWranglerArguments:
         assert kwargs["workgroup"] == "test_wg"
 
     @patch("dynamicio.mixins.with_athena.wr.athena.read_sql_query")
+    def test_ctas_is_off_by_default_and_can_be_enabled(self, mock_wr_read, test_df):
+        mock_wr_read.return_value = test_df
+        config = _athena_config("READ_FROM_ATHENA")
+
+        ReadAthenaIO(source_config=config, query="SELECT 1").read()
+        assert mock_wr_read.call_args.kwargs["ctas_approach"] is False
+
+        ReadAthenaIO(source_config=config, query="SELECT 1", ctas_approach=True).read()
+        assert mock_wr_read.call_args.kwargs["ctas_approach"] is True
+
+    @patch("dynamicio.mixins.with_athena.wr.athena.read_sql_query")
     def test_database_defaults_to_athenas_default_database(self, mock_wr_read, test_df):
         mock_wr_read.return_value = test_df
 

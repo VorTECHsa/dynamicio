@@ -38,6 +38,9 @@ class WithAthena:
             - region_name, workgroup (optional)
             - query (or the `query` option)
 
+        `ctas_approach` defaults to `False` (the query's own result file is read, column names keep the case used in the query);
+        pass `ctas_approach=True` in the resource `options` for large results.
+
         Returns:
             DataFrame. awswrangler returns pandas nullable dtypes (e.g. `Int64`, `string`); declare the column dtypes in the
             resource schema to have them cast on read.
@@ -50,6 +53,9 @@ class WithAthena:
         options = dict(self.options)
         options.setdefault("database", cfg.database)
         options.setdefault("s3_output", cfg.s3_output)
+        # PyAthena read the query's CSV result. wrangler defaults to CTAS, which lower-cases column names and creates (and
+        # needs permission to create) a temporary Glue table, so keep the previous behaviour unless the caller opts in.
+        options.setdefault("ctas_approach", False)
         if cfg.workgroup:
             options.setdefault("workgroup", cfg.workgroup)
         if "boto3_session" not in options:
