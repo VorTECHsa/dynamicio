@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v9.1.0
 
 - chore(deps): dependency audit, ranges widened to what the code needs and CI proves. Removed packages the code never imports (`fsspec`, `libcst`, `logzero`, `no_implicit_optional`); dropped exact pins (`confluent-kafka>=2.4.0,<3`, `psycopg2-binary>=2.9.3,<3`, `python-json-logger>=2.0.1`, `simplejson>=3.17.2`); lifted the `numpy<2` ceiling (numpy 2.x passes the suite) and the `python<3.13` ceiling (3.13 and 3.14 pass; added to CI and classifiers). Raised floors so every allowed combination works with numpy 2 as well as numpy 1: `pandas>=2.2.2` (JSON writes with `index=False` for `records`/`values`, relied on since 8.1.1, need pandas 2.1, and pandas before 2.2.2 breaks with numpy 2), `pyarrow>=16.0.0`, `fastparquet>=2024.5.0`, `awswrangler>=3.9.0` (older ones cannot import against numpy 2 or pyarrow 16), `PyYAML>=6.0` (5.4.1 does not build with current toolchains). New CI job `dependency-ranges` tests the minimums (Python 3.10), the minimums with numpy 2 (Python 3.11) and the newest releases (Python 3.14); publishing waits for it
 - fix: `python-json-logger` 3.1+ import path (`pythonjsonlogger.json`) with fallback to the old module, avoiding a `DeprecationWarning` on import
