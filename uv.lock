@@ -969,7 +969,7 @@ dev = [
     { name = "flake8-import-order" },
     { name = "flake8-print" },
     { name = "flake8-tidy-imports" },
-    { name = "gitlint" },
+    { name = "gitlint-core" },
     { name = "isort" },
     { name = "mock" },
     { name = "pandas-stubs", version = "2.3.3.260113", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -981,6 +981,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
+    { name = "sh", marker = "sys_platform != 'win32'" },
     { name = "tox", version = "4.65.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "tox", version = "4.67.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "types-pyyaml" },
@@ -1022,7 +1023,7 @@ dev = [
     { name = "flake8-import-order" },
     { name = "flake8-print" },
     { name = "flake8-tidy-imports" },
-    { name = "gitlint" },
+    { name = "gitlint-core" },
     { name = "isort" },
     { name = "mock" },
     { name = "pandas-stubs" },
@@ -1032,6 +1033,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
+    { name = "sh", marker = "sys_platform != 'win32'", specifier = ">=2.2.4" },
     { name = "tox" },
     { name = "types-pyyaml" },
     { name = "types-setuptools" },
@@ -1228,18 +1230,6 @@ wheels = [
 ]
 
 [[package]]
-name = "gitlint"
-version = "0.19.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "gitlint-core", extra = ["trusted-deps"] },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/95/d2/67e308b3f26394b2e98d2b0df594aa8c116e165d09d15094d45ecade7272/gitlint-0.19.1.tar.gz", hash = "sha256:b5b70fb894e80849b69abbb65ee7dbb3520fc3511f202a6e6b6ddf1a71ee8f61", size = 4799, upload-time = "2023-03-10T12:51:45.875Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/84/90/8b6a29ddceb51272a054399d4864eefd28083530349f5735e0bb979c5f0f/gitlint-0.19.1-py3-none-any.whl", hash = "sha256:26bb085959148d99fbbc178b4e56fda6c3edd7646b7c2a24d8ee1f8e036ed85d", size = 2649, upload-time = "2023-03-10T12:51:44.191Z" },
-]
-
-[[package]]
 name = "gitlint-core"
 version = "0.19.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1251,13 +1241,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/73/51/b59270264aabcab5b933f3eb9bfb022464ca9205b04feef1bdc1635fd9b4/gitlint_core-0.19.1.tar.gz", hash = "sha256:7bf977b03ff581624a9e03f65ebb8502cc12dfaa3e92d23e8b2b54bbdaa29992", size = 36141, upload-time = "2023-03-10T12:51:42.713Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b0/57/dea471da24ceac6de8c3dc5d37e4ddde57a5c340d6bac90010898734de34/gitlint_core-0.19.1-py3-none-any.whl", hash = "sha256:f41effd1dcbc06ffbfc56b6888cce72241796f517b46bd9fd4ab1b145056988c", size = 44207, upload-time = "2023-03-10T12:51:41.054Z" },
-]
-
-[package.optional-dependencies]
-trusted-deps = [
-    { name = "arrow" },
-    { name = "click" },
-    { name = "sh", marker = "sys_platform != 'win32'" },
 ]
 
 [[package]]
@@ -3395,9 +3378,12 @@ wheels = [
 
 [[package]]
 name = "sh"
-version = "1.14.3"
+version = "2.4.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/b7/09/89c28aaf2a49f226fef8587c90c6386bd2cc03a0295bc4ff7fc6ee43c01d/sh-1.14.3.tar.gz", hash = "sha256:e4045b6c732d9ce75d571c79f5ac2234edd9ae4f5fa9d59b09705082bdca18c7", size = 62851, upload-time = "2022-07-18T07:17:50.947Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e9/c8/137093889a8b8c9a66c9b46079cf2a0e155a8be027df212a4041e3b7b09c/sh-2.4.0.tar.gz", hash = "sha256:a250aef68509ed93419c9a1d90b0647cd5cbe26107ba94d3717ef5b6d595ffd9", size = 136950, upload-time = "2026-07-25T21:44:42.705Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/23/dd/6b9aceecddbb3df894003d6a5005bd90bce3cf4743c28c406ebecc8d80f6/sh-2.4.0-py3-none-any.whl", hash = "sha256:98eba32eeb5ecdd310668737d7461e668afc42b273550d0bc198a1c5c2b1ab36", size = 48619, upload-time = "2026-07-25T21:44:41.216Z" },
+]
 
 [[package]]
 name = "simplejson"
