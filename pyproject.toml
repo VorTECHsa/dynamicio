@@ -20,7 +20,7 @@ dependencies = [
     "boto3>=1.20.24",
     "confluent-kafka~=2.4.0",
     "fastparquet>=0.8.0",
-    "fsspec==2022.11.0",
+    "fsspec==2026.6.0",
     "libcst==1.5.1",
     "logzero>=1.7.0",
     "magic-logger>=1.0.2",
