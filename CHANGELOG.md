@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v9.0.0
 
 - docs: README documents Athena I/O (resource options, `ctas_approach`, dtypes, `s3_staging_dir` migration); ADR 0003
 - chore: migrate project and dependency management from Poetry to uv (PEP 621 `pyproject.toml`, `uv.lock`, `hatchling` + `hatch-vcs` build backend). The version is still derived from the git tag and the published wheel is unchanged apart from standard metadata. Contributors now use `make dev-env-setup` / `uv sync`; see `CONTRIBUTING.md` and `AGENTS.md`
