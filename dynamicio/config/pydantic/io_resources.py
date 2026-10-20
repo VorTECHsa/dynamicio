@@ -275,11 +275,24 @@ class PostgresDataEnvironment(IOEnvironment):
 class AthenaDataSubSection(BaseModel):
     """AWS Athena configuration section."""
 
-    s3_staging_dir: str
-    region_name: str
+    s3_output: str
+    database: str = "default"
+    region_name: Optional[str] = None
+    workgroup: Optional[str] = None
 
-    # Optional fields, one must be provided via YAML or mixin options
+    # Optional field, a query must be provided via YAML or mixin options
     query: Optional[str] = None
+
+    @pydantic.root_validator(pre=True)
+    def reject_removed_s3_staging_dir(cls, values):
+        """Fail with an actionable message for the `s3_staging_dir` key removed when Athena moved from PyAthena to AWS Wrangler."""
+        if "s3_staging_dir" in values:
+            raise ValueError(
+                "Athena resource option 's3_staging_dir' was removed in dynamicio 9.0 (Athena now reads through AWS Wrangler). "
+                "Fix: in the resource definition's `athena:` section, rename `s3_staging_dir` to `s3_output` (same value). "
+                "`region_name` and `query` are still accepted; `database` and `workgroup` are new optional keys."
+            )
+        return values
 
 
 class AthenaDataEnvironment(IOEnvironment):

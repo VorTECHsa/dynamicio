@@ -2,7 +2,11 @@
 
 ## Unreleased
 
+- docs: README documents Athena I/O (resource options, `ctas_approach`, dtypes, `s3_staging_dir` migration); ADR 0003
 - chore: migrate project and dependency management from Poetry to uv (PEP 621 `pyproject.toml`, `uv.lock`, `hatchling` + `hatch-vcs` build backend). The version is still derived from the git tag and the published wheel is unchanged apart from standard metadata. Contributors now use `make dev-env-setup` / `uv sync`; see `CONTRIBUTING.md` and `AGENTS.md`
+- feat(RND-13624)!: `WithAthena` reads through AWS Data Wrangler (`wr.athena.read_sql_query`) instead of PyAthena, and the `pyathena` dependency is dropped. **Breaking (resource definitions):** the `s3_staging_dir` key of an `athena:` section is removed. Loading such a definition now fails with an error saying to rename it to `s3_output` (same value); nothing else changes in the YAML. `region_name` and `query` stay optional, and `database` (default `default`, Athena's own default) and `workgroup` are new optional keys. Reads use the shared per-process boto3 session unless `region_name` is set. Extra `options` are filtered to what `read_sql_query` accepts (e.g. `ctas_approach`, `unload_approach`, `athena_cache_settings`); `chunksize` is rejected with an error, because a chunked read returns an iterator rather than a DataFrame
+- `ctas_approach` defaults to `False` (as PyAthena, which read the query's result file): column names keep the case used in the query (CTAS lower-cases them) and no temporary Glue table is created. Pass `ctas_approach: true` in `options` to opt in for large results
+- note: results now come back with pandas nullable dtypes (`Int64`, `string`, `boolean`) and `date` as Python dates, as returned by awswrangler; declare the dtypes in the resource schema to cast them on read, as for any other source
 
 ## v8.1.1
 

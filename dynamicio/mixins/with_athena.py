@@ -1,26 +1,22 @@
-# pylint: disable=no-member, protected-access, too-few-public-methods
-
 """This module provides mixins that support AWS Athena I/O."""
 
-import inspect
+# pylint: disable=no-member, protected-access, too-few-public-methods
+
 from typing import Any, MutableMapping
 
+import awswrangler as wr
+import boto3
 import pandas as pd
 from magic_logger import logger
-from pyathena import connect
-from pyathena.connection import Connection
-from pyathena.pandas.cursor import PandasCursor
-from pyathena.pandas.result_set import AthenaPandasResultSet
 
 # Application Imports
 from dynamicio.config.pydantic import AthenaDataEnvironment
 from dynamicio.mixins.utils import allow_options
-
-allowed_athena_options = set(inspect.signature(AthenaPandasResultSet.__init__).parameters.keys()) - {"self"}
+from dynamicio.mixins.with_s3 import _shared_boto3_session
 
 
 class WithAthena:
-    """Handles I/O operations for AWS Athena.
+    """Handles I/O operations for AWS Athena using AWS Wrangler.
 
     Note:
         The `__abstractmethods__ = frozenset()` is used to silence false positives from pylint,
@@ -34,31 +30,48 @@ class WithAthena:
     options: MutableMapping[str, Any]
 
     def _read_from_athena(self) -> pd.DataFrame:
-        """Reads data from AWS Athena.
+        """Reads data from AWS Athena using awswrangler with validated kwargs.
 
         Expected config:
-            - query
-            - s3_staging_dir
-            - region_name
+            - s3_output
+            - database (defaults to Athena's `default` database)
+            - region_name, workgroup (optional)
+            - query (or the `query` option)
+
+        `ctas_approach` defaults to `False` (the query's own result file is read, column names keep the case used in the query);
+        pass `ctas_approach=True` in the resource `options` for large results. `chunksize` is rejected: wrangler would return an
+        iterator of frames, which schema validation cannot process.
+
+        Returns:
+            DataFrame. awswrangler returns pandas nullable dtypes (e.g. `Int64`, `string`); declare the column dtypes in the
+            resource schema to have them cast on read.
         """
         cfg = self.sources_config.athena
-        query = self.options.pop("query", None)
+        query = self.options.pop("query", None) or cfg.query
+        if not query:
+            raise ValueError("A 'query' must be provided for Athena reads")
 
-        assert query, "A 'query' must be provided for Athena read"
+        options = dict(self.options)
+        if options.get("chunksize"):
+            raise ValueError("Athena reads return a single DataFrame, so the 'chunksize' option is not supported; remove it from the resource options")
+        options.setdefault("database", cfg.database)
+        options.setdefault("s3_output", cfg.s3_output)
+        # PyAthena read the query's CSV result. wrangler defaults to CTAS, which lower-cases column names and creates (and
+        # needs permission to create) a temporary Glue table, so keep the previous behaviour unless the caller opts in.
+        options.setdefault("ctas_approach", False)
+        if cfg.workgroup:
+            options.setdefault("workgroup", cfg.workgroup)
+        if "boto3_session" not in options:
+            options["boto3_session"] = boto3.Session(region_name=cfg.region_name) if cfg.region_name else _shared_boto3_session()
 
-        conn = connect(s3_staging_dir=cfg.s3_staging_dir, region_name=cfg.region_name, cursor_class=PandasCursor)
-        return self._run_query(conn, query, **self.options)
+        logger.info(f"[athena] Executing query on database '{options['database']}': {query}")
+        return self._run_wr_athena_query_wrapped(sql=query, **options)
 
-    @allow_options(allowed_athena_options)
-    def _run_query(self, conn: Connection, query: str, **options: Any) -> pd.DataFrame:
-        logger.info(f"[athena] Executing query: {query}")
-        cursor = conn.cursor()
-        cursor.execute(query)
-
-        rows = cursor.fetchall(**options)
-        columns = [col[0] for col in cursor.description]
-        return pd.DataFrame(rows, columns=columns)
+    @staticmethod
+    @allow_options(wr.athena.read_sql_query)
+    def _run_wr_athena_query_wrapped(sql: str, **options: Any) -> pd.DataFrame:
+        return wr.athena.read_sql_query(sql, **options)
 
     def _write_to_athena(self, df: pd.DataFrame):
         """Athena does not support direct writing. Raise NotImplementedError."""
-        raise NotImplementedError("Athena does not support direct writes via pandas. Consider writing to S3 or using Glue instead.")
+        raise NotImplementedError("Athena does not support direct writes. Use S3/Glue for persistence.")

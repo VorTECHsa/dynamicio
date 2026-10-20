@@ -19,6 +19,7 @@ A repository for hosting the `dynamicio` library, used as a wrapper for `pandas`
   * [Main features](https://github.com/VorTECHsa/dynamicio/tree/master#main-features)
 - [Supported sources and data formats:](https://github.com/VorTECHsa/dynamicio/tree/master#supported-sources-and-data-formats)
   * [S3 I/O](https://github.com/VorTECHsa/dynamicio/tree/master#s3-i-o)
+  * [Athena I/O](https://github.com/VorTECHsa/dynamicio/tree/master#athena-i-o)
   * [Coming soon](https://github.com/VorTECHsa/dynamicio/tree/master#coming-soon)
 - [Installation](https://github.com/VorTECHsa/dynamicio/tree/master#installation)
 - [API Documentation](https://github.com/VorTECHsa/dynamicio/tree/master#api-documentation)
@@ -33,6 +34,7 @@ A repository for hosting the `dynamicio` library, used as a wrapper for `pandas`
       - [Step 4.2. Use the dynamicio cli](https://github.com/VorTECHsa/dynamicio/tree/master#step-42-use-the-dynamicio-cli)
       - [Step 4.3: Loading from `S3`](https://github.com/VorTECHsa/dynamicio/tree/master#step-43--loading-from--s3)
       - [Step 4.3: Loading from `Postgres`](https://github.com/VorTECHsa/dynamicio/tree/master#step-43--loading-from--postgres)
+      - [Step 4.3: Loading from `Athena`](https://github.com/VorTECHsa/dynamicio/tree/master#step-43--loading-from--athena)
     + [Step 5: Writing out](https://github.com/VorTECHsa/dynamicio/tree/master#step-5--writing-out)
     + [Step 6: Full Code](https://github.com/VorTECHsa/dynamicio/tree/master#step-6--full-code)
   * [Utilising `asyncio`](https://github.com/VorTECHsa/dynamicio/tree/master#utilising--asyncio)
@@ -126,6 +128,7 @@ decoupling business logic from the I/O layer.
   - `json`
   - `csv`
 - **Postgres** Input & Output
+- **Athena** Input only (`type: athena`)
 - **Kafka** Output
 
 ### S3 I/O
@@ -161,8 +164,40 @@ schema column typed as a non-nullable dtype (e.g. `int64`) still fails, because 
 reads and `local_batch` are strict. Watch the warning if the missing data would indicate a real upstream problem rather
 than an old schema ([design decision](https://github.com/VorTECHsa/dynamicio/blob/master/docs/adr/0002-tolerate-missing-columns-in-parquet-prefix-reads.md)).
 
+### Athena I/O
+
+`type: athena` resources run a SQL query on AWS Athena and return the result as a dataframe, through
+[AWS SDK for pandas](https://aws-sdk-pandas.readthedocs.io/) (`awswrangler`). Mix `WithAthena` into your IO class, as with the other sources.
+Athena is read-only: writing raises `NotImplementedError`.
+
+```yaml
+EVENTS_ATHENA:
+  CLOUD:
+    type: athena
+    athena:
+      s3_output: s3://my-athena-results-bucket/dynamicio/   # required: where Athena writes query results
+      database: analytics        # optional, default "default"
+      workgroup: primary         # optional
+      region_name: eu-west-1     # optional: builds a dedicated boto3 session for that region
+      query: SELECT id, ts FROM events WHERE day = '2024-01-01'   # optional here, or pass `query=` when instantiating the IO class
+  schema:
+    file_path: "[[ RESOURCES ]]/schemas/input/events.yaml"
+```
+
+Notes:
+
+* The query comes from the resource definition or from `query=...` at instantiation; the latter wins, as do any other
+  options, which are passed to `awswrangler.athena.read_sql_query` (unknown ones are dropped). A read without a query raises `ValueError`.
+* Credentials and region come from the usual `boto3` chain and the process-wide shared session, unless `region_name` is set.
+* `ctas_approach` defaults to `False`: the query runs as is and column names keep the case used in the `SELECT`. Pass
+  `ctas_approach=True` to use awswrangler's CTAS path (faster for large results, but it creates a temporary Glue table
+  and lower-cases column names).
+* awswrangler returns nullable pandas dtypes (`Int64`, `string`, `boolean`) and Python `date` objects for `date`
+  columns. When the resource declares a schema, dynamicio casts to the declared dtypes, so declare them.
+* **Breaking (9.0):** the `s3_staging_dir` key from the PyAthena era was removed. Rename it to `s3_output` (same
+  value); a definition that still has it fails to load with an error saying so.
+
 ### Coming soon
-- **Athena** (pending)
 - **Delta Tables** (pending)
 - **GCS** (pending)
 - **BigQuery** (pending)
@@ -876,6 +911,17 @@ To, then, load from `postgres` you simply do:
 ```
 
 which will load the cargo the movements table as a dataframe.
+
+##### Step 4.3: Loading from `Athena`
+
+`athena` resources need an `s3_output` location for query results and a query, either in the resource definition or
+passed when instantiating the IO class (which takes precedence):
+
+```python
+    events_df = InputIO(source_config=input_config.get(source_key="EVENTS_ATHENA"), query="SELECT id, ts FROM events LIMIT 10").read()
+```
+
+where `InputIO` mixes in `WithAthena`. See [Athena I/O](#athena-i-o) for the available options.
 
 #### Step 5: Writing out
 
