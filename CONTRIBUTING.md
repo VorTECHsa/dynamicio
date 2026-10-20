@@ -9,7 +9,7 @@
 ```
 This installs the OS libraries needed on macOS (via `brew`), creates a `.venv` in the repo's root directory from `uv.lock`
 with the `dev` and `docs` dependency groups, and installs the `pre-commit` hooks. uv downloads the Python version named
-in `.python-version` if you do not already have it. The supported range is `>=3.10,<3.13`.
+in `.python-version` if you do not already have it. The supported range is `>=3.10` (CI runs 3.10 to 3.14).
 
 You do not need to activate the environment: prefix commands with `uv run` (e.g. `uv run pytest`). To activate it anyway:
 ```shell

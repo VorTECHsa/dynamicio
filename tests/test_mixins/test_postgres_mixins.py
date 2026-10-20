@@ -5,7 +5,7 @@ from unittest.mock import ANY, MagicMock, patch
 
 import pandas as pd
 import pytest
-from sqlalchemy.sql.base import ReadOnlyColumnCollection
+from sqlalchemy.sql.base import ColumnCollection
 
 # Application Imports
 from dynamicio import WithPostgres
@@ -223,7 +223,7 @@ class TestPostgresIO:
         columns = ReadPostgresIO(source_config=pg_cloud_config)._get_table_columns(model)  # pylint: disable=protected-access
 
         # Then
-        assert isinstance(model.__table__.columns, ReadOnlyColumnCollection)
+        assert isinstance(model.__table__.columns, ColumnCollection)
         for x, y in zip(columns, [PgModel.id, PgModel.foo, PgModel.bar, PgModel.baz]):
             assert str(x) == str(y)
 
