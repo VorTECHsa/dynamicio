@@ -2,7 +2,7 @@ name: Build and Publish
 
 on:
   push:
-    branches: ["*"]
+    branches: ["**"]
     tags: ["v*"]
   workflow_dispatch:
 
