@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pandas as pd
 import pytest
 
-from demo.src import environment
+from demo.src.config import environment
 from demo.src.resources.io import InputIO
 from demo.src.resources.schemas import Events
 from dynamicio.config import IOConfig

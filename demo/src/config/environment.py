@@ -3,8 +3,8 @@ import os
 
 ENVIRONMENT = "sample"
 CLOUD_ENV = "DEV"
-RESOURCES = os.path.join(os.path.dirname(os.path.realpath(__file__)), "resources")
-TEST_RESOURCES = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../tests")
+RESOURCES = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../resources")
+TEST_RESOURCES = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../tests")
 S3_YOUR_INPUT_BUCKET = None
 S3_YOUR_OUTPUT_BUCKET = None
 KAFKA_SERVER = None

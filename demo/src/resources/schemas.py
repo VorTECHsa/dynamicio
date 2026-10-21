@@ -3,7 +3,7 @@
 import pandera.pandas as pa
 from pandera.typing import Series
 
-from demo.src.environment import LOWER_THAN_LIMIT
+from demo.src.config.environment import LOWER_THAN_LIMIT
 
 
 class Bar(pa.DataFrameModel):
