@@ -42,7 +42,7 @@ class Foo(pa.DataFrameModel):
 
 
 class FinalBar(pa.DataFrameModel):
-    """Migrated from the dynamicio schema 'bar'."""
+    """Migrated from the dynamicio schema 'final_bar'."""
 
     column_a: Series[str] = pa.Field(nullable=True, unique=True, metadata={"dynamicio": {"metrics": ["Counts"]}})
     column_b: Series[str] = pa.Field(nullable=False, metadata={"dynamicio": {"metrics": ["CountsPerLabel"]}})
@@ -50,11 +50,11 @@ class FinalBar(pa.DataFrameModel):
     column_d: Series[float] = pa.Field(nullable=True, lt=LOWER_THAN_LIMIT, metadata={"dynamicio": {"metrics": ["Min", "Max", "Mean", "Std", "Variance"]}})
 
     class Config:
-        name = "bar"
+        name = "final_bar"
 
 
 class FinalFoo(pa.DataFrameModel):
-    """Migrated from final_foo.yaml, whose schema name is 'bar'; kept so existing metric lines do not change."""
+    """Migrated from the dynamicio schema 'final_foo'."""
 
     column_a: Series[str] = pa.Field(nullable=True, unique=True, metadata={"dynamicio": {"metrics": ["Counts"]}})
     column_b: Series[str] = pa.Field(nullable=False, metadata={"dynamicio": {"metrics": ["CountsPerLabel"]}})
@@ -62,4 +62,4 @@ class FinalFoo(pa.DataFrameModel):
     column_d: Series[float] = pa.Field(nullable=True, lt=1000, metadata={"dynamicio": {"metrics": ["Min", "Max", "Mean", "Std", "Variance"]}})
 
     class Config:
-        name = "bar"
+        name = "final_foo"
