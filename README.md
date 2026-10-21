@@ -30,7 +30,8 @@ A repository for hosting the `dynamicio` library, used as a wrapper for `pandas`
     + [Step 2: Defining your environment variables](https://github.com/VorTECHsa/dynamicio/tree/master#step-2--defining-your-environment-variables)
     + [Step 3: Read in your resource definitions](https://github.com/VorTECHsa/dynamicio/tree/master#step-3--read-in-your-resource-definitions)
     + [Step 4: Loading the data resources](https://github.com/VorTECHsa/dynamicio/tree/master#step-4--loading-the-data-resources)
-      - [Step 4.1. `SCHEMA_FROM_FILE`](https://github.com/VorTECHsa/dynamicio/tree/master#step-41--schema-from-file)
+      - [Step 4.1. Pandera models](https://github.com/VorTECHsa/dynamicio/tree/master#step-41-pandera-models)
+      - [Step 4.1b. `SCHEMA_FROM_FILE`](https://github.com/VorTECHsa/dynamicio/tree/master#step-41b--schema-from-file)
       - [Step 4.2. Use the dynamicio cli](https://github.com/VorTECHsa/dynamicio/tree/master#step-42-use-the-dynamicio-cli)
       - [Step 4.3: Loading from `S3`](https://github.com/VorTECHsa/dynamicio/tree/master#step-43--loading-from--s3)
       - [Step 4.3: Loading from `Postgres`](https://github.com/VorTECHsa/dynamicio/tree/master#step-43--loading-from--postgres)
@@ -674,7 +675,64 @@ as a yaml file (see `InputIO`) as explained in the next section.
 However, if you need to use different mixins for different datasets, you can do so by defining a class for each dataset (e.g. `StagedFoo` and `StagedBar`). You will definitely need to define your own classes if you
 want to avoid using `SCHEMA_FROM_FILE` (as per the below instructions) but in this case, your dataset's name will be inferred from the dataclass name you use, e.g. `StagedFoo` will be inferred as `STAGED_FOO`.
 
-##### Step 4.1. `SCHEMA_FROM_FILE`
+##### Step 4.1. Pandera models
+
+Schemas are declared in Python as [Pandera](https://pandera.readthedocs.io) `DataFrameModel` classes. Resource definitions
+stay in YAML; only the schema moves into code. Pandera is the *declaration* layer: dynamicio still runs the validations and
+emits the metrics, so error payloads and `METRIC` log lines are identical to the YAML schemas'.
+
+```python
+import pandera.pandas as pa
+from pandera.typing import Series
+
+from demo.src.environment import LOWER_THAN_LIMIT
+
+
+class Foo(pa.DataFrameModel):
+    column_a: Series[str] = pa.Field(nullable=True, unique=True, metadata={"dynamicio": {"metrics": ["Counts"]}})
+    column_b: Series[str] = pa.Field(nullable=False, metadata={"dynamicio": {"metrics": ["CountsPerLabel"]}})
+    column_c: Series[float] = pa.Field(nullable=True, gt=1000)
+    column_d: Series[float] = pa.Field(nullable=True, lt=LOWER_THAN_LIMIT, metadata={"dynamicio": {"metrics": ["Min", "Max", "Mean", "Std", "Variance"]}})
+
+    class Config:
+        name = "foo"  # the dataset name in metric lines is Config.name upper-cased; without it, the class name is used
+```
+
+Use the model as a class attribute when the IO class serves one dataset (`schema = Foo`), or let one class serve many by
+taking the model per instance:
+
+```python
+from dynamicio.core import SCHEMA_FROM_ARGUMENT
+
+
+class InputIO(UnifiedIO):
+    schema = SCHEMA_FROM_ARGUMENT
+
+
+foo_df = InputIO(source_config=input_config.get(source_key="FOO"), schema=Foo, apply_schema_validations=True, log_schema_metrics=True).read()
+```
+
+The `schema=` argument takes precedence over the class attribute; omitting it with `SCHEMA_FROM_ARGUMENT` raises `SchemaNotFoundError`.
+
+How `pa.Field` arguments map onto dynamicio's validations:
+
+| `pa.Field(...)` | dynamicio validation |
+|---|---|
+| `nullable=False` | `has_no_null_values` |
+| `unique=True` | `has_unique_values` |
+| `gt` / `ge` / `lt` / `le` | `is_greater_than` / `..._or_equal` / `is_lower_than` / `..._or_equal` |
+| `in_range={"min_value", "max_value", "include_min", "include_max"}` | `is_between` |
+| `isin=[...]` | `is_in` |
+| `metadata={"dynamicio": {"validations": {...}, "metrics": [...]}}` | anything else, e.g. `has_acceptable_percentage_of_nulls`, and all metrics |
+
+Two traps when writing models by hand:
+
+- **Always set `nullable=` explicitly.** Pandera's default is `nullable=False`, which adds `has_no_null_values`; the YAML schemas allowed nulls unless the validation was declared.
+- **Always set `include_min` / `include_max` on `in_range`.** Pandera includes the bounds by default; dynamicio's `is_between` excludes them.
+
+YAML schemas (`SCHEMA_FROM_FILE`) and dict schemas keep working.
+
+##### Step 4.1b. `SCHEMA_FROM_FILE`
 
 `from dynamicio.core import SCHEMA_FROM_FILE` is a unique dynamic(i/o) object used as a placeholder.
 It is used to indicate that a schema is provided as part of a _resource definition_.
@@ -886,6 +944,20 @@ optional arguments:
 ```
 
 The generated schema definitions will not have any validations or metrics automatically selected for you.
+
+###### Migrating YAML schemas to Pandera models
+
+```shell
+dynamicio migrate resources/schemas -o src/schemas.py [--scan src]
+```
+
+This converts every YAML schema under the path into one models module (class names come from the file names, `Config.name` keeps the
+schema's `name`, so metric lines do not change) and checks that each generated model compiles back to a schema equivalent to its source.
+It also writes `MIGRATION_PROMPT.md` next to the module, listing the models and every remaining call site (`SCHEMA_FROM_FILE`,
+dict schemas, `schema:` blocks in resource definitions) with file and line. Hand that prompt to an LLM, or follow it yourself:
+set `schema = <Model>` or `schema = SCHEMA_FROM_ARGUMENT` with `schema=<Model>` on construction, and delete the `schema:` blocks from the
+definitions. Dynamic variables (`[[ NAME ]]`) in the YAML become plain names marked `# TODO` in the module, to be replaced by imports.
+Dict-style schemas are not converted automatically. The `demo/` project was migrated this way.
 
 ##### Step 4.3: Loading from `S3`
 
