@@ -211,7 +211,7 @@ class DynamicDataIO:
                 the exception object is a `List[str]`, where each element is the name of a
                 validation that failed.
         """
-        failed_validations = {}
+        failed_validations: dict = {}
         for column in self.schema_validations.keys():
             col_validations = self.schema_validations[column]
             for validation in col_validations:
@@ -219,10 +219,11 @@ class DynamicDataIO:
                     validator = validations.ALL_VALIDATORS[validation.name]
                     validation_result = validator(self.name, df, column, **validation.options)
                     if not validation_result.valid:
-                        failed_validations[validation.name] = validation_result.message
+                        failed_validations.setdefault(validation.name, []).append(validation_result.message)
 
         if len(failed_validations) > 0:
-            raise SchemaValidationError(failed_validations)
+            # One entry per validation name; when several columns fail the same validation their messages are joined, none are lost.
+            raise SchemaValidationError({name: "; ".join(messages) for name, messages in failed_validations.items()})
 
         return self
 
