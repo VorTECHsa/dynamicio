@@ -54,6 +54,7 @@ class DynamicDataIO:
         log_schema_metrics: bool = False,
         show_casting_warnings: bool = False,
         strict_dtype_check: bool = False,
+        *,
         schema: Optional[Type[DataFrameModel]] = None,
         **options: MutableMapping[str, Any],
     ):
