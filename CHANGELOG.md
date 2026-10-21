@@ -1,8 +1,10 @@
 # Changelog
 
-## v9.2.3
+## Unreleased (v10.0.0)
 
-- fix: `WithPostgres` builds one SQLAlchemy model per table definition and reuses it, instead of a new same-named class on every read or write. The classes piled up in the declarative registry, and SQLAlchemy's cleanup of them could raise a `RecursionError` during garbage collection (seen as a failing test on the lowest-dependency CI job). Each definition has its own declarative base, so two definitions of one table cannot alter each other's columns, and the cache is thread-safe for `async_read` / `async_write`. Queries and tables are unchanged.
+- test: `tests/test_contracts/` pins the validation, metric, lifecycle-order and dtype behaviour that the schema work must preserve, for every schema declaration style
+- feat: schemas can be declared as Pandera `DataFrameModel` classes (`class MyIO(UnifiedIO): schema = MyModel`). Dynamicio's validators and metric logging are unchanged, so error payloads and `METRIC` log lines are identical to the YAML and dict styles. `pandera` is now a required dependency. Anything Pandera cannot express natively goes in `Field(metadata={"dynamicio": {"validations": {...}, "metrics": [...]}})`. Note Pandera's default is `nullable=False`; dynamicio's YAML allowed nulls unless `has_no_null_values` was declared
+- fix: when the same validation fails on several columns, `SchemaValidationError.message` now holds every column's message (joined with `; ` under the one validation-name key). Previously only the last column's message survived
 
 ## v9.2.2
 

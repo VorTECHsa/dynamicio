@@ -46,7 +46,7 @@ def test_all_violations_are_collected_not_fail_fast_and_keyed_by_validation_name
         "has_unique_values": f"Values [1] for {name}[a] are duplicated!",
         "is_greater_than": f"2 cell values for {name}[a] are below 1",
         "is_between": f"1 cell values for {name}[a] are either below 0 or above 5",
-        "has_no_null_values": f"{name}[c] has 2 nulls",
+        "has_no_null_values": f"{name}[b] has 1 nulls; {name}[c] has 2 nulls",
         "is_in": f"Values {{'z'}} for {name}[b] are not acceptable for 2 cells",
         "has_acceptable_percentage_of_nulls": f"Percentage of nulls of for {name}[c] is 0.6666666666666666 which exceeds threshold: 0.3",
     }
@@ -55,15 +55,15 @@ def test_all_violations_are_collected_not_fail_fast_and_keyed_by_validation_name
 
 
 @pytest.mark.unit
-def test_quirk_same_validation_failing_on_two_columns_reports_only_the_last_column(make_io):
-    # `has_no_null_values` fails for both b and c, but the payload is keyed by validation name alone, so b's message is lost.
+def test_same_validation_failing_on_two_columns_reports_every_column_joined_in_one_entry(make_io):
+    # v10 fix: this used to keep only the last column's message. Keys are unchanged; the entry now holds all messages.
     df = pd.DataFrame({"a": [2, 3, 4], "b": [None, "x", "y"], "c": [None, 1.0, 1.0]})
 
     with pytest.raises(SchemaValidationError) as exc_info:
         make_io().validate_from_schema(df)
 
-    assert exc_info.value.message["has_no_null_values"] == f"{make_io.dataset_name}[c] has 1 nulls"
-    assert "[b]" not in str(exc_info.value.message)
+    name = make_io.dataset_name
+    assert exc_info.value.message["has_no_null_values"] == f"{name}[b] has 1 nulls; {name}[c] has 1 nulls"
 
 
 @pytest.mark.unit
