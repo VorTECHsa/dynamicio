@@ -12,12 +12,14 @@ from typing import Any, List, Mapping, MutableMapping, Optional, Tuple
 import pandas as pd
 import pydantic
 from magic_logger import logger
+from pandera.pandas import DataFrameModel
 
 # Application Imports
 from dynamicio import validations
 from dynamicio.config.pydantic import DataframeSchema, IOEnvironment, SchemaColumn
 from dynamicio.errors import CASTING_WARNING_MSG, NOTICE_MSG, ColumnsDataTypeError, SchemaNotFoundError, SchemaValidationError
 from dynamicio.metrics import get_metric
+from dynamicio.pandera_schema import to_dataframe_schema
 
 SCHEMA_FROM_FILE = {"schema": object()}
 
@@ -76,6 +78,8 @@ class DynamicDataIO:
         source_name = self.sources_config.data_backend_type.value
         if self.schema is SCHEMA_FROM_FILE:
             active_schema = self.sources_config.dynamicio_schema
+        elif inspect.isclass(self.schema) and issubclass(self.schema, DataFrameModel):
+            active_schema = to_dataframe_schema(self.schema)
         else:
             active_schema = self._schema_from_obj(self)
 
@@ -133,6 +137,8 @@ class DynamicDataIO:
         if not inspect.getmodule(cls).__name__.startswith("dynamicio"):
             assert "schema" in cls.__dict__
 
+            if inspect.isclass(cls.schema) and issubclass(cls.schema, DataFrameModel):
+                return
             if cls.schema is None or (cls.schema is not SCHEMA_FROM_FILE and len(cls.schema) == 0):
                 raise ValueError(f"schema for class {cls} cannot be None or empty...")
 
