@@ -1,5 +1,7 @@
 """Per-instance ``schema=`` argument: one IO class, the schema chosen per resource."""
 
+# pylint: disable=missing-class-docstring, missing-function-docstring, redefined-outer-name
+
 import pytest
 
 from dynamicio import UnifiedIO
