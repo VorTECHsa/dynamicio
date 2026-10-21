@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased (v10.0.0)
+
+- test: `tests/test_contracts/` pins the validation, metric, lifecycle-order and dtype behaviour that the schema work must preserve, for every schema declaration style
+- feat: schemas can be declared as Pandera `DataFrameModel` classes (`class MyIO(UnifiedIO): schema = MyModel`). Dynamicio's validators and metric logging are unchanged, so error payloads and `METRIC` log lines are identical to the YAML and dict styles. `pandera` is now a required dependency. Anything Pandera cannot express natively goes in `Field(metadata={"dynamicio": {"validations": {...}, "metrics": [...]}})`. Note Pandera's default is `nullable=False`; dynamicio's YAML allowed nulls unless `has_no_null_values` was declared
+- fix: when the same validation fails on several columns, `SchemaValidationError.message` now holds every column's message (joined with `; ` under the one validation-name key). Previously only the last column's message survived
+
 ## v9.2.1
 
 - fix: transient S3 connection errors no longer fail a read or write. The shared boto3 client now uses the `standard` retry mode with 10 attempts, `connect_timeout=10` and `read_timeout=60`. The in-memory and file transfers (`put_object`, `upload_fileobj`, `get_object`, `download_fileobj`) are repeated, up to 5 attempts with backoff, on `ConnectionClosedError`, `ConnectTimeoutError`, `EndpointConnectionError`, `ReadTimeoutError`, `IncompleteReadError`, `ResponseStreamingError` and the `RetriesExceededError` that the transfer manager raises (s3transfer's and boto3's) when a download above 16 MiB gave up on a broken part. botocore does not retry these once the body is being sent or read. The buffer is rewound before each attempt (bytes written are identical), each retry is logged at WARNING with the bucket and key, and the shared client is rebuilt so the next attempt opens fresh connections. Other errors (for example `ClientError`) are raised as before, and nothing changes when no error occurs
