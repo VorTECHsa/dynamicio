@@ -1005,7 +1005,7 @@ requires-dist = [
     { name = "confluent-kafka", specifier = ">=2.4.0,<3" },
     { name = "fastparquet", specifier = ">=2024.5.0" },
     { name = "magic-logger", specifier = ">=1.0.2" },
-    { name = "numpy", specifier = ">=1.24.0" },
+    { name = "numpy", specifier = ">=1.24.4" },
     { name = "pandas", specifier = ">=2.2.2" },
     { name = "pandera", specifier = ">=0.34.1" },
     { name = "psycopg2-binary", specifier = ">=2.9.3,<3" },
