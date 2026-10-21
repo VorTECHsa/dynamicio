@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased (v10.0.0)
+
+- test: `tests/test_contracts/` pins the validation, metric, lifecycle-order and dtype behaviour that the schema work must preserve, for every schema declaration style
+- feat: schemas can be declared as Pandera `DataFrameModel` classes (`class MyIO(UnifiedIO): schema = MyModel`). Dynamicio's validators and metric logging are unchanged, so error payloads and `METRIC` log lines are identical to the YAML and dict styles. `pandera` is now a required dependency. Anything Pandera cannot express natively goes in `Field(metadata={"dynamicio": {"validations": {...}, "metrics": [...]}})`. Note Pandera's default is `nullable=False`; dynamicio's YAML allowed nulls unless `has_no_null_values` was declared
+- fix: when the same validation fails on several columns, `SchemaValidationError.message` now holds every column's message (joined with `; ` under the one validation-name key). Previously only the last column's message survived
+
 ## v9.2.2
 
 - fix: an IO object can be read or written repeatedly. A read or write removed values from `self.options`, so a second call on the same object failed or read the wrong data. The second call of a path with template fields (for example `{runner_id}`) raised `ValueError: Expected values for all fields`. Three cases gave no error. The S3 path-prefix read removed `no_disk_space`. The Athena read removed `query`, and the Postgres read removed `sql_query`, so the second read ran the default query and returned wrong data. Each call now works on a copy of the options, and `self.options` does not change. The two private methods `WithS3._read_parquet_object` and `WithS3._concat_parquet_objects` are removed. The module-level functions with the same names are unchanged
