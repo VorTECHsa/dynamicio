@@ -7,7 +7,7 @@ jobs:
   title-check:
     runs-on: ubuntu-latest
     steps:
-      - uses: naveenk1223/action-pr-title@master
+      - uses: naveenk1223/action-pr-title@3aa93d134e256c2f2c2cbba87567728bbbd5b405 # master as of 2026-10; unmaintained since 2020
         with:
           regex: '^((?:Revert ")*)(build|ci|docs|feat|fix|bug|perf|refactor|style|test|eda|dag|adr|chore|dev|monitor|alert)(\(RND-\d{4,5}\))?: .+$(|" \(#\d+\))'
           prefix_case_sensitive: false
