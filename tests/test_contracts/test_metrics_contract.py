@@ -69,7 +69,7 @@ def test_records_come_from_the_dynamicio_metrics_logger_at_info(make_io, valid_d
 @pytest.mark.unit
 def test_dataset_name_is_the_schema_name_uppercased_for_yaml_and_the_snake_cased_class_name_for_dict(make_io):
     assert make_io().name == make_io.dataset_name
-    assert make_io.dataset_name == ("CONTRACT_DATASET" if make_io.style == "yaml_schema" else "CONTRACT_DICT_IO")
+    assert make_io.dataset_name == ("CONTRACT_DICT_IO" if make_io.style == "dict_schema" else "CONTRACT_DATASET")
 
 
 @pytest.mark.unit
