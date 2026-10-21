@@ -181,8 +181,6 @@ EVENTS_ATHENA:
       workgroup: primary         # optional
       region_name: eu-west-1     # optional: builds a dedicated boto3 session for that region
       query: SELECT id, ts FROM events WHERE day = '2024-01-01'   # optional here, or pass `query=` when instantiating the IO class
-  schema:
-    file_path: "[[ RESOURCES ]]/schemas/input/events.yaml"
 ```
 
 Notes:
@@ -240,34 +238,30 @@ Assume you want to build a pipeline that looks something like the image below:
 
 <img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/sample-pipeline.png?raw=True" width="600">
 
-Assume the below repository structure, which implements this pipeline, for the purpose of this tutorial:
+Assume the below repository structure, which implements this pipeline, for the purpose of this tutorial. It is also the
+structure we recommend for a data pipeline repository (see [Recommended project structure](#recommended-project-structure) below):
 
 ```shell
 demo
 ├── __init__.py
-├── resources
-│   ├── definitions
-│   │   ├── input.yaml
-│   │   ├── processed.yaml
-│   │   └── raw.yaml
-│   └── schemas
-│       ├── input
-│       │   ├── bar.yaml
-│       │   └── foo.yaml
-│       └── processed
-│           ├── final_bar.yaml
-│           └── final_foo.yaml
 ├── src
-│   ├── __init__.py
-│   ├── __main__.py
-│   ├── constants.py
-│   ├── environment.py
-│   ├── io.py
-│   ├── runner_selection.py
-│   └── runners
-│       ├── __init__.py
-│       ├── staging.py
-│       └── transform.py
+│   ├── __init__.py
+│   ├── __main__.py
+│   ├── constants.py
+│   ├── environment.py
+│   ├── resources
+│   │   ├── __init__.py
+│   │   ├── definitions
+│   │   │   ├── input.yaml
+│   │   │   ├── processed.yaml
+│   │   │   └── raw.yaml
+│   │   ├── io.py
+│   │   └── schemas.py
+│   ├── runner_selection.py
+│   └── runners
+│       ├── __init__.py
+│       ├── staging.py
+│       └── transform.py
 └── tests
     ├── __init__.py
     ├── conftest.py
@@ -293,26 +287,37 @@ demo
     └── test_runner_selection.py
 ```
 
+##### Recommended project structure
+
+Everything that describes *what data the pipeline touches* lives together under `src/resources`; everything that describes
+*what the pipeline does with it* lives outside:
+
+| Path | Holds |
+|---|---|
+| `src/resources/definitions/*.yaml` | Resource definitions: where each dataset lives per environment, its format and options. YAML, so a bucket or path can change without touching code |
+| `src/resources/schemas.py` | The datasets' Pandera models: columns, dtypes, validations, metrics |
+| `src/resources/io.py` | The `UnifiedIO`/`DynamicDataIO` subclasses used to read and write them |
+| `src/environment.py` | The values behind the `[[ DYNAMIC ]]` variables in the definitions, and the `RESOURCES` path |
+| `src/runners/` | The pipeline steps: they import from `src.resources` and never open a file or table directly |
+| `tests/` | Tests and their sample data (the `sample` environment points at `tests/data`) |
+
+Rules of thumb: a dataset is added by touching `src/resources` only (definition, model, optionally an IO class); a runner
+changes only when its logic changes. Keep the models next to the definitions that use them so a resource and its contract
+are reviewed together. `demo/` follows this structure.
+
 #### Step 1: Resource Definitions
 
-We will start with defining our input and output resources as yaml files. These need to be defined under `resources/definitions`:
+We will start with defining our input and output resources as yaml files. These need to be defined under `src/resources/definitions`:
 
 ```shell
 resources
-├── __init__.py
-├── definitions
-│   ├── input.yaml
-│   ├── processed.yaml
-│   └── raw.yaml
-└── schemas
-    ├── input
-    │   ├── bar.yaml
-    │   └── foo.yaml
-    └── processed
-        ├── final_bar.yaml
-        └── final_foo.yaml
-
+└── definitions
+    ├── input.yaml
+    ├── processed.yaml
+    └── raw.yaml
 ```
+
+Schemas are not part of the resource definitions: they are declared as Pandera models in `src/resources/schemas.py` (see Step 4.1).
 
 You will need to define your pipeline's resources by creating three `yaml` files. The first is:
 
@@ -332,8 +337,6 @@ FOO:
       bucket: "[[ S3_YOUR_INPUT_BUCKET ]]"
       file_path: "data/foo.h5"
       file_type: "hdf"
-  schema:
-    file_path: "[[ RESOURCES ]]/schemas/input/foo.yaml"
 
 BAR:
   sample:
@@ -349,8 +352,6 @@ BAR:
       db_name: "[[ DB_NAME ]]"
       db_user: "[[ DB_USER ]]"
       db_password: "[[ DB_PASS ]]"
-  schema:
-    file_path: "[[ RESOURCES ]]/schemas/input/bar.yaml"
 ```
 
 - the `raw.yaml`, which concerns data coming out of the **staging** task and go into the **transform** task:
@@ -398,8 +399,6 @@ FINAL_FOO:
       bucket: "[[ S3_YOUR_OUTPUT_BUCKET ]]"
       file_path: "live/data/processed/final_foo.parquet"
       file_type: "parquet"
-  schema:
-    file_path: "[[ RESOURCES ]]/schemas/processed/final_foo.yaml"
 
 FINAL_BAR:
   sample:
@@ -423,8 +422,6 @@ FINAL_BAR:
       batch_size: 262144
       request_timeout_ms: 60000 # 60s
       buffer_memory: 134217728  # 128MB
-  schema:
-    file_path: "[[ RESOURCES ]]/schemas/processed/final_bar.yaml"
 
 ```
 
@@ -464,7 +461,7 @@ import os
 
 ENVIRONMENT = "sample"
 CLOUD_ENV = "DEV"
-RESOURCES = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../resources")
+RESOURCES = os.path.join(os.path.dirname(os.path.realpath(__file__)), "resources")
 TEST_RESOURCES = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../tests")
 S3_YOUR_INPUT_BUCKET = None
 S3_YOUR_OUTPUT_BUCKET = None
@@ -506,8 +503,6 @@ FOO:
       bucket: "[[ S3_YOUR_INPUT_BUCKET ]]"
       file_path: "data/foo.h5"
       file_type: "hdf"
-  schema:
-    file_path: "[[ RESOURCES ]]/schemas/input/foo.yaml"
 ```
 
 and therefore needs to be defined here as well.
@@ -612,13 +607,14 @@ To load a resource, you will need to generate instances of subclasses of `from d
 that the `UnifiedIO` class operates as an abstract class and cannot be used for instantiating objects.
 
 You will need to implement your own subclasses for each of the inputs you care to load. You can do this in the `io.py`
-module, under:
+module, under `src/resources`:
 
 ```shell
 .
 ├── src
 │   ├── __init__.py
-│   ├── io.py
+│   ├── resources
+│   │   └── io.py
 
 ```
 
@@ -947,7 +943,7 @@ The generated schema definitions will not have any validations or metrics automa
 ###### Migrating YAML schemas to Pandera models
 
 ```shell
-dynamicio migrate resources/schemas -o src/schemas.py [--scan src]
+dynamicio migrate src/resources/schemas -o src/resources/schemas.py --scan src
 ```
 
 This converts every YAML schema under the path into one models module (class names come from the file names, `Config.name` keeps the
@@ -1033,7 +1029,7 @@ STAGED_BAR:
    in your `src/environment.py`
 3. You need to create an instance of the `IOConfig` class for the `raw.yaml` in the
    `__init__.py` file (we already did this).
-4. Define the additional `DynamicDataIO` subclasses in the `src/io.py` module,
+4. Define the additional `DynamicDataIO` subclasses in the `src/resources/io.py` module,
    dictating through the schema the list of columns, and their types (also used for schema validation).
 5. Finally, instantiate instances of those subclasses and call the `.write()` method,
    passing in the dataframe you want to write out, e.g.
@@ -1058,7 +1054,7 @@ TO_PARQUET_KWARGS = {
 ```
 
 Of, course this is not a problem as parquet is the format used by both resources in either environment. This not always the case however. See in 
-`demo/resources/definitions/processed.yaml`:
+`demo/src/resources/definitions/processed.yaml`:
 
 ```yaml
 ---
@@ -1086,8 +1082,6 @@ FINAL_BAR:
       batch_size: 262144
       request_timeout_ms: 60000 # 60s
       buffer_memory: 134217728  # 128MB
-  schema:
-    file_path: "[[ RESOURCES ]]/schemas/processed/final_bar.yaml"
 ```
 
 Here, we have a case where different options need to be used for each environment as it deals with a different source. This is gracefully managed through resource 
@@ -1112,7 +1106,7 @@ and looks like:
 import logging
 
 from demo.src import constants, input_config, raw_config
-from demo.src.io import InputIO, StagedBar, StagedFoo
+from demo.src.resources.io import InputIO, StagedBar, StagedFoo
 
 logger = logging.getLogger(__name__)
 
@@ -1156,7 +1150,7 @@ import logging
 
 import demo.src.environment
 from demo.src import processed_config, raw_config
-from demo.src.io import InputIO, StagedBar, StagedFoo
+from demo.src.resources.io import InputIO, StagedBar, StagedFoo
 
 logger = logging.getLogger(__name__)
 
