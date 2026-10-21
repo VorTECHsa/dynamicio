@@ -247,8 +247,10 @@ demo
 ├── src
 │   ├── __init__.py
 │   ├── __main__.py
-│   ├── constants.py
-│   ├── environment.py
+│   ├── config
+│   │   ├── __init__.py
+│   │   ├── constants.py
+│   │   └── environment.py
 │   ├── resources
 │   │   ├── __init__.py
 │   │   ├── definitions
@@ -297,7 +299,8 @@ Everything that describes *what data the pipeline touches* lives together under 
 | `src/resources/definitions/*.yaml` | Resource definitions: where each dataset lives per environment, its format and options. YAML, so a bucket or path can change without touching code |
 | `src/resources/schemas.py` | The datasets' Pandera models: columns, dtypes, validations, metrics |
 | `src/resources/io.py` | The `UnifiedIO`/`DynamicDataIO` subclasses used to read and write them |
-| `src/environment.py` | The values behind the `[[ DYNAMIC ]]` variables in the definitions, and the `RESOURCES` path |
+| `src/config/environment.py` | The values behind the `[[ DYNAMIC ]]` variables in the definitions, and the `RESOURCES` path |
+| `src/config/constants.py` | Constants shared by the runners, e.g. writer options |
 | `src/runners/` | The pipeline steps: they import from `src.resources` and never open a file or table directly |
 | `tests/` | Tests and their sample data (the `sample` environment points at `tests/data`) |
 
@@ -444,12 +447,13 @@ Also notice that paths to datasets are embedded with dynamic values identified w
 
 Resource definitions (`*.yaml` files) work in conjunction with `global` and `environment` variables:
 
-- `environment.py`
+- `config/environment.py`
 
 ```shell
 ├── __init__.py
 ├── src
-    └── environment.py
+    └── config
+        └── environment.py
 ...
 ```
 
@@ -461,8 +465,8 @@ import os
 
 ENVIRONMENT = "sample"
 CLOUD_ENV = "DEV"
-RESOURCES = os.path.join(os.path.dirname(os.path.realpath(__file__)), "resources")
-TEST_RESOURCES = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../tests")
+RESOURCES = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../resources")
+TEST_RESOURCES = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../tests")
 S3_YOUR_INPUT_BUCKET = None
 S3_YOUR_OUTPUT_BUCKET = None
 KAFKA_SERVER = None
@@ -530,8 +534,8 @@ __all__ = ["input_config", "raw_config", "processed_config"]
 import logging
 import os
 
-from demo.src import environment
-from demo.src.environment import ENVIRONMENT, RESOURCES
+from demo.src.config import environment
+from demo.src.config.environment import ENVIRONMENT, RESOURCES
 from dynamicio.config import IOConfig
 
 logging.basicConfig(level=logging.INFO)
@@ -560,21 +564,21 @@ On loading, `IOConfig` will load the respective configs for all resources in the
 for `actual`:
 
 ```python
-import demo.src.environment
+import demo.src.config.environment
 
 {
     "FOO": {
         "sample": {
             "type": "local",
             "local": {
-                "file_path": f"{demo.src.environment.TEST_RESOURCES}/data/input/foo.csv",
+                "file_path": f"{demo.src.config.environment.TEST_RESOURCES}/data/input/foo.csv",
                 "file_type": "csv",
             },
         },
         "actual": {
             "type": "s3",
             "s3": {
-                "bucket": f"{demo.src.environment.S3_YOUR_INPUT_BUCKET}",
+                "bucket": f"{demo.src.config.environment.S3_YOUR_INPUT_BUCKET}",
                 "file_path": "data/foo.h5",
                 "file_type": "hdf"
             }
@@ -595,7 +599,7 @@ and with `env_identifier="actual"`, the output would be:
 ```python
 "type": "s3",
 "s3": {
-    "bucket": f"{demo.src.environment.S3_YOUR_INPUT_BUCKET}",
+    "bucket": f"{demo.src.config.environment.S3_YOUR_INPUT_BUCKET}",
     "file_path": "data/foo.h5",
     "file_type": "hdf"
 }
@@ -680,7 +684,7 @@ emits the metrics, so error payloads and `METRIC` log lines are identical to the
 import pandera.pandas as pa
 from pandera.typing import Series
 
-from demo.src.environment import LOWER_THAN_LIMIT
+from demo.src.config.environment import LOWER_THAN_LIMIT
 
 
 class Foo(pa.DataFrameModel):
@@ -918,7 +922,7 @@ columns:
       - Std
       - Variance
 ```
-Similar to resource definitions, this value needs to be defined in `environment.py`
+Similar to resource definitions, this value needs to be defined in `config/environment.py`
 
 ##### Step 4.2. Use the dynamicio cli
 The `dynamicio` cli can be used to automatically generate schema definitions for you, provided either a path to
@@ -1026,7 +1030,7 @@ STAGED_BAR:
 ```
 
 2. You need to define the respective dynamic values found in your resource definitions
-   in your `src/environment.py`
+   in your `src/config/environment.py`
 3. You need to create an instance of the `IOConfig` class for the `raw.yaml` in the
    `__init__.py` file (we already did this).
 4. Define the additional `DynamicDataIO` subclasses in the `src/resources/io.py` module,
@@ -1043,7 +1047,7 @@ STAGED_BAR:
 
 Notice that you can pass all `pandas` options to write out, when for instance you are writing out `parquet`.
 
-`demo/src/constants.py`:
+`demo/src/config/constants.py`:
 ```python
 # Parquet
 TO_PARQUET_KWARGS = {
@@ -1105,7 +1109,8 @@ and looks like:
 """Add module docstring...."""
 import logging
 
-from demo.src import constants, input_config, raw_config
+from demo.src import input_config, raw_config
+from demo.src.config import constants
 from demo.src.resources.io import InputIO, StagedBar, StagedFoo
 
 logger = logging.getLogger(__name__)
@@ -1148,7 +1153,7 @@ An example can be found in the second of the two demo tasks, namely, the `transf
 import asyncio
 import logging
 
-import demo.src.environment
+import demo.src.config.environment
 from demo.src import processed_config, raw_config
 from demo.src.resources.io import InputIO, StagedBar, StagedFoo
 
@@ -1179,7 +1184,7 @@ async def main() -> None:
     logger.info("Transformations applied successfully...")
 
     # SINK DATA
-    logger.info(f"Begin sinking data to staging area: S3:{demo.src.environment.S3_YOUR_OUTPUT_BUCKET}:live/data/raw")
+    logger.info(f"Begin sinking data to staging area: S3:{demo.src.config.environment.S3_YOUR_OUTPUT_BUCKET}:live/data/raw")
     await asyncio.gather(
         InputIO(source_config=processed_config.get(source_key="FINAL_FOO"), apply_schema_validations=True, log_schema_metrics=True).async_write(foo_df),
         InputIO(source_config=processed_config.get(source_key="FINAL_BAR"), apply_schema_validations=True, log_schema_metrics=True).async_write(bar_df),
