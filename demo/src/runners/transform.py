@@ -4,8 +4,8 @@ import logging
 
 import demo.src.environment
 from demo.src import processed_config, raw_config
-from demo.src.io import InputIO, StagedBar, StagedFoo
-from demo.src.schemas import FinalBar, FinalFoo
+from demo.src.resources.io import InputIO, StagedBar, StagedFoo
+from demo.src.resources.schemas import FinalBar, FinalFoo
 
 logger = logging.getLogger(__name__)
 

@@ -6,7 +6,7 @@
 - feat: schemas can be declared as Pandera `DataFrameModel` classes (`class MyIO(UnifiedIO): schema = MyModel`). Dynamicio's validators and metric logging are unchanged, so error payloads and `METRIC` log lines are identical to the YAML and dict styles. `pandera` is now a required dependency. Anything Pandera cannot express natively goes in `Field(metadata={"dynamicio": {"validations": {...}, "metrics": [...]}})`. Note Pandera's default is `nullable=False`; dynamicio's YAML allowed nulls unless `has_no_null_values` was declared
 - fix: when the same validation fails on several columns, `SchemaValidationError.message` now holds every column's message (joined with `; ` under the one validation-name key). Previously only the last column's message survived- feat: `schema=` constructor argument and `SCHEMA_FROM_ARGUMENT` placeholder, so one IO class can take a different Pandera model per instance (the Pandera counterpart of `SCHEMA_FROM_FILE`). The argument takes precedence over the class attribute
 - feat: `dynamicio migrate <schemas dir> -o schemas.py` converts YAML schemas to Pandera models (dataset names, validations and metrics preserved, verified by a parity check) and writes `MIGRATION_PROMPT.md` listing the call sites to update by hand or with an LLM. The existing `-b/-s` schema generator is unchanged
-- docs: README Step 4.1 (Pandera models) and migration guide, ADR 0004; the `demo/` project now declares its schemas as Pandera models
+- docs: README Step 4.1 (Pandera models) and migration guide, ADR 0004; the `demo/` project now declares its schemas as Pandera models and keeps its resource definitions, models and IO classes together under `demo/src/resources`, documented in the README as the recommended pipeline project structure
 
 ## v9.1.0
 
