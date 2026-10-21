@@ -4,7 +4,7 @@
 from functools import partial
 from signal import SIGINT, SIGTERM, getsignal, signal
 
-from demo.src.runner_selection import choose_module, create_parser, custom_signal_handler
+from demo.src.runners.utils.runner_selection import choose_module, create_parser, custom_signal_handler
 from demo.src.runners import staging, transform
 
 AIRFLOW_TASK_MODULES = {"staging": staging, "transform": transform}
