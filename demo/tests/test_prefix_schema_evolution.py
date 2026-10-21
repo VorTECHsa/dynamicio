@@ -9,8 +9,8 @@ import pandas as pd
 import pytest
 
 from demo.src import environment
-from demo.src.io import InputIO
-from demo.src.schemas import Events
+from demo.src.resources.io import InputIO
+from demo.src.resources.schemas import Events
 from dynamicio.config import IOConfig
 
 
