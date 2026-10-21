@@ -632,15 +632,15 @@ __all__ = ["InputIO", "StagedFoo", "StagedBar"]
 from sqlalchemy.ext.declarative import declarative_base
 
 from dynamicio import UnifiedIO, WithLocal, WithPostgres, WithS3File
-from dynamicio.core import SCHEMA_FROM_FILE, DynamicDataIO
+from dynamicio.core import SCHEMA_FROM_ARGUMENT, DynamicDataIO
 
 Base = declarative_base()
 
 
 class InputIO(UnifiedIO):
-    """UnifiedIO subclass for V6 data."""
+    """UnifiedIO subclass for the input and processed datasets; each instance takes its Pandera model."""
 
-    schema = SCHEMA_FROM_FILE
+    schema = SCHEMA_FROM_ARGUMENT
 
 
 class StagedFoo(WithS3File, WithLocal, DynamicDataIO):
@@ -668,8 +668,7 @@ class StagedBar(WithLocal, WithPostgres, DynamicDataIO):
 
 Instances of the `DynamicDataIO` class can either inherit directly from `UnifiedIO` (e.g. `InputIO` inherits from `UnifiedIO`) or user can choose the mixins they want to use 
 (e.g. `StagedFoo` inherits from `WithS3File` and `WithLocal` mixins and needs to inherit from `DynamicDataIO`; note that MOR kicks in to address polymorphic conflicts--i.e. order matters). 
-Also, all instances of the `DynamicDataIO` **must** define a class `schema`. The schema can have the form of a dictionary, associating columns (keys) with `dtypes` (values) or be defined 
-as a yaml file (see `InputIO`) as explained in the next section.
+Also, all instances of the `DynamicDataIO` **must** define a class `schema`. The schema can have the form of a dictionary, associating columns (keys) with `dtypes` (values) or be a Pandera model (see `InputIO` and Step 4.1), or a yaml file (Step 4.1b).
 
 **N.B.** For convenience's sake and to reduce the need of boilerplate code, using a single class definition like `InputIO` is recommended (this way all your datasets can be loaded with instances of the same class). 
 However, if you need to use different mixins for different datasets, you can do so by defining a class for each dataset (e.g. `StagedFoo` and `StagedBar`). You will definitely need to define your own classes if you
