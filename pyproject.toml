@@ -25,6 +25,7 @@ dependencies = [
     "magic-logger>=1.0.2",
     "numpy>=1.24.0",
     "pandas>=2.2.2",
+    "pandera>=0.34.1",
     "psycopg2-binary>=2.9.3,<3",
     "pyarrow>=16.0.0",
     "pydantic>=1.9.2,<3",
