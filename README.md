@@ -269,26 +269,33 @@ demo
 └── tests
     ├── __init__.py
     ├── conftest.py
-    ├── constants.py
+    ├── config
+    │   ├── __init__.py
+    │   └── constants.py
     ├── data
-    │   ├── input
-    │   │   ├── bar.parquet
-    │   │   └── foo.csv
-    │   ├── processed
-    │   │   └── expected
-    │   │       ├── final_bar.parquet
-    │   │       └── final_foo.parquet
-    │   └── raw
-    │       └── expected
-    │           ├── staged_bar.parquet
-    │           └── staged_foo.parquet
+    │   ├── input
+    │   │   ├── bar.parquet
+    │   │   └── foo.csv
+    │   ├── processed
+    │   │   └── expected
+    │   │       ├── final_bar.parquet
+    │   │       └── final_foo.parquet
+    │   └── raw
+    │       └── expected
+    │           ├── staged_bar.parquet
+    │           └── staged_foo.parquet
+    ├── resources
+    │   ├── __init__.py
+    │   └── test_prefix_schema_evolution.py
     ├── runners
-    │   ├── __init__.py
-    │   ├── conftest.py
-    │   ├── test_staging.py
-    │   └── test_transform.py
-    ├── test_pipeline.py
-    └── test_runner_selection.py
+    │   ├── __init__.py
+    │   ├── conftest.py
+    │   ├── test_staging.py
+    │   ├── test_transform.py
+    │   └── utils
+    │       ├── __init__.py
+    │       └── test_runner_selection.py
+    └── test_pipeline.py
 ```
 
 ##### Recommended project structure
@@ -304,7 +311,7 @@ Everything that describes *what data the pipeline touches* lives together under 
 | `src/config/environment.py` | The values behind the `[[ DYNAMIC ]]` variables in the definitions, and the `RESOURCES` path |
 | `src/config/constants.py` | Constants shared by the runners, e.g. writer options |
 | `src/runners/` | The pipeline steps: they import from `src.resources` and never open a file or table directly |
-| `tests/` | Tests and their sample data (the `sample` environment points at `tests/data`) |
+| `tests/` | Tests mirror the `src/` tree (`tests/runners/test_staging.py` tests `src/runners/staging.py`, and so on), plus `tests/test_pipeline.py` for the end-to-end run, and the sample data under `tests/data` (the `sample` environment points at it) |
 
 Rules of thumb: a dataset is added by touching `src/resources` only (definition, model, optionally an IO class); a runner
 changes only when its logic changes. Keep the models next to the definitions that use them so a resource and its contract
@@ -491,7 +498,7 @@ some of its variables:
   used to distinguish between local and cloud runs of your module. It assumes that this environment variable is
   defined in the cloud environment where your module is executed from.
 - ```python
-  "TEST_RESOURCES": os.path.join(os.path.dirname(os.path.realpath(__file__)), "../tests"),
+  "TEST_RESOURCES": os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../tests"),
   ```
   It is defined in the resource definitions, e.g.:
 
@@ -1215,26 +1222,33 @@ In the case of our example, you would have to:
 └── tests
     ├── __init__.py
     ├── conftest.py
-    ├── constants.py
+    ├── config
+    │   ├── __init__.py
+    │   └── constants.py
     ├── data
-    │   ├── input
-    │   │   ├── bar.parquet
-    │   │   └── foo.csv
-    │   ├── processed
-    │   │   └── expected
-    │   │       ├── final_bar.parquet
-    │   │       └── final_foo.parquet
-    │   └── raw
-    │       └── expected
-    │           ├── staged_bar.parquet
-    │           └── staged_foo.parquet
+    │   ├── input
+    │   │   ├── bar.parquet
+    │   │   └── foo.csv
+    │   ├── processed
+    │   │   └── expected
+    │   │       ├── final_bar.parquet
+    │   │       └── final_foo.parquet
+    │   └── raw
+    │       └── expected
+    │           ├── staged_bar.parquet
+    │           └── staged_foo.parquet
+    ├── resources
+    │   ├── __init__.py
+    │   └── test_prefix_schema_evolution.py
     ├── runners
-    │   ├── __init__.py
-    │   ├── conftest.py
-    │   ├── test_staging.py
-    │   └── test_transform.py
-    ├── test_pipeline.py
-    └── test_runner_selection.py
+    │   ├── __init__.py
+    │   ├── conftest.py
+    │   ├── test_staging.py
+    │   ├── test_transform.py
+    │   └── utils
+    │       ├── __init__.py
+    │       └── test_runner_selection.py
+    └── test_pipeline.py
 ```
 
 2. Implement an end-to-end, black-box style test that simply generates the expected data output given a
