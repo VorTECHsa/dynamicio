@@ -45,7 +45,9 @@ dev = [
     "flake8-print",
     "flake8-tidy-imports",
     "flake8",
-    "gitlint",
+    # `gitlint` itself requires `gitlint-core[trusted-deps]`, which pins `sh==1.14.3` (GHSA-q38v-wp89-2w55, fixed in 2.2.4)
+    "gitlint-core",
+    "sh>=2.2.4; sys_platform != 'win32'",
     "isort",
     "mock",
     "pandas-stubs",
