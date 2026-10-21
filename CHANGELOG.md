@@ -2,6 +2,7 @@
 
 ## Unreleased (v10.0.0)
 
+- chore: raise the `numpy` floor to 1.24.4, the oldest release Pandera 0.34 accepts (found by the `dependency-ranges (lowest)` job).
 - Docs: README review. Fixed stale schema wording, the `is_between` `include_right` default, the casting-failure exception (`ColumnsDataTypeError`), unique Step 4.3 anchors, and added a summary of validation/metrics behaviour to the closing notes.
 - test: `tests/test_contracts/` pins the validation, metric, lifecycle-order and dtype behaviour that the schema work must preserve, for every schema declaration style
 - feat: schemas can be declared as Pandera `DataFrameModel` classes (`class MyIO(UnifiedIO): schema = MyModel`). Dynamicio's validators and metric logging are unchanged, so error payloads and `METRIC` log lines are identical to the YAML and dict styles. `pandera` is now a required dependency. Anything Pandera cannot express natively goes in `Field(metadata={"dynamicio": {"validations": {...}, "metrics": [...]}})`. Note Pandera's default is `nullable=False`; dynamicio's YAML allowed nulls unless `has_no_null_values` was declared
