@@ -30,11 +30,12 @@ A repository for hosting the `dynamicio` library, used as a wrapper for `pandas`
     + [Step 2: Defining your environment variables](https://github.com/VorTECHsa/dynamicio/tree/master#step-2--defining-your-environment-variables)
     + [Step 3: Read in your resource definitions](https://github.com/VorTECHsa/dynamicio/tree/master#step-3--read-in-your-resource-definitions)
     + [Step 4: Loading the data resources](https://github.com/VorTECHsa/dynamicio/tree/master#step-4--loading-the-data-resources)
-      - [Step 4.1. `SCHEMA_FROM_FILE`](https://github.com/VorTECHsa/dynamicio/tree/master#step-41--schema-from-file)
+      - [Step 4.1. Pandera models](https://github.com/VorTECHsa/dynamicio/tree/master#step-41-pandera-models)
+      - [Step 4.1b. `SCHEMA_FROM_FILE`](https://github.com/VorTECHsa/dynamicio/tree/master#step-41b--schema-from-file)
       - [Step 4.2. Use the dynamicio cli](https://github.com/VorTECHsa/dynamicio/tree/master#step-42-use-the-dynamicio-cli)
-      - [Step 4.3: Loading from `S3`](https://github.com/VorTECHsa/dynamicio/tree/master#step-43--loading-from--s3)
-      - [Step 4.3: Loading from `Postgres`](https://github.com/VorTECHsa/dynamicio/tree/master#step-43--loading-from--postgres)
-      - [Step 4.3: Loading from `Athena`](https://github.com/VorTECHsa/dynamicio/tree/master#step-43--loading-from--athena)
+      - [Step 4.3a: Loading from `S3`](https://github.com/VorTECHsa/dynamicio/tree/master#step-43a-loading-from-s3)
+      - [Step 4.3b: Loading from `Postgres`](https://github.com/VorTECHsa/dynamicio/tree/master#step-43b-loading-from-postgres)
+      - [Step 4.3c: Loading from `Athena`](https://github.com/VorTECHsa/dynamicio/tree/master#step-43c-loading-from-athena)
     + [Step 5: Writing out](https://github.com/VorTECHsa/dynamicio/tree/master#step-5--writing-out)
     + [Step 6: Full Code](https://github.com/VorTECHsa/dynamicio/tree/master#step-6--full-code)
   * [Utilising `asyncio`](https://github.com/VorTECHsa/dynamicio/tree/master#utilising--asyncio)
@@ -180,8 +181,6 @@ EVENTS_ATHENA:
       workgroup: primary         # optional
       region_name: eu-west-1     # optional: builds a dedicated boto3 session for that region
       query: SELECT id, ts FROM events WHERE day = '2024-01-01'   # optional here, or pass `query=` when instantiating the IO class
-  schema:
-    file_path: "[[ RESOURCES ]]/schemas/input/events.yaml"
 ```
 
 Notes:
@@ -222,13 +221,14 @@ We will go over an end-to-end example for reading and writing a single dataset, 
 1. all components involved and how they are configured, and;
 2. how these components are pieced together
 
-You can find this example under the demo directory fo this repo.
+You can find this example under the demo directory of this repo.
 
 ### Keywords:
 
-- **source configs**
-- **resource definitions**
-- **schema definitions**
+- **resource definitions**: the YAML files that say *where* each dataset lives (path, bucket, table, topic...) for each environment.
+- **source configs**: what `IOConfig` parses a resource definition into, one per dataset; you hand one to an IO class to read or write that dataset.
+- **schema definitions**: the Python classes (Pandera models, see Step 4.1) that say *what* a dataset looks like: columns, dtypes, validations and metrics.
+  Older projects may still declare them in YAML or as plain dictionaries; both keep working.
 
 ### Let's start
 
@@ -239,79 +239,98 @@ Assume you want to build a pipeline that looks something like the image below:
 
 <img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/sample-pipeline.png?raw=True" width="600">
 
-Assume the below repository structure, which implements this pipeline, for the purpose of this tutorial:
+Assume the below repository structure, which implements this pipeline, for the purpose of this tutorial. It is also the
+structure we recommend for a data pipeline repository (see [Recommended project structure](#recommended-project-structure) below):
 
 ```shell
 demo
 ├── __init__.py
-├── resources
-│   ├── definitions
-│   │   ├── input.yaml
-│   │   ├── processed.yaml
-│   │   └── raw.yaml
-│   └── schemas
-│       ├── input
-│       │   ├── bar.yaml
-│       │   └── foo.yaml
-│       └── processed
-│           ├── final_bar.yaml
-│           └── final_foo.yaml
 ├── src
-│   ├── __init__.py
-│   ├── __main__.py
-│   ├── constants.py
-│   ├── environment.py
-│   ├── io.py
-│   ├── runner_selection.py
-│   └── runners
-│       ├── __init__.py
-│       ├── staging.py
-│       └── transform.py
+│   ├── __init__.py
+│   ├── __main__.py
+│   ├── config
+│   │   ├── __init__.py
+│   │   ├── constants.py
+│   │   └── environment.py
+│   ├── resources
+│   │   ├── __init__.py
+│   │   ├── definitions
+│   │   │   ├── input.yaml
+│   │   │   ├── processed.yaml
+│   │   │   └── raw.yaml
+│   │   ├── io.py
+│   │   └── schemas.py
+│   └── runners
+│       ├── __init__.py
+│       ├── staging.py
+│       ├── transform.py
+│       └── utils
+│           ├── __init__.py
+│           └── runner_selection.py
 └── tests
     ├── __init__.py
     ├── conftest.py
-    ├── constants.py
+    ├── config
+    │   ├── __init__.py
+    │   └── constants.py
     ├── data
-    │   ├── input
-    │   │   ├── bar.parquet
-    │   │   └── foo.csv
-    │   ├── processed
-    │   │   └── expected
-    │   │       ├── final_bar.parquet
-    │   │       └── final_foo.parquet
-    │   └── raw
-    │       └── expected
-    │           ├── staged_bar.parquet
-    │           └── staged_foo.parquet
+    │   ├── input
+    │   │   ├── bar.parquet
+    │   │   └── foo.csv
+    │   ├── processed
+    │   │   └── expected
+    │   │       ├── final_bar.parquet
+    │   │       └── final_foo.parquet
+    │   └── raw
+    │       └── expected
+    │           ├── staged_bar.parquet
+    │           └── staged_foo.parquet
+    ├── resources
+    │   ├── __init__.py
+    │   └── test_prefix_schema_evolution.py
     ├── runners
-    │   ├── __init__.py
-    │   ├── conftest.py
-    │   ├── test_staging.py
-    │   └── test_transform.py
-    ├── test_pipeline.py
-    └── test_runner_selection.py
+    │   ├── __init__.py
+    │   ├── conftest.py
+    │   ├── test_staging.py
+    │   ├── test_transform.py
+    │   └── utils
+    │       ├── __init__.py
+    │       └── test_runner_selection.py
+    └── test_pipeline.py
 ```
+
+##### Recommended project structure
+
+Everything that describes *what data the pipeline touches* lives together under `src/resources`; everything that describes
+*what the pipeline does with it* lives outside:
+
+| Path | Holds |
+|---|---|
+| `src/resources/definitions/*.yaml` | Resource definitions: where each dataset lives per environment, its format and options. YAML, so a bucket or path can change without touching code |
+| `src/resources/schemas.py` | The datasets' Pandera models: columns, dtypes, validations, metrics |
+| `src/resources/io.py` | The `UnifiedIO`/`DynamicDataIO` subclasses used to read and write them |
+| `src/config/environment.py` | The values behind the `[[ DYNAMIC ]]` variables in the definitions, and the `RESOURCES` path |
+| `src/config/constants.py` | Constants shared by the runners, e.g. writer options |
+| `src/runners/` | The pipeline steps: they import from `src.resources` and never open a file or table directly |
+| `tests/` | Tests mirror the `src/` tree (`tests/runners/test_staging.py` tests `src/runners/staging.py`, and so on), plus `tests/test_pipeline.py` for the end-to-end run, and the sample data under `tests/data` (the `sample` environment points at it) |
+
+Rules of thumb: a dataset is added by touching `src/resources` only (definition, model, optionally an IO class); a runner
+changes only when its logic changes. Keep the models next to the definitions that use them so a resource and its contract
+are reviewed together. `demo/` follows this structure.
 
 #### Step 1: Resource Definitions
 
-We will start with defining our input and output resources as yaml files. These need to be defined under `resources/definitions`:
+We will start with defining our input and output resources as yaml files. These need to be defined under `src/resources/definitions`:
 
 ```shell
 resources
-├── __init__.py
-├── definitions
-│   ├── input.yaml
-│   ├── processed.yaml
-│   └── raw.yaml
-└── schemas
-    ├── input
-    │   ├── bar.yaml
-    │   └── foo.yaml
-    └── processed
-        ├── final_bar.yaml
-        └── final_foo.yaml
-
+└── definitions
+    ├── input.yaml
+    ├── processed.yaml
+    └── raw.yaml
 ```
+
+Schemas are not part of the resource definitions: they are declared as Pandera models in `src/resources/schemas.py` (see Step 4.1).
 
 You will need to define your pipeline's resources by creating three `yaml` files. The first is:
 
@@ -331,8 +350,6 @@ FOO:
       bucket: "[[ S3_YOUR_INPUT_BUCKET ]]"
       file_path: "data/foo.h5"
       file_type: "hdf"
-  schema:
-    file_path: "[[ RESOURCES ]]/schemas/input/foo.yaml"
 
 BAR:
   sample:
@@ -348,8 +365,6 @@ BAR:
       db_name: "[[ DB_NAME ]]"
       db_user: "[[ DB_USER ]]"
       db_password: "[[ DB_PASS ]]"
-  schema:
-    file_path: "[[ RESOURCES ]]/schemas/input/bar.yaml"
 ```
 
 - the `raw.yaml`, which concerns data coming out of the **staging** task and go into the **transform** task:
@@ -382,7 +397,7 @@ STAGED_BAR:
       file_path: "live/data/raw/staged_bar.parquet"
       file_type: "parquet"
 ```
-- and the `processed.yaml`, which concerns data coming out of the **transform* task:
+- and the `processed.yaml`, which concerns data coming out of the **transform** task:
 ```yaml
 ---
 FINAL_FOO:
@@ -397,8 +412,6 @@ FINAL_FOO:
       bucket: "[[ S3_YOUR_OUTPUT_BUCKET ]]"
       file_path: "live/data/processed/final_foo.parquet"
       file_type: "parquet"
-  schema:
-    file_path: "[[ RESOURCES ]]/schemas/processed/final_foo.yaml"
 
 FINAL_BAR:
   sample:
@@ -422,8 +435,6 @@ FINAL_BAR:
       batch_size: 262144
       request_timeout_ms: 60000 # 60s
       buffer_memory: 134217728  # 128MB
-  schema:
-    file_path: "[[ RESOURCES ]]/schemas/processed/final_bar.yaml"
 
 ```
 
@@ -433,11 +444,12 @@ The first, `input.yaml` defines the input sources for the **staging** task, hand
 second one, defines its output; similarly for **transform**. These files are parsed by `dynamicio.config.IOConfig` to generated configuration i/o
 instances referred to as "source configs" (see `demo/src/__init__.py`).
 
-Notice that under every source there are three layers: `sample`, `actual` and `schema`. The first two point to the variants of the same
+Notice that under every source there are two layers: `sample` and `actual`. They point to the variants of the same
 dataset, depending on whether it is called from the local environment or from the cloud (we will showcase how this
 distinction takes place later).
 
-The third refers your source config to a **"schema definition"** for your dataset (we will cover this in detail later).
+Resource definitions say nothing about the *shape* of the data. That is the job of the **"schema definition"** of your dataset, a Python
+class kept next to them in `src/resources/schemas.py` (we will cover this in detail in Step 4).
 
 #### Step 2: Defining your environment variables
 
@@ -446,12 +458,13 @@ Also notice that paths to datasets are embedded with dynamic values identified w
 
 Resource definitions (`*.yaml` files) work in conjunction with `global` and `environment` variables:
 
-- `environment.py`
+- `config/environment.py`
 
 ```shell
 ├── __init__.py
 ├── src
-    └── environment.py
+    └── config
+        └── environment.py
 ...
 ```
 
@@ -464,7 +477,7 @@ import os
 ENVIRONMENT = "sample"
 CLOUD_ENV = "DEV"
 RESOURCES = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../resources")
-TEST_RESOURCES = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../tests")
+TEST_RESOURCES = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../tests")
 S3_YOUR_INPUT_BUCKET = None
 S3_YOUR_OUTPUT_BUCKET = None
 KAFKA_SERVER = None
@@ -487,7 +500,7 @@ some of its variables:
   used to distinguish between local and cloud runs of your module. It assumes that this environment variable is
   defined in the cloud environment where your module is executed from.
 - ```python
-  "TEST_RESOURCES": os.path.join(os.path.dirname(os.path.realpath(__file__)), "../tests"),
+  "TEST_RESOURCES": os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../tests"),
   ```
   It is defined in the resource definitions, e.g.:
 
@@ -505,8 +518,6 @@ FOO:
       bucket: "[[ S3_YOUR_INPUT_BUCKET ]]"
       file_path: "data/foo.h5"
       file_type: "hdf"
-  schema:
-    file_path: "[[ RESOURCES ]]/schemas/input/foo.yaml"
 ```
 
 and therefore needs to be defined here as well.
@@ -525,7 +536,7 @@ src
 ├── __init__.py
 ```
 
-which allows it to be automatically loaded on call of any module within the `pipeline` package.
+which allows it to be automatically loaded on call of any module within the `demo.src` package.
 
 ```python
 """Set config IOs"""
@@ -534,8 +545,8 @@ __all__ = ["input_config", "raw_config", "processed_config"]
 import logging
 import os
 
-from demo.src import environment
-from demo.src.environment import ENVIRONMENT, RESOURCES
+from demo.src.config import environment
+from demo.src.config.environment import ENVIRONMENT, RESOURCES
 from dynamicio.config import IOConfig
 
 logging.basicConfig(level=logging.INFO)
@@ -564,21 +575,21 @@ On loading, `IOConfig` will load the respective configs for all resources in the
 for `actual`:
 
 ```python
-import demo.src.environment
+import demo.src.config.environment
 
 {
     "FOO": {
         "sample": {
             "type": "local",
             "local": {
-                "file_path": f"{demo.src.environment.TEST_RESOURCES}/data/input/foo.csv",
+                "file_path": f"{demo.src.config.environment.TEST_RESOURCES}/data/input/foo.csv",
                 "file_type": "csv",
             },
         },
         "actual": {
             "type": "s3",
             "s3": {
-                "bucket": f"{demo.src.environment.S3_YOUR_INPUT_BUCKET}",
+                "bucket": f"{demo.src.config.environment.S3_YOUR_INPUT_BUCKET}",
                 "file_path": "data/foo.h5",
                 "file_type": "hdf"
             }
@@ -599,7 +610,7 @@ and with `env_identifier="actual"`, the output would be:
 ```python
 "type": "s3",
 "s3": {
-    "bucket": f"{demo.src.environment.S3_YOUR_INPUT_BUCKET}",
+    "bucket": f"{demo.src.config.environment.S3_YOUR_INPUT_BUCKET}",
     "file_path": "data/foo.h5",
     "file_type": "hdf"
 }
@@ -611,13 +622,14 @@ To load a resource, you will need to generate instances of subclasses of `from d
 that the `UnifiedIO` class operates as an abstract class and cannot be used for instantiating objects.
 
 You will need to implement your own subclasses for each of the inputs you care to load. You can do this in the `io.py`
-module, under:
+module, under `src/resources`:
 
 ```shell
 .
 ├── src
 │   ├── __init__.py
-│   ├── io.py
+│   ├── resources
+│   │   └── io.py
 
 ```
 
@@ -631,15 +643,15 @@ __all__ = ["InputIO", "StagedFoo", "StagedBar"]
 from sqlalchemy.ext.declarative import declarative_base
 
 from dynamicio import UnifiedIO, WithLocal, WithPostgres, WithS3File
-from dynamicio.core import SCHEMA_FROM_FILE, DynamicDataIO
+from dynamicio.core import SCHEMA_FROM_ARGUMENT, DynamicDataIO
 
 Base = declarative_base()
 
 
 class InputIO(UnifiedIO):
-    """UnifiedIO subclass for V6 data."""
+    """UnifiedIO subclass for the input and processed datasets; each instance takes its Pandera model."""
 
-    schema = SCHEMA_FROM_FILE
+    schema = SCHEMA_FROM_ARGUMENT
 
 
 class StagedFoo(WithS3File, WithLocal, DynamicDataIO):
@@ -666,15 +678,72 @@ class StagedBar(WithLocal, WithPostgres, DynamicDataIO):
 ```
 
 Instances of the `DynamicDataIO` class can either inherit directly from `UnifiedIO` (e.g. `InputIO` inherits from `UnifiedIO`) or user can choose the mixins they want to use 
-(e.g. `StagedFoo` inherits from `WithS3File` and `WithLocal` mixins and needs to inherit from `DynamicDataIO`; note that MOR kicks in to address polymorphic conflicts--i.e. order matters). 
-Also, all instances of the `DynamicDataIO` **must** define a class `schema`. The schema can have the form of a dictionary, associating columns (keys) with `dtypes` (values) or be defined 
-as a yaml file (see `InputIO`) as explained in the next section.
+(e.g. `StagedFoo` inherits from `WithS3File` and `WithLocal` mixins and needs to inherit from `DynamicDataIO`; note that Python's method resolution order (MRO) kicks in to address polymorphic conflicts--i.e. order matters). 
+Also, all instances of the `DynamicDataIO` **must** define a class `schema`. The schema can have the form of a dictionary, associating columns (keys) with `dtypes` (values) or be a Pandera model (see `InputIO` and Step 4.1), or a yaml file (Step 4.1b).
 
 **N.B.** For convenience's sake and to reduce the need of boilerplate code, using a single class definition like `InputIO` is recommended (this way all your datasets can be loaded with instances of the same class). 
-However, if you need to use different mixins for different datasets, you can do so by defining a class for each dataset (e.g. `StagedFoo` and `StagedBar`). You will definitely need to define your own classes if you
-want to avoid using `SCHEMA_FROM_FILE` (as per the below instructions) but in this case, your dataset's name will be inferred from the dataclass name you use, e.g. `StagedFoo` will be inferred as `STAGED_FOO`.
+However, if you need to use different mixins for different datasets, you can do so by defining a class for each dataset (e.g. `StagedFoo` and `StagedBar`). For such a shared class, set `schema = SCHEMA_FROM_ARGUMENT` and pass the model per instance, `InputIO(source_config=..., schema=Foo)`.
+You only need your own class per dataset when you want a dict `schema` as a class attribute; in that case the dataset's name
+is inferred from the class name, e.g. `StagedFoo` becomes `STAGED_FOO`. With a Pandera model the name comes from the model's `Config.name`.
 
-##### Step 4.1. `SCHEMA_FROM_FILE`
+##### Step 4.1. Pandera models
+
+Schemas are declared in Python as [Pandera](https://pandera.readthedocs.io) `DataFrameModel` classes. Resource definitions
+stay in YAML; only the schema moves into code. Pandera is the *declaration* layer: dynamicio still runs the validations and
+emits the metrics, so error payloads and `METRIC` log lines are identical to the YAML schemas'.
+
+```python
+import pandera.pandas as pa
+from pandera.typing import Series
+
+from demo.src.config.environment import LOWER_THAN_LIMIT
+
+
+class Foo(pa.DataFrameModel):
+    column_a: Series[str] = pa.Field(nullable=True, unique=True, metadata={"dynamicio": {"metrics": ["Counts"]}})
+    column_b: Series[str] = pa.Field(nullable=False, metadata={"dynamicio": {"metrics": ["CountsPerLabel"]}})
+    column_c: Series[float] = pa.Field(nullable=True, gt=1000)
+    column_d: Series[float] = pa.Field(nullable=True, lt=LOWER_THAN_LIMIT, metadata={"dynamicio": {"metrics": ["Min", "Max", "Mean", "Std", "Variance"]}})
+
+    class Config:
+        name = "foo"  # the dataset name in metric lines is Config.name upper-cased; without it, the class name is used
+```
+
+Use the model as a class attribute when the IO class serves one dataset (`schema = Foo`), or let one class serve many by
+taking the model per instance:
+
+```python
+from dynamicio.core import SCHEMA_FROM_ARGUMENT
+
+
+class InputIO(UnifiedIO):
+    schema = SCHEMA_FROM_ARGUMENT
+
+
+foo_df = InputIO(source_config=input_config.get(source_key="FOO"), schema=Foo, apply_schema_validations=True, log_schema_metrics=True).read()
+```
+
+The `schema=` argument takes precedence over the class attribute; omitting it with `SCHEMA_FROM_ARGUMENT` raises `SchemaNotFoundError`.
+
+How `pa.Field` arguments map onto dynamicio's validations:
+
+| `pa.Field(...)` | dynamicio validation |
+|---|---|
+| `nullable=False` | `has_no_null_values` |
+| `unique=True` | `has_unique_values` |
+| `gt` / `ge` / `lt` / `le` | `is_greater_than` / `..._or_equal` / `is_lower_than` / `..._or_equal` |
+| `in_range={"min_value", "max_value", "include_min", "include_max"}` | `is_between` |
+| `isin=[...]` | `is_in` |
+| `metadata={"dynamicio": {"validations": {...}, "metrics": [...]}}` | anything else, e.g. `has_acceptable_percentage_of_nulls`, and all metrics |
+
+Two traps when writing models by hand:
+
+- **Always set `nullable=` explicitly.** Pandera's default is `nullable=False`, which adds `has_no_null_values`; the YAML schemas allowed nulls unless the validation was declared.
+- **Always set `include_min` / `include_max` on `in_range`.** Pandera includes the bounds by default; dynamicio's `is_between` excludes them.
+
+YAML schemas (`SCHEMA_FROM_FILE`) and dict schemas keep working.
+
+##### Step 4.1b. `SCHEMA_FROM_FILE`
 
 `from dynamicio.core import SCHEMA_FROM_FILE` is a unique dynamic(i/o) object used as a placeholder.
 It is used to indicate that a schema is provided as part of a _resource definition_.
@@ -753,7 +822,7 @@ interacting with a database, but will happen post-loading in the case of `*.h5` 
 
 `dtypes` are then used to validate the types of the columns. If types don't match, `dynamic(i/o)`
 will attempt to cast them and will issue a `WARNING`. If casting does not work either, it will
-throw a `ValueError` exception.
+raise a `ColumnsDataTypeError`.
 
 `validations` and `metrics` are there to document the user's expectations of the quality of the dataset.
 They can be automatically applied on loading or on writing out.
@@ -795,7 +864,7 @@ Specifically, you can use the following **validations**:
           lower: 0
           upper: 1000
           include_left: false
-          include_right: true # true by default
+          include_right: true # false by default, so bounds are excluded unless you ask
   ```
 
 and **metrics**:
@@ -865,7 +934,7 @@ columns:
       - Std
       - Variance
 ```
-Similar to resource definitions, this value needs to be defined in `environment.py`
+Similar to resource definitions, this value needs to be defined in `config/environment.py`
 
 ##### Step 4.2. Use the dynamicio cli
 The `dynamicio` cli can be used to automatically generate schema definitions for you, provided either a path to
@@ -887,32 +956,46 @@ optional arguments:
 
 The generated schema definitions will not have any validations or metrics automatically selected for you.
 
-##### Step 4.3: Loading from `S3`
+###### Migrating YAML schemas to Pandera models
+
+```shell
+dynamicio migrate src/resources/schemas -o src/resources/schemas.py --scan src
+```
+
+This converts every YAML schema under the path into one models module (class names come from the file names, `Config.name` keeps the
+schema's `name`, so metric lines do not change) and checks that each generated model compiles back to a schema equivalent to its source.
+It also writes `MIGRATION_PROMPT.md` next to the module, listing the models and every remaining call site (`SCHEMA_FROM_FILE`,
+dict schemas, `schema:` blocks in resource definitions) with file and line. Hand that prompt to an LLM, or follow it yourself:
+set `schema = <Model>` or `schema = SCHEMA_FROM_ARGUMENT` with `schema=<Model>` on construction, and delete the `schema:` blocks from the
+definitions. Dynamic variables (`[[ NAME ]]`) in the YAML become plain names marked `# TODO` in the module, to be replaced by imports.
+Dict-style schemas are not converted automatically. The `demo/` project was migrated this way.
+
+##### Step 4.3a: Loading from `S3`
 
 To then load from `S3` you simply do:
 
 ```python
-    foo_df = InputIO(source_config=input_config.get(source_key="FOO"), apply_schema_validations=True, log_schema_metrics=True).read()
+    foo_df = InputIO(source_config=input_config.get(source_key="FOO"), schema=Foo, apply_schema_validations=True, log_schema_metrics=True).read()
 ```
 
-which will load the `foo.csv` file as a dataframe.
+which will load the `FOO` dataset from the `actual` definition (here an `S3` object) as a dataframe. With the environment set to `sample` the same call reads the local sample file instead.
 
-##### Step 4.3: Loading from `Postgres`
+##### Step 4.3b: Loading from `Postgres`
 
 Likewise to `S3` resources, `postgres` resources need the same number of options to be defined for their loading.
 
-**Implicitly, dynamicio is able to infer data model from the schema yml files of the source key provided rather than requiring that the schema is explicitly defined.**
+When the dataset has a schema (a Pandera model or a YAML/dict schema), dynamicio infers a SQL data model from it rather than requiring you to define one.
 This data model defines the table, the columns and their respective SQL types.
 
 To, then, load from `postgres` you simply do:
 
 ```python
-    bar_df = InputIOsource_config=input_config.get(source_key="BAR"), apply_schema_validations=True, log_schema_metrics=True).read()
+    bar_df = InputIO(source_config=input_config.get(source_key="BAR"), schema=Bar, apply_schema_validations=True, log_schema_metrics=True).read()
 ```
 
-which will load the cargo the movements table as a dataframe.
+which will load the table defined for `BAR` as a dataframe.
 
-##### Step 4.3: Loading from `Athena`
+##### Step 4.3c: Loading from `Athena`
 
 `athena` resources need an `s3_output` location for query results and a query, either in the resource definition or
 passed when instantiating the IO class (which takes precedence):
@@ -959,10 +1042,10 @@ STAGED_BAR:
 ```
 
 2. You need to define the respective dynamic values found in your resource definitions
-   in your `src/environment.py`
+   in your `src/config/environment.py`
 3. You need to create an instance of the `IOConfig` class for the `raw.yaml` in the
    `__init__.py` file (we already did this).
-4. Define the additional `DynamicDataIO` subclasses in the `src/io.py` module,
+4. Define the additional `DynamicDataIO` subclasses in the `src/resources/io.py` module,
    dictating through the schema the list of columns, and their types (also used for schema validation).
 5. Finally, instantiate instances of those subclasses and call the `.write()` method,
    passing in the dataframe you want to write out, e.g.
@@ -976,7 +1059,7 @@ STAGED_BAR:
 
 Notice that you can pass all `pandas` options to write out, when for instance you are writing out `parquet`.
 
-`demo/src/constants.py`:
+`demo/src/config/constants.py`:
 ```python
 # Parquet
 TO_PARQUET_KWARGS = {
@@ -986,8 +1069,8 @@ TO_PARQUET_KWARGS = {
 }
 ```
 
-Of, course this is not a problem as parquet is the format used by both resources in either environment. This not always the case however. See in 
-`demo/resources/definitions/processed.yaml`:
+Of course this is not a problem as parquet is the format used by both resources in either environment. This is not always the case however. See in 
+`demo/src/resources/definitions/processed.yaml`:
 
 ```yaml
 ---
@@ -1009,14 +1092,12 @@ FINAL_BAR:
     kafka:
       kafka_server: "[[ KAFKA_SERVER ]]"
       kafka_topic: "[[ KAFKA_TOPIC ]]"
-    options:                                      <---- Options for writting to a Kafka Topic
+    options:                                      <---- Options for writing to a Kafka Topic
       compression_type: "snappy"
       max_in_flight_requests_per_connection: 10
       batch_size: 262144
       request_timeout_ms: 60000 # 60s
       buffer_memory: 134217728  # 128MB
-  schema:
-    file_path: "[[ RESOURCES ]]/schemas/processed/final_bar.yaml"
 ```
 
 Here, we have a case where different options need to be used for each environment as it deals with a different source. This is gracefully managed through resource 
@@ -1040,8 +1121,9 @@ and looks like:
 """Add module docstring...."""
 import logging
 
-from demo.src import constants, input_config, raw_config
-from demo.src.io import InputIO, StagedBar, StagedFoo
+from demo.src import input_config, raw_config
+from demo.src.config import constants
+from demo.src.resources.io import InputIO, StagedBar, StagedFoo
 
 logger = logging.getLogger(__name__)
 
@@ -1055,8 +1137,8 @@ def main() -> None:
     # LOAD DATA
     logger.info("Loading data from live sources...")
 
-    bar_df = InputIO(source_config=input_config.get(source_key="BAR"), apply_schema_validations=True, log_schema_metrics=True).read()
-    foo_df = InputIO(source_config=input_config.get(source_key="FOO"), apply_schema_validations=True, log_schema_metrics=True).read()
+    bar_df = InputIO(source_config=input_config.get(source_key="BAR"), schema=Bar, apply_schema_validations=True, log_schema_metrics=True).read()
+    foo_df = InputIO(source_config=input_config.get(source_key="FOO"), schema=Foo, apply_schema_validations=True, log_schema_metrics=True).read()
 
     logger.info("Data successfully loaded from live sources...")
 
@@ -1083,9 +1165,9 @@ An example can be found in the second of the two demo tasks, namely, the `transf
 import asyncio
 import logging
 
-import demo.src.environment
+import demo.src.config.environment
 from demo.src import processed_config, raw_config
-from demo.src.io import InputIO, StagedBar, StagedFoo
+from demo.src.resources.io import InputIO, StagedBar, StagedFoo
 
 logger = logging.getLogger(__name__)
 
@@ -1114,10 +1196,10 @@ async def main() -> None:
     logger.info("Transformations applied successfully...")
 
     # SINK DATA
-    logger.info(f"Begin sinking data to staging area: S3:{demo.src.environment.S3_YOUR_OUTPUT_BUCKET}:live/data/raw")
+    logger.info(f"Begin sinking data to staging area: S3:{demo.src.config.environment.S3_YOUR_OUTPUT_BUCKET}:live/data/raw")
     await asyncio.gather(
-        InputIO(source_config=processed_config.get(source_key="FINAL_FOO"), apply_schema_validations=True, log_schema_metrics=True).async_write(foo_df),
-        InputIO(source_config=processed_config.get(source_key="FINAL_BAR"), apply_schema_validations=True, log_schema_metrics=True).async_write(bar_df),
+        InputIO(source_config=processed_config.get(source_key="FINAL_FOO"), schema=FinalFoo, apply_schema_validations=True, log_schema_metrics=True).async_write(foo_df),
+        InputIO(source_config=processed_config.get(source_key="FINAL_BAR"), schema=FinalBar, apply_schema_validations=True, log_schema_metrics=True).async_write(bar_df),
     )
     logger.info("Data staging is complete...")
 
@@ -1143,26 +1225,33 @@ In the case of our example, you would have to:
 └── tests
     ├── __init__.py
     ├── conftest.py
-    ├── constants.py
+    ├── config
+    │   ├── __init__.py
+    │   └── constants.py
     ├── data
-    │   ├── input
-    │   │   ├── bar.parquet
-    │   │   └── foo.csv
-    │   ├── processed
-    │   │   └── expected
-    │   │       ├── final_bar.parquet
-    │   │       └── final_foo.parquet
-    │   └── raw
-    │       └── expected
-    │           ├── staged_bar.parquet
-    │           └── staged_foo.parquet
+    │   ├── input
+    │   │   ├── bar.parquet
+    │   │   └── foo.csv
+    │   ├── processed
+    │   │   └── expected
+    │   │       ├── final_bar.parquet
+    │   │       └── final_foo.parquet
+    │   └── raw
+    │       └── expected
+    │           ├── staged_bar.parquet
+    │           └── staged_foo.parquet
+    ├── resources
+    │   ├── __init__.py
+    │   └── test_prefix_schema_evolution.py
     ├── runners
-    │   ├── __init__.py
-    │   ├── conftest.py
-    │   ├── test_staging.py
-    │   └── test_transform.py
-    ├── test_pipeline.py
-    └── test_runner_selection.py
+    │   ├── __init__.py
+    │   ├── conftest.py
+    │   ├── test_staging.py
+    │   ├── test_transform.py
+    │   └── utils
+    │       ├── __init__.py
+    │       └── test_runner_selection.py
+    └── test_pipeline.py
 ```
 
 2. Implement an end-to-end, black-box style test that simply generates the expected data output given a
@@ -1196,7 +1285,7 @@ class TestPipeline:
     ):
         """Showcases how you can leverage dynamicio to read local data for fast feedback when you want to run your pipelines locally."""
         # Given
-        # The src/resources/input.yaml
+        # The src/resources/definitions/input.yaml
 
         # When
         staging.main()
@@ -1218,7 +1307,15 @@ class TestPipeline:
 
 ##  Last notes
 
-Hope this was helpful. 
+Hope this was helpful.
+
+A few things worth remembering:
+
+- `apply_schema_validations` and `log_schema_metrics` are both `False` by default: without them a schema only selects and casts columns.
+- On read, dynamicio casts, then validates, then logs metrics. On write it keeps only the schema's columns, validates, logs metrics, then casts.
+- A failed validation raises `dynamicio.errors.SchemaValidationError`; its `.message` is a dict of validation name to details, with every violation collected, not just the first.
+- Metrics are emitted as `METRIC` JSON log lines on the `dynamicio.metrics` logger, so they are easy to parse in your log dashboards.
+- See `CHANGELOG.md` for what changed between releases and `docs/adr/` for the reasoning behind the larger decisions.
 
 Please do reach out with comments and your views about how the library or the docs can be improved, and by all means, come along and contribute to our project!
 

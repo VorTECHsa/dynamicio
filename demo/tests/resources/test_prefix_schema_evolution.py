@@ -8,8 +8,9 @@ from unittest.mock import patch
 import pandas as pd
 import pytest
 
-from demo.src import environment
-from demo.src.io import InputIO
+from demo.src.config import environment
+from demo.src.resources.io import InputIO
+from demo.src.resources.schemas import Events
 from dynamicio.config import IOConfig
 
 
@@ -30,7 +31,7 @@ class TestPrefixSchemaEvolution:
 
         # When (`s3_read_down` is what fetches and parses every object under the prefix; here it serves the two above)
         with patch("dynamicio.mixins.with_s3.s3_read_down", side_effect=lambda _url, reader, **_: [reader(_parquet(old)), reader(_parquet(recent))]):
-            df = InputIO(source_config=config).read()
+            df = InputIO(source_config=config, schema=Events).read()
 
         # Then the column is kept, nulled for the old object, and the schema's column order is preserved
         assert df.columns.tolist() == ["event_id", "vessel", "model_action"]
@@ -45,7 +46,7 @@ class TestPrefixSchemaEvolution:
         # When / Then
         with patch("dynamicio.mixins.with_s3.s3_read_down", side_effect=lambda _url, reader, **_: [reader(_parquet(old))]):
             with pytest.raises(ValueError, match="missing from every parquet object"):
-                InputIO(source_config=config).read()
+                InputIO(source_config=config, schema=Events).read()
 
     @pytest.mark.unit
     def test_the_sample_environment_reads_the_same_resource_from_local_files(self):
@@ -53,7 +54,7 @@ class TestPrefixSchemaEvolution:
         config = IOConfig(os.path.join(environment.RESOURCES, "definitions/input.yaml"), env_identifier="sample", dynamic_vars=environment).get(source_key="EVENTS")
 
         # When
-        df = InputIO(source_config=config).read()
+        df = InputIO(source_config=config, schema=Events).read()
 
         # Then
         assert df.columns.tolist() == ["event_id", "vessel", "model_action"] and len(df) == 3

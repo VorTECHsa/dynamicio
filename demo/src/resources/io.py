@@ -5,15 +5,15 @@ __all__ = ["InputIO", "StagedFoo", "StagedBar"]
 from sqlalchemy.ext.declarative import declarative_base
 
 from dynamicio import UnifiedIO, WithLocal, WithPostgres, WithS3File
-from dynamicio.core import SCHEMA_FROM_FILE, DynamicDataIO
+from dynamicio.core import SCHEMA_FROM_ARGUMENT, DynamicDataIO
 
 Base = declarative_base()
 
 
 class InputIO(UnifiedIO):
-    """UnifiedIO subclass for V6 data."""
+    """UnifiedIO subclass for the input and processed datasets; each instance takes its Pandera model: ``InputIO(config, schema=Foo)``."""
 
-    schema = SCHEMA_FROM_FILE
+    schema = SCHEMA_FROM_ARGUMENT
 
 
 class StagedFoo(WithS3File, WithLocal, DynamicDataIO):
