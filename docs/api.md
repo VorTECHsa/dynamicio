@@ -40,7 +40,7 @@ docstrings.
 
 ## Validation
 
-::: dynamicio.validations
+::: dynamicio.schema.validations
 
 ## Errors
 
