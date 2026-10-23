@@ -12,7 +12,7 @@ import yaml
 
 # Application Imports
 from dynamicio.errors import InvalidDatasetTypeError
-from dynamicio.migrate import migrate
+from dynamicio.schema.migrate import migrate
 
 
 def parse_args(args: Optional[Sequence] = None) -> argparse.Namespace:
