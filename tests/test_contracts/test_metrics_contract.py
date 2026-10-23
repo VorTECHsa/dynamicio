@@ -13,10 +13,10 @@ import pandas as pd
 import pytest
 
 import dynamicio
-from dynamicio import metrics
 from dynamicio.config.pydantic.table_schema import MetricsName
 from dynamicio.core import DynamicDataIO
 from dynamicio.errors import SchemaValidationError
+from dynamicio.schema import metrics
 
 
 def _line(dataset, column, metric, value):

@@ -11,7 +11,7 @@ parse `METRIC` log lines and consumers catch `SchemaValidationError`, so those c
 
 ## Decision
 
-1. A schema may be a Pandera `DataFrameModel`. It is the **declaration only**: `dynamicio/pandera_schema.py` compiles it into the existing
+1. A schema may be a Pandera `DataFrameModel`. It is the **declaration only**: `dynamicio/schema/models.py` compiles it into the existing
    `DataframeSchema`, and dynamicio's own validators and metrics remain the execution engine. Error payloads, collected-not-fail-fast
    behaviour, metric names, logger, dataset naming and lifecycle order are therefore identical across YAML, dict and Pandera styles.
    Pandera's native checks were rejected as the engine: they fail per row with different shapes and would change the contracts.

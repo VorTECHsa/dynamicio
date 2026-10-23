@@ -8,8 +8,8 @@ from pandera.typing import Series
 
 from dynamicio import cli
 from dynamicio.config.pydantic.table_schema import DataframeSchema
-from dynamicio.migrate import compile_module, migrate, render_model, schemas_equivalent
-from dynamicio.pandera_schema import to_dataframe_schema
+from dynamicio.schema.migrate import compile_module, migrate, render_model, schemas_equivalent
+from dynamicio.schema.models import to_dataframe_schema
 from tests.test_contracts.conftest import SCHEMA_SPEC
 
 

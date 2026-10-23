@@ -11,8 +11,8 @@ import os
 import pandas as pd
 import pytest
 
-from dynamicio import validations
 from dynamicio.errors import SchemaValidationError
+from dynamicio.schema import validations
 
 PUBLIC_VALIDATORS = {
     "has_unique_values": ["dataset", "df", "column"],
