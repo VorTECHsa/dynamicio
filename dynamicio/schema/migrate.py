@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Mapping, Sequence, Tuple
 import yaml
 
 from dynamicio.config.pydantic.table_schema import DataframeSchema, SchemaColumn
-from dynamicio.pandera_schema import to_dataframe_schema
+from dynamicio.schema.models import to_dataframe_schema
 
 _DTYPES = {"int64": "int", "float64": "float", "object": "str", "bool": "bool", "datetime64[ns]": "pd.Timestamp"}
 

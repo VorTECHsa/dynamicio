@@ -15,11 +15,11 @@ from magic_logger import logger
 from pandera.pandas import DataFrameModel
 
 # Application Imports
-from dynamicio import validations
 from dynamicio.config.pydantic import DataframeSchema, IOEnvironment, SchemaColumn
 from dynamicio.errors import CASTING_WARNING_MSG, NOTICE_MSG, ColumnsDataTypeError, SchemaNotFoundError, SchemaValidationError
-from dynamicio.metrics import get_metric
-from dynamicio.pandera_schema import to_dataframe_schema
+from dynamicio.schema import validations
+from dynamicio.schema.metrics import get_metric
+from dynamicio.schema.models import to_dataframe_schema
 
 SCHEMA_FROM_FILE = {"schema": object()}
 SCHEMA_FROM_ARGUMENT = {"schema": object()}
