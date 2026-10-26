@@ -5,12 +5,25 @@ import os
 import re
 from typing import Any, Dict, List, Mapping, Sequence, Tuple
 
+import pandas as pd
 import yaml
 
 from dynamicio.config.pydantic.table_schema import DataframeSchema, SchemaColumn
 from dynamicio.schema.models import to_dataframe_schema
 
 _DTYPES = {"int64": "int", "float64": "float", "object": "str", "bool": "bool", "datetime64[ns]": "pd.Timestamp"}
+
+
+def _canonical_dtype(name: str) -> str:
+    """The pandas name of a dtype alias (`double` is `float64`, `int` is `int64`); unknown names are returned unchanged."""
+    try:
+        return str(pd.api.types.pandas_dtype(name))
+    except TypeError:
+        return name
+
+
+def _value_order(value: Any) -> tuple:
+    return (value is None, str(value))
 
 
 def _class_name(name: str) -> str:
@@ -31,13 +44,14 @@ def _render_column(column: SchemaColumn) -> str:
     for name, options in by_name.items():
         if name in simple:
             kwargs.append(f"{simple[name]}={options['threshold']!r}")
-        elif name == "is_between":
+        # A string bound is a `[[ VARIABLE ]]` placeholder; Pandera's `in_range` compares the bounds on definition, so those go to metadata.
+        elif name == "is_between" and not isinstance(options["lower"], str) and not isinstance(options["upper"], str):
             kwargs.append(
                 f"in_range={{'min_value': {options['lower']!r}, 'max_value': {options['upper']!r}, "
                 f"'include_min': {options.get('include_left', False)!r}, 'include_max': {options.get('include_right', False)!r}}}"
             )
         elif name == "is_in" and options.get("match_all", True):
-            kwargs.append(f"isin={sorted(options['categorical_values'])!r}")
+            kwargs.append(f"isin={sorted(options['categorical_values'], key=_value_order)!r}")
         elif name not in ("has_no_null_values", "has_unique_values"):
             extra.setdefault("validations", {})[name] = options
     if column.metrics:
@@ -67,7 +81,8 @@ def _render_model(schema: DataframeSchema, class_name: str = "") -> str:
         field = _render_column(column)
         if attribute != name:
             field = field[:-1] + f", alias={name!r})"
-        dtype = _DTYPES.get(column.data_type, f"pd.api.types.pandas_dtype({column.data_type!r})")
+        canonical = _canonical_dtype(column.data_type)
+        dtype = _DTYPES.get(canonical, f"pd.api.types.pandas_dtype({canonical!r})")
         lines.append(f"    {attribute}: Series[{dtype}] = {field}")
     lines += ["", "    class Config:", f"        name = {schema.name!r}", ""]
     return "\n".join(lines)
@@ -88,19 +103,30 @@ def render_module(schemas: Mapping[str, DataframeSchema]) -> str:
 
 
 def _options(validation) -> list:
-    defaults = {"include_left": False, "include_right": False} if validation.name == "is_between" else {}
-    return sorted({**defaults, **validation.options}.items(), key=str)
+    defaults = {"is_between": {"include_left": False, "include_right": False}, "is_in": {"match_all": True}}.get(validation.name, {})
+    options = {**defaults, **validation.options}
+    if "categorical_values" in options:  # a set semantically: order is irrelevant
+        options["categorical_values"] = sorted(options["categorical_values"], key=_value_order)
+    return sorted(options.items(), key=str)
 
 
 def _comparable(schema: DataframeSchema) -> dict:
     return {
-        name: (col.data_type, sorted((v.name, _options(v)) for v in col.validations if v.apply), [getattr(m, "value", m) for m in col.metrics]) for name, col in schema.columns.items()
+        name: (_canonical_dtype(col.data_type), sorted((v.name, _options(v)) for v in col.validations if v.apply), [getattr(m, "value", m) for m in col.metrics])
+        for name, col in schema.columns.items()
     }
+
+
+def differences(left: DataframeSchema, right: DataframeSchema) -> List[str]:
+    """Describe, per column, how two schemas differ (empty when equivalent)."""
+    a, b = _comparable(left), _comparable(right)
+    found = [f"{name}: {a.get(name)} != {b.get(name)}" for name in sorted(set(a) | set(b)) if a.get(name) != b.get(name)]
+    return found + ([f"name: {left.name!r} != {right.name!r}"] if left.name != right.name else [])
 
 
 def schemas_equivalent(left: DataframeSchema, right: DataframeSchema) -> bool:
     """True if both schemas declare the same dtypes, applied validations (defaults normalised) and metrics, per column."""
-    return left.name == right.name and _comparable(left) == _comparable(right)
+    return not differences(left, right)
 
 
 def compile_module(source: str) -> Dict[str, Any]:
@@ -213,8 +239,9 @@ def migrate(path: str, output: str, scan: str = "") -> Dict[str, Any]:
     source = render_module({cls: schema for cls, (_, schema) in by_class.items()})
     namespace = compile_module(source)
     for cls, (file_path, schema) in by_class.items():
-        if not schemas_equivalent(to_dataframe_schema(namespace[cls]), schema):
-            raise ValueError(f"Generated model {cls} is not equivalent to {file_path}")
+        problems = differences(to_dataframe_schema(namespace[cls]), schema)
+        if problems:
+            raise ValueError(f"Generated model {cls} is not equivalent to {file_path}:\n" + "\n".join(problems))
 
     todos = [line.split(" =")[0] for line in source.splitlines() if "# TODO" in line]
     with open(output, "w", encoding="utf-8") as handle:
