@@ -217,8 +217,18 @@ def render_prompt(module: str, models: Mapping[str, str], sites: Sequence[Tuple[
     return PROMPT_TEMPLATE.format(module=module, models=model_lines, sites=site_lines)
 
 
+def _module_name(path: str, file_path: str) -> str:
+    """Name of the module a schema file goes to in package mode: its directory below ``path`` (``common`` for files directly in ``path``)."""
+    relative = os.path.relpath(os.path.dirname(file_path), path)
+    return "common" if relative == "." else re.sub(r"\W+", "_", relative).strip("_").lower()
+
+
 def migrate(path: str, output: str, scan: str = "") -> Dict[str, Any]:
-    """Convert every YAML schema under ``path`` into one models module at ``output``, verify parity and write a prompt next to it.
+    """Convert every YAML schema under ``path`` into Pandera models at ``output``, verify parity and write a prompt next to it.
+
+    If ``output`` ends with ``.py`` all models go into that one module. Otherwise ``output`` is a package directory and the models are grouped
+    into one module per sub-directory of ``path``, mirroring how the YAML schemas were organised (for example ``schemas/stage/*.yaml`` becomes
+    ``<output>/stage.py``).
 
     Raises:
         ValueError: If no schemas are found, two schemas map to the same class name, or a generated model does not compile back to its source schema.
@@ -227,6 +237,8 @@ def migrate(path: str, output: str, scan: str = "") -> Dict[str, Any]:
     if not schemas:
         raise ValueError(f"No dynamicio YAML schemas found under {path}")
     by_class: Dict[str, Tuple[str, DataframeSchema]] = {}
+    modules: Dict[str, Dict[str, DataframeSchema]] = {}
+    package = not output.endswith(".py")
     for file_path, schema in schemas.items():
         # Named after the file: schema names need not be unique (and are what metric lines report), file names are.
         cls = _class_name(os.path.splitext(os.path.basename(file_path))[0])
@@ -235,19 +247,31 @@ def migrate(path: str, output: str, scan: str = "") -> Dict[str, Any]:
         if cls in by_class:
             raise ValueError(f"Schemas {by_class[cls][0]} and {file_path} both map to class {cls}")
         by_class[cls] = (file_path, schema)
+        modules.setdefault(_module_name(path, file_path) if package else "", {})[cls] = schema
 
-    source = render_module({cls: schema for cls, (_, schema) in by_class.items()})
-    namespace = compile_module(source)
-    for cls, (file_path, schema) in by_class.items():
-        problems = differences(to_dataframe_schema(namespace[cls]), schema)
-        if problems:
-            raise ValueError(f"Generated model {cls} is not equivalent to {file_path}:\n" + "\n".join(problems))
+    sources = {name: render_module(group) for name, group in modules.items()}
+    for name, source in sources.items():
+        namespace = compile_module(source)
+        for cls in modules[name]:
+            file_path, schema = by_class[cls]
+            problems = differences(to_dataframe_schema(namespace[cls]), schema)
+            if problems:
+                raise ValueError(f"Generated model {cls} is not equivalent to {file_path}:\n" + "\n".join(problems))
 
-    todos = [line.split(" =")[0] for line in source.splitlines() if "# TODO" in line]
-    with open(output, "w", encoding="utf-8") as handle:
-        handle.write(source)
-    prompt_path = os.path.join(os.path.dirname(os.path.abspath(output)), "MIGRATION_PROMPT.md")
-    sites = find_call_sites(scan or os.getcwd(), exclude=[os.path.abspath(output)])
+    todos = [line.split(" =")[0] for source in sources.values() for line in source.splitlines() if "# TODO" in line]
+    if package:
+        os.makedirs(output, exist_ok=True)
+        written = {os.path.join(output, f"{name}.py"): source for name, source in sources.items()}
+        init_path = os.path.join(output, "__init__.py")
+        if not os.path.exists(init_path):
+            written[init_path] = '"""Pandera models of the datasets, one module per group of the former YAML schemas."""\n'
+    else:
+        written = {output: sources[""]}
+    for file_path, source in written.items():
+        with open(file_path, "w", encoding="utf-8") as handle:
+            handle.write(source)
+    prompt_path = os.path.join(output if package else os.path.dirname(os.path.abspath(output)), "MIGRATION_PROMPT.md")
+    sites = find_call_sites(scan or os.getcwd(), exclude=[os.path.abspath(p) for p in written])
     with open(prompt_path, "w", encoding="utf-8") as handle:
         handle.write(render_prompt(output, {cls: file_path for cls, (file_path, _) in by_class.items()}, sites))
     return {"models": list(by_class), "module": output, "prompt": prompt_path, "call_sites": len(sites), "todos": todos}
