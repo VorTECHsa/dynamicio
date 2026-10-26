@@ -101,3 +101,41 @@ def test_dynamic_variable_in_a_yaml_schema_becomes_a_name_to_import(project):
     assert report["todos"] == ["LIMIT"]
     assert "lt=LIMIT" in source and "# TODO" in source
     assert "LIMIT" in (project / "MIGRATION_PROMPT.md").read_text()
+
+
+@pytest.mark.unit
+def test_is_in_with_mixed_type_categorical_values_migrates():
+    original = DataframeSchema(
+        name="mixed",
+        columns={"c": {"type": "object", "validations": {"is_in": {"apply": True, "options": {"categorical_values": ["b", None, "a"]}}}, "metrics": []}},
+    )
+    model = compile_module("import pandera.pandas as pa\nfrom pandera.typing import Series\n\n\n" + render_model(original))["Mixed"]
+
+    assert schemas_equivalent(to_dataframe_schema(model), original)
+
+
+@pytest.mark.unit
+def test_is_between_with_a_dynamic_variable_bound_migrates():
+    original = DataframeSchema(
+        name="dyn",
+        columns={"y": {"type": "float64", "validations": {"is_between": {"apply": True, "options": {"lower": 1941, "upper": "[[ NEXT_YEAR ]]"}}}, "metrics": []}},
+    )
+    model = compile_module("import pandera.pandas as pa\nfrom pandera.typing import Series\n\n\n" + 'NEXT_YEAR = "[[ NEXT_YEAR ]]"\n\n\n' + render_model(original))["Dyn"]
+
+    assert schemas_equivalent(to_dataframe_schema(model), original)
+
+
+@pytest.mark.unit
+def test_an_explicit_default_option_is_equivalent_to_omitting_it():
+    def schema(options):
+        return DataframeSchema(name="d", columns={"c": {"type": "object", "validations": {"is_in": {"apply": True, "options": options}}, "metrics": []}})
+
+    assert schemas_equivalent(schema({"categorical_values": ["a"], "match_all": True}), schema({"categorical_values": ["a"]}))
+
+
+@pytest.mark.unit
+def test_dtype_aliases_migrate_to_their_pandas_names():
+    original = DataframeSchema(name="al", columns={"a": {"type": "double", "validations": {}, "metrics": []}, "b": {"type": "int", "validations": {}, "metrics": []}})
+    model = compile_module("import pandera.pandas as pa\nfrom pandera.typing import Series\n\n\n" + render_model(original))["Al"]
+
+    assert schemas_equivalent(to_dataframe_schema(model), original)
