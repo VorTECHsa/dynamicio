@@ -2,6 +2,7 @@
 
 ## Unreleased (v10.0.0)
 
+- feat: `dynamicio migrate -o <package dir>` writes one models module per sub-directory of the YAML schemas (the grouping by runner and input/output carries over); `-o file.py` still writes a single module. The README recommends one models module per runner stage or definitions file, and the `demo/` project now follows it (`demo/src/resources/schemas/{input,processed}.py`)
 - fix: `dynamicio migrate` handles real-world schemas: mixed-type `is_in` values (incl. `null`), `is_between` bounds that are `[[ VARIABLES ]]`, dtype aliases such as `double`/`int`, and explicit default options; a failed parity check now lists the differing columns.
 - refactor: schema modules now live in a `dynamicio.schema` subpackage (`schema.validations`, `schema.metrics`, `schema.models`, `schema.migrate`). `dynamicio.validations` and `dynamicio.metrics` keep working as aliases of the same module objects, and the `dynamicio.metrics` logger name is unchanged. `dynamicio.pandera_schema` and `dynamicio.migrate` (new in 10.0.0-rc.1 only) moved to `dynamicio.schema.models` and `dynamicio.schema.migrate` without aliases.
 - chore: raise the `numpy` floor to 1.24.4, the oldest release Pandera 0.34 accepts (found by the `dependency-ranges (lowest)` job).

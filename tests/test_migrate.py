@@ -139,3 +139,17 @@ def test_dtype_aliases_migrate_to_their_pandas_names():
     model = compile_module("import pandera.pandas as pa\nfrom pandera.typing import Series\n\n\n" + render_model(original))["Al"]
 
     assert schemas_equivalent(to_dataframe_schema(model), original)
+
+
+@pytest.mark.unit
+def test_migrate_to_a_package_groups_models_by_source_directory(project):
+    (project / "resources" / "schemas" / "stage").mkdir()
+    (project / "resources" / "schemas" / "stage" / "staged.yaml").write_text(yaml.safe_dump({**SCHEMA_SPEC, "name": "staged"}, sort_keys=False))
+
+    report = migrate("resources/schemas", "models")
+
+    assert sorted(report["models"]) == ["Contract", "Staged"]
+    assert sorted(path.name for path in (project / "models").glob("*.py")) == ["__init__.py", "common.py", "stage.py"]
+    assert "class Staged" in (project / "models" / "stage.py").read_text()
+    assert "class Contract" in (project / "models" / "common.py").read_text()
+    assert "class Contract" not in (project / "models" / "stage.py").read_text()

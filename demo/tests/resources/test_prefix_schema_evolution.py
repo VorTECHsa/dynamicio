@@ -10,7 +10,7 @@ import pytest
 
 from demo.src.config import environment
 from demo.src.resources.io import InputIO
-from demo.src.resources.schemas import Events
+from demo.src.resources.schemas.input import Events
 from dynamicio.config import IOConfig
 
 

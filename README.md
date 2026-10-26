@@ -259,7 +259,10 @@ demo
 │   │   │   ├── processed.yaml
 │   │   │   └── raw.yaml
 │   │   ├── io.py
-│   │   └── schemas.py
+│   │   └── schemas
+│   │       ├── __init__.py
+│   │       ├── input.py
+│   │       └── processed.py
 │   └── runners
 │       ├── __init__.py
 │       ├── staging.py
@@ -307,7 +310,7 @@ Everything that describes *what data the pipeline touches* lives together under 
 | Path | Holds |
 |---|---|
 | `src/resources/definitions/*.yaml` | Resource definitions: where each dataset lives per environment, its format and options. YAML, so a bucket or path can change without touching code |
-| `src/resources/schemas.py` | The datasets' Pandera models: columns, dtypes, validations, metrics |
+| `src/resources/schemas/*.py` | The datasets' Pandera models: columns, dtypes, validations, metrics. One module per definitions file (`input.py` next to `definitions/input.yaml`), or per runner and direction in a bigger pipeline (`stage.py`, `transform.py`, ...) |
 | `src/resources/io.py` | The `UnifiedIO`/`DynamicDataIO` subclasses used to read and write them |
 | `src/config/environment.py` | The values behind the `[[ DYNAMIC ]]` variables in the definitions, and the `RESOURCES` path |
 | `src/config/constants.py` | Constants shared by the runners, e.g. writer options |
@@ -330,7 +333,7 @@ resources
     └── raw.yaml
 ```
 
-Schemas are not part of the resource definitions: they are declared as Pandera models in `src/resources/schemas.py` (see Step 4.1).
+Schemas are not part of the resource definitions: they are declared as Pandera models in the `src/resources/schemas/` package, one module per group of datasets (see Step 4.1).
 
 You will need to define your pipeline's resources by creating three `yaml` files. The first is:
 
@@ -449,7 +452,7 @@ dataset, depending on whether it is called from the local environment or from th
 distinction takes place later).
 
 Resource definitions say nothing about the *shape* of the data. That is the job of the **"schema definition"** of your dataset, a Python
-class kept next to them in `src/resources/schemas.py` (we will cover this in detail in Step 4).
+class kept next to them in a module of `src/resources/schemas/` (we will cover this in detail in Step 4).
 
 #### Step 2: Defining your environment variables
 
@@ -959,11 +962,13 @@ The generated schema definitions will not have any validations or metrics automa
 ###### Migrating YAML schemas to Pandera models
 
 ```shell
-dynamicio migrate src/resources/schemas -o src/resources/schemas.py --scan src
+dynamicio migrate src/resources/schemas -o src/resources/schemas --scan src
 ```
 
-This converts every YAML schema under the path into one models module (class names come from the file names, `Config.name` keeps the
-schema's `name`, so metric lines do not change) and checks that each generated model compiles back to a schema equivalent to its source.
+This converts every YAML schema under the path into Pandera models, one module per sub-directory of the YAML schemas (so
+`schemas/stage/*.yaml` becomes `schemas/stage.py`: the grouping you already had, by runner and input or output, carries over; this is the
+recommended layout, with one models module per runner stage or definitions file rather than a single catch-all module). Pass `-o schemas.py` instead to get one module. Class names come from the file names, `Config.name` keeps the
+schema's `name`, so metric lines do not change, and checks that each generated model compiles back to a schema equivalent to its source.
 It also writes `MIGRATION_PROMPT.md` next to the module, listing the models and every remaining call site (`SCHEMA_FROM_FILE`,
 dict schemas, `schema:` blocks in resource definitions) with file and line. Hand that prompt to an LLM, or follow it yourself:
 set `schema = <Model>` or `schema = SCHEMA_FROM_ARGUMENT` with `schema=<Model>` on construction, and delete the `schema:` blocks from the
