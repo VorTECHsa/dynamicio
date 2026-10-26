@@ -4,7 +4,7 @@ import logging
 from demo.src import input_config, raw_config
 from demo.src.config import constants
 from demo.src.resources.io import InputIO, StagedBar, StagedFoo
-from demo.src.resources.schemas import Bar, Foo
+from demo.src.resources.schemas.input import Bar, Foo
 
 logger = logging.getLogger(__name__)
 

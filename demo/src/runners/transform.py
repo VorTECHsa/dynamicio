@@ -5,7 +5,7 @@ import logging
 import demo.src.config.environment
 from demo.src import processed_config, raw_config
 from demo.src.resources.io import InputIO, StagedBar, StagedFoo
-from demo.src.resources.schemas import FinalBar, FinalFoo
+from demo.src.resources.schemas.processed import FinalBar, FinalFoo
 
 logger = logging.getLogger(__name__)
 

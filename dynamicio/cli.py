@@ -108,7 +108,9 @@ def run_migrate(argv: Sequence[str]) -> None:
     """The ``dynamicio migrate`` subcommand: YAML schemas to Pandera models, plus an LLM prompt for the call sites."""
     parser = argparse.ArgumentParser(prog="dynamicio migrate", description="Convert YAML schemas into Pandera models")
     parser.add_argument("path", help="directory searched for YAML schema files")
-    parser.add_argument("-o", "--output", default="schemas.py", help="the models module to write (default: schemas.py)")
+    parser.add_argument(
+        "-o", "--output", default="schemas.py", help="a models module (ends with .py) or a package directory with one module per sub-directory of the YAML schemas (default: schemas.py)"
+    )
     parser.add_argument("--scan", default="", help="directory searched for call sites to list in the prompt (default: the current directory)")
     args = parser.parse_args(argv)
     report = migrate(args.path, args.output, args.scan)
