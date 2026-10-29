@@ -643,10 +643,10 @@ The file looks like this:
 # pylint: disable=too-few-public-methods
 __all__ = ["InputIO", "StagedFoo", "StagedBar"]
 
-from sqlalchemy.ext.declarative import declarative_base
-
+from demo.src.resources.schemas.raw import StagedBarModel, StagedFooModel
 from dynamicio import UnifiedIO, WithLocal, WithPostgres, WithS3File
 from dynamicio.core import SCHEMA_FROM_ARGUMENT, DynamicDataIO
+from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
 
@@ -658,36 +658,25 @@ class InputIO(UnifiedIO):
 
 
 class StagedFoo(WithS3File, WithLocal, DynamicDataIO):
-    """UnifiedIO subclass for staged foos."""
+    """IO class for staged foos: it needs S3 and local mixins, so the model is fixed on the class."""
 
-    schema = {
-        "column_a": "object",
-        "column_b": "object",
-        "column_c": "int64",
-        "column_d": "int64",
-    }
+    schema = StagedFooModel
 
 
 class StagedBar(WithLocal, WithPostgres, DynamicDataIO):
-    """UnifiedIO subclass for cargo movements volumes data."""
+    """IO class for staged bars: it needs local and postgres mixins, so the model is fixed on the class."""
 
-    schema = {
-        "column_a": "object",
-        "column_b": "object",
-        "column_c": "int64",
-        "column_d": "int64",
-    }
+    schema = StagedBarModel
 
 ```
 
 Instances of the `DynamicDataIO` class can either inherit directly from `UnifiedIO` (e.g. `InputIO` inherits from `UnifiedIO`) or user can choose the mixins they want to use 
 (e.g. `StagedFoo` inherits from `WithS3File` and `WithLocal` mixins and needs to inherit from `DynamicDataIO`; note that Python's method resolution order (MRO) kicks in to address polymorphic conflicts--i.e. order matters). 
-Also, all instances of the `DynamicDataIO` **must** define a class `schema`. The schema can have the form of a dictionary, associating columns (keys) with `dtypes` (values) or be a Pandera model (see `InputIO` and Step 4.1), or a yaml file (Step 4.1b).
+Also, all instances of the `DynamicDataIO` **must** define a class `schema`. The schema is a Pandera model, either fixed on the class (`schema = StagedFooModel`, see `StagedFoo`), supplied per instance (`schema = SCHEMA_FROM_ARGUMENT`, see `InputIO` and Step 4.1), or read from the YAML resource definition (`schema = SCHEMA_FROM_FILE`, Step 4.1b).
 
 **N.B.** For convenience's sake and to reduce the need of boilerplate code, using a single class definition like `InputIO` is recommended (this way all your datasets can be loaded with instances of the same class). 
 However, if you need to use different mixins for different datasets, you can do so by defining a class for each dataset (e.g. `StagedFoo` and `StagedBar`). For such a shared class, set `schema = SCHEMA_FROM_ARGUMENT` and pass the model per instance, `InputIO(source_config=..., schema=Foo)`.
-You only need your own class per dataset when you want a dict `schema` as a class attribute; in that case the dataset's name
-is inferred from the class name, e.g. `StagedFoo` becomes `STAGED_FOO`. With a Pandera model the name comes from the model's `Config.name`.
+You only need your own class per dataset when the schema is fixed on the class, as in `StagedFoo`. The dataset's name always comes from the model's `Config.name` (upper-cased, e.g. `staged_foo` becomes `STAGED_FOO`).
 
 ##### Step 4.1. Pandera models
 
