@@ -644,9 +644,10 @@ The file looks like this:
 __all__ = ["InputIO", "StagedFoo", "StagedBar"]
 
 from demo.src.resources.schemas.raw import StagedBarModel, StagedFooModel
+from sqlalchemy.ext.declarative import declarative_base
+
 from dynamicio import UnifiedIO, WithLocal, WithPostgres, WithS3File
 from dynamicio.core import SCHEMA_FROM_ARGUMENT, DynamicDataIO
-from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
 
