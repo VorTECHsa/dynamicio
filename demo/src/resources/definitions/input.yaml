@@ -11,8 +11,6 @@ FOO:
       bucket: "[[ S3_YOUR_INPUT_BUCKET ]]"
       file_path: "data/foo.h5"
       file_type: "hdf"
-  schema:
-    file_path: "[[ RESOURCES ]]/schemas/input/foo.yaml"
 
 BAR:
   sample:
@@ -28,8 +26,6 @@ BAR:
       db_name: "[[ DB_NAME ]]"
       db_user: "[[ DB_USER ]]"
       db_password: "[[ DB_PASS ]]"
-  schema:
-    file_path: "[[ RESOURCES ]]/schemas/input/bar.yaml"
 
 EVENTS:
   sample:
@@ -43,5 +39,3 @@ EVENTS:
       bucket: "[[ S3_YOUR_INPUT_BUCKET ]]"
       path_prefix: "data/events/"
       file_type: "parquet"
-  schema:
-    file_path: "[[ RESOURCES ]]/schemas/input/events.yaml"

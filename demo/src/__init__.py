@@ -4,8 +4,8 @@ __all__ = ["input_config", "raw_config", "processed_config"]
 import logging
 import os
 
-from demo.src import environment
-from demo.src.environment import ENVIRONMENT, RESOURCES
+from demo.src.config import environment
+from demo.src.config.environment import ENVIRONMENT, RESOURCES
 from dynamicio.config import IOConfig
 
 logging.basicConfig(level=logging.INFO)

@@ -1,7 +1,7 @@
 """A module for configuring all dynamic environment variables for testing purposes"""
 import os
 
-E2E_TEST_RESOURCES = os.path.join(os.path.dirname(os.path.realpath(__file__)))
+E2E_TEST_RESOURCES = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
 # Dynamic Vars
 S3_INPUT_BUCKET = "mock-foo-input-bucket"
