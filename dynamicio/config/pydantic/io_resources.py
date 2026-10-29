@@ -101,10 +101,13 @@ class IOEnvironment(BaseModel):
     options: Mapping = pydantic.Field(default_factory=dict)
     data_backend_type: DataBackendType = pydantic.Field(alias="type", const=None)
 
-    class Config:
-        """Additional pydantic configuration for the model."""
+    if pydantic.VERSION.startswith("1."):
+        # Pydantic 2 always treats underscore attributes as private and warns about this removed key.
 
-        underscore_attrs_are_private = True
+        class Config:
+            """Additional pydantic configuration for the model."""
+
+            underscore_attrs_are_private = True
 
     @property
     def dynamicio_schema(self) -> Union[table_spec.DataframeSchema, None]:
