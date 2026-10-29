@@ -1,15 +1,18 @@
-# pylint: disable=no-member, missing-module-docstring, missing-class-docstring, missing-function-docstring, too-many-public-methods, too-few-public-methods, protected-access, C0103, C0302, R0801
+# pylint: disable=no-member, missing-module-docstring, missing-class-docstring, missing-function-docstring, too-many-public-methods, too-few-public-methods, protected-access, C0103, C0302, R0801, redefined-outer-name
 import os
 import types
 from unittest.mock import ANY, MagicMock, patch
 
 import pandas as pd
+import pandera.pandas as pa
 import pytest
+from pandera.typing import Series
 from sqlalchemy.sql.base import ColumnCollection
 
 # Application Imports
-from dynamicio import WithPostgres
+from dynamicio import UnifiedIO, WithPostgres
 from dynamicio.config import IOConfig
+from dynamicio.core import SCHEMA_FROM_ARGUMENT
 from tests import constants
 from tests.mocking.io import ReadPostgresIO, WriteExtendedPostgresIO, WritePostgresIO
 from tests.mocking.models import ERModel, PgModel
@@ -317,3 +320,71 @@ class TestPostgresIO:
 
         # Then
         assert is_valid is True
+
+
+class _PgPanderaModel(pa.DataFrameModel):
+    id: Series[str]
+    amount: Series[int]
+    seen_at: Series[pd.Timestamp] = pa.Field(nullable=True)
+
+    class Config:
+        name = "pg_pandera_table"
+
+
+class PanderaPostgresIO(UnifiedIO):
+    schema = SCHEMA_FROM_ARGUMENT
+
+
+@pytest.fixture
+def postgres_resource_without_schema(tmp_path):
+    """A CLOUD postgres resource whose YAML declares no schema: the Pandera model is the only source of the table definition."""
+    resource = tmp_path / "pg_no_schema.yaml"
+    resource.write_text(
+        "READ_FROM_POSTGRES:\n"
+        "  CLOUD:\n"
+        '    type: "postgres"\n'
+        "    postgres:\n"
+        '      db_host: "localhost"\n'
+        '      db_port: "5432"\n'
+        '      db_name: "db"\n'
+        '      db_user: "user"\n'
+        '      db_password: "password"\n'
+    )
+    return IOConfig(path_to_source_yaml=str(resource), env_identifier="CLOUD", dynamic_vars=constants).get(source_key="READ_FROM_POSTGRES")
+
+
+class TestPostgresWithPanderaSchema:
+    """A Pandera model supplies the table definition when the resource YAML has no schema."""
+
+    @pytest.mark.unit
+    @patch.object(WithPostgres, "_read_database")
+    def test_read_uses_table_name_and_columns_from_the_model(self, mock__read_database, postgres_resource_without_schema):
+        # When
+        PanderaPostgresIO(source_config=postgres_resource_without_schema, schema=_PgPanderaModel).read()
+
+        # Then
+        query = mock__read_database.call_args.args[1]
+        assert [column.name for column in query.column_descriptions and query.statement.selected_columns] == ["id", "amount", "seen_at"]
+        assert "pg_pandera_table" in str(query.statement)
+
+    @pytest.mark.unit
+    @patch.object(WithPostgres, "_write_to_database")
+    def test_write_uses_table_name_from_the_model(self, mock__write_to_database, postgres_resource_without_schema):
+        # Given
+        df = pd.DataFrame({"id": ["a"], "amount": [1], "seen_at": [pd.Timestamp("2026-01-01")]})
+
+        # When
+        PanderaPostgresIO(source_config=postgres_resource_without_schema, schema=_PgPanderaModel).write(df)
+
+        # Then
+        assert mock__write_to_database.call_args.args[1] == "pg_pandera_table"
+
+    @pytest.mark.unit
+    def test_read_without_any_schema_still_fails_clearly(self, postgres_resource_without_schema):
+        # Given a class schema that is not compiled to a DataframeSchema, and a YAML without a schema
+        io_instance = ReadPostgresIO(source_config=postgres_resource_without_schema)
+        io_instance.schema = None
+
+        # When / Then
+        with pytest.raises(AssertionError, match="The schema must be specified for SQL tables"):
+            io_instance._table_schema()  # pylint: disable=protected-access

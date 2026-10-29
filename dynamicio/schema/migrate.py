@@ -223,6 +223,38 @@ def _module_name(path: str, file_path: str) -> str:
     return "common" if relative == "." else re.sub(r"\W+", "_", relative).strip("_").lower()
 
 
+def _verify_parity(sources: Dict[str, str], modules: Dict[str, Dict[str, DataframeSchema]], by_class: Dict[str, Tuple[str, DataframeSchema]]) -> None:
+    """Compile every generated module and check each model against the YAML schema it came from."""
+    for name, source in sources.items():
+        namespace = compile_module(source)
+        for cls in modules[name]:
+            file_path, schema = by_class[cls]
+            problems = differences(to_dataframe_schema(namespace[cls]), schema)
+            if problems:
+                raise ValueError(f"Generated model {cls} is not equivalent to {file_path}:\n" + "\n".join(problems))
+
+
+def _todo_names(sources: Dict[str, str]) -> List[str]:
+    """Names of the generated fields that carry a ``# TODO`` for the user to review."""
+    return [line.split(" =")[0] for source in sources.values() for line in source.splitlines() if "# TODO" in line]
+
+
+def _write_modules(output: str, sources: Dict[str, str], package: bool) -> Dict[str, str]:
+    """Write the generated modules (a package directory, or the single ``output`` file) and return ``{path: source}`` of what was written."""
+    if package:
+        os.makedirs(output, exist_ok=True)
+        written = {os.path.join(output, f"{name}.py"): source for name, source in sources.items()}
+        init_path = os.path.join(output, "__init__.py")
+        if not os.path.exists(init_path):
+            written[init_path] = '"""Pandera models of the datasets, one module per group of the former YAML schemas."""\n'
+    else:
+        written = {output: sources[""]}
+    for file_path, source in written.items():
+        with open(file_path, "w", encoding="utf-8") as handle:
+            handle.write(source)
+    return written
+
+
 def migrate(path: str, output: str, scan: str = "") -> Dict[str, Any]:
     """Convert every YAML schema under ``path`` into Pandera models at ``output``, verify parity and write a prompt next to it.
 
@@ -250,28 +282,11 @@ def migrate(path: str, output: str, scan: str = "") -> Dict[str, Any]:
         modules.setdefault(_module_name(path, file_path) if package else "", {})[cls] = schema
 
     sources = {name: render_module(group) for name, group in modules.items()}
-    for name, source in sources.items():
-        namespace = compile_module(source)
-        for cls in modules[name]:
-            file_path, schema = by_class[cls]
-            problems = differences(to_dataframe_schema(namespace[cls]), schema)
-            if problems:
-                raise ValueError(f"Generated model {cls} is not equivalent to {file_path}:\n" + "\n".join(problems))
+    _verify_parity(sources, modules, by_class)
 
-    todos = [line.split(" =")[0] for source in sources.values() for line in source.splitlines() if "# TODO" in line]
-    if package:
-        os.makedirs(output, exist_ok=True)
-        written = {os.path.join(output, f"{name}.py"): source for name, source in sources.items()}
-        init_path = os.path.join(output, "__init__.py")
-        if not os.path.exists(init_path):
-            written[init_path] = '"""Pandera models of the datasets, one module per group of the former YAML schemas."""\n'
-    else:
-        written = {output: sources[""]}
-    for file_path, source in written.items():
-        with open(file_path, "w", encoding="utf-8") as handle:
-            handle.write(source)
+    written = _write_modules(output, sources, package)
     prompt_path = os.path.join(output if package else os.path.dirname(os.path.abspath(output)), "MIGRATION_PROMPT.md")
     sites = find_call_sites(scan or os.getcwd(), exclude=[os.path.abspath(p) for p in written])
     with open(prompt_path, "w", encoding="utf-8") as handle:
         handle.write(render_prompt(output, {cls: file_path for cls, (file_path, _) in by_class.items()}, sites))
-    return {"models": list(by_class), "module": output, "prompt": prompt_path, "call_sites": len(sites), "todos": todos}
+    return {"models": list(by_class), "module": output, "prompt": prompt_path, "call_sites": len(sites), "todos": _todo_names(sources)}

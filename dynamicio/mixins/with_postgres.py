@@ -106,15 +106,23 @@ class WithPostgres:
 
         sql_query = self.options.pop("sql_query", None)
 
-        assert self.sources_config.dynamicio_schema is not None, "The schema must be specified for SQL tables"
-        model = self._generate_model_from_schema(self.sources_config.dynamicio_schema)
+        table_schema = self._table_schema()
+        model = self._generate_model_from_schema(table_schema)
 
         query = Query(self._get_table_columns(model))
         if sql_query:
             query = sql_query
-        logger.info(f"[postgres] Started downloading table: {self.sources_config.dynamicio_schema.name} from: {db_host}:{db_name}")
+        logger.info(f"[postgres] Started downloading table: {table_schema.name} from: {db_host}:{db_name}")
         with session_for(connection_string) as session:
             return self._read_database(session, query, **self.options)
+
+    def _table_schema(self) -> DataframeSchema:
+        """Returns the schema describing the SQL table: the resource YAML's, else the one compiled from the Pandera model."""
+        table_schema = self.sources_config.dynamicio_schema
+        if table_schema is None and isinstance(self.schema, DataframeSchema):
+            table_schema = self.schema
+        assert table_schema is not None, "The schema must be specified for SQL tables"
+        return table_schema
 
     @staticmethod
     def _generate_model_from_schema(schema: DataframeSchema) -> DeclarativeMeta:
@@ -177,12 +185,12 @@ class WithPostgres:
 
         connection_string = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
 
-        assert self.sources_config.dynamicio_schema is not None, "The schema must be specified for SQL tables"
-        model = self._generate_model_from_schema(self.sources_config.dynamicio_schema)
+        table_schema = self._table_schema()
+        model = self._generate_model_from_schema(table_schema)
 
         is_truncate_and_append = self.options.get("truncate_and_append", False)
 
-        logger.info(f"[postgres] Started uploading table: {self.sources_config.dynamicio_schema.name} from: {db_host}:{db_name}")
+        logger.info(f"[postgres] Started uploading table: {table_schema.name} from: {db_host}:{db_name}")
         with session_for(connection_string) as session:
             self._write_to_database(session, model.__tablename__, df, is_truncate_and_append)  # type: ignore
 
