@@ -2,10 +2,10 @@
 # pylint: disable=too-few-public-methods
 __all__ = ["InputIO", "StagedFoo", "StagedBar"]
 
-from sqlalchemy.ext.declarative import declarative_base
-
+from demo.src.resources.schemas.raw import StagedBarModel, StagedFooModel
 from dynamicio import UnifiedIO, WithLocal, WithPostgres, WithS3File
 from dynamicio.core import SCHEMA_FROM_ARGUMENT, DynamicDataIO
+from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
 
@@ -17,22 +17,12 @@ class InputIO(UnifiedIO):
 
 
 class StagedFoo(WithS3File, WithLocal, DynamicDataIO):
-    """UnifiedIO subclass for staged foos."""
+    """IO class for staged foos: it needs S3 and local mixins, so the model is fixed on the class."""
 
-    schema = {
-        "column_a": "object",
-        "column_b": "object",
-        "column_c": "int64",
-        "column_d": "int64",
-    }
+    schema = StagedFooModel
 
 
 class StagedBar(WithLocal, WithPostgres, DynamicDataIO):
-    """UnifiedIO subclass for cargo movements volumes data."""
+    """IO class for staged bars: it needs local and postgres mixins, so the model is fixed on the class."""
 
-    schema = {
-        "column_a": "object",
-        "column_b": "object",
-        "column_c": "int64",
-        "column_d": "int64",
-    }
+    schema = StagedBarModel
