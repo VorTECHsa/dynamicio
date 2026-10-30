@@ -2,12 +2,18 @@
 import io
 import os
 import shutil
+import threading
+import types
+import urllib.parse
+import urllib.request
 from io import StringIO
 from tempfile import NamedTemporaryFile
 from unittest import mock
 from unittest.mock import MagicMock, patch
 
+import boto3
 import pandas as pd
+import pyarrow.fs as pafs
 import pyarrow.parquet as pq
 import pydantic
 import pytest
@@ -1492,3 +1498,291 @@ class TestS3CopilotRegressions:
         assert results == [b"p/b.parquet", b"p/a.parquet"]
         assert client.get_object.call_count == 2
         client.head_object.assert_not_called()
+
+
+class TestS3ParquetRangedRead:
+    """A single-file parquet read with `filters` reads byte ranges over pyarrow's S3 file system instead of the whole object."""
+
+    KEY = "s3:sample-prefix/mock-key"
+
+    @staticmethod
+    def _config():
+        return IOConfig(
+            path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml"),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_S3_PARQUET")
+
+    @pytest.fixture
+    def bucket_root(self, tmp_path):
+        df = pd.DataFrame({"id": list(range(12)), "foo_name": [f"name_{i}" for i in range(12)], "bar": [i * 10 for i in range(12)]})
+        path = tmp_path / constants.MOCK_BUCKET / self.KEY
+        path.parent.mkdir(parents=True)
+        df.to_parquet(path, row_group_size=4, index=False)
+        return tmp_path
+
+    @staticmethod
+    def _local_s3(root):
+        return pafs.SubTreeFileSystem(str(root), pafs.LocalFileSystem())
+
+    def _object_path(self, root):
+        return root / constants.MOCK_BUCKET / self.KEY
+
+    def _corrupt_row_groups(self, root, row_groups):
+        path = self._object_path(root)
+        metadata = pq.ParquetFile(path).metadata
+        with open(path, "r+b") as fobj:
+            for index in row_groups:
+                for column_index in range(metadata.num_columns):
+                    column = metadata.row_group(index).column(column_index)
+                    start = column.dictionary_page_offset if column.has_dictionary_page else column.data_page_offset
+                    fobj.seek(start)
+                    fobj.write(b"\xff" * column.total_compressed_size)
+
+    @pytest.mark.unit
+    def test_filtered_read_skips_row_groups_whose_statistics_cannot_match(self, bucket_root):
+        # Given
+        self._corrupt_row_groups(bucket_root, [1, 2])
+        with pytest.raises(Exception):
+            pd.read_parquet(self._object_path(bucket_root))
+
+        # When
+        with (
+            patch.object(dynamicio.mixins.with_s3, "_s3_filesystem", return_value=self._local_s3(bucket_root)),
+            patch.object(dynamicio.mixins.with_s3, "_download_to_memory") as mock_download,
+        ):
+            df = ReadS3ParquetIO(source_config=self._config(), filters=[("id", "<=", 3)]).read()
+
+        # Then
+        mock_download.assert_not_called()
+        assert df["id"].tolist() == [0, 1, 2, 3] and df.columns.tolist() == ["id", "foo_name", "bar"]
+
+    @pytest.mark.unit
+    def test_filtered_read_returns_the_same_frame_as_the_full_download(self, bucket_root):
+        # Given
+        filters = [("id", ">=", 3), ("id", "<=", 9)]
+        body = io.BytesIO(self._object_path(bucket_root).read_bytes())
+
+        # When
+        with patch.object(dynamicio.mixins.with_s3, "_s3_filesystem", return_value=self._local_s3(bucket_root)):
+            ranged = ReadS3ParquetIO(source_config=self._config(), filters=filters).read()
+        downloaded = dynamicio.mixins.with_local.WithLocal._read_parquet_file(body, ReadS3ParquetIO(source_config=self._config()).schema, filters=filters)
+
+        # Then
+        assert ranged["id"].tolist() == list(range(3, 10))
+        pd.testing.assert_frame_equal(ranged, downloaded)
+
+    @pytest.mark.unit
+    def test_filtered_read_opens_the_bucket_and_key_on_the_s3_file_system(self):
+        # Given
+        schema = ReadS3ParquetIO(source_config=self._config()).schema
+
+        # When
+        with patch.object(dynamicio.mixins.with_s3, "_s3_filesystem") as mock_filesystem, patch.object(dynamicio.mixins.with_s3.pd, "read_parquet") as mock_read:
+            dynamicio.mixins.with_s3.WithS3File._read_s3_parquet_file("s3://bucket/dir/file.parquet", schema, filters=[("id", "==", 1)])
+
+        # Then
+        mock_filesystem.assert_called_once_with("bucket")
+        assert mock_read.call_args.args == ("bucket/dir/file.parquet",)
+        assert mock_read.call_args.kwargs["filesystem"] is mock_filesystem.return_value
+        assert mock_read.call_args.kwargs["filters"] == [("id", "==", 1)]
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("options", [{}, {"filters": None}, {"filters": [("id", "==", 1)], "engine": "fastparquet"}])
+    def test_read_without_filters_downloads_the_whole_object(self, options, expected_s3_parquet_df):
+        # Given
+        body = io.BytesIO()
+        expected_s3_parquet_df.to_parquet(body)
+        body.seek(0)
+        schema = ReadS3ParquetIO(source_config=self._config()).schema
+
+        # When
+        with (
+            patch.object(dynamicio.mixins.with_s3, "_s3_filesystem") as mock_filesystem,
+            patch.object(dynamicio.mixins.with_s3, "_download_to_memory", return_value=body) as mock_download,
+            patch.object(dynamicio.mixins.with_local.WithLocal, "_read_parquet_file") as mock_read,
+        ):
+            dynamicio.mixins.with_s3.WithS3File._read_s3_parquet_file("s3://bucket/dir/file.parquet", schema, **options)
+
+        # Then
+        mock_filesystem.assert_not_called()
+        mock_download.assert_called_once_with("bucket", "dir/file.parquet")
+        assert mock_read.call_args.args[0] is body
+
+    @pytest.mark.unit
+    @patch("dynamicio.mixins.with_s3.wr.s3.read_parquet")
+    def test_wrangler_only_options_take_precedence_over_the_ranged_read(self, mock_reader, expected_s3_parquet_df):
+        # Given
+        mock_reader.return_value = expected_s3_parquet_df
+
+        # When
+        with patch.object(dynamicio.mixins.with_s3, "_s3_filesystem") as mock_filesystem:
+            ReadS3ParquetIO(source_config=self._config(), pyarrow_additional_kwargs={}, filters=[("id", "==", 1)]).read()
+
+        # Then
+        mock_reader.assert_called_once()
+        mock_filesystem.assert_not_called()
+
+    @pytest.mark.unit
+    def test_caller_supplied_filesystem_is_respected(self, bucket_root):
+        # Given
+        schema = ReadS3ParquetIO(source_config=self._config()).schema
+        caller_filesystem = self._local_s3(bucket_root)
+
+        # When
+        with patch.object(dynamicio.mixins.with_s3, "_s3_filesystem") as mock_filesystem:
+            df = dynamicio.mixins.with_s3.WithS3File._read_s3_parquet_file(f"s3://{constants.MOCK_BUCKET}/{self.KEY}", schema, filters=[("id", "==", 1)], filesystem=caller_filesystem)
+
+        # Then
+        assert df["id"].tolist() == [1]
+        mock_filesystem.assert_called_once()
+
+    @pytest.mark.unit
+    def test_s3_filesystem_is_built_once_per_process_and_bucket_in_the_bucket_region(self):
+        # Given
+        dynamicio.mixins.with_s3._FILESYSTEM.clear()
+
+        # When
+        with (
+            patch.object(dynamicio.mixins.with_s3.pafs, "S3FileSystem", side_effect=lambda **_: object()) as mock_s3,
+            patch.object(dynamicio.mixins.with_s3.pafs, "resolve_s3_region", return_value="eu-west-1") as mock_region,
+        ):
+            first = dynamicio.mixins.with_s3._s3_filesystem("bucket-a")
+            again = dynamicio.mixins.with_s3._s3_filesystem("bucket-a")
+            other = dynamicio.mixins.with_s3._s3_filesystem("bucket-b")
+            with patch.object(dynamicio.mixins.with_s3.os, "getpid", return_value=-1):
+                forked = dynamicio.mixins.with_s3._s3_filesystem("bucket-a")
+        dynamicio.mixins.with_s3._FILESYSTEM.clear()
+
+        # Then
+        assert first is again
+        assert other is not first and forked is not first
+        assert mock_s3.call_count == 3
+        mock_s3.assert_called_with(region="eu-west-1")
+        assert [call.args for call in mock_region.call_args_list] == [("bucket-a",), ("bucket-b",), ("bucket-a",)]
+
+
+class TestS3ParquetRangedReadOverS3Protocol:
+    """The same reads against moto's S3 server: pyarrow and boto3 send real HTTP requests, so the byte ranges can be checked."""
+
+    KEY = "s3:sample-prefix/mock-key"
+
+    @staticmethod
+    def _config():
+        return IOConfig(
+            path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml"),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_S3_PARQUET")
+
+    @pytest.fixture
+    def moto_s3_server(self, monkeypatch):
+        """Run moto's S3 as a local HTTP server, recording (method, path, Range header, bytes sent) for every request.
+
+        pyarrow's S3 client is C++, so moto's in-process `mock_aws` does not see its calls; a server does.
+        """
+        moto_server = pytest.importorskip("moto.server")  # dev dependency only; the dependency-ranges CI jobs do not install it
+        serving = pytest.importorskip("werkzeug.serving")
+        for name in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"):
+            monkeypatch.setenv(name, "testing")
+        monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
+        requests: list = []
+        app = moto_server.DomainDispatcherApplication(moto_server.create_backend_app)
+
+        def recording_app(environ, start_response):
+            record = {"method": environ["REQUEST_METHOD"], "path": urllib.parse.unquote(environ["PATH_INFO"]), "range": environ.get("HTTP_RANGE"), "bytes": 0}
+            requests.append(record)
+
+            def recording_start_response(status, headers, *args):
+                record["bytes"] = int(dict(headers).get("Content-Length", 0)) if record["method"] == "GET" else 0
+                return start_response(status, headers, *args)
+
+            return app(environ, recording_start_response)
+
+        server = serving.make_server("127.0.0.1", 0, recording_app, threaded=True)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        endpoint = f"127.0.0.1:{server.server_port}"
+        yield types.SimpleNamespace(
+            endpoint=endpoint,
+            requests=requests,
+            client=boto3.client("s3", endpoint_url=f"http://{endpoint}", region_name="us-east-1"),
+            filesystem=pafs.S3FileSystem(endpoint_override=endpoint, scheme="http", access_key="testing", secret_key="testing", region="us-east-1"),
+        )
+        urllib.request.urlopen(urllib.request.Request(f"http://{endpoint}/moto-api/reset", method="POST"))  # pylint: disable=consider-using-with
+        server.shutdown()
+
+    @pytest.fixture
+    def s3_object(self, moto_s3_server):
+        df = pd.DataFrame({"id": list(range(300_000)), "foo_name": [f"name_{i}" for i in range(300_000)], "bar": [i * 10 for i in range(300_000)]})
+        body = io.BytesIO()
+        df.to_parquet(body, row_group_size=100_000, index=False)
+        moto_s3_server.client.create_bucket(Bucket=constants.MOCK_BUCKET)
+        moto_s3_server.client.put_object(Bucket=constants.MOCK_BUCKET, Key=self.KEY, Body=body.getvalue())
+        moto_s3_server.requests.clear()
+        return body.getvalue()
+
+    def _object_gets(self, server):
+        return [r for r in server.requests if r["method"] == "GET" and r["path"] == f"/{constants.MOCK_BUCKET}/{self.KEY}"]
+
+    @pytest.mark.unit
+    def test_filtered_read_requests_only_byte_ranges_outside_the_skipped_row_groups(self, moto_s3_server, s3_object):
+        # Given
+        metadata = pq.ParquetFile(io.BytesIO(s3_object)).metadata
+        skipped = []
+        for index in (1, 2):
+            for column_index in range(metadata.num_columns):
+                column = metadata.row_group(index).column(column_index)
+                start = column.dictionary_page_offset if column.has_dictionary_page else column.data_page_offset
+                skipped.append((start, start + column.total_compressed_size))
+
+        # When
+        with (
+            patch.object(dynamicio.mixins.with_s3, "_s3_filesystem", return_value=moto_s3_server.filesystem),
+            patch.object(dynamicio.mixins.with_s3, "_download_to_memory") as mock_download,
+        ):
+            df = ReadS3ParquetIO(source_config=self._config(), filters=[("id", "<=", 99_999)]).read()
+
+        # Then
+        mock_download.assert_not_called()
+        assert df["id"].tolist() == list(range(100_000))
+        gets = self._object_gets(moto_s3_server)
+        assert gets and all(r["range"] for r in gets)
+        requested = [tuple(int(n) for n in r["range"].removeprefix("bytes=").split("-")) for r in gets]
+        footer_reads = [(a, b) for a, b in requested if b == len(s3_object) - 1]  # pyarrow reads the file tail speculatively to find the footer
+        data_reads = [(a, b) for a, b in requested if b != len(s3_object) - 1]
+        assert footer_reads and data_reads
+        assert not [(a, b) for a, b in data_reads for s, e in skipped if a < e and b >= s]
+        assert sum(r["bytes"] for r in gets) < len(s3_object) / 2
+
+    @pytest.mark.unit
+    @pytest.mark.usefixtures("s3_object")
+    def test_filtered_read_returns_the_same_frame_as_the_full_download_over_s3(self, moto_s3_server):
+        # Given
+        filters = [("id", ">=", 150_000), ("id", "<=", 250_000)]
+
+        # When
+        with patch.object(dynamicio.mixins.with_s3, "_s3_filesystem", return_value=moto_s3_server.filesystem):
+            ranged = ReadS3ParquetIO(source_config=self._config(), filters=filters).read()
+        with patch.object(dynamicio.mixins.with_s3, "_shared_s3_client", return_value=moto_s3_server.client):
+            body = dynamicio.mixins.with_s3._download_to_memory(constants.MOCK_BUCKET, self.KEY)
+        downloaded = dynamicio.mixins.with_local.WithLocal._read_parquet_file(body, ReadS3ParquetIO(source_config=self._config()).schema, filters=filters)
+
+        # Then
+        assert ranged["id"].tolist() == list(range(150_000, 250_001))
+        pd.testing.assert_frame_equal(ranged, downloaded)
+
+    @pytest.mark.unit
+    def test_read_without_filters_is_one_whole_object_get_over_boto3(self, moto_s3_server, s3_object):
+        # When
+        with (
+            patch.object(dynamicio.mixins.with_s3, "_shared_s3_client", return_value=moto_s3_server.client),
+            patch.object(dynamicio.mixins.with_s3, "_s3_filesystem") as mock_filesystem,
+        ):
+            df = ReadS3ParquetIO(source_config=self._config()).read()
+
+        # Then
+        mock_filesystem.assert_not_called()
+        gets = self._object_gets(moto_s3_server)
+        assert len(gets) == 1 and gets[0]["range"] is None and gets[0]["bytes"] == len(s3_object)
+        assert len(df) == 300_000
