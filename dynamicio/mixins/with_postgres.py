@@ -195,9 +195,11 @@ class WithPostgres:
         """Create the table of `model` without a primary key if it does not exist, inside the write transaction.
 
         The generated model makes the first column a primary key, which tables holding many rows per first-column value
-        violate. Postgres DDL is transactional, so a failed write also rolls back the new table.
+        violate. Its string columns are `String(255)`, a limit the schema does not state, so the new table uses unbounded
+        strings. Postgres DDL is transactional, so a failed write also rolls back the new table.
         """
-        table = Table(model.__tablename__, MetaData(), *[Column(column.name, column.type) for column in model.__table__.columns])  # type: ignore
+        columns = [Column(column.name, String() if isinstance(column.type, String) else column.type) for column in model.__table__.columns]  # type: ignore
+        table = Table(model.__tablename__, MetaData(), *columns)  # type: ignore
         table.create(session.connection(), checkfirst=True)
 
     @staticmethod

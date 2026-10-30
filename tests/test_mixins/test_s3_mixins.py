@@ -1610,6 +1610,29 @@ class TestS3ParquetRangedRead:
         assert mock_read.call_args.args[0] is body
 
     @pytest.mark.unit
+    @pytest.mark.parametrize("options", [{"filters": [("id", "==", 1)]}, {"filters": [("id", "==", 1)], "engine": "auto"}])
+    def test_filtered_read_downloads_the_whole_object_when_the_pandas_default_engine_is_fastparquet(self, options, expected_s3_parquet_df):
+        # Given
+        body = io.BytesIO()
+        expected_s3_parquet_df.to_parquet(body)
+        body.seek(0)
+        schema = ReadS3ParquetIO(source_config=self._config()).schema
+
+        # When
+        with (
+            pd.option_context("io.parquet.engine", "fastparquet"),
+            patch.object(dynamicio.mixins.with_s3, "_s3_filesystem") as mock_filesystem,
+            patch.object(dynamicio.mixins.with_s3, "_download_to_memory", return_value=body) as mock_download,
+            patch.object(dynamicio.mixins.with_local.WithLocal, "_read_parquet_file") as mock_read,
+        ):
+            dynamicio.mixins.with_s3.WithS3File._read_s3_parquet_file("s3://bucket/dir/file.parquet", schema, **options)
+
+        # Then
+        mock_filesystem.assert_not_called()
+        mock_download.assert_called_once_with("bucket", "dir/file.parquet")
+        assert mock_read.call_args.args[0] is body
+
+    @pytest.mark.unit
     @patch("dynamicio.mixins.with_s3.wr.s3.read_parquet")
     def test_wrangler_only_options_take_precedence_over_the_ranged_read(self, mock_reader, expected_s3_parquet_df):
         # Given

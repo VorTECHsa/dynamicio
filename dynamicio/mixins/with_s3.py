@@ -620,7 +620,10 @@ class WithS3File:
             # A "directory" is read as a dataset of all its objects, as pandas/pyarrow did before.
             return WithS3File._read_s3_parquet_directory(s3_path, schema, **kwargs)
         bucket, key = _split_s3_url(s3_path)
-        if kwargs.get("filters") is not None and kwargs.get("engine") != "fastparquet":
+        engine = kwargs.get("engine", "auto")
+        if engine == "auto":
+            engine = pd.get_option("io.parquet.engine")
+        if kwargs.get("filters") is not None and engine != "fastparquet":
             filesystem = _s3_filesystem(bucket) if kwargs.get("filesystem") is None else kwargs["filesystem"]
             return with_local.WithLocal._read_parquet_file(f"{bucket}/{key}", schema, **{**kwargs, "filesystem": filesystem})  # pylint: disable=protected-access
         return with_local.WithLocal._read_parquet_file(_download_to_memory(bucket, key), schema, **kwargs)  # type: ignore[arg-type] # pylint: disable=protected-access

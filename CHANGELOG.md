@@ -3,7 +3,7 @@
 ## v9.2.0
 
 - feat: a single-file S3 parquet read with `filters` reads only the row groups whose footer statistics can match, over ranged `GetObject` requests through `pyarrow.fs.S3FileSystem` (one for each process and bucket). The rows, index and dtypes are the same as before. Reads without `filters`, fastparquet reads, prefix reads and reads with wrangler-only kwargs do not change. See ADR 0004
-- feat: new postgres write option `create_table_if_missing` (default `False`). When `True`, the writer creates a missing table from the schema columns, with no primary key, in the same transaction as the write
+- feat: new postgres write option `create_table_if_missing` (default `False`). When `True`, the writer creates a missing table from the schema columns, with no primary key and with unbounded string columns, in the same transaction as the write
 - chore: dev dependency `moto[server]>=5` for the tests of the ranged read
 
 ## v9.1.0

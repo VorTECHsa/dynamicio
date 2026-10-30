@@ -360,6 +360,7 @@ class TestCreateTableIfMissing:
         inspector = inspect(engine)
         assert [column["name"] for column in inspector.get_columns("create_if_missing_table")] == ["item_id", "quantity", "is_active"]
         assert not inspector.get_pk_constraint("create_if_missing_table")["constrained_columns"]
+        assert inspector.get_columns("create_if_missing_table")[0]["type"].length is None
         session.execute(text("INSERT INTO create_if_missing_table VALUES ('a', 1, 1), ('a', 2, 0)"))  # many rows per first column
         session.commit()
         session.close()
