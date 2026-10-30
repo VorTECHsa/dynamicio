@@ -20,6 +20,7 @@ import boto3
 import boto3.s3.transfer
 import pandas as pd
 import pyarrow as pa
+import pyarrow.fs as pafs
 import pyarrow.parquet as pq
 import s3transfer.futures
 import tables
@@ -35,6 +36,7 @@ from dynamicio.mixins.utils import get_file_type_value
 _SESSION_LOCK = threading.Lock()
 _SESSION: Dict[int, boto3.Session] = {}
 _CLIENT: Dict[int, object] = {}
+_FILESYSTEM: Dict[tuple, pafs.S3FileSystem] = {}
 
 
 def _shared_boto3_session() -> boto3.Session:
@@ -154,6 +156,15 @@ def _shared_s3_client():
             _CLIENT.clear()
             _CLIENT[pid] = session.client("s3", config=Config(max_pool_connections=64))  # pool must cover the sync thread pools
         return _CLIENT[pid]
+
+
+def _s3_filesystem(bucket: str) -> pafs.S3FileSystem:
+    """Return a per-process pyarrow S3 file system in the region of `bucket` (same default credential chain as boto3)."""
+    pid = os.getpid()
+    with _SESSION_LOCK:
+        if (pid, bucket) not in _FILESYSTEM:
+            _FILESYSTEM[(pid, bucket)] = pafs.S3FileSystem(region=pafs.resolve_s3_region(bucket))
+        return _FILESYSTEM[(pid, bucket)]
 
 
 def _split_s3_url(url: str):
@@ -599,6 +610,9 @@ class WithS3File:
         By default the object is fetched in a single round trip over a shared boto3 client and parsed in memory with
         the same pandas/pyarrow options as local reads. If options only awswrangler understands are given (e.g.
         `s3_additional_kwargs`, `pyarrow_additional_kwargs`), awswrangler does the read instead.
+
+        With `filters`, pyarrow reads the object over S3 byte ranges: it reads the footer, skips the row groups whose
+        statistics cannot match, and fetches only the column chunks of the remaining ones.
         """
         if _WRANGLER_ONLY_READ_PARQUET & kwargs.keys():
             return WithS3File._read_s3_parquet_file_with_wrangler(s3_path, schema, **kwargs)
@@ -606,6 +620,8 @@ class WithS3File:
             # A "directory" is read as a dataset of all its objects, as pandas/pyarrow did before.
             return WithS3File._read_s3_parquet_directory(s3_path, schema, **kwargs)
         bucket, key = _split_s3_url(s3_path)
+        if kwargs.get("filters") is not None and kwargs.get("engine") != "fastparquet":
+            return with_local.WithLocal._read_parquet_file(f"{bucket}/{key}", schema, **{"filesystem": _s3_filesystem(bucket), **kwargs})  # pylint: disable=protected-access
         return with_local.WithLocal._read_parquet_file(_download_to_memory(bucket, key), schema, **kwargs)  # type: ignore[arg-type] # pylint: disable=protected-access
 
     @staticmethod
