@@ -9,7 +9,7 @@ from typing import Any, Dict, Generator, MutableMapping, Union
 
 import pandas as pd
 from magic_logger import logger
-from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, Float, Integer, String, create_engine, text
+from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, Float, Integer, MetaData, String, Table, create_engine, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Query
@@ -76,6 +76,8 @@ class WithPostgres:
            - `truncate_and_append: bool`: If True, truncates the table with CASCADE and appends new rows (faster but destructive).
                                     If False (default), safely deletes all existing rows and then appends new rows.
                                     Use truncate only if you are certain views and FK constraints can be dropped or tolerated.
+           - `create_table_if_missing: bool`: If True, creates the table from the schema before writing when it does not exist.
+                                    The table has no primary key, because the schema does not say which columns form it.
     """
 
     sources_config: PostgresDataEnvironment
@@ -184,7 +186,19 @@ class WithPostgres:
 
         logger.info(f"[postgres] Started uploading table: {self.sources_config.dynamicio_schema.name} from: {db_host}:{db_name}")
         with session_for(connection_string) as session:
+            if self.options.get("create_table_if_missing", False):
+                self._create_table_if_missing(session, model)
             self._write_to_database(session, model.__tablename__, df, is_truncate_and_append)  # type: ignore
+
+    @staticmethod
+    def _create_table_if_missing(session: SqlAlchemySession, model: DeclarativeMeta):
+        """Create the table of `model` without a primary key if it does not exist, inside the write transaction.
+
+        The generated model makes the first column a primary key, which tables holding many rows per first-column value
+        violate. Postgres DDL is transactional, so a failed write also rolls back the new table.
+        """
+        table = Table(model.__tablename__, MetaData(), *[Column(column.name, column.type) for column in model.__table__.columns])  # type: ignore
+        table.create(session.connection(), checkfirst=True)
 
     @staticmethod
     def _write_to_database(session: SqlAlchemySession, table_name: str, df: pd.DataFrame, is_truncate_and_append: bool):
