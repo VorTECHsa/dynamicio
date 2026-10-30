@@ -2,6 +2,7 @@
 
 - Status: Accepted (branch `rnd-13624`, PR #88)
 - Date: 2026-10-08
+- Amended by: [ADR 0004](0004-ranged-parquet-reads-with-filters.md) (decision 2, for reads with `filters` only)
 
 ## Context
 

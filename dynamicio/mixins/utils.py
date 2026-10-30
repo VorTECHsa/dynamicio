@@ -15,6 +15,10 @@ from magic_logger import logger
 def allow_options(options: Union[Iterable[str], Callable]):
     """Decorator to filter **kwargs passed to a function, allowing only valid ones.
 
+    Options are filtered per reader or writer: a key that is not in `options` is dropped with a warning only.
+    A new dynamicio option (one that the target library does not accept, e.g. `truncate_and_append`) must be
+    added to the list of each reader or writer that reads it, as in `[*args_of(pd.HDFStore.put), "pickle_protocol"]`.
+
     Args:
         options: A list of valid options or a callable that returns a list of valid options.
 

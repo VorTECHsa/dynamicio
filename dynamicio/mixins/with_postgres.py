@@ -9,7 +9,7 @@ from typing import Any, Dict, Generator, MutableMapping, Union
 
 import pandas as pd
 from magic_logger import logger
-from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, Float, Integer, String, create_engine, text
+from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, Float, Integer, MetaData, String, Table, create_engine, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Query
@@ -76,6 +76,8 @@ class WithPostgres:
            - `truncate_and_append: bool`: If True, truncates the table with CASCADE and appends new rows (faster but destructive).
                                     If False (default), safely deletes all existing rows and then appends new rows.
                                     Use truncate only if you are certain views and FK constraints can be dropped or tolerated.
+           - `create_table: bool`: If True, creates the table from the schema before writing when it does not exist.
+                                    The table has no primary key, because the schema does not say which columns form it.
     """
 
     sources_config: PostgresDataEnvironment
@@ -180,11 +182,32 @@ class WithPostgres:
         assert self.sources_config.dynamicio_schema is not None, "The schema must be specified for SQL tables"
         model = self._generate_model_from_schema(self.sources_config.dynamicio_schema)
 
-        is_truncate_and_append = self.options.get("truncate_and_append", False)
-
         logger.info(f"[postgres] Started uploading table: {self.sources_config.dynamicio_schema.name} from: {db_host}:{db_name}")
+        self._write_model(connection_string, model, df, **self.options)
+
+    @staticmethod
+    @utils.allow_options(["truncate_and_append", "create_table"])
+    def _write_model(connection_string: str, model: DeclarativeMeta, df: pd.DataFrame, truncate_and_append: bool = False, create_table: bool = False):
+        if not isinstance(create_table, bool):
+            raise TypeError(f"create_table must be a bool, got {create_table!r}")
         with session_for(connection_string) as session:
-            self._write_to_database(session, model.__tablename__, df, is_truncate_and_append)  # type: ignore
+            if create_table:
+                WithPostgres._create_table(session, model)
+            WithPostgres._write_to_database(session, model.__tablename__, df, truncate_and_append)  # type: ignore
+
+    @staticmethod
+    def _create_table(session: SqlAlchemySession, model: DeclarativeMeta):
+        """Create the table of `model` without a primary key if it does not exist, inside the write transaction.
+
+        The generated model makes the first column a primary key, which tables holding many rows per first-column value
+        violate. Its string columns are `String(255)`, a limit the schema does not state, so the new table uses unbounded
+        strings. Each column keeps only its name and type: the table has no constraints, all columns are nullable with
+        no defaults, and it is created in the default schema of the connection. Postgres DDL is transactional, so a
+        failed write also rolls back the new table.
+        """
+        columns = [Column(column.name, String() if isinstance(column.type, String) else column.type) for column in model.__table__.columns]  # type: ignore
+        table = Table(model.__tablename__, MetaData(), *columns)  # type: ignore
+        table.create(session.connection(), checkfirst=True)
 
     @staticmethod
     def _write_to_database(session: SqlAlchemySession, table_name: str, df: pd.DataFrame, is_truncate_and_append: bool):

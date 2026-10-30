@@ -49,6 +49,9 @@ Downstream pipelines upgrade by a **version bump only**, so I/O behaviour must s
   `lines=True` and `index=False`; 8.1.1 restored `lines=False` and a per-orient `index` default. Never "improve" defaults silently.
 - When changing a reader or writer, add a test that runs against a **CLOUD** resource definition with an in-memory object store
   (see `_json_object_store` in `tests/test_mixins/test_s3_mixins.py`). `ENVIRONMENT=LOCAL` tests do not exercise the S3 paths.
+- A new option must be on the `utils.allow_options` list of each reader or writer that uses it. An option that is
+  not on the list is dropped with only a warning, so a missing entry fails silently. Add a test that the option
+  reaches the reader or writer through the public `IO(...)` call.
 - Add a `CHANGELOG.md` entry for every user-visible change, and update README/docs when options change.
 
 ## Testing against real AWS locally (no release needed)
