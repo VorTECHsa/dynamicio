@@ -5,8 +5,10 @@ from unittest.mock import ANY, MagicMock, patch
 
 import pandas as pd
 import pytest
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import Table, create_engine, inspect, text
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
+from sqlalchemy.schema import CreateTable
 from sqlalchemy.sql.base import ColumnCollection
 
 # Application Imports
@@ -384,6 +386,26 @@ class TestCreateTable:
         session.close()
 
     @pytest.mark.unit
+    def test_create_table_renders_postgres_ddl_without_a_primary_key_and_with_jsonb(self):
+        # Given
+        schema = types.SimpleNamespace(
+            name="create_table_ddl",
+            columns={
+                "item_id": types.SimpleNamespace(name="item_id", data_type="object"),
+                "payload": types.SimpleNamespace(name="payload", data_type="json"),
+            },
+        )
+
+        # When
+        with patch.object(Table, "create", autospec=True) as mock_create:
+            WithPostgres._create_table(MagicMock(), WithPostgres._generate_model_from_schema(schema))
+
+        # Then
+        ddl = str(CreateTable(mock_create.call_args.args[0]).compile(dialect=postgresql.dialect()))
+        assert " ".join(ddl.split()) == "CREATE TABLE create_table_ddl ( item_id VARCHAR, payload JSONB )"
+        assert mock_create.call_args.kwargs == {"checkfirst": True}
+
+    @pytest.mark.unit
     def test_write_creates_the_missing_table_before_writing_when_the_option_is_set(self):
         # Given
         calls = MagicMock()
@@ -432,3 +454,16 @@ class TestCreateTable:
         # Then
         mock_create.assert_not_called()
         mock_write.assert_called_once()
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("value", ["false", "true", 1, None])
+    def test_write_rejects_a_create_table_value_that_is_not_a_bool(self, value):
+        # When / Then
+        with (
+            patch("dynamicio.mixins.with_postgres.session_for") as mock_session,
+            patch.object(WithPostgres, "_create_table") as mock_create,
+            pytest.raises(TypeError, match="create_table must be a bool"),
+        ):
+            WritePostgresIO(source_config=self._config(), create_table=value).write(self._df())
+        mock_session.assert_not_called()
+        mock_create.assert_not_called()

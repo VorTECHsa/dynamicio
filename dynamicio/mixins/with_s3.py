@@ -159,12 +159,21 @@ def _shared_s3_client():
 
 
 def _s3_filesystem(bucket: str) -> pafs.S3FileSystem:
-    """Return a per-process pyarrow S3 file system in the region of `bucket` (same default credential chain as boto3)."""
-    pid = os.getpid()
+    """Return a per-process pyarrow S3 file system in the region of `bucket` (same default credential chain as boto3).
+
+    The region lookup is a network call, so it runs outside `_SESSION_LOCK`: a slow lookup must not block the boto3
+    client of other threads. A failed lookup raises and caches nothing. Entries of other processes are dropped, as
+    the boto3 session and client caches do.
+    """
+    key = (os.getpid(), bucket)
+    filesystem = _FILESYSTEM.get(key)
+    if filesystem is not None:
+        return filesystem
+    filesystem = pafs.S3FileSystem(region=pafs.resolve_s3_region(bucket))
     with _SESSION_LOCK:
-        if (pid, bucket) not in _FILESYSTEM:
-            _FILESYSTEM[(pid, bucket)] = pafs.S3FileSystem(region=pafs.resolve_s3_region(bucket))
-        return _FILESYSTEM[(pid, bucket)]
+        for stale in [k for k in _FILESYSTEM if k[0] != key[0]]:
+            del _FILESYSTEM[stale]
+        return _FILESYSTEM.setdefault(key, filesystem)
 
 
 def _split_s3_url(url: str):
@@ -611,8 +620,11 @@ class WithS3File:
         the same pandas/pyarrow options as local reads. If options only awswrangler understands are given (e.g.
         `s3_additional_kwargs`, `pyarrow_additional_kwargs`), awswrangler does the read instead.
 
-        With `filters`, pyarrow reads the object over S3 byte ranges: it reads the footer, skips the row groups whose
-        statistics cannot match, and fetches only the column chunks of the remaining ones.
+        With non-empty `filters`, pyarrow reads the object over S3 byte ranges: it reads the footer, skips the row groups
+        whose statistics cannot match, and fetches only the column chunks of the remaining ones. A caller `filesystem`
+        is used for this read only if it is a `pyarrow.fs.FileSystem`; with another file system (e.g. fsspec) or with
+        fastparquet, the object is downloaded as without `filters`. Errors on the ranged read come from pyarrow
+        (`FileNotFoundError`, `OSError`), not from botocore (`ClientError`).
         """
         if _WRANGLER_ONLY_READ_PARQUET & kwargs.keys():
             return WithS3File._read_s3_parquet_file_with_wrangler(s3_path, schema, **kwargs)
@@ -623,8 +635,9 @@ class WithS3File:
         engine = kwargs.get("engine", "auto")
         if engine == "auto":
             engine = pd.get_option("io.parquet.engine")
-        if kwargs.get("filters") is not None and engine != "fastparquet":
-            filesystem = _s3_filesystem(bucket) if kwargs.get("filesystem") is None else kwargs["filesystem"]
+        filesystem = kwargs.get("filesystem")
+        if kwargs.get("filters") and engine != "fastparquet" and (filesystem is None or isinstance(filesystem, pafs.FileSystem)):
+            filesystem = filesystem or _s3_filesystem(bucket)
             return with_local.WithLocal._read_parquet_file(f"{bucket}/{key}", schema, **{**kwargs, "filesystem": filesystem})  # pylint: disable=protected-access
         return with_local.WithLocal._read_parquet_file(_download_to_memory(bucket, key), schema, **kwargs)  # type: ignore[arg-type] # pylint: disable=protected-access
 

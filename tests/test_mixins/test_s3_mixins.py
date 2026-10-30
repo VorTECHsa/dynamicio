@@ -1588,7 +1588,10 @@ class TestS3ParquetRangedRead:
         assert mock_read.call_args.kwargs["filters"] == [("id", "==", 1)]
 
     @pytest.mark.unit
-    @pytest.mark.parametrize("options", [{}, {"filters": None}, {"filters": [("id", "==", 1)], "engine": "fastparquet"}])
+    @pytest.mark.parametrize(
+        "options",
+        [{}, {"filters": None}, {"filters": []}, {"filters": [("id", "==", 1)], "engine": "fastparquet"}, {"filters": [("id", "==", 1)], "filesystem": object()}],
+    )
     def test_read_without_filters_downloads_the_whole_object(self, options, expected_s3_parquet_df):
         # Given
         body = io.BytesIO()
@@ -1716,6 +1719,45 @@ class TestS3ParquetRangedRead:
         assert mock_s3.call_count == 3
         mock_s3.assert_called_with(region="eu-west-1")
         assert [call.args for call in mock_region.call_args_list] == [("bucket-a",), ("bucket-b",), ("bucket-a",)]
+
+    @pytest.mark.unit
+    def test_s3_filesystem_drops_the_entries_of_other_processes(self):
+        # Given
+        dynamicio.mixins.with_s3._FILESYSTEM.clear()
+
+        # When
+        with (
+            patch.object(dynamicio.mixins.with_s3.pafs, "S3FileSystem", side_effect=lambda **_: object()),
+            patch.object(dynamicio.mixins.with_s3.pafs, "resolve_s3_region", return_value="eu-west-1"),
+        ):
+            dynamicio.mixins.with_s3._s3_filesystem("bucket-a")
+            with patch.object(dynamicio.mixins.with_s3.os, "getpid", return_value=-1):
+                dynamicio.mixins.with_s3._s3_filesystem("bucket-a")
+        keys = list(dynamicio.mixins.with_s3._FILESYSTEM)
+        dynamicio.mixins.with_s3._FILESYSTEM.clear()
+
+        # Then
+        assert keys == [(-1, "bucket-a")]
+
+    @pytest.mark.unit
+    def test_s3_filesystem_resolves_the_region_without_the_session_lock_and_caches_no_failure(self):
+        # Given
+        dynamicio.mixins.with_s3._FILESYSTEM.clear()
+        lock_held = []
+
+        def failing_lookup(bucket):
+            lock_held.append(dynamicio.mixins.with_s3._SESSION_LOCK.locked())
+            raise OSError(f"no region for {bucket}")
+
+        # When
+        with patch.object(dynamicio.mixins.with_s3.pafs, "resolve_s3_region", side_effect=failing_lookup):
+            for _ in range(2):
+                with pytest.raises(OSError):
+                    dynamicio.mixins.with_s3._s3_filesystem("bucket-a")
+
+        # Then
+        assert lock_held == [False, False]
+        assert not dynamicio.mixins.with_s3._FILESYSTEM
 
 
 class TestS3ParquetRangedReadOverS3Protocol:

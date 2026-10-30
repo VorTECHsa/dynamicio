@@ -188,6 +188,8 @@ class WithPostgres:
     @staticmethod
     @utils.allow_options(["truncate_and_append", "create_table"])
     def _write_model(connection_string: str, model: DeclarativeMeta, df: pd.DataFrame, truncate_and_append: bool = False, create_table: bool = False):
+        if not isinstance(create_table, bool):
+            raise TypeError(f"create_table must be a bool, got {create_table!r}")
         with session_for(connection_string) as session:
             if create_table:
                 WithPostgres._create_table(session, model)
@@ -199,7 +201,9 @@ class WithPostgres:
 
         The generated model makes the first column a primary key, which tables holding many rows per first-column value
         violate. Its string columns are `String(255)`, a limit the schema does not state, so the new table uses unbounded
-        strings. Postgres DDL is transactional, so a failed write also rolls back the new table.
+        strings. Each column keeps only its name and type: the table has no constraints, all columns are nullable with
+        no defaults, and it is created in the default schema of the connection. Postgres DDL is transactional, so a
+        failed write also rolls back the new table.
         """
         columns = [Column(column.name, String() if isinstance(column.type, String) else column.type) for column in model.__table__.columns]  # type: ignore
         table = Table(model.__tablename__, MetaData(), *columns)  # type: ignore
