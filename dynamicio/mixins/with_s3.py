@@ -621,7 +621,8 @@ class WithS3File:
             return WithS3File._read_s3_parquet_directory(s3_path, schema, **kwargs)
         bucket, key = _split_s3_url(s3_path)
         if kwargs.get("filters") is not None and kwargs.get("engine") != "fastparquet":
-            return with_local.WithLocal._read_parquet_file(f"{bucket}/{key}", schema, **{"filesystem": _s3_filesystem(bucket), **kwargs})  # pylint: disable=protected-access
+            filesystem = _s3_filesystem(bucket) if kwargs.get("filesystem") is None else kwargs["filesystem"]
+            return with_local.WithLocal._read_parquet_file(f"{bucket}/{key}", schema, **{**kwargs, "filesystem": filesystem})  # pylint: disable=protected-access
         return with_local.WithLocal._read_parquet_file(_download_to_memory(bucket, key), schema, **kwargs)  # type: ignore[arg-type] # pylint: disable=protected-access
 
     @staticmethod

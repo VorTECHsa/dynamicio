@@ -1635,7 +1635,40 @@ class TestS3ParquetRangedRead:
 
         # Then
         assert df["id"].tolist() == [1]
-        mock_filesystem.assert_called_once()
+        mock_filesystem.assert_not_called()
+
+    @pytest.mark.unit
+    def test_explicit_none_filesystem_uses_the_s3_file_system(self, bucket_root):
+        # Given
+        schema = ReadS3ParquetIO(source_config=self._config()).schema
+
+        # When
+        with patch.object(dynamicio.mixins.with_s3, "_s3_filesystem", return_value=self._local_s3(bucket_root)) as mock_filesystem:
+            df = dynamicio.mixins.with_s3.WithS3File._read_s3_parquet_file(f"s3://{constants.MOCK_BUCKET}/{self.KEY}", schema, filters=[("id", "==", 1)], filesystem=None)
+
+        # Then
+        assert df["id"].tolist() == [1]
+        mock_filesystem.assert_called_once_with(constants.MOCK_BUCKET)
+
+    @pytest.mark.unit
+    def test_filtered_read_does_not_take_partition_columns_from_hive_style_keys(self, tmp_path):
+        # Given
+        df = pd.DataFrame({"id": [1, 2, 3], "foo_name": ["a", "b", "c"], "bar": [10, 20, 30]})
+        for key in ["id=1/data.parquet", "day=7/data.parquet"]:
+            (tmp_path / constants.MOCK_BUCKET / key).parent.mkdir(parents=True)
+            df.to_parquet(tmp_path / constants.MOCK_BUCKET / key, index=False)
+        schema = ReadS3ParquetIO(source_config=self._config()).schema
+
+        # When
+        with patch.object(dynamicio.mixins.with_s3, "_s3_filesystem", return_value=self._local_s3(tmp_path)):
+            frames = [
+                dynamicio.mixins.with_s3.WithS3File._read_s3_parquet_file(f"s3://{constants.MOCK_BUCKET}/{key}", schema, filters=[("id", "<", 3)])
+                for key in ["id=1/data.parquet", "day=7/data.parquet"]
+            ]
+
+        # Then
+        for frame in frames:
+            pd.testing.assert_frame_equal(frame, df[df["id"] < 3])
 
     @pytest.mark.unit
     def test_s3_filesystem_is_built_once_per_process_and_bucket_in_the_bucket_region(self):
