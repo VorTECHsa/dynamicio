@@ -321,7 +321,7 @@ class TestPostgresIO:
         assert is_valid is True
 
 
-class TestCreateTableIfMissing:
+class TestCreateTable:
     @staticmethod
     def _model():
         schema = types.SimpleNamespace(
@@ -347,13 +347,13 @@ class TestCreateTableIfMissing:
         return pd.DataFrame({"id": ["a"], "foo": ["b"], "bar": [2000], "baz": ["c"]})
 
     @pytest.mark.unit
-    def test_create_table_if_missing_creates_the_schema_columns_without_a_primary_key(self):
+    def test_create_table_creates_the_schema_columns_without_a_primary_key(self):
         # Given
         engine = create_engine("sqlite://")
         session = Session(bind=engine)
 
         # When
-        WithPostgres._create_table_if_missing(session, self._model())
+        WithPostgres._create_table(session, self._model())
         session.commit()
 
         # Then
@@ -366,7 +366,7 @@ class TestCreateTableIfMissing:
         session.close()
 
     @pytest.mark.unit
-    def test_create_table_if_missing_keeps_an_existing_table_and_its_rows(self):
+    def test_create_table_keeps_an_existing_table_and_its_rows(self):
         # Given
         engine = create_engine("sqlite://")
         session = Session(bind=engine)
@@ -375,7 +375,7 @@ class TestCreateTableIfMissing:
         session.commit()
 
         # When
-        WithPostgres._create_table_if_missing(session, self._model())
+        WithPostgres._create_table(session, self._model())
         session.commit()
 
         # Then
@@ -391,10 +391,10 @@ class TestCreateTableIfMissing:
         # When
         with (
             patch("dynamicio.mixins.with_postgres.session_for") as mock_session_for,
-            patch.object(WithPostgres, "_create_table_if_missing", calls.create),
+            patch.object(WithPostgres, "_create_table", calls.create),
             patch.object(WithPostgres, "_write_to_database", calls.write),
         ):
-            WritePostgresIO(source_config=self._config(), create_table_if_missing=True).write(self._df())
+            WritePostgresIO(source_config=self._config(), create_table=True).write(self._df())
 
         # Then
         session = mock_session_for.return_value.__enter__.return_value
@@ -403,12 +403,28 @@ class TestCreateTableIfMissing:
         assert calls.create.call_args.args[1].__tablename__ == calls.write.call_args.args[1]
 
     @pytest.mark.unit
-    @pytest.mark.parametrize("options", [{}, {"create_table_if_missing": False}])
+    def test_write_drops_options_that_the_postgres_writer_does_not_list(self):
+        # When
+        with (
+            patch("dynamicio.mixins.with_postgres.session_for"),
+            patch.object(WithPostgres, "_create_table") as mock_create,
+            patch.object(WithPostgres, "_write_to_database") as mock_write,
+            patch("dynamicio.mixins.utils.logger") as mock_logger,
+        ):
+            WritePostgresIO(source_config=self._config(), truncate_and_append=True, unknown_option=1).write(self._df())
+
+        # Then
+        mock_create.assert_not_called()
+        assert mock_write.call_args.args[3] is True
+        assert "unknown_option" in mock_logger.warning.call_args.args[0]
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("options", [{}, {"create_table": False}])
     def test_write_does_not_create_tables_without_the_option(self, options):
         # When
         with (
             patch("dynamicio.mixins.with_postgres.session_for"),
-            patch.object(WithPostgres, "_create_table_if_missing") as mock_create,
+            patch.object(WithPostgres, "_create_table") as mock_create,
             patch.object(WithPostgres, "_write_to_database") as mock_write,
         ):
             WritePostgresIO(source_config=self._config(), **options).write(self._df())

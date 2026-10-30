@@ -76,7 +76,7 @@ class WithPostgres:
            - `truncate_and_append: bool`: If True, truncates the table with CASCADE and appends new rows (faster but destructive).
                                     If False (default), safely deletes all existing rows and then appends new rows.
                                     Use truncate only if you are certain views and FK constraints can be dropped or tolerated.
-           - `create_table_if_missing: bool`: If True, creates the table from the schema before writing when it does not exist.
+           - `create_table: bool`: If True, creates the table from the schema before writing when it does not exist.
                                     The table has no primary key, because the schema does not say which columns form it.
     """
 
@@ -182,16 +182,19 @@ class WithPostgres:
         assert self.sources_config.dynamicio_schema is not None, "The schema must be specified for SQL tables"
         model = self._generate_model_from_schema(self.sources_config.dynamicio_schema)
 
-        is_truncate_and_append = self.options.get("truncate_and_append", False)
-
         logger.info(f"[postgres] Started uploading table: {self.sources_config.dynamicio_schema.name} from: {db_host}:{db_name}")
-        with session_for(connection_string) as session:
-            if self.options.get("create_table_if_missing", False):
-                self._create_table_if_missing(session, model)
-            self._write_to_database(session, model.__tablename__, df, is_truncate_and_append)  # type: ignore
+        self._write_model(connection_string, model, df, **self.options)
 
     @staticmethod
-    def _create_table_if_missing(session: SqlAlchemySession, model: DeclarativeMeta):
+    @utils.allow_options(["truncate_and_append", "create_table"])
+    def _write_model(connection_string: str, model: DeclarativeMeta, df: pd.DataFrame, truncate_and_append: bool = False, create_table: bool = False):
+        with session_for(connection_string) as session:
+            if create_table:
+                WithPostgres._create_table(session, model)
+            WithPostgres._write_to_database(session, model.__tablename__, df, truncate_and_append)  # type: ignore
+
+    @staticmethod
+    def _create_table(session: SqlAlchemySession, model: DeclarativeMeta):
         """Create the table of `model` without a primary key if it does not exist, inside the write transaction.
 
         The generated model makes the first column a primary key, which tables holding many rows per first-column value
