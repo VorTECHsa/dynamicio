@@ -1,5 +1,6 @@
 """This module provides mixins that are providing S3 I/O support."""
 
+import atexit
 import collections
 import dataclasses
 import fnmatch
@@ -37,6 +38,10 @@ _SESSION_LOCK = threading.Lock()
 _SESSION: Dict[int, boto3.Session] = {}
 _CLIENT: Dict[int, object] = {}
 _FILESYSTEM: Dict[tuple, pafs.S3FileSystem] = {}
+# pyarrow 24+ can deadlock at exit in its S3 finalizer while an S3FileSystem is still referenced, at least with web
+# identity credentials (https://github.com/apache/arrow/issues/50188). atexit runs handlers in reverse order and
+# `pyarrow.fs` registers its finalizer on import above, so this clear runs first.
+atexit.register(_FILESYSTEM.clear)
 
 
 def _shared_boto3_session() -> boto3.Session:

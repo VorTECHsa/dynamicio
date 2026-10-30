@@ -2,6 +2,8 @@
 import io
 import os
 import shutil
+import subprocess
+import sys
 import threading
 import types
 import urllib.parse
@@ -1758,6 +1760,23 @@ class TestS3ParquetRangedRead:
         # Then
         assert lock_held == [False, False]
         assert not dynamicio.mixins.with_s3._FILESYSTEM
+
+    @pytest.mark.unit
+    def test_s3_filesystem_cache_is_cleared_at_exit_before_the_pyarrow_s3_finalizer(self):
+        # Given: a hook registered after `pyarrow.fs` and before dynamicio, so it runs between the two atexit handlers
+        script = (
+            "import atexit, sys\n"
+            "import pyarrow.fs as pafs\n"
+            "atexit.register(lambda: print('entries before pyarrow finalizer:', len(sys.modules['dynamicio.mixins.with_s3']._FILESYSTEM)))\n"
+            "import dynamicio.mixins.with_s3 as with_s3\n"
+            "with_s3._FILESYSTEM[(0, 'bucket-a')] = pafs.S3FileSystem(region='eu-west-1', anonymous=True)\n"
+        )
+
+        # When
+        result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=60, check=True)
+
+        # Then
+        assert "entries before pyarrow finalizer: 0" in result.stdout
 
 
 class TestS3ParquetRangedReadOverS3Protocol:

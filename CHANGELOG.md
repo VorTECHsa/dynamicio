@@ -4,6 +4,7 @@
 
 - feat: a single-file S3 parquet read with `filters` reads only the row groups whose footer statistics can match, over ranged `GetObject` requests through `pyarrow.fs.S3FileSystem` (one for each process and bucket). The rows, index and dtypes are the same as before. Reads without `filters` or with `filters=[]`, fastparquet reads, reads with a non-pyarrow `filesystem`, prefix reads and reads with wrangler-only kwargs do not change. On the ranged read, a missing key or a permission problem raises pyarrow `FileNotFoundError` or `OSError` in place of botocore `ClientError`, and a custom S3 endpoint of boto3 (`AWS_ENDPOINT_URL`) does not apply. See ADR 0004
 - feat: new postgres write option `create_table` (default `False`). When `True`, the writer creates a missing table from the schema columns, with no primary key and with unbounded string columns, in the same transaction as the write. The postgres writer now lists its options (`truncate_and_append`, `create_table`), so it drops other options with a warning, as the other writers do. A `create_table` value that is not a bool (for example the YAML string `"false"`) raises `TypeError`
+- fix: the cache of pyarrow S3 file systems is cleared at exit, before the pyarrow S3 finalizer runs. With pyarrow 24 and later, a process that read with `filters` on a pod with web identity credentials did not exit (https://github.com/apache/arrow/issues/50188)
 - chore: dev dependency `moto[server]>=5` for the tests of the ranged read
 
 ## v9.1.0
