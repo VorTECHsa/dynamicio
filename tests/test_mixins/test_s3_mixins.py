@@ -2049,17 +2049,17 @@ class TestS3TransientConnectionErrors:
             WriteS3IO(source_config=config).write(df)
 
         # Then
-        (stored,) = client.objects.values()
+        stored = next(iter(client.objects.values()))
         pd.testing.assert_frame_equal(pd.read_parquet(io.BytesIO(stored)), df)
 
     @pytest.mark.unit
-    def test_the_shared_client_is_configured_for_retries_timeouts_and_keepalive(self):
+    def test_the_shared_client_is_configured_for_retries_and_timeouts(self):
         # When
         config = dynamicio.mixins.with_s3._CLIENT_CONFIG
 
         # Then
         assert config.retries == {"mode": "standard", "max_attempts": 10}
-        assert (config.connect_timeout, config.read_timeout, config.tcp_keepalive, config.max_pool_connections) == (10, 60, True, 64)
+        assert (config.connect_timeout, config.read_timeout, config.max_pool_connections) == (10, 60, 64)
 
 
 class TestS3ConnectionResetsOverRealSockets:

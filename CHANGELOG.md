@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- fix: transient S3 connection errors no longer fail a read or write. The shared boto3 client now uses the `standard` retry mode with 10 attempts, `connect_timeout=10`, `read_timeout=60` and TCP keep-alive. The in-memory and file transfers (`put_object`, `upload_fileobj`, `get_object`, `download_fileobj`) are repeated, up to 5 attempts with backoff, on `ConnectionClosedError`, `ConnectTimeoutError`, `EndpointConnectionError`, `ReadTimeoutError`, `IncompleteReadError` and `ResponseStreamingError`, which botocore does not retry once the body is being sent or read. The buffer is rewound before each attempt (bytes written are identical), each retry is logged at WARNING with the bucket and key, and the shared client is rebuilt so the next attempt opens fresh connections. Other errors (for example `ClientError`) are raised as before, and nothing changes when no error occurs
+- fix: transient S3 connection errors no longer fail a read or write. The shared boto3 client now uses the `standard` retry mode with 10 attempts, `connect_timeout=10` and `read_timeout=60`. The in-memory and file transfers (`put_object`, `upload_fileobj`, `get_object`, `download_fileobj`) are repeated, up to 5 attempts with backoff, on `ConnectionClosedError`, `ConnectTimeoutError`, `EndpointConnectionError`, `ReadTimeoutError`, `IncompleteReadError` and `ResponseStreamingError`, which botocore does not retry once the body is being sent or read. The buffer is rewound before each attempt (bytes written are identical), each retry is logged at WARNING with the bucket and key, and the shared client is rebuilt so the next attempt opens fresh connections. Other errors (for example `ClientError`) are raised as before, and nothing changes when no error occurs
 
 ## v9.2.0
 

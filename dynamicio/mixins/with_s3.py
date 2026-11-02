@@ -158,7 +158,7 @@ class HdfIO:
 # Pool: must cover the sync thread pools. Retries: botocore's "standard" mode (10 attempts) also covers broken connections and
 # throttling. Keepalive probes stop idle pooled connections from being dropped silently; the timeouts match botocore's read default
 # and fail a dead connect quickly so that it is retried.
-_CLIENT_CONFIG = Config(max_pool_connections=64, retries={"mode": "standard", "max_attempts": 10}, connect_timeout=10, read_timeout=60, tcp_keepalive=True)
+_CLIENT_CONFIG = Config(max_pool_connections=64, retries={"mode": "standard", "max_attempts": 10}, connect_timeout=10, read_timeout=60)
 
 
 def _shared_s3_client():
