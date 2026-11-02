@@ -1992,34 +1992,44 @@ class TestS3TransientConnectionErrors:
 
     @pytest.mark.unit
     @pytest.mark.parametrize("threshold", [1024, 10**9], ids=["transfer-manager", "single-request"])
-    def test_file_upload_is_repeated_and_stores_identical_bytes(self, tmp_path, threshold):
-        # Given
+    def test_file_upload_is_repeated_on_the_replacement_client_and_stores_identical_bytes(self, tmp_path, threshold):
+        # Given: the client that failed is evicted, so the retry must ask for the shared client again
         data = os.urandom(4096)
         local_path = tmp_path / "upload.bin"
         local_path.write_bytes(data)
-        client = _FlakyS3Client(failures=2, error=self._closed())
+        failing = _FlakyS3Client(failures=1, error=self._closed())
+        replacement = _FlakyS3Client(failures=0, error=self._closed())
 
         # When
-        with patch.object(dynamicio.mixins.with_s3, "_DIRECT_TRANSFER_MAX_BYTES", threshold):
-            dynamicio.mixins.with_s3._upload_file(client, str(local_path), self.BUCKET, self.KEY, "bucket-owner-full-control")
+        with (
+            patch.object(dynamicio.mixins.with_s3, "_shared_s3_client", side_effect=[failing, replacement]),
+            patch.object(dynamicio.mixins.with_s3, "_DIRECT_TRANSFER_MAX_BYTES", threshold),
+        ):
+            dynamicio.mixins.with_s3._upload_file(str(local_path), self.BUCKET, self.KEY, "bucket-owner-full-control")
 
         # Then
-        assert client.calls == 3 and client.objects[(self.BUCKET, self.KEY)] == data
+        assert failing.calls == 1 and not failing.objects
+        assert replacement.calls == 1 and replacement.objects[(self.BUCKET, self.KEY)] == data
 
     @pytest.mark.unit
     @pytest.mark.parametrize("threshold", [1024, 10**9], ids=["transfer-manager", "single-request"])
-    def test_file_download_is_repeated_and_writes_identical_bytes(self, tmp_path, threshold):
+    def test_file_download_is_repeated_on_the_replacement_client_and_writes_identical_bytes(self, tmp_path, threshold):
         # Given
         data = os.urandom(4096)
-        client = _FlakyS3Client(failures=0, error=self._closed())
-        client.objects[(self.BUCKET, self.KEY)] = data
-        client.failures = 2
+        failing = _FlakyS3Client(failures=1, error=self._closed())
+        failing.objects[(self.BUCKET, self.KEY)] = data
+        replacement = _FlakyS3Client(failures=0, error=self._closed())
+        replacement.objects[(self.BUCKET, self.KEY)] = data
 
         # When
-        with patch.object(dynamicio.mixins.with_s3, "_DIRECT_TRANSFER_MAX_BYTES", threshold):
-            dynamicio.mixins.with_s3._download_file(client, self.BUCKET, self.KEY, str(tmp_path / "download.bin"))
+        with (
+            patch.object(dynamicio.mixins.with_s3, "_shared_s3_client", side_effect=[failing, replacement]),
+            patch.object(dynamicio.mixins.with_s3, "_DIRECT_TRANSFER_MAX_BYTES", threshold),
+        ):
+            dynamicio.mixins.with_s3._download_file(self.BUCKET, self.KEY, str(tmp_path / "download.bin"))
 
         # Then
+        assert failing.calls == 1 and replacement.calls > 0  # a body read is a call too
         assert (tmp_path / "download.bin").read_bytes() == data
 
     @pytest.mark.unit
@@ -2034,7 +2044,7 @@ class TestS3TransientConnectionErrors:
         with patch.object(dynamicio.mixins.with_s3, "_shared_s3_client", return_value=client), patch.object(dynamicio.mixins.with_s3, "_DIRECT_TRANSFER_MAX_BYTES", 1024):
             in_memory = dynamicio.mixins.with_s3._download_to_memory(self.BUCKET, self.KEY)
             client.calls = 0
-            dynamicio.mixins.with_s3._download_file(client, self.BUCKET, self.KEY, str(tmp_path / "download.bin"))
+            dynamicio.mixins.with_s3._download_file(self.BUCKET, self.KEY, str(tmp_path / "download.bin"))
 
         # Then
         assert in_memory.getvalue() == data and (tmp_path / "download.bin").read_bytes() == data

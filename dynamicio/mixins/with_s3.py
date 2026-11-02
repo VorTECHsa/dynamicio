@@ -246,10 +246,11 @@ def _split_s3_url(url: str):
 _SYNC_MAX_CONCURRENCY = 32  # measured best/flat from 32 up for 200-5000 files; the old 10 was up to 2x slower on small prefixes
 
 
-def _download_file(client, bucket: str, key: str, local_path: str):
+def _download_file(bucket: str, key: str, local_path: str):
     """Download one object: a single GetObject for small ones, the multipart transfer manager for large ones."""
 
     def attempt():
+        client = _shared_s3_client()  # reacquired: a retry must not reuse the client evicted after the failure
         response = client.get_object(Bucket=bucket, Key=key)
         if response["ContentLength"] > _DIRECT_TRANSFER_MAX_BYTES:
             response["Body"].close()
@@ -292,7 +293,7 @@ def s3_sync_down(source_url: str, dest_dir: str, include_pattern: Optional[str] 
                     continue
                 local_path = os.path.join(dest_dir, *relative_key.split("/"))
                 os.makedirs(os.path.dirname(local_path), exist_ok=True)
-                futures.append(pool.submit(_download_file, client, bucket, obj["Key"], local_path))
+                futures.append(pool.submit(_download_file, bucket, obj["Key"], local_path))
         for future in futures:
             future.result()
 
@@ -334,10 +335,11 @@ def s3_read_down(source_url: str, reader: Callable[[io.BytesIO], Any], include_p
         return [future.result() for future in futures]
 
 
-def _upload_file(client, local_path: str, bucket: str, key: str, acl: str):
+def _upload_file(local_path: str, bucket: str, key: str, acl: str):
     """Upload one file: a single PutObject for small ones, the multipart transfer manager for large ones."""
 
     def attempt():
+        client = _shared_s3_client()  # reacquired: a retry must not reuse the client evicted after the failure
         if os.path.getsize(local_path) > _DIRECT_TRANSFER_MAX_BYTES:
             client.upload_file(local_path, bucket, key, ExtraArgs={"ACL": acl})
             return
@@ -358,7 +360,6 @@ def s3_sync_up(source_dir: str, dest_url: str, acl: str = "bucket-owner-full-con
     """
     bucket, key_prefix = _split_s3_url(dest_url)
     key_prefix = f"{key_prefix.rstrip('/')}/" if key_prefix else ""
-    client = _shared_s3_client()
 
     with ThreadPoolExecutor(max_workers=max_concurrency) as pool:
         futures = []
@@ -366,7 +367,7 @@ def s3_sync_up(source_dir: str, dest_url: str, acl: str = "bucket-owner-full-con
             for name in files:
                 local_path = os.path.join(root, name)
                 relative_key = os.path.relpath(local_path, source_dir).replace(os.sep, "/")
-                futures.append(pool.submit(_upload_file, client, local_path, bucket, f"{key_prefix}{relative_key}", acl))
+                futures.append(pool.submit(_upload_file, local_path, bucket, f"{key_prefix}{relative_key}", acl))
         for future in futures:
             future.result()
 
