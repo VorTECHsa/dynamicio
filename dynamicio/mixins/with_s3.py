@@ -1,5 +1,6 @@
 """This module provides mixins that are providing S3 I/O support."""
 
+import atexit
 import collections
 import dataclasses
 import fnmatch
@@ -20,6 +21,7 @@ import boto3
 import boto3.s3.transfer
 import pandas as pd
 import pyarrow as pa
+import pyarrow.fs as pafs
 import pyarrow.parquet as pq
 import s3transfer.futures
 import tables
@@ -35,6 +37,11 @@ from dynamicio.mixins.utils import get_file_type_value
 _SESSION_LOCK = threading.Lock()
 _SESSION: Dict[int, boto3.Session] = {}
 _CLIENT: Dict[int, object] = {}
+_FILESYSTEM: Dict[tuple, pafs.S3FileSystem] = {}
+# pyarrow 24+ can deadlock at exit in its S3 finalizer while an S3FileSystem is still referenced, at least with web
+# identity credentials (https://github.com/apache/arrow/issues/50188). atexit runs handlers in reverse order and
+# `pyarrow.fs` registers its finalizer on import above, so this clear runs first.
+atexit.register(_FILESYSTEM.clear)
 
 
 def _shared_boto3_session() -> boto3.Session:
@@ -154,6 +161,24 @@ def _shared_s3_client():
             _CLIENT.clear()
             _CLIENT[pid] = session.client("s3", config=Config(max_pool_connections=64))  # pool must cover the sync thread pools
         return _CLIENT[pid]
+
+
+def _s3_filesystem(bucket: str) -> pafs.S3FileSystem:
+    """Return a per-process pyarrow S3 file system in the region of `bucket` (same default credential chain as boto3).
+
+    The region lookup is a network call, so it runs outside `_SESSION_LOCK`: a slow lookup must not block the boto3
+    client of other threads. A failed lookup raises and caches nothing. Entries of other processes are dropped, as
+    the boto3 session and client caches do.
+    """
+    key = (os.getpid(), bucket)
+    filesystem = _FILESYSTEM.get(key)
+    if filesystem is not None:
+        return filesystem
+    filesystem = pafs.S3FileSystem(region=pafs.resolve_s3_region(bucket))
+    with _SESSION_LOCK:
+        for stale in [k for k in _FILESYSTEM if k[0] != key[0]]:
+            del _FILESYSTEM[stale]
+        return _FILESYSTEM.setdefault(key, filesystem)
 
 
 def _split_s3_url(url: str):
@@ -599,6 +624,12 @@ class WithS3File:
         By default the object is fetched in a single round trip over a shared boto3 client and parsed in memory with
         the same pandas/pyarrow options as local reads. If options only awswrangler understands are given (e.g.
         `s3_additional_kwargs`, `pyarrow_additional_kwargs`), awswrangler does the read instead.
+
+        With non-empty `filters`, pyarrow reads the object over S3 byte ranges: it reads the footer, skips the row groups
+        whose statistics cannot match, and fetches only the column chunks of the remaining ones. A caller `filesystem`
+        is used for this read only if it is a `pyarrow.fs.FileSystem`; with another file system (e.g. fsspec) or with
+        fastparquet, the object is downloaded as without `filters`. Errors on the ranged read come from pyarrow
+        (`FileNotFoundError`, `OSError`), not from botocore (`ClientError`).
         """
         if _WRANGLER_ONLY_READ_PARQUET & kwargs.keys():
             return WithS3File._read_s3_parquet_file_with_wrangler(s3_path, schema, **kwargs)
@@ -606,6 +637,13 @@ class WithS3File:
             # A "directory" is read as a dataset of all its objects, as pandas/pyarrow did before.
             return WithS3File._read_s3_parquet_directory(s3_path, schema, **kwargs)
         bucket, key = _split_s3_url(s3_path)
+        engine = kwargs.get("engine", "auto")
+        if engine == "auto":
+            engine = pd.get_option("io.parquet.engine")
+        filesystem = kwargs.get("filesystem")
+        if kwargs.get("filters") and engine != "fastparquet" and (filesystem is None or isinstance(filesystem, pafs.FileSystem)):
+            filesystem = filesystem or _s3_filesystem(bucket)
+            return with_local.WithLocal._read_parquet_file(f"{bucket}/{key}", schema, **{**kwargs, "filesystem": filesystem})  # pylint: disable=protected-access
         return with_local.WithLocal._read_parquet_file(_download_to_memory(bucket, key), schema, **kwargs)  # type: ignore[arg-type] # pylint: disable=protected-access
 
     @staticmethod

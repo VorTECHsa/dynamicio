@@ -50,6 +50,7 @@ dev = [
     "sh>=2.2.4; sys_platform != 'win32'",
     "isort",
     "mock",
+    "moto[server]>=5",
     "pandas-stubs",
     "pre-commit",
     "pydocstyle",
