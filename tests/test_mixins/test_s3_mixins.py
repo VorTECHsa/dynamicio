@@ -1924,7 +1924,7 @@ class _FlakyS3Client:
 
     def put_object(self, Bucket, Key, Body, **_):  # pylint: disable=invalid-name
         self._maybe_fail()
-        self.objects[(Bucket, Key)] = bytes(Body)
+        self.objects[(Bucket, Key)] = Body.read() if hasattr(Body, "read") else bytes(Body)
 
     def upload_fileobj(self, fobj, bucket, key, **_):
         data = fobj.read()  # consumes the buffer, as the transfer manager does before it fails
@@ -1934,7 +1934,8 @@ class _FlakyS3Client:
     def get_object(self, Bucket, Key):  # pylint: disable=invalid-name
         data = self.objects[(Bucket, Key)]
         body = MagicMock()
-        body.read.side_effect = lambda: self._raise_or(data)
+        chunks = [data, b""]
+        body.read.side_effect = lambda *_: self._raise_or(chunks.pop(0))
         return {"ContentLength": len(data), "Body": body}
 
     def _raise_or(self, data):
@@ -1944,6 +1945,16 @@ class _FlakyS3Client:
     def download_fileobj(self, bucket, key, fobj):
         self._maybe_fail()
         fobj.write(self.objects[(bucket, key)])
+
+    def upload_file(self, local_path, bucket, key, **_):
+        self._maybe_fail()
+        with open(local_path, "rb") as fobj:
+            self.objects[(bucket, key)] = fobj.read()
+
+    def download_file(self, bucket, key, local_path):
+        self._maybe_fail()
+        with open(local_path, "wb") as fobj:
+            fobj.write(self.objects[(bucket, key)])
 
 
 class TestS3TransientConnectionErrors:
@@ -1974,6 +1985,38 @@ class TestS3TransientConnectionErrors:
         assert client.calls == 3 and client.objects[(self.BUCKET, self.KEY)] == data
         assert _no_sleep.call_count == 2
         assert all(self.KEY in call.args[0] and "ConnectionClosedError" in call.args[0] for call in logger.warning.call_args_list) and logger.warning.call_count == 2
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("threshold", [1024, 10**9], ids=["transfer-manager", "single-request"])
+    def test_file_upload_is_repeated_and_stores_identical_bytes(self, tmp_path, threshold):
+        # Given
+        data = os.urandom(4096)
+        local_path = tmp_path / "upload.bin"
+        local_path.write_bytes(data)
+        client = _FlakyS3Client(failures=2, error=self._closed())
+
+        # When
+        with patch.object(dynamicio.mixins.with_s3, "_DIRECT_TRANSFER_MAX_BYTES", threshold):
+            dynamicio.mixins.with_s3._upload_file(client, str(local_path), self.BUCKET, self.KEY, "bucket-owner-full-control")
+
+        # Then
+        assert client.calls == 3 and client.objects[(self.BUCKET, self.KEY)] == data
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("threshold", [1024, 10**9], ids=["transfer-manager", "single-request"])
+    def test_file_download_is_repeated_and_writes_identical_bytes(self, tmp_path, threshold):
+        # Given
+        data = os.urandom(4096)
+        client = _FlakyS3Client(failures=0, error=self._closed())
+        client.objects[(self.BUCKET, self.KEY)] = data
+        client.failures = 2
+
+        # When
+        with patch.object(dynamicio.mixins.with_s3, "_DIRECT_TRANSFER_MAX_BYTES", threshold):
+            dynamicio.mixins.with_s3._download_file(client, self.BUCKET, self.KEY, str(tmp_path / "download.bin"))
+
+        # Then
+        assert (tmp_path / "download.bin").read_bytes() == data
 
     @pytest.mark.unit
     def test_multipart_upload_rewinds_the_buffer_before_each_attempt(self):
