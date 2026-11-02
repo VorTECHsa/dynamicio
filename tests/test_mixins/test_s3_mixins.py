@@ -2,6 +2,8 @@
 import io
 import os
 import shutil
+import socket
+import struct
 import subprocess
 import sys
 import threading
@@ -20,6 +22,7 @@ import pyarrow.parquet as pq
 import pydantic
 import pytest
 import yaml
+from botocore.exceptions import ClientError, ConnectionClosedError, EndpointConnectionError, ReadTimeoutError, ResponseStreamingError
 
 # Application Imports
 import dynamicio.errors
@@ -1903,3 +1906,236 @@ class TestS3ParquetRangedReadOverS3Protocol:
         gets = self._object_gets(moto_s3_server)
         assert len(gets) == 1 and gets[0]["range"] is None and gets[0]["bytes"] == len(s3_object)
         assert len(df) == 300_000
+
+
+class _FlakyS3Client:
+    """An in-memory S3 client whose first `failures` transfers drop the connection, as S3 did on a pooled socket."""
+
+    def __init__(self, failures, error):
+        self.failures = failures
+        self.error = error
+        self.calls = 0
+        self.objects = {}
+
+    def _maybe_fail(self):
+        self.calls += 1
+        if self.calls <= self.failures:
+            raise self.error
+
+    def put_object(self, Bucket, Key, Body, **_):  # pylint: disable=invalid-name
+        self._maybe_fail()
+        self.objects[(Bucket, Key)] = bytes(Body)
+
+    def upload_fileobj(self, fobj, bucket, key, **_):
+        data = fobj.read()  # consumes the buffer, as the transfer manager does before it fails
+        self._maybe_fail()
+        self.objects[(bucket, key)] = data
+
+    def get_object(self, Bucket, Key):  # pylint: disable=invalid-name
+        data = self.objects[(Bucket, Key)]
+        body = MagicMock()
+        body.read.side_effect = lambda: self._raise_or(data)
+        return {"ContentLength": len(data), "Body": body}
+
+    def _raise_or(self, data):
+        self._maybe_fail()
+        return data
+
+    def download_fileobj(self, bucket, key, fobj):
+        self._maybe_fail()
+        fobj.write(self.objects[(bucket, key)])
+
+
+class TestS3TransientConnectionErrors:
+    """A broken connection during a transfer is repeated instead of failing the task (intermittent put_object BrokenPipe)."""
+
+    BUCKET, KEY = "bucket", "dir/file.parquet"
+
+    @staticmethod
+    def _closed():
+        return ConnectionClosedError(endpoint_url="https://s3.eu-west-1.amazonaws.com/bucket/dir/file.parquet")
+
+    @pytest.fixture(autouse=True)
+    def _no_sleep(self):
+        with patch.object(dynamicio.mixins.with_s3.time, "sleep") as sleep:
+            yield sleep
+
+    @pytest.mark.unit
+    def test_small_upload_is_repeated_and_stores_identical_bytes(self, _no_sleep):
+        # Given
+        data = os.urandom(4096)
+        client = _FlakyS3Client(failures=2, error=self._closed())
+
+        # When
+        with patch.object(dynamicio.mixins.with_s3, "_shared_s3_client", return_value=client), patch("dynamicio.mixins.with_s3.logger") as logger:
+            dynamicio.mixins.with_s3._upload_from_memory(io.BytesIO(data), self.BUCKET, self.KEY)
+
+        # Then
+        assert client.calls == 3 and client.objects[(self.BUCKET, self.KEY)] == data
+        assert _no_sleep.call_count == 2
+        assert all(self.KEY in call.args[0] and "ConnectionClosedError" in call.args[0] for call in logger.warning.call_args_list) and logger.warning.call_count == 2
+
+    @pytest.mark.unit
+    def test_multipart_upload_rewinds_the_buffer_before_each_attempt(self):
+        # Given
+        data = os.urandom(4096)
+        client = _FlakyS3Client(failures=1, error=self._closed())
+
+        # When
+        with patch.object(dynamicio.mixins.with_s3, "_shared_s3_client", return_value=client), patch.object(dynamicio.mixins.with_s3, "_DIRECT_TRANSFER_MAX_BYTES", 1024):
+            dynamicio.mixins.with_s3._upload_from_memory(io.BytesIO(data), self.BUCKET, self.KEY)
+
+        # Then
+        assert client.calls == 2 and client.objects[(self.BUCKET, self.KEY)] == data
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "error", [ConnectionClosedError(endpoint_url="u"), EndpointConnectionError(endpoint_url="u"), ReadTimeoutError(endpoint_url="u"), ResponseStreamingError(error="reset")]
+    )
+    def test_download_is_repeated_for_each_transient_error_type(self, error):
+        # Given
+        data = os.urandom(2048)
+        client = _FlakyS3Client(failures=1, error=error)
+        client.objects[(self.BUCKET, self.KEY)] = data
+
+        # When
+        with patch.object(dynamicio.mixins.with_s3, "_shared_s3_client", return_value=client):
+            result = dynamicio.mixins.with_s3._download_to_memory(self.BUCKET, self.KEY)
+
+        # Then
+        assert result.getvalue() == data and client.calls == 2
+
+    @pytest.mark.unit
+    def test_the_shared_client_is_dropped_after_a_connection_error(self):
+        # Given
+        client = _FlakyS3Client(failures=1, error=self._closed())
+
+        # When
+        with patch.object(dynamicio.mixins.with_s3, "_shared_s3_client", return_value=client), patch.object(dynamicio.mixins.with_s3, "_drop_shared_s3_client") as drop:
+            dynamicio.mixins.with_s3._upload_from_memory(io.BytesIO(b"x"), self.BUCKET, self.KEY)
+
+        # Then
+        drop.assert_called_once()
+
+    @pytest.mark.unit
+    def test_the_original_error_is_raised_when_every_attempt_fails(self):
+        # Given
+        client = _FlakyS3Client(failures=100, error=self._closed())
+
+        # When / Then
+        with patch.object(dynamicio.mixins.with_s3, "_shared_s3_client", return_value=client), pytest.raises(ConnectionClosedError):
+            dynamicio.mixins.with_s3._upload_from_memory(io.BytesIO(b"x"), self.BUCKET, self.KEY)
+        assert client.calls == dynamicio.mixins.with_s3._TRANSFER_ATTEMPTS
+
+    @pytest.mark.unit
+    def test_errors_that_are_not_connection_errors_are_not_repeated(self):
+        # Given
+        client = _FlakyS3Client(failures=100, error=ClientError({"Error": {"Code": "AccessDenied", "Message": "denied"}}, "PutObject"))
+
+        # When / Then
+        with patch.object(dynamicio.mixins.with_s3, "_shared_s3_client", return_value=client), pytest.raises(ClientError):
+            dynamicio.mixins.with_s3._upload_from_memory(io.BytesIO(b"x"), self.BUCKET, self.KEY)
+        assert client.calls == 1
+
+    @pytest.mark.unit
+    def test_a_cloud_parquet_write_survives_dropped_connections_and_reads_back_identically(self):
+        # Given
+        df = pd.DataFrame.from_dict({"col_1": [3, 2, 1, 0], "col_2": ["a", "b", "c", "d"]})
+        config = TestS3ParquetTransferPaths._config("WRITE_TO_S3_PARQUET", "definitions/processed.yaml")
+        client = _FlakyS3Client(failures=2, error=self._closed())
+
+        # When
+        with patch.object(dynamicio.mixins.with_s3, "_shared_s3_client", return_value=client):
+            WriteS3IO(source_config=config).write(df)
+
+        # Then
+        (stored,) = client.objects.values()
+        pd.testing.assert_frame_equal(pd.read_parquet(io.BytesIO(stored)), df)
+
+    @pytest.mark.unit
+    def test_the_shared_client_is_configured_for_retries_timeouts_and_keepalive(self):
+        # When
+        config = dynamicio.mixins.with_s3._CLIENT_CONFIG
+
+        # Then
+        assert config.retries == {"mode": "standard", "max_attempts": 10}
+        assert (config.connect_timeout, config.read_timeout, config.tcp_keepalive, config.max_pool_connections) == (10, 60, True, 64)
+
+
+class TestS3ConnectionResetsOverRealSockets:
+    """Resets the TCP connection of the first requests to a local S3 server, as the pods saw ConnectionClosedError / BrokenPipe on put_object."""
+
+    @pytest.fixture
+    def flaky_s3(self, monkeypatch):
+        moto_server = pytest.importorskip("moto.server")  # dev dependency only; the dependency-ranges CI jobs do not install it
+        serving = pytest.importorskip("werkzeug.serving")
+        for name in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"):
+            monkeypatch.setenv(name, "testing")
+        server = serving.make_server("127.0.0.1", 0, moto_server.DomainDispatcherApplication(moto_server.create_backend_app), threaded=True)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        listener = socket.socket()
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(64)
+        state = types.SimpleNamespace(resets_left=0, resets=0, lock=threading.Lock())
+
+        def pipe(source, target):
+            try:
+                while chunk := source.recv(65536):
+                    target.sendall(chunk)
+            except OSError:
+                pass
+            finally:
+                for sock in (source, target):
+                    try:
+                        sock.shutdown(socket.SHUT_RDWR)
+                    except OSError:
+                        pass
+
+        def handle(client):
+            with state.lock:
+                reset = state.resets_left > 0
+                if reset:
+                    state.resets_left -= 1
+                    state.resets += 1
+            if reset:
+                client.recv(1024)  # the request has started when S3 drops the connection
+                client.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))  # close() sends RST
+                client.close()
+                return
+            upstream = socket.create_connection(("127.0.0.1", server.server_port))
+            threading.Thread(target=pipe, args=(client, upstream), daemon=True).start()
+            threading.Thread(target=pipe, args=(upstream, client), daemon=True).start()
+
+        def accept_loop():
+            while True:
+                try:
+                    client, _ = listener.accept()
+                except OSError:
+                    return
+                threading.Thread(target=handle, args=(client,), daemon=True).start()
+
+        threading.Thread(target=accept_loop, daemon=True).start()
+        endpoint = f"http://127.0.0.1:{listener.getsockname()[1]}"
+        client = boto3.client("s3", endpoint_url=endpoint, region_name="us-east-1", config=dynamicio.mixins.with_s3._CLIENT_CONFIG)
+        boto3.client("s3", endpoint_url=f"http://127.0.0.1:{server.server_port}", region_name="us-east-1").create_bucket(Bucket="bucket")
+        yield types.SimpleNamespace(client=client, state=state)
+        listener.close()
+        server.shutdown()
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("resets", [3, 25])
+    @pytest.mark.parametrize("size", [64 * 1024, 20 * 1024**2])
+    def test_upload_and_download_survive_reset_connections_with_identical_bytes(self, flaky_s3, resets, size):
+        # Given: 3 resets are absorbed by botocore's own retries, 25 outlast them and need the transfer to be repeated
+        data = os.urandom(size)
+        flaky_s3.state.resets_left = resets
+
+        # When
+        with patch.object(dynamicio.mixins.with_s3, "_shared_s3_client", return_value=flaky_s3.client), patch.object(dynamicio.mixins.with_s3.time, "sleep"):
+            dynamicio.mixins.with_s3._upload_from_memory(io.BytesIO(data), "bucket", "dir/object.bin")
+            flaky_s3.state.resets_left = resets
+            downloaded = dynamicio.mixins.with_s3._download_to_memory("bucket", "dir/object.bin")
+
+        # Then
+        assert flaky_s3.state.resets == 2 * resets
+        assert downloaded.getvalue() == data

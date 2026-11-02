@@ -6,14 +6,16 @@ import dataclasses
 import fnmatch
 import io
 import os
+import random
 import shutil
 import tempfile
 import threading
+import time
 import urllib.parse
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
-from typing import IO, Any, Callable, Dict, Generator, List, Mapping, Optional, Union
+from typing import IO, Any, Callable, Dict, Generator, List, Mapping, Optional, TypeVar, Union
 from urllib.parse import urlparse
 
 import awswrangler as wr
@@ -26,6 +28,7 @@ import pyarrow.parquet as pq
 import s3transfer.futures
 import tables
 from botocore.config import Config
+from botocore.exceptions import ConnectionClosedError, ConnectTimeoutError, EndpointConnectionError, IncompleteReadError, ReadTimeoutError, ResponseStreamingError
 from magic_logger import logger
 from pandas import DataFrame, Series
 
@@ -152,6 +155,12 @@ class HdfIO:
             fobj.write(file_handle.get_file_image())
 
 
+# Pool: must cover the sync thread pools. Retries: botocore's "standard" mode (10 attempts) also covers broken connections and
+# throttling. Keepalive probes stop idle pooled connections from being dropped silently; the timeouts match botocore's read default
+# and fail a dead connect quickly so that it is retried.
+_CLIENT_CONFIG = Config(max_pool_connections=64, retries={"mode": "standard", "max_attempts": 10}, connect_timeout=10, read_timeout=60, tcp_keepalive=True)
+
+
 def _shared_s3_client():
     """Return a per-process S3 client built from the shared session (thread-safe, keeps connections alive)."""
     session = _shared_boto3_session()
@@ -159,8 +168,42 @@ def _shared_s3_client():
     with _SESSION_LOCK:
         if pid not in _CLIENT:
             _CLIENT.clear()
-            _CLIENT[pid] = session.client("s3", config=Config(max_pool_connections=64))  # pool must cover the sync thread pools
+            _CLIENT[pid] = session.client("s3", config=_CLIENT_CONFIG)
         return _CLIENT[pid]
+
+
+def _drop_shared_s3_client() -> None:
+    """Forget this process's shared client so the next call builds one with fresh connection pools."""
+    with _SESSION_LOCK:
+        _CLIENT.pop(os.getpid(), None)
+
+
+_T = TypeVar("_T")
+# Errors that mean "the connection broke, the request may not have been handled": repeating an S3 GET or PUT of the same object is safe.
+_TRANSIENT_S3_ERRORS = (ConnectionClosedError, ConnectTimeoutError, EndpointConnectionError, IncompleteReadError, ReadTimeoutError, ResponseStreamingError)
+_TRANSFER_ATTEMPTS = 5
+_TRANSFER_BACKOFF_SECONDS = 0.5
+
+
+def _retry_transient(operation: Callable[[], _T], description: str) -> _T:
+    """Run a whole S3 transfer, repeating it when the connection breaks, and return its result.
+
+    botocore retries a request that fails on a broken connection, but not a response body that breaks while it is
+    being read, nor a multipart transfer that gave up. This repeats the transfer as a whole, after dropping the shared
+    client so a new attempt cannot reuse a pool of dead sockets. `operation` must be safe to repeat: it has to
+    rewind its own buffers and overwrite the same object.
+    """
+    for attempt in range(1, _TRANSFER_ATTEMPTS + 1):
+        try:
+            return operation()
+        except _TRANSIENT_S3_ERRORS as error:
+            if attempt == _TRANSFER_ATTEMPTS:
+                raise
+            delay = _TRANSFER_BACKOFF_SECONDS * 2 ** (attempt - 1) * (1 + random.random())
+            logger.warning(f"[s3] {type(error).__name__} on {description} (attempt {attempt} of {_TRANSFER_ATTEMPTS}), retrying in {delay:.1f}s: {error}")
+            _drop_shared_s3_client()
+            time.sleep(delay)
+    raise AssertionError("unreachable")  # pragma: no cover
 
 
 def _s3_filesystem(bucket: str) -> pafs.S3FileSystem:
@@ -192,13 +235,17 @@ _SYNC_MAX_CONCURRENCY = 32  # measured best/flat from 32 up for 200-5000 files; 
 
 def _download_file(client, bucket: str, key: str, local_path: str):
     """Download one object: a single GetObject for small ones, the multipart transfer manager for large ones."""
-    response = client.get_object(Bucket=bucket, Key=key)
-    if response["ContentLength"] > _DIRECT_TRANSFER_MAX_BYTES:
-        response["Body"].close()
-        client.download_file(bucket, key, local_path)
-        return
-    with open(local_path, "wb") as fobj:
-        shutil.copyfileobj(response["Body"], fobj)
+
+    def attempt():
+        response = client.get_object(Bucket=bucket, Key=key)
+        if response["ContentLength"] > _DIRECT_TRANSFER_MAX_BYTES:
+            response["Body"].close()
+            client.download_file(bucket, key, local_path)
+            return
+        with open(local_path, "wb") as fobj:
+            shutil.copyfileobj(response["Body"], fobj)
+
+    _retry_transient(attempt, f"s3://{bucket}/{key}")
 
 
 def s3_sync_down(source_url: str, dest_dir: str, include_pattern: Optional[str] = None, max_concurrency: int = _SYNC_MAX_CONCURRENCY):
@@ -276,11 +323,15 @@ def s3_read_down(source_url: str, reader: Callable[[io.BytesIO], Any], include_p
 
 def _upload_file(client, local_path: str, bucket: str, key: str, acl: str):
     """Upload one file: a single PutObject for small ones, the multipart transfer manager for large ones."""
-    if os.path.getsize(local_path) > _DIRECT_TRANSFER_MAX_BYTES:
-        client.upload_file(local_path, bucket, key, ExtraArgs={"ACL": acl})
-        return
-    with open(local_path, "rb") as fobj:
-        client.put_object(Bucket=bucket, Key=key, Body=fobj, ACL=acl)
+
+    def attempt():
+        if os.path.getsize(local_path) > _DIRECT_TRANSFER_MAX_BYTES:
+            client.upload_file(local_path, bucket, key, ExtraArgs={"ACL": acl})
+            return
+        with open(local_path, "rb") as fobj:
+            client.put_object(Bucket=bucket, Key=key, Body=fobj, ACL=acl)
+
+    _retry_transient(attempt, f"s3://{bucket}/{key}")
 
 
 def s3_sync_up(source_dir: str, dest_url: str, acl: str = "bucket-owner-full-control", max_concurrency: int = _SYNC_MAX_CONCURRENCY):
@@ -316,26 +367,34 @@ _WRANGLER_ONLY_WRITE_PARQUET = utils.args_of(wr.s3.to_parquet) - utils.args_of(p
 
 def _download_to_memory(bucket: str, key: str) -> io.BytesIO:
     """Download an S3 object into memory over the shared client (one round trip for small objects)."""
-    client = _shared_s3_client()
-    response = client.get_object(Bucket=bucket, Key=key)
-    if response["ContentLength"] <= _DIRECT_TRANSFER_MAX_BYTES:
-        return io.BytesIO(response["Body"].read())
-    response["Body"].close()
-    fobj = io.BytesIO()
-    client.download_fileobj(bucket, key, fobj)
-    fobj.seek(0)
-    return fobj
+
+    def attempt():
+        client = _shared_s3_client()
+        response = client.get_object(Bucket=bucket, Key=key)
+        if response["ContentLength"] <= _DIRECT_TRANSFER_MAX_BYTES:
+            return io.BytesIO(response["Body"].read())
+        response["Body"].close()
+        fobj = io.BytesIO()
+        client.download_fileobj(bucket, key, fobj)
+        fobj.seek(0)
+        return fobj
+
+    return _retry_transient(attempt, f"s3://{bucket}/{key}")
 
 
 def _upload_from_memory(fobj: io.BytesIO, bucket: str, key: str, acl: str = "bucket-owner-full-control") -> None:
     """Upload an in-memory buffer over the shared client (single PUT for small objects)."""
-    client = _shared_s3_client()
     size = fobj.getbuffer().nbytes
-    fobj.seek(0)
-    if size <= _DIRECT_TRANSFER_MAX_BYTES:
-        client.put_object(Bucket=bucket, Key=key, Body=fobj.getvalue(), ACL=acl)
-    else:
-        client.upload_fileobj(fobj, bucket, key, ExtraArgs={"ACL": acl})
+
+    def attempt():
+        client = _shared_s3_client()
+        fobj.seek(0)
+        if size <= _DIRECT_TRANSFER_MAX_BYTES:
+            client.put_object(Bucket=bucket, Key=key, Body=fobj.getvalue(), ACL=acl)
+        else:
+            client.upload_fileobj(fobj, bucket, key, ExtraArgs={"ACL": acl})
+
+    _retry_transient(attempt, f"s3://{bucket}/{key}")
 
 
 def _read_parquet_object(fobj: IO[bytes], schema: DataframeSchema, options: Mapping[str, Any], absent: List[str]) -> pd.DataFrame:
