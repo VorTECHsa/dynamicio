@@ -10,18 +10,22 @@ import threading
 import types
 import urllib.parse
 import urllib.request
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from io import StringIO
 from tempfile import NamedTemporaryFile
 from unittest import mock
 from unittest.mock import MagicMock, patch
 
 import boto3
+import boto3.exceptions
 import pandas as pd
 import pyarrow.fs as pafs
 import pyarrow.parquet as pq
 import pydantic
 import pytest
+import s3transfer.exceptions
 import yaml
+from botocore.config import Config
 from botocore.exceptions import ClientError, ConnectionClosedError, EndpointConnectionError, ReadTimeoutError, ResponseStreamingError
 
 # Application Imports
@@ -2019,6 +2023,23 @@ class TestS3TransientConnectionErrors:
         assert (tmp_path / "download.bin").read_bytes() == data
 
     @pytest.mark.unit
+    @pytest.mark.parametrize("wrapper", [s3transfer.exceptions.RetriesExceededError, boto3.exceptions.RetriesExceededError], ids=["download_fileobj", "download_file"])
+    def test_a_download_the_transfer_manager_gave_up_on_is_repeated(self, tmp_path, wrapper):
+        # Given: above 16 MiB s3transfer repeats a broken part 5 times and raises RetriesExceededError (boto3's own class for download_file)
+        data = os.urandom(4096)
+        client = _FlakyS3Client(failures=2, error=wrapper(ResponseStreamingError(error="Connection broken")))
+        client.objects[(self.BUCKET, self.KEY)] = data
+
+        # When
+        with patch.object(dynamicio.mixins.with_s3, "_shared_s3_client", return_value=client), patch.object(dynamicio.mixins.with_s3, "_DIRECT_TRANSFER_MAX_BYTES", 1024):
+            in_memory = dynamicio.mixins.with_s3._download_to_memory(self.BUCKET, self.KEY)
+            client.calls = 0
+            dynamicio.mixins.with_s3._download_file(client, self.BUCKET, self.KEY, str(tmp_path / "download.bin"))
+
+        # Then
+        assert in_memory.getvalue() == data and (tmp_path / "download.bin").read_bytes() == data
+
+    @pytest.mark.unit
     def test_multipart_upload_rewinds_the_buffer_before_each_attempt(self):
         # Given
         data = os.urandom(4096)
@@ -2182,3 +2203,86 @@ class TestS3ConnectionResetsOverRealSockets:
         # Then
         assert flaky_s3.state.resets == 2 * resets
         assert downloaded.getvalue() == data
+
+
+class TestS3LargeDownloadWithBrokenBody:
+    """Above 16 MiB the transfer manager downloads ranged parts, repeats each one 5 times and then raises RetriesExceededError."""
+
+    @pytest.fixture
+    def breaking_s3(self, monkeypatch):
+        """A minimal S3 endpoint for one object whose ranged GETs reset the connection halfway through the body while `cuts_left` > 0."""
+        for name in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"):
+            monkeypatch.setenv(name, "testing")
+        state = types.SimpleNamespace(data=os.urandom(20 * 1024**2), cuts_left=0, cuts=0, lock=threading.Lock())
+
+        class Handler(BaseHTTPRequestHandler):
+            protocol_version = "HTTP/1.1"
+
+            def log_message(self, *_):
+                pass
+
+            def _send(self, status, headers, body=b""):
+                self.send_response(status)
+                for name, value in headers.items():
+                    self.send_header(name, value)
+                self.end_headers()
+                self.wfile.write(body)
+
+            def do_HEAD(self):  # pylint: disable=invalid-name
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(state.data)))
+                self.send_header("ETag", '"etag"')
+                self.end_headers()
+
+            def do_GET(self):  # pylint: disable=invalid-name
+                start, end = 0, len(state.data) - 1
+                if self.headers.get("Range"):
+                    first, last = self.headers["Range"].removeprefix("bytes=").split("-")
+                    start, end = int(first), min(int(last or end), end)
+                body = state.data[start : end + 1]
+                self.send_response(206 if self.headers.get("Range") else 200)
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("ETag", '"etag"')
+                if self.headers.get("Range"):
+                    self.send_header("Content-Range", f"bytes {start}-{end}/{len(state.data)}")
+                self.end_headers()
+                with state.lock:
+                    cut = bool(self.headers.get("Range")) and state.cuts_left > 0
+                    if cut:
+                        state.cuts_left -= 1
+                        state.cuts += 1
+                try:
+                    if cut:
+                        self.wfile.write(body[: len(body) // 2])
+                        self.wfile.flush()
+                        self.close_connection = True  # the server closes the socket with the body short of its Content-Length
+                    else:
+                        self.wfile.write(body)
+                except OSError:
+                    self.close_connection = True
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        client = boto3.client(
+            "s3", endpoint_url=f"http://127.0.0.1:{server.server_port}", region_name="us-east-1", config=dynamicio.mixins.with_s3._CLIENT_CONFIG.merge(Config(read_timeout=10))
+        )
+        yield types.SimpleNamespace(client=client, state=state)
+        server.shutdown()
+        server.server_close()
+
+    @pytest.mark.unit
+    def test_download_whose_body_breaks_is_repeated_after_the_transfer_manager_gives_up(self, breaking_s3):
+        # Given: more cuts than one transfer-manager run can absorb (3 parts, 5 attempts each), fewer than the attempts of the whole transfer
+        breaking_s3.state.cuts_left = 20
+
+        # When
+        with (
+            patch.object(dynamicio.mixins.with_s3, "_shared_s3_client", return_value=breaking_s3.client),
+            patch.object(dynamicio.mixins.with_s3.time, "sleep"),
+            patch("dynamicio.mixins.with_s3.logger") as logger,
+        ):
+            downloaded = dynamicio.mixins.with_s3._download_to_memory("bucket", "dir/object.bin")
+
+        # Then
+        assert downloaded.getvalue() == breaking_s3.state.data
+        assert any("RetriesExceededError" in call.args[0] for call in logger.warning.call_args_list)

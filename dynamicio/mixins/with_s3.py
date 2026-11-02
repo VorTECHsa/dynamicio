@@ -20,11 +20,13 @@ from urllib.parse import urlparse
 
 import awswrangler as wr
 import boto3
+import boto3.exceptions
 import boto3.s3.transfer
 import pandas as pd
 import pyarrow as pa
 import pyarrow.fs as pafs
 import pyarrow.parquet as pq
+import s3transfer.exceptions
 import s3transfer.futures
 import tables
 from botocore.config import Config
@@ -180,7 +182,18 @@ def _drop_shared_s3_client() -> None:
 
 _T = TypeVar("_T")
 # Errors that mean "the connection broke, the request may not have been handled": repeating an S3 GET or PUT of the same object is safe.
-_TRANSIENT_S3_ERRORS = (ConnectionClosedError, ConnectTimeoutError, EndpointConnectionError, IncompleteReadError, ReadTimeoutError, ResponseStreamingError)
+# Above `_DIRECT_TRANSFER_MAX_BYTES` the transfer manager repeats a broken part 5 times and then raises RetriesExceededError, wrapping the error
+# in `last_exception`: s3transfer's own for `download_fileobj`, boto3's for `download_file`. Only broken connections are wrapped this way.
+_TRANSIENT_S3_ERRORS = (
+    ConnectionClosedError,
+    ConnectTimeoutError,
+    EndpointConnectionError,
+    IncompleteReadError,
+    ReadTimeoutError,
+    ResponseStreamingError,
+    s3transfer.exceptions.RetriesExceededError,
+    boto3.exceptions.RetriesExceededError,
+)
 _TRANSFER_ATTEMPTS = 5
 _TRANSFER_BACKOFF_SECONDS = 0.5
 
