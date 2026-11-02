@@ -88,6 +88,9 @@ Do not publish a release candidate just to test locally. Release candidates are 
 - Tag from **master after the PR is merged** (or an rc from the feature branch), and tag an explicit commit sha:
   `git tag -a vX.Y.Z <sha> -m "..."` then `git push origin vX.Y.Z`. Check `git pull` actually succeeded first; a failed pull
   silently tags a stale commit.
+- The tag must carry its changelog. Release PR (the only change in it): rename `## Unreleased` in `CHANGELOG.md` to `## vX.Y.Z`. Tag the merge commit.
+  CI fails a final tag without a `## vX.Y.Z` heading, publishes README + CHANGELOG as the PyPI description (`hatch-fancy-pypi-readme`) and
+  creates the GitHub release with that section as notes. Release candidates skip these checks.
 - Do not merge pull requests or publish a final release unless the maintainer asked you to; open the PR and hand over.
 
 ## Conventions

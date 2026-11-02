@@ -1,8 +1,7 @@
 [project]
 name = "dynamicio"
-dynamic = ["version"]  # derived from the git tag at build time (hatch-vcs)
+dynamic = ["version", "readme"]  # version: from the git tag at build time (hatch-vcs); readme: README.md plus CHANGELOG.md (hatch-fancy-pypi-readme)
 description = "Panda's wrapper for IO operations"
-readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.10"
 authors = [
@@ -34,6 +33,9 @@ dependencies = [
     "SQLAlchemy>=1.4.11",
     "tables>=3.10.1",
 ]
+
+[project.urls]
+Changelog = "https://github.com/VorTECHsa/dynamicio/blob/master/CHANGELOG.md"
 
 [project.scripts]
 dynamicio = "dynamicio.cli:run"
@@ -72,7 +74,7 @@ docs = [
 ]
 
 [build-system]
-requires = ["hatchling", "hatch-vcs"]
+requires = ["hatchling", "hatch-vcs", "hatch-fancy-pypi-readme"]
 build-backend = "hatchling.build"
 
 [tool.hatch.version]
@@ -80,6 +82,18 @@ source = "vcs"
 
 [tool.hatch.version.raw-options]
 local_scheme = "no-local-version"
+
+[tool.hatch.metadata.hooks.fancy-pypi-readme]
+content-type = "text/markdown"
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.fragments]]
+path = "README.md"
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.fragments]]
+text = "\n\n"
+
+[[tool.hatch.metadata.hooks.fancy-pypi-readme.fragments]]
+path = "CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["dynamicio"]
