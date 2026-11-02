@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- fix: transient S3 connection errors no longer fail a read or write. The shared boto3 client now uses the `standard` retry mode with 10 attempts, `connect_timeout=10` and `read_timeout=60`. The in-memory and file transfers (`put_object`, `upload_fileobj`, `get_object`, `download_fileobj`) are repeated, up to 5 attempts with backoff, on `ConnectionClosedError`, `ConnectTimeoutError`, `EndpointConnectionError`, `ReadTimeoutError`, `IncompleteReadError`, `ResponseStreamingError` and the `RetriesExceededError` that the transfer manager raises (s3transfer's and boto3's) when a download above 16 MiB gave up on a broken part. botocore does not retry these once the body is being sent or read. The buffer is rewound before each attempt (bytes written are identical), each retry is logged at WARNING with the bucket and key, and the shared client is rebuilt so the next attempt opens fresh connections. Other errors (for example `ClientError`) are raised as before, and nothing changes when no error occurs
+
 ## v9.2.0
 
 - feat: a single-file S3 parquet read with `filters` reads only the row groups whose footer statistics can match, over ranged `GetObject` requests through `pyarrow.fs.S3FileSystem` (one for each process and bucket). The rows, index and dtypes are the same as before. Reads without `filters` or with `filters=[]`, fastparquet reads, reads with a non-pyarrow `filesystem`, prefix reads and reads with wrangler-only kwargs do not change. On the ranged read, a missing key or a permission problem raises pyarrow `FileNotFoundError` or `OSError` in place of botocore `ClientError`, and a custom S3 endpoint of boto3 (`AWS_ENDPOINT_URL`) does not apply. See ADR 0004
