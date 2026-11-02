@@ -122,6 +122,8 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: ["style-checks", "test", "dependency-ranges"]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # to create the GitHub release
     steps:
       - uses: actions/checkout@v4
         with:
@@ -133,6 +135,14 @@ jobs:
           python-version: "3.10"
           enable-cache: true
 
+      - name: Check that CHANGELOG.md has a section for this release
+        if: ${{ !contains(github.ref_name, '-rc') }}
+        run: |
+          if ! grep -qx "## ${GITHUB_REF_NAME}" CHANGELOG.md; then
+            echo "CHANGELOG.md has no '## ${GITHUB_REF_NAME}' heading: rename '## Unreleased' in the release PR and tag the merge commit" >&2
+            exit 1
+          fi
+
       - name: Build and Publish to PyPI
         env:
           PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
@@ -140,3 +150,11 @@ jobs:
           uv build
           uv publish --token "$PYPI_TOKEN"
 
+
+      - name: Create the GitHub release from the CHANGELOG section
+        if: ${{ !contains(github.ref_name, '-rc') }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          awk -v tag="## ${GITHUB_REF_NAME}" '$0 == tag {on=1; next} /^## /{on=0} on' CHANGELOG.md > notes.md
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes-file notes.md
