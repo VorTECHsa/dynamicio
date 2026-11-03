@@ -2,6 +2,7 @@
 
 ## Unreleased (v10.0.0)
 
+- feat: models written by `dynamicio migrate` set `strict = "filter"`, so `Model.validate(df)` on its own drops columns that are not in the schema, as dynamicio does. `coerce` stays off: Pandera would turn a nullable int column into `Int64`, where dynamicio casts to `int64`. Dynamicio's own validation is unchanged
 - fix: no more `UserWarning: Valid config keys have changed in V2: 'underscore_attrs_are_private' has been removed` on import under pydantic 2. The key is now only set under pydantic 1, where it is needed to keep `IOEnvironment._parent` private
 - fix: `WithPostgres` reads and writes work when the table is declared only by a Pandera model. The table name and columns come from the resource YAML's `schema` when it has one (unchanged), otherwise from the model (`Config.name` is the table name). Before, a postgres resource without a YAML schema failed with `AssertionError: The schema must be specified for SQL tables`
 - feat: `dynamicio migrate -o <package dir>` writes one models module per sub-directory of the YAML schemas (the grouping by runner and input/output carries over); `-o file.py` still writes a single module. The README recommends one models module per runner stage or definitions file, and the `demo/` project now follows it (`demo/src/resources/schemas/{input,processed}.py`)

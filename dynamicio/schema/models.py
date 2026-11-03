@@ -32,6 +32,9 @@ def to_dataframe_schema(model: type) -> DataframeSchema:
     schema = model.to_schema()
     columns: Dict[str, Dict[str, Any]] = {}
     for name, column in schema.columns.items():
+        # TODO: optionally accept `pa.Field(log_statistics={"metrics": [...]})` (a Pandera check method that logs the metrics while validating, as the
+        #  abandoned v5 branch did) next to this metadata. It would log as a side effect of validation, so the order relative to other checks and
+        #  logging for data that fails validation could differ from today's METRIC lines: add it only as an opt-in feature with its own tests.
         extra = (column.metadata or {}).get(METADATA_KEY, {})
         validations: Dict[str, Dict[str, Any]] = {}
         if not column.nullable:

@@ -84,7 +84,9 @@ def _render_model(schema: DataframeSchema, class_name: str = "") -> str:
         canonical = _canonical_dtype(column.data_type)
         dtype = _DTYPES.get(canonical, f"pd.api.types.pandas_dtype({canonical!r})")
         lines.append(f"    {attribute}: Series[{dtype}] = {field}")
-    lines += ["", "    class Config:", f"        name = {schema.name!r}", ""]
+    # dynamicio drops columns that are not in the schema, so a standalone `Model.validate(df)` should too. Not `coerce = True`: Pandera then turns a
+    # nullable int column into `Int64`, where dynamicio casts to `int64` (the contract tests pin this).
+    lines += ["", "    class Config:", f"        name = {schema.name!r}", '        strict = "filter"', ""]
     return "\n".join(lines)
 
 
