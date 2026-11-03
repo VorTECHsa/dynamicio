@@ -2,7 +2,7 @@
 
 # pylint: disable=too-many-positional-arguments
 import operator
-from typing import Callable, NamedTuple, Set
+from typing import Any, Callable, Dict, NamedTuple, Set
 
 import pandas as pd  # type: ignore
 
@@ -347,3 +347,42 @@ def is_between(
         message=f"{no_of_invalid} cell values for {dataset}[{column}] are either below {lower} or above {upper}",
         value=no_of_invalid / len(no_nulls_for_column_df),
     )
+
+
+def pandera_check(dataset: str, df: pd.DataFrame, column: str, pandera_check: Any) -> ValidationResult:  # pylint: disable=redefined-outer-name
+    """Runs a Pandera `Check` that dynamicio has no validator of its own for (`str_matches`, a custom `@pa.check`, ...) on a column.
+
+    Not in `ALL_VALIDATORS`: it is not part of the YAML vocabulary, `core` calls it for the checks that `schema.models` compiles.
+
+    Args:
+        dataset: Name of the dataset
+        df: A pandas DataFrame
+        column: The column to be validated
+        pandera_check: The Pandera `Check` taken from the `DataFrameModel`
+
+    Returns:
+        An instance of ValidationResult, where `value` is the number of values that failed the check
+    """
+    result = pandera_check(df, column)
+    if bool(result.check_passed):
+        return ValidationResult(valid=True, message=f"{dataset}[{column}] passes {pandera_check.name}", value=0)
+
+    failures = result.failure_cases
+    failing = failures.to_list() if hasattr(failures, "to_list") else [failures]
+    return ValidationResult(valid=False, message=f"Values {failing[:5]} for {dataset}[{column}] fail the check {pandera_check.name}!", value=len(failing))
+
+
+def dataframe_failures(dataset: str, df: pd.DataFrame, dataframe_validator: Any) -> Dict[str, str]:
+    """Runs the dataframe-level part of a Pandera model (dataframe checks, `unique`, `ordered`, the index) and returns the failures by check name."""
+    # pylint: disable=import-outside-toplevel
+    from pandera.errors import SchemaErrors
+
+    try:
+        dataframe_validator.validate(df, lazy=True)
+    except SchemaErrors as error:
+        cases = error.failure_cases
+        return {
+            str(check): f"{dataset}: {len(group)} failure(s) of {check}, for example {group['failure_case'].head(5).to_list()}"
+            for check, group in cases.groupby(cases["check"].astype(str), sort=False)
+        }
+    return {}

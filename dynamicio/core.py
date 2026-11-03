@@ -19,7 +19,7 @@ from dynamicio.config.pydantic import DataframeSchema, IOEnvironment, SchemaColu
 from dynamicio.errors import CASTING_WARNING_MSG, NOTICE_MSG, ColumnsDataTypeError, SchemaNotFoundError, SchemaValidationError
 from dynamicio.schema import validations
 from dynamicio.schema.metrics import get_metric
-from dynamicio.schema.models import to_dataframe_schema
+from dynamicio.schema.models import dataframe_validator, to_dataframe_schema
 
 SCHEMA_FROM_FILE = {"schema": object()}
 SCHEMA_FROM_ARGUMENT = {"schema": object()}
@@ -27,7 +27,19 @@ SCHEMA_FROM_ARGUMENT = {"schema": object()}
 pool = ThreadPoolExecutor()
 
 
-class DynamicDataIO:
+def _is_declared_dtype(declared: str, found: Any) -> bool:
+    """Whether a column's dtype is the declared one.
+
+    Compares dtypes, not their names: the name of `string[pyarrow]` is `string`, which never equals the declared string and recast the column on every read.
+    A bare `category` accepts any categorical dtype, as its name did.
+    """
+    expected = pd.api.types.pandas_dtype(declared)
+    if isinstance(expected, pd.CategoricalDtype) and expected.categories is None:
+        return isinstance(found, pd.CategoricalDtype)
+    return bool(expected == found)
+
+
+class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
     """Given a `src.utils.dynamicio.config.IOConfig` object, it generates an object with access to a series of methods for cloud I/O operations and data validations.
 
     Example:
@@ -80,16 +92,19 @@ class DynamicDataIO:
         self.strict_dtype_check = strict_dtype_check
         self.options = self._get_options(options, source_config.options)
         source_name = self.sources_config.data_backend_type.value
+        self._dataframe_validator = None  # the dataframe-level part of a Pandera model, if any
         if schema is not None:
             if not (inspect.isclass(schema) and issubclass(schema, DataFrameModel)):
                 raise TypeError(f"schema must be a pandera DataFrameModel subclass, got {schema!r}")
             active_schema = to_dataframe_schema(schema)
+            self._dataframe_validator = dataframe_validator(schema)
         elif self.schema is SCHEMA_FROM_ARGUMENT:
             active_schema = None
         elif self.schema is SCHEMA_FROM_FILE:
             active_schema = self.sources_config.dynamicio_schema
         elif inspect.isclass(self.schema) and issubclass(self.schema, DataFrameModel):
             active_schema = to_dataframe_schema(self.schema)
+            self._dataframe_validator = dataframe_validator(self.schema)
         else:
             active_schema = self._schema_from_obj(self)
 
@@ -226,10 +241,14 @@ class DynamicDataIO:
             col_validations = self.schema_validations[column]
             for validation in col_validations:
                 if validation.apply:
-                    validator = validations.ALL_VALIDATORS[validation.name]
+                    validator = validations.pandera_check if "pandera_check" in validation.options else validations.ALL_VALIDATORS[validation.name]
                     validation_result = validator(self.name, df, column, **validation.options)
                     if not validation_result.valid:
                         failed_validations.setdefault(validation.name, []).append(validation_result.message)
+
+        if getattr(self, "_dataframe_validator", None) is not None:
+            for name, message in validations.dataframe_failures(self.name, df, self._dataframe_validator).items():
+                failed_validations.setdefault(name, []).append(message)
 
         if len(failed_validations) > 0:
             # One entry per validation name; when several columns fail the same validation their messages are joined, none are lost.
@@ -305,7 +324,7 @@ class DynamicDataIO:
             expected_dtype = col_info.data_type
             found_dtype = dtypes[column_name].name
 
-            if found_dtype != expected_dtype:
+            if not _is_declared_dtype(expected_dtype, dtypes[column_name]):
                 if self.show_casting_warnings:
                     logger.info(f"Expected: '{expected_dtype}' dtype for {self.name}['{column_name}'], " f"found '{found_dtype}'")
                 try:
