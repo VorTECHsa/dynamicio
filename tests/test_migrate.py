@@ -1,6 +1,7 @@
 """Tests for ``dynamicio migrate``: YAML schemas to Pandera models, parity check, and the call-site prompt."""
 
 # pylint: disable=missing-function-docstring, redefined-outer-name
+import pandas as pd
 import pandera.pandas as pa
 import pytest
 import yaml
@@ -27,6 +28,16 @@ def test_yaml_schema_migrates_to_a_model_that_compiles_back_to_the_same_schema()
     model = compile_module("import pandas as pd\nimport pandera.pandas as pa\nfrom pandera.typing import Series\n\n\n" + render_model(original))["ContractDataset"]
 
     assert schemas_equivalent(to_dataframe_schema(model), original)
+
+
+@pytest.mark.unit
+def test_migrated_model_filters_extra_columns_like_dynamicio_does():
+    model = compile_module("import pandas as pd\nimport pandera.pandas as pa\nfrom pandera.typing import Series\n\n\n" + render_model(DataframeSchema(**SCHEMA_SPEC)))["ContractDataset"]
+    df = pd.DataFrame({"a": [2, 3, 4], "b": ["x", "y", "x"], "c": [1.0, 2.0, 3.0], "extra": [0, 0, 0]})
+
+    out = model.validate(df)
+
+    assert list(out.columns) == ["a", "b", "c"] and str(out["a"].dtype) == "int64"  # no coerce: Pandera's would make a nullable int `Int64`
 
 
 @pytest.mark.unit

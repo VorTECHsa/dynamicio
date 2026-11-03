@@ -82,6 +82,7 @@ class ContractModel(pa.DataFrameModel):
 
     class Config:
         name = "contract_dataset"
+        strict = "filter"
 
 
 class ContractPanderaIO(UnifiedIO):
