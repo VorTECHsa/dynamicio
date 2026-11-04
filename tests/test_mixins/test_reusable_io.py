@@ -4,6 +4,7 @@
 Every sequence of calls on one object has to behave like the same calls on new objects, and the object's options
 have to stay as they were. Local files run on a temp dir. S3 runs on moto's in-memory S3 through the real read and write code.
 """
+
 import io
 import itertools
 import os
