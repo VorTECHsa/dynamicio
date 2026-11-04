@@ -173,6 +173,7 @@ class TestPostgresIO:
             dynamic_vars=constants,
         ).get(source_key="READ_FROM_POSTGRES")
         io_obj = ReadPostgresIO(source_config=postgres_cloud_config, sql_query="SELECT * FROM example")
+        options_before = dict(io_obj.options)
 
         # When
         io_obj.read()
@@ -180,6 +181,7 @@ class TestPostgresIO:
 
         # Then
         assert [call.args[1] for call in mock__read_database.call_args_list] == ["SELECT * FROM example", "SELECT * FROM example"]
+        assert io_obj.options == options_before
 
     @pytest.mark.unit
     @patch.object(WithPostgres, "_read_database")
