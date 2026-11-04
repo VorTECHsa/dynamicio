@@ -278,7 +278,7 @@ class DynamicDataIO:
         """
         dtypes = df.dtypes
 
-        cols_allowed, cols_not_allowed = self._split_columns_to_validate_between_allowed_and_not(columns_to_validate=self.options.get("columns", self.schema.column_names))
+        cols_allowed, cols_not_allowed = self._split_columns_to_validate_between_allowed_and_not(columns_to_validate=self._columns_to_validate())
         if cols_not_allowed:
             logger.exception(f"The columns passed: {cols_not_allowed} do not belong to the schema")
             return False
@@ -305,6 +305,11 @@ class DynamicDataIO:
                     return False
 
         return True
+
+    def _columns_to_validate(self) -> List[str]:
+        # A string `columns` is a path template field (for example `data/{columns}.parquet`), not a column selection
+        columns = self.options.get("columns")
+        return self.schema.column_names if columns is None or isinstance(columns, str) else columns
 
     def _split_columns_to_validate_between_allowed_and_not(self, columns_to_validate: List[str]) -> Tuple[List[SchemaColumn], List[str]]:
         not_allowed_cols, allowed_cols = [], []

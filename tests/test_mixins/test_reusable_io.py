@@ -198,3 +198,42 @@ class TestOneObjectForRepeatedReads:
         pd.testing.assert_frame_equal(first, FRAME)
         pd.testing.assert_frame_equal(second, FRAME)
         assert io_object.options == options_before
+
+
+@pytest.mark.unit
+class TestTemplateFieldNamedColumns:
+    """`columns` is also the option that selects columns to read, so a template field of that name must not be taken for a selection."""
+
+    def test_local_file(self, tmp_path):
+        # Given
+        resources = {"LOCAL_FILE": {"LOCAL": {"type": "local", "local": {"file_path": f"{tmp_path}/{{columns}}.parquet", "file_type": "parquet"}}}}
+        path = tmp_path / "resources.yaml"
+        path.write_text(yaml.safe_dump(resources))
+        config = IOConfig(path_to_source_yaml=str(path), env_identifier="LOCAL", dynamic_vars=constants).get(source_key="LOCAL_FILE")
+        io_object = FileIO(source_config=config, columns="daily")
+        options_before = dict(io_object.options)
+
+        # When
+        io_object.write(FRAME)
+        first, second = io_object.read(), io_object.read()
+
+        # Then
+        pd.testing.assert_frame_equal(first, FRAME)
+        pd.testing.assert_frame_equal(second, FRAME)
+        assert io_object.options == options_before
+
+    def test_s3_file(self, config_for, s3_client, tmp_path):
+        # Given
+        resources = {"S3_FILE": {"CLOUD": {"type": "s3_file", "s3": {"bucket": BUCKET, "file_path": "data/{columns}.parquet", "file_type": "parquet"}}}}
+        path = tmp_path / "columns_resources.yaml"
+        path.write_text(yaml.safe_dump(resources))
+        config = IOConfig(path_to_source_yaml=str(path), env_identifier="CLOUD", dynamic_vars=constants).get(source_key="S3_FILE")
+        io_object = FileIO(source_config=config, columns="daily")
+
+        # When
+        io_object.write(FRAME)
+        first = io_object.read()
+
+        # Then
+        pd.testing.assert_frame_equal(first, FRAME)
+        assert _keys(s3_client) == ["data/daily.parquet"]
