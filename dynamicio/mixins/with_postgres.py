@@ -106,7 +106,8 @@ class WithPostgres:
 
         connection_string = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
 
-        sql_query = self.options.pop("sql_query", None)
+        options = dict(self.options)
+        sql_query = options.pop("sql_query", None)
 
         assert self.sources_config.dynamicio_schema is not None, "The schema must be specified for SQL tables"
         model = self._generate_model_from_schema(self.sources_config.dynamicio_schema)
@@ -116,7 +117,7 @@ class WithPostgres:
             query = sql_query
         logger.info(f"[postgres] Started downloading table: {self.sources_config.dynamicio_schema.name} from: {db_host}:{db_name}")
         with session_for(connection_string) as session:
-            return self._read_database(session, query, **self.options)
+            return self._read_database(session, query, **options)
 
     @staticmethod
     def _generate_model_from_schema(schema: DataframeSchema) -> DeclarativeMeta:

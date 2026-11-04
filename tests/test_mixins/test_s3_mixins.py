@@ -164,6 +164,32 @@ class TestS3FileIO:
         assert args[1] == "s3://mock-bucket/path/to/some_csv_to_read.csv"
 
     @pytest.mark.unit
+    def test_read_and_write_twice_resolve_the_templated_file_path_each_time(self):
+        # Given
+        cloud_config = IOConfig(
+            path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml"),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="TEMPLATED_FILE_PATH")
+        df = pd.read_csv(os.path.join(constants.TEST_RESOURCES, "data/input/some_csv_to_read.csv"))
+        io_obj = TemplatedFile(source_config=cloud_config, file_name_to_replace="some_csv_to_read")
+
+        # When
+        with (
+            patch.object(dynamicio.mixins.with_s3.WithS3File, "_read_s3_csv_file", return_value=df) as mock__read_csv_file,
+            patch.object(dynamicio.mixins.with_s3.WithS3File, "_write_s3_csv_file") as mock__write_csv_file,
+        ):
+            io_obj.read()
+            io_obj.write(df)
+            io_obj.read()
+            io_obj.write(df)
+
+        # Then
+        expected_path = "s3://mock-bucket/path/to/some_csv_to_read.csv"
+        assert [call.args[0] for call in mock__read_csv_file.call_args_list] == [expected_path, expected_path]
+        assert [call.args[1] for call in mock__write_csv_file.call_args_list] == [expected_path, expected_path]
+
+    @pytest.mark.unit
     @patch.object(dynamicio.mixins.with_s3.WithS3File, "_read_from_s3_file")
     def test_read_from_s3_file_is_called_for_loading_a_file_with_env_as_cloud_s3(self, mock__read_from_s3_file, expected_s3_csv_df):
         # Given
@@ -1057,6 +1083,28 @@ class TestS3PathPrefixIO:
         # Then
         mock__read_parquet_file.assert_called()
         mock__s3_sync.assert_not_called()
+
+    @pytest.mark.unit
+    def test_read_twice_resolves_the_templated_dynamic_file_path_and_keeps_the_options(self):
+        # Given
+        s3_parquet_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="READ_DYNAMIC_FROM_BATCH_LOCAL_PARQUET")
+        io_obj = ReadS3ParquetIO(source_config=s3_parquet_cloud_config, runner_id="01", no_disk_space=True)
+        options_before = dict(io_obj.options)
+        df = pd.DataFrame({"id": [1], "foo_name": ["a"], "bar": [1]})
+
+        # When
+        with patch.object(dynamicio.mixins.with_s3, "s3_read_down", side_effect=lambda _url, reader, **_: [reader(io.BytesIO(df.to_parquet()))]) as mock__s3_read_down:
+            first_df = io_obj.read()
+            second_df = io_obj.read()
+
+        # Then
+        pd.testing.assert_frame_equal(first_df, second_df)
+        assert [call.kwargs["include_pattern"] for call in mock__s3_read_down.call_args_list] == ["**/part_01.parquet", "**/part_01.parquet"]
+        assert io_obj.options == options_before
 
     @pytest.mark.unit
     # pylint: disable=unused-argument

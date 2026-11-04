@@ -499,6 +499,43 @@ class TestLocalIO:
         assert called_with_file_path == config.local.file_path.format(file_name_to_replace="some_csv_to_read")
 
     @pytest.mark.unit
+    def test_read_twice_resolves_the_templated_file_path_both_times(self):
+        # Given
+        config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="TEMPLATED_FILE_PATH")
+        io_object = TemplatedFile(source_config=config, file_name_to_replace="some_csv_to_read")
+
+        # When
+        first_df = io_object.read()
+        second_df = io_object.read()
+
+        # Then
+        pd.testing.assert_frame_equal(first_df, second_df)
+
+    @pytest.mark.unit
+    def test_write_twice_resolves_the_templated_file_path_both_times(self):
+        # Given
+        config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="TEMPLATED_FILE_PATH")
+        io_object = TemplatedFile(source_config=config, file_name_to_replace="some_csv_to_read")
+        df = pd.read_csv(os.path.join(TEST_RESOURCES, "data/input/some_csv_to_read.csv"))
+
+        # When
+        with patch.object(io_object, "_write_csv_file") as mocked__write_csv_file:
+            io_object.write(df)
+            io_object.write(df)
+
+        # Then
+        expected_file_path = config.local.file_path.format(file_name_to_replace="some_csv_to_read")
+        assert [call.args[1] for call in mocked__write_csv_file.call_args_list] == [expected_file_path, expected_file_path]
+
+    @pytest.mark.unit
     def test_local_writers_only_write_out_castable_columns_according_to_the_io_schema_case_float64_to_int64_id(
         self,
     ):
@@ -913,3 +950,21 @@ class TestBatchLocal:
         # Then
         pd.testing.assert_frame_equal(expected_concatenated_01_df, concatenated_01_df)
         pd.testing.assert_frame_equal(expected_concatenated_02_df, concatenated_02_df)
+
+    @pytest.mark.unit
+    def test_templated_parquet_paths_are_resolved_on_each_read_of_the_same_io(self, expected_concatenated_01_df):
+        # Given
+        parquet_local_batch_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="READ_DYNAMIC_FROM_BATCH_LOCAL_PARQUET")
+        io_object = ReadFromBatchLocalParquet(source_config=parquet_local_batch_config, runner_id="01")
+
+        # When
+        first_df = io_object.read()
+        second_df = io_object.read()
+
+        # Then
+        pd.testing.assert_frame_equal(expected_concatenated_01_df, first_df)
+        pd.testing.assert_frame_equal(expected_concatenated_01_df, second_df)

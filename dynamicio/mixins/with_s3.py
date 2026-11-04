@@ -500,15 +500,16 @@ class WithS3PathPrefix(with_local.WithLocal):
         file_type = get_file_type_value(s3_config.file_type)
         if file_type != "parquet":
             raise ValueError(f"File type not supported: {file_type}, only parquet files can be written to an S3 key")
-        if "partition_cols" not in self.options:
+        options = dict(self.options)
+        if "partition_cols" not in options:
             raise ValueError("`partition_cols` is required as an option to write partitioned parquet files to S3")
 
         bucket = s3_config.bucket
         path_prefix = s3_config.path_prefix
-        full_path_prefix = utils.resolve_template(f"s3://{bucket}/{path_prefix}", self.options)
+        full_path_prefix = utils.resolve_template(f"s3://{bucket}/{path_prefix}", options)
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            self._write_parquet_file(df, temp_dir, **self.options)
+            self._write_parquet_file(df, temp_dir, **options)
             s3_sync_up(temp_dir, full_path_prefix)
 
     def _read_from_s3_path_prefix(self) -> pd.DataFrame:  # pylint: disable=too-many-locals,too-many-branches
@@ -564,15 +565,16 @@ class WithS3PathPrefix(with_local.WithLocal):
         bucket = s3_config.bucket
         dynamic_file_path = s3_config.dynamic_file_path
         path_prefix = s3_config.path_prefix
+        options = dict(self.options)
 
         if dynamic_file_path:
-            full_path = utils.resolve_template(f"s3://{bucket}/{dynamic_file_path}", self.options)
+            full_path = utils.resolve_template(f"s3://{bucket}/{dynamic_file_path}", options)
         else:
-            full_path = utils.resolve_template(f"s3://{bucket}/{path_prefix}", self.options)
+            full_path = utils.resolve_template(f"s3://{bucket}/{path_prefix}", options)
 
         # The `no_disk_space` option should be used only when reading a subset of columns from S3. Parquet needs no special
         # handling: it is always parsed in memory, a few objects at a time, on the download threads.
-        if self.options.pop("no_disk_space", False) and path_prefix:
+        if options.pop("no_disk_space", False) and path_prefix:
             if file_type == "hdf":
                 dfs: List[DataFrame] = []
                 for fobj in self._iter_s3_files(full_path, file_ext=".h5", max_memory_use=1024**3):  # 1 gib
@@ -586,14 +588,14 @@ class WithS3PathPrefix(with_local.WithLocal):
             absent: List[str] = []
 
             def reader(fobj: io.BytesIO) -> pd.DataFrame:
-                return self._read_parquet_object(fobj, absent)
+                return _read_parquet_object(fobj, self.schema, options, absent)
 
             if dynamic_file_path:
                 prefix, suffix = full_path.rsplit("/**/", 1)
                 results = s3_read_down(prefix, reader, include_pattern=f"**/{suffix}")
             else:
                 results = s3_read_down(full_path, reader)
-            return self._concat_parquet_objects([df for df in results if len(df) > 0] or results, absent, full_path)
+            return _concat_parquet_objects([df for df in results if len(df) > 0] or results, absent, full_path, self.schema, options)
 
         with tempfile.TemporaryDirectory() as temp_dir:
             if dynamic_file_path:
@@ -604,19 +606,11 @@ class WithS3PathPrefix(with_local.WithLocal):
 
             dfs: List[DataFrame] = []
             for file in os.listdir(temp_dir):
-                df = getattr(self, f"_read_{file_type}_file")(os.path.join(temp_dir, file), self.schema, **self.options)  # type: ignore
+                df = getattr(self, f"_read_{file_type}_file")(os.path.join(temp_dir, file), self.schema, **options)  # type: ignore
                 if len(df) > 0:
                     dfs.append(df)
 
             return pd.concat(dfs, ignore_index=True)
-
-    def _read_parquet_object(self, fobj: IO[bytes], absent: List[str]) -> pd.DataFrame:
-        """Read one parquet object of a prefix, tolerating requested columns that this object does not contain."""
-        return _read_parquet_object(fobj, self.schema, self.options, absent)
-
-    def _concat_parquet_objects(self, dfs: List[DataFrame], absent: List[str], source: str) -> DataFrame:
-        """Concatenate the frames of a prefix, warning about columns some objects lack and failing on columns none have."""
-        return _concat_parquet_objects(dfs, absent, source, self.schema, self.options)
 
     def _iter_s3_files(self, s3_prefix: str, file_ext: Optional[str] = None, max_memory_use: int = -1) -> Generator[IO[bytes], None, None]:  # pylint: disable=too-many-locals
         """Download sways of S3 objects.
@@ -683,7 +677,7 @@ class WithS3File:
         """
         s3_config = self.sources_config.s3
         file_type = get_file_type_value(s3_config.file_type)
-        options = getattr(self, "options", {})
+        options = dict(getattr(self, "options", {}))
         s3_path = f"s3://{s3_config.bucket}/{utils.resolve_template(s3_config.file_path, options)}"
 
         logger.info(f"[s3] Started downloading: {s3_path}")
@@ -785,7 +779,7 @@ class WithS3File:
         """
         s3_config = self.sources_config.s3
         file_type = get_file_type_value(s3_config.file_type)
-        options = getattr(self, "options", {})
+        options = dict(getattr(self, "options", {}))
         s3_path = f"s3://{s3_config.bucket}/{utils.resolve_template(s3_config.file_path, options)}"
 
         logger.info(f"[s3] Started uploading: {s3_path}")

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- fix: one IO object can read or write more than once. Reads and writes removed the template fields of the path (for example `{runner_id}`) from `self.options`, so a second call on the same object raised `ValueError: Expected values for all fields`. The S3 path-prefix read also removed `no_disk_space`, the Athena read removed `query`, and the postgres read removed `sql_query`, so a second read used the default query without an error. Each call now works on a copy of the options. The two private methods `WithS3._read_parquet_object` and `WithS3._concat_parquet_objects` are removed. The module-level functions with the same names are unchanged
+
 ## v9.2.1
 
 - fix: transient S3 connection errors no longer fail a read or write. The shared boto3 client now uses the `standard` retry mode with 10 attempts, `connect_timeout=10` and `read_timeout=60`. The in-memory and file transfers (`put_object`, `upload_fileobj`, `get_object`, `download_fileobj`) are repeated, up to 5 attempts with backoff, on `ConnectionClosedError`, `ConnectTimeoutError`, `EndpointConnectionError`, `ReadTimeoutError`, `IncompleteReadError`, `ResponseStreamingError` and the `RetriesExceededError` that the transfer manager raises (s3transfer's and boto3's) when a download above 16 MiB gave up on a broken part. botocore does not retry these once the body is being sent or read. The buffer is rewound before each attempt (bytes written are identical), each retry is logged at WARNING with the bucket and key, and the shared client is rebuilt so the next attempt opens fresh connections. Other errors (for example `ClientError`) are raised as before, and nothing changes when no error occurs
