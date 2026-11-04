@@ -965,6 +965,29 @@ class TestS3PathPrefixIO:
         mocked__s3_sync.assert_called_with("temp", "s3://mock-bucket/data/some_dir/")
 
     @pytest.mark.unit
+    @patch.object(WriteS3IO, "_write_parquet_file")
+    def test_write_twice_resolves_the_templated_path_prefix_and_keeps_the_options(self, mock__write_parquet_file):
+        # Given
+        input_df = pd.DataFrame.from_dict({"col_1": [3, 2, 1], "col_2": ["a", "b", "c"]})
+        s3_parquet_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_BATCH_LOCAL_TEMPLATED_PARQUET")
+        io_obj = WriteS3IO(source_config=s3_parquet_cloud_config, partition_cols="col_2", dir_name_to_replace="some_dir")
+        options_before = dict(io_obj.options)
+
+        # When
+        with patch.object(dynamicio.mixins.with_s3, "s3_sync_up") as mocked__s3_sync:
+            io_obj.write(input_df)
+            io_obj.write(input_df)
+
+        # Then
+        assert [call.args[1] for call in mocked__s3_sync.call_args_list] == ["s3://mock-bucket//data/some_dir/"] * 2
+        assert [call.kwargs for call in mock__write_parquet_file.call_args_list] == [{"partition_cols": "col_2"}] * 2
+        assert io_obj.options == options_before
+
+    @pytest.mark.unit
     # pylint: disable=unused-argument
     def test_s3_sync_is_called_with_correct_s3_path_and_aws_command_when_loading_a_path_prefix_with_env_as_cloud_s3(self, mock_listdir, mock_temporary_directory, mock__read_hdf_file):
         # Given

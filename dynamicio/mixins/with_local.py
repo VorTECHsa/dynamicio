@@ -43,10 +43,11 @@ class WithLocal:
             DataFrame
         """
         local_config = self.sources_config.local
-        file_path = utils.resolve_template(local_config.file_path, self.options)
+        options = dict(self.options)
+        file_path = utils.resolve_template(local_config.file_path, options)
         file_type = get_file_type_value(local_config.file_type)
 
-        return getattr(self, f"_read_{file_type}_file")(file_path, self.schema, **self.options)
+        return getattr(self, f"_read_{file_type}_file")(file_path, self.schema, **options)
 
     def _write_to_local(self, df: pd.DataFrame):
         """Write a dataframe locally based on the {file_type} of the config_io configuration.
@@ -63,9 +64,10 @@ class WithLocal:
             df: The dataframe to be written out.
         """
         local_config = self.sources_config.local
-        file_path = utils.resolve_template(local_config.file_path, self.options)
+        options = dict(self.options)
+        file_path = utils.resolve_template(local_config.file_path, options)
         file_type = get_file_type_value(local_config.file_type)
-        getattr(self, f"_write_{file_type}_file")(df, file_path, **self.options)
+        getattr(self, f"_write_{file_type}_file")(df, file_path, **options)
 
     @staticmethod
     @utils.allow_options(pd.read_hdf)
@@ -288,6 +290,7 @@ class WithLocalBatch(WithLocal):
             A concatenated dataframe composed of all files read through local_batch.
         """
         local_batch_config = self.sources_config.local
+        options = dict(self.options)
 
         file_type = get_file_type_value(local_batch_config.file_type)
         filtering_file_type = "h5" if file_type == "hdf" else file_type
@@ -295,11 +298,11 @@ class WithLocalBatch(WithLocal):
         # Determine if the path is dynamic or static
         if local_batch_config.dynamic_file_path:
             # Dynamic path: use it directly
-            file_path = utils.resolve_template(local_batch_config.dynamic_file_path, self.options)
+            file_path = utils.resolve_template(local_batch_config.dynamic_file_path, options)
             files = sorted(glob.glob(file_path, recursive=True))
         elif local_batch_config.path_prefix:
             # Static path: append the file type
-            file_path = utils.resolve_template(local_batch_config.path_prefix, self.options)
+            file_path = utils.resolve_template(local_batch_config.path_prefix, options)
             files = sorted(glob.glob(os.path.join(file_path, f"*.{filtering_file_type}"), recursive=True))
         else:
             raise ValueError("Either path_prefix or dynamic_path must be provided in local_batch_config")
@@ -307,6 +310,6 @@ class WithLocalBatch(WithLocal):
         dfs_to_concatenate = []
         for file in files:
             file_to_load = os.path.join(file_path, file)
-            dfs_to_concatenate.append(getattr(self, f"_read_{file_type}_file")(file_to_load, self.schema, **self.options))
+            dfs_to_concatenate.append(getattr(self, f"_read_{file_type}_file")(file_to_load, self.schema, **options))
 
         return pd.concat(dfs_to_concatenate).reset_index(drop=True)

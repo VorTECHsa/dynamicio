@@ -47,11 +47,11 @@ class WithAthena:
             resource schema to have them cast on read.
         """
         cfg = self.sources_config.athena
-        query = self.options.pop("query", None) or cfg.query
+        options = dict(self.options)
+        query = options.pop("query", None) or cfg.query
         if not query:
             raise ValueError("A 'query' must be provided for Athena reads")
 
-        options = dict(self.options)
         if options.get("chunksize"):
             raise ValueError("Athena reads return a single DataFrame, so the 'chunksize' option is not supported; remove it from the resource options")
         options.setdefault("database", cfg.database)

@@ -165,6 +165,26 @@ class TestPostgresIO:
 
     @pytest.mark.unit
     @patch.object(WithPostgres, "_read_database")
+    def test_read_twice_runs_the_query_from_the_options_both_times(self, mock__read_database):
+        # Given
+        postgres_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_POSTGRES")
+        io_obj = ReadPostgresIO(source_config=postgres_cloud_config, sql_query="SELECT * FROM example")
+        options_before = dict(io_obj.options)
+
+        # When
+        io_obj.read()
+        io_obj.read()
+
+        # Then
+        assert [call.args[1] for call in mock__read_database.call_args_list] == ["SELECT * FROM example", "SELECT * FROM example"]
+        assert io_obj.options == options_before
+
+    @pytest.mark.unit
+    @patch.object(WithPostgres, "_read_database")
     def test_read_from_postgres_with_query_in_options(self, mock__read_database):
         # Given
         postgres_cloud_config = IOConfig(

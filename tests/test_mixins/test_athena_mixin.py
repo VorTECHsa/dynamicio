@@ -115,6 +115,18 @@ class TestAthenaWranglerArguments:
         assert kwargs["workgroup"] == "test_wg"
 
     @patch("dynamicio.mixins.with_athena.wr.athena.read_sql_query")
+    def test_read_twice_runs_the_query_from_the_options_both_times(self, mock_wr_read, test_df):
+        mock_wr_read.return_value = test_df
+        io_obj = ReadAthenaIO(source_config=_athena_config("READ_FROM_ATHENA"), query="SELECT 1")
+        options_before = dict(io_obj.options)
+
+        io_obj.read()
+        io_obj.read()
+
+        assert [call.args for call in mock_wr_read.call_args_list] == [("SELECT 1",), ("SELECT 1",)]
+        assert io_obj.options == options_before
+
+    @patch("dynamicio.mixins.with_athena.wr.athena.read_sql_query")
     def test_ctas_is_off_by_default_and_can_be_enabled(self, mock_wr_read, test_df):
         mock_wr_read.return_value = test_df
         config = _athena_config("READ_FROM_ATHENA")
