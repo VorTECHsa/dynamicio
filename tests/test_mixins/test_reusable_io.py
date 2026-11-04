@@ -222,7 +222,7 @@ class TestTemplateFieldNamedColumns:
         pd.testing.assert_frame_equal(second, FRAME)
         assert io_object.options == options_before
 
-    def test_s3_file(self, config_for, s3_client, tmp_path):
+    def test_s3_file(self, s3_client, tmp_path):
         # Given
         resources = {"S3_FILE": {"CLOUD": {"type": "s3_file", "s3": {"bucket": BUCKET, "file_path": "data/{columns}.parquet", "file_type": "parquet"}}}}
         path = tmp_path / "columns_resources.yaml"
