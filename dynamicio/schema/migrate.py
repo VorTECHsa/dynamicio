@@ -11,7 +11,8 @@ import yaml
 from dynamicio.config.pydantic.table_schema import DataframeSchema, SchemaColumn
 from dynamicio.schema.models import to_dataframe_schema
 
-_DTYPES = {"int64": "int", "float64": "float", "object": "str", "bool": "bool", "datetime64[ns]": "pd.Timestamp"}
+# YAML `object` meant "anything" (strings, lists, mixed values) and dynamicio never looked inside, so it stays `object`: faithful and byte-compatible.
+_DTYPES = {"int64": "int", "float64": "float", "object": "object", "bool": "bool", "datetime64[ns]": "pd.Timestamp"}
 
 
 def _canonical_dtype(name: str) -> str:
@@ -93,7 +94,15 @@ def _render_model(schema: DataframeSchema, class_name: str = "") -> str:
 def render_module(schemas: Mapping[str, DataframeSchema]) -> str:
     """Return a module defining one model per schema."""
     body = "\n\n".join(_render_model(s, cls) for cls, s in schemas.items())
-    header = ["import pandera.pandas as pa", "from pandera.typing import Series", "", ""]
+    header = [
+        "import pandera.pandas as pa",
+        "from pandera.typing import Series",
+        "",
+        "# `object` is what the YAML schemas declared: any Python values, including lists. Where you know a column only holds strings, declare it",
+        "# `Series[str]` (or `Series[pd.StringDtype]`, `string[pyarrow]` for a smaller column; the last two give `pd.NA` instead of `NaN` for missing values).",
+        "",
+        "",
+    ]
     if "pd." in body:
         header.insert(0, "import pandas as pd")
     names = sorted({match.group(2) for match in _PLACEHOLDER.finditer(body)})

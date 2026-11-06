@@ -9,7 +9,7 @@ from pandera.typing import Series
 
 from dynamicio import cli
 from dynamicio.config.pydantic.table_schema import DataframeSchema
-from dynamicio.schema.migrate import compile_module, migrate, render_model, schemas_equivalent
+from dynamicio.schema.migrate import compile_module, migrate, render_model, render_module, schemas_equivalent
 from dynamicio.schema.models import to_dataframe_schema
 from tests.test_contracts.conftest import SCHEMA_SPEC
 
@@ -164,3 +164,14 @@ def test_migrate_to_a_package_groups_models_by_source_directory(project):
     assert "class Staged" in (project / "models" / "stage.py").read_text()
     assert "class Contract" in (project / "models" / "common.py").read_text()
     assert "class Contract" not in (project / "models" / "stage.py").read_text()
+
+
+@pytest.mark.unit
+def test_a_yaml_object_column_migrates_to_object_and_keeps_list_values_valid():
+    original = DataframeSchema(name="lists", columns={"tags": {"type": "object", "validations": {}, "metrics": []}, "label": {"type": "object", "validations": {}, "metrics": []}})
+    source = render_module({"Lists": original})
+    model = compile_module(source)["Lists"]
+
+    assert "label: Series[str]" not in source and "tags: Series[object]" in source and "label: Series[object]" in source
+    assert schemas_equivalent(to_dataframe_schema(model), original)
+    model.validate(pd.DataFrame({"tags": [["a", "b"], []], "label": ["x", None]}))  # plain Pandera accepts lists in an `object` column
