@@ -1,12 +1,15 @@
 # pylint: disable=no-member, missing-module-docstring, missing-class-docstring, missing-function-docstring, too-many-public-methods, too-few-public-methods, protected-access, C0103, C0302, R0801
 import copy
 import os
+import threading
+import time
 import types
+from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import ANY, MagicMock, patch
 
 import pandas as pd
 import pytest
-from sqlalchemy import Table, create_engine, inspect, text
+from sqlalchemy import Column, Table, create_engine, inspect, text
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
 from sqlalchemy.schema import CreateTable
@@ -253,6 +256,56 @@ class TestPostgresIO:
         # Then
         assert first is second
         assert other is not first
+
+    @pytest.mark.unit
+    def test_a_table_defined_twice_with_different_columns_keeps_each_definition_intact(self):
+        # Given
+        postgres_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_POSTGRES")
+        full = postgres_cloud_config.dynamicio_schema
+        reduced = copy.deepcopy(full)
+        for name in list(reduced.columns)[1:]:
+            reduced.columns.pop(name)
+
+        # When
+        small = WithPostgres._generate_model_from_schema(reduced)
+        WithPostgres._generate_model_from_schema(full)
+        small_again = WithPostgres._generate_model_from_schema(reduced)
+
+        # Then
+        assert small_again is small
+        assert [column.name for column in small.__table__.columns] == list(reduced.columns)
+        assert len(WithPostgres._get_table_columns(small)) == 1
+
+    @pytest.mark.unit
+    def test_concurrent_first_calls_for_one_definition_build_one_model(self):
+        # Given
+        postgres_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_POSTGRES")
+        schema = copy.deepcopy(postgres_cloud_config.dynamicio_schema)
+        schema.name = "concurrent_first_calls"
+        barrier = threading.Barrier(8)
+
+        def generate(_):
+            barrier.wait()
+            return WithPostgres._generate_model_from_schema(schema)
+
+        def slow_column(*args, **kwargs):
+            time.sleep(0.01)  # keeps the first build in flight long enough for the other threads to miss the cache too
+            return Column(*args, **kwargs)
+
+        # When
+        with patch("dynamicio.mixins.with_postgres.Column", side_effect=slow_column), ThreadPoolExecutor(max_workers=8) as pool:
+            models = list(pool.map(generate, range(8)))
+
+        # Then
+        assert all(model is models[0] for model in models)
 
     @pytest.mark.unit
     def test_get_table_columns_from_generated_model_returns_valid_list_of_columns(self):
