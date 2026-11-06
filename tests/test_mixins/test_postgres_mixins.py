@@ -12,6 +12,7 @@ import pandera.pandas as pa
 import pytest
 from pandera.typing import Series
 from sqlalchemy import Column, Table, create_engine, inspect, text
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
 from sqlalchemy.schema import CreateTable
 from sqlalchemy.sql.base import ColumnCollection

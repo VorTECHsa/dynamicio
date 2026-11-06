@@ -22,6 +22,10 @@
 - feat: `dynamicio migrate <schemas dir> -o schemas.py` converts YAML schemas to Pandera models (dataset names, validations and metrics preserved, verified by a parity check) and writes `MIGRATION_PROMPT.md` listing the call sites to update by hand or with an LLM. The existing `-b/-s` schema generator is unchanged
 - docs: README Step 4.1 (Pandera models) and migration guide, ADR 0005; the `demo/` project now declares its schemas as Pandera models and keeps its resource definitions, models and IO classes together under `demo/src/resources` (with `environment.py` and `constants.py` under `demo/src/config`), with `demo/tests` mirroring `demo/src`, documented in the README as the recommended pipeline project structure
 
+## v9.2.3
+
+- fix: `WithPostgres` builds one SQLAlchemy model per table definition and reuses it, instead of a new same-named class on every read or write. The classes piled up in the declarative registry, and SQLAlchemy's cleanup of them could raise a `RecursionError` during garbage collection (seen as a failing test on the lowest-dependency CI job). Each definition has its own declarative base, so two definitions of one table cannot alter each other's columns, and the cache is thread-safe for `async_read` / `async_write`. Queries and tables are unchanged.
+
 ## v9.2.2
 
 - fix: an IO object can be read or written repeatedly. A read or write removed values from `self.options`, so a second call on the same object failed or read the wrong data. The second call of a path with template fields (for example `{runner_id}`) raised `ValueError: Expected values for all fields`. Three cases gave no error. The S3 path-prefix read removed `no_disk_space`. The Athena read removed `query`, and the Postgres read removed `sql_query`, so the second read ran the default query and returned wrong data. Each call now works on a copy of the options, and `self.options` does not change. The two private methods `WithS3._read_parquet_object` and `WithS3._concat_parquet_objects` are removed. The module-level functions with the same names are unchanged
