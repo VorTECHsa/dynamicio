@@ -2,7 +2,7 @@
 import pandas as pd
 import pytest
 
-from demo.tests import constants
+from demo.tests.config import constants
 
 
 @pytest.fixture(scope="class")
