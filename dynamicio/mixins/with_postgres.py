@@ -4,6 +4,7 @@
 
 import csv
 import tempfile
+import threading
 from contextlib import contextmanager
 from typing import Any, Dict, Generator, MutableMapping, Union
 
@@ -24,6 +25,14 @@ from dynamicio.mixins import utils
 Session = sessionmaker(autoflush=True)  # pylint: disable=invalid-name
 
 Base = declarative_base()
+
+# One declarative class per table definition, each on its own declarative base (so its own registry and metadata). Building a new
+# class for every read or write piled up same-named classes in the registry of the shared `Base`, and SQLAlchemy's weakref cleanup
+# of them raised a RecursionError during garbage collection. A separate base also keeps two definitions of one table (say, with
+# and without an extra column) from altering each other's `__table__`. `async_read` and `async_write` call this from a thread
+# pool, hence the lock.
+_models: Dict[Any, DeclarativeMeta] = {}
+_models_lock = threading.Lock()
 
 _type_lookup = {
     # Booleans
@@ -129,12 +138,18 @@ class WithPostgres:
                 raise ValueError(f"Unsupported data_type '{col.data_type}' for column '{col.name}' in schema '{schema.name}'")
             json_cls_schema["columns"].append({"name": col.name, "type": sql_type})
 
-        class_name = "".join(word.capitalize() or "_" for word in schema.name.split("_")) + "Model"
+        key = (schema.name, tuple((column["name"], column["type"]) for column in json_cls_schema["columns"]))
+        with _models_lock:
+            if key not in _models:
+                class_name = "".join(word.capitalize() or "_" for word in schema.name.split("_")) + "Model"
 
-        class_dict = {"clsname": class_name, "__tablename__": schema.name, "__table_args__": {"extend_existing": True}}
-        class_dict.update({column["name"]: Column(column["type"], primary_key=True) if idx == 0 else Column(column["type"]) for idx, column in enumerate(json_cls_schema["columns"])})
+                class_dict = {"clsname": class_name, "__tablename__": schema.name, "__table_args__": {"extend_existing": True}}
+                class_dict.update(
+                    {column["name"]: Column(column["type"], primary_key=True) if idx == 0 else Column(column["type"]) for idx, column in enumerate(json_cls_schema["columns"])}
+                )
 
-        return type(class_name, (Base,), class_dict)
+                _models[key] = type(class_name, (declarative_base(),), class_dict)
+            return _models[key]
 
     @staticmethod
     def _get_table_columns(model):
