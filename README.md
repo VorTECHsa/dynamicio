@@ -121,7 +121,7 @@ decoupling business logic from the I/O layer.
 
 ## Supported sources and data formats
 
-<img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/supported_sources.png?raw=True" width="600">
+<img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/supported_sources.png?raw=True" width="750">
 
 - **S3** (or local) Input & Output, for single files (`type: s3`) and for prefixes holding many files (`type: s3_path_prefix`):
   - `parquet`
@@ -963,7 +963,9 @@ It also writes `MIGRATION_PROMPT.md` next to the module, listing the models and 
 dict schemas, `schema:` blocks in resource definitions) with file and line. Hand that prompt to an LLM, or follow it yourself:
 set `schema = <Model>` or `schema = SCHEMA_FROM_ARGUMENT` with `schema=<Model>` on construction, and delete the `schema:` blocks from the
 definitions. Dynamic variables (`[[ NAME ]]`) in the YAML become plain names marked `# TODO` in the module, to be replaced by imports.
-Dict-style schemas are not converted automatically. The `demo/` project was migrated this way.
+A YAML `object` column becomes `Series[object]`, because `object` meant "any values" (strings, lists, mixed) and dynamicio never looked inside.
+Where you know a column only holds strings, change it to `Series[str]` by hand (or `string[pyarrow]` for a smaller column, which gives `pd.NA`
+instead of `NaN` for missing values). Dict-style schemas are not converted automatically. The `demo/` project was migrated this way.
 
 ##### Step 4.3a: Loading from `S3`
 
