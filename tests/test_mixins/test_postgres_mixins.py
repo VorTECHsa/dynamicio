@@ -1,4 +1,5 @@
 # pylint: disable=no-member, missing-module-docstring, missing-class-docstring, missing-function-docstring, too-many-public-methods, too-few-public-methods, protected-access, C0103, C0302, R0801
+import copy
 import os
 import types
 from unittest.mock import ANY, MagicMock, patch
@@ -231,6 +232,27 @@ class TestPostgresIO:
 
         # Then
         assert len(model.__table__.columns) == len(schema.columns) and model.__tablename__ == schema_name
+
+    @pytest.mark.unit
+    def test_the_same_schema_generates_one_model_and_a_changed_schema_generates_another(self):
+        # Given
+        postgres_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_POSTGRES")
+        schema = postgres_cloud_config.dynamicio_schema
+        changed = copy.deepcopy(schema)
+        changed.columns.pop(next(iter(changed.columns)))
+
+        # When
+        first = WithPostgres._generate_model_from_schema(schema)
+        second = WithPostgres._generate_model_from_schema(schema)
+        other = WithPostgres._generate_model_from_schema(changed)
+
+        # Then
+        assert first is second
+        assert other is not first
 
     @pytest.mark.unit
     def test_get_table_columns_from_generated_model_returns_valid_list_of_columns(self):
