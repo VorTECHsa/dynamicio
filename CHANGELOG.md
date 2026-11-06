@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v9.2.3
 
 - fix: `WithPostgres` builds one SQLAlchemy model per table definition and reuses it, instead of a new same-named class on every read or write. The classes piled up in the declarative registry, and SQLAlchemy's cleanup of them could raise a `RecursionError` during garbage collection (seen as a failing test on the lowest-dependency CI job). Each definition has its own declarative base, so two definitions of one table cannot alter each other's columns, and the cache is thread-safe for `async_read` / `async_write`. Queries and tables are unchanged.
 
