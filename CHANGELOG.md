@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (v10.0.0)
+## v10.0.0
 
 - fix: `dynamicio migrate` writes a YAML `object` column as `Series[object]`, not `Series[str]`. `object` meant "any values", and list columns declared `str` fail plain Pandera validation (and would be recast under pandas 3). Models already generated with `Series[str]` for list columns should be changed to `Series[object]`; the generated module now says where `str` is safe
 - docs: the supported-sources picture in the README now shows Athena next to S3, Postgres and Kafka
