@@ -112,8 +112,17 @@ def test_empty_dataframe_logs_zero_counts_and_nan_for_statistics(make_io, valid_
 
 
 @pytest.mark.unit
-def test_wire_format_wraps_the_raw_line_in_a_json_envelope_for_the_default_handler():
-    # `dynamicio.metrics` attaches a JsonFormatter handler to stdout; the envelope is what log shippers see there.
+def test_wire_format_is_the_raw_line_with_the_default_logging_configuration():
+    # `dynamicio` applies `logging_config` on import: the `dynamicio.metrics` logger then writes the bare `message`, which is what log shippers parse.
+    record = logging.LogRecord("dynamicio.metrics", logging.INFO, __file__, 1, _line("D", "c", "Min", 1.0), None, None)
+    stream_handlers = [handler for handler in logging.getLogger("dynamicio.metrics").handlers if type(handler) is logging.StreamHandler]  # pylint: disable=unidiomatic-typecheck
+
+    assert [handler.format(record) for handler in stream_handlers] == [_line("D", "c", "Min", 1.0)]
+
+
+@pytest.mark.unit
+def test_wire_format_wraps_the_raw_line_in_a_json_envelope_when_logging_configuration_is_opted_out():
+    # With DYNAMICIO_DO_NOT_CONFIGURE_LOGGING=1 the handler `dynamicio.schema.metrics` attaches itself is the one that writes.
     record = logging.LogRecord("dynamicio.metrics", logging.INFO, __file__, 1, _line("D", "c", "Min", 1.0), None, None)
 
     assert json.loads(metrics.formatter.format(record)) == {"message": _line("D", "c", "Min", 1.0)}

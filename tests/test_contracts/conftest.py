@@ -113,8 +113,8 @@ def make_io(request, tmp_path):
                 local:
                   file_path: "{csv_file}"
                   file_type: "csv"
-                  options:
-                    index: false
+                options:
+                  index: false
               schema:
                 file_path: "{schema_file}"
             """))

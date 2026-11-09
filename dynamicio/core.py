@@ -31,11 +31,17 @@ def _is_declared_dtype(declared: str, found: Any) -> bool:
     """Whether a column's dtype is the declared one.
 
     Compares dtypes, not their names: the name of `string[pyarrow]` is `string`, which never equals the declared string and recast the column on every read.
-    A bare `category` accepts any categorical dtype, as its name did.
+    A bare `category` accepts any categorical dtype, and a bare `string` any string storage, as their names did: only `string[python]` or `string[pyarrow]`
+    ask for one storage. A declared type pandas does not know is not declared by anything: the cast reports it.
     """
-    expected = pd.api.types.pandas_dtype(declared)
+    try:
+        expected = pd.api.types.pandas_dtype(declared)
+    except TypeError:
+        return False
     if isinstance(expected, pd.CategoricalDtype) and expected.categories is None:
         return isinstance(found, pd.CategoricalDtype)
+    if isinstance(expected, pd.StringDtype) and declared.strip() == "string":
+        return isinstance(found, pd.StringDtype)
     return bool(expected == found)
 
 

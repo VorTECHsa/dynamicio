@@ -130,4 +130,4 @@ class TestWhenValidationsRun:
         # an extra column that would violate nothing is dropped; the output holds schema columns only.
         make_io(apply_schema_validations=True).write(valid_df.assign(extra=[None, None, None]))
 
-        assert pd.read_csv(make_io.csv_file, index_col=0).columns.to_list() == ["a", "b", "c"]
+        assert pd.read_csv(make_io.csv_file).columns.to_list() == ["a", "b", "c"]
