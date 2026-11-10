@@ -9,36 +9,36 @@ A repository for hosting the `dynamicio` library, used as a wrapper for `pandas`
 -- Logo illustrated by [Nick Loucas](https://www.linkedin.com/in/nickloucas/)
 
 ## Table of Contents
-- [Why wrap your i/o?](https://github.com/VorTECHsa/dynamicio/tree/master#why-wrap-your-i-o)
+- [Why wrap your i/o?](https://github.com/VorTECHsa/dynamicio/tree/master#why-wrap-your-io)
   * [Managing various Resources](https://github.com/VorTECHsa/dynamicio/tree/master#managing-various-resources)
   * [Managing Various Data Types](https://github.com/VorTECHsa/dynamicio/tree/master#managing-various-data-types)
-  * [Validations & Metrics Generation](https://github.com/VorTECHsa/dynamicio/tree/master#validations---metrics-generation)
-  * [Testing (Running Local Regression Tests)](https://github.com/VorTECHsa/dynamicio/tree/master#testing--running-local-regression-tests)
-  * [So, what do we do about these?](https://github.com/VorTECHsa/dynamicio/tree/master#so--what-do-we-do-about-these)
+  * [Validations & Metrics Generation](https://github.com/VorTECHsa/dynamicio/tree/master#validations--metrics-generation)
+  * [Testing (Running Local Regression Tests)](https://github.com/VorTECHsa/dynamicio/tree/master#testing-running-local-regression-tests)
+  * [So, what do we do about these?](https://github.com/VorTECHsa/dynamicio/tree/master#so-what-do-we-do-about-these)
   * [The Solution](https://github.com/VorTECHsa/dynamicio/tree/master#the-solution)
   * [Main features](https://github.com/VorTECHsa/dynamicio/tree/master#main-features)
-- [Supported sources and data formats:](https://github.com/VorTECHsa/dynamicio/tree/master#supported-sources-and-data-formats)
-  * [S3 I/O](https://github.com/VorTECHsa/dynamicio/tree/master#s3-i-o)
-  * [Athena I/O](https://github.com/VorTECHsa/dynamicio/tree/master#athena-i-o)
+- [Supported sources and data formats](https://github.com/VorTECHsa/dynamicio/tree/master#supported-sources-and-data-formats)
+  * [S3 I/O](https://github.com/VorTECHsa/dynamicio/tree/master#s3-io)
+  * [Athena I/O](https://github.com/VorTECHsa/dynamicio/tree/master#athena-io)
   * [Coming soon](https://github.com/VorTECHsa/dynamicio/tree/master#coming-soon)
 - [Installation](https://github.com/VorTECHsa/dynamicio/tree/master#installation)
 - [API Documentation](https://github.com/VorTECHsa/dynamicio/tree/master#api-documentation)
 - [How to use](https://github.com/VorTECHsa/dynamicio/tree/master#how-to-use)
   * [Keywords](https://github.com/VorTECHsa/dynamicio/tree/master#keywords)
-  * [Let's start](https://github.com/VorTECHsa/dynamicio/tree/master#let-s-start)
-    + [Step 1: Resource Definitions](https://github.com/VorTECHsa/dynamicio/tree/master#step-1--resource-definitions)
-    + [Step 2: Defining your environment variables](https://github.com/VorTECHsa/dynamicio/tree/master#step-2--defining-your-environment-variables)
-    + [Step 3: Read in your resource definitions](https://github.com/VorTECHsa/dynamicio/tree/master#step-3--read-in-your-resource-definitions)
-    + [Step 4: Loading the data resources](https://github.com/VorTECHsa/dynamicio/tree/master#step-4--loading-the-data-resources)
+  * [Let's start](https://github.com/VorTECHsa/dynamicio/tree/master#lets-start)
+    + [Step 1: Resource Definitions](https://github.com/VorTECHsa/dynamicio/tree/master#step-1-resource-definitions)
+    + [Step 2: Defining your environment variables](https://github.com/VorTECHsa/dynamicio/tree/master#step-2-defining-your-environment-variables)
+    + [Step 3: Read in your resource definitions](https://github.com/VorTECHsa/dynamicio/tree/master#step-3-read-in-your-resource-definitions)
+    + [Step 4: Loading the data resources](https://github.com/VorTECHsa/dynamicio/tree/master#step-4-loading-the-data-resources)
       - [Step 4.1. Pandera models](https://github.com/VorTECHsa/dynamicio/tree/master#step-41-pandera-models)
-      - [Step 4.1b. `SCHEMA_FROM_FILE`](https://github.com/VorTECHsa/dynamicio/tree/master#step-41b--schema-from-file)
+      - [Step 4.1b. `SCHEMA_FROM_FILE`](https://github.com/VorTECHsa/dynamicio/tree/master#step-41b-schema_from_file)
       - [Step 4.2. Use the dynamicio cli](https://github.com/VorTECHsa/dynamicio/tree/master#step-42-use-the-dynamicio-cli)
       - [Step 4.3a: Loading from `S3`](https://github.com/VorTECHsa/dynamicio/tree/master#step-43a-loading-from-s3)
       - [Step 4.3b: Loading from `Postgres`](https://github.com/VorTECHsa/dynamicio/tree/master#step-43b-loading-from-postgres)
       - [Step 4.3c: Loading from `Athena`](https://github.com/VorTECHsa/dynamicio/tree/master#step-43c-loading-from-athena)
-    + [Step 5: Writing out](https://github.com/VorTECHsa/dynamicio/tree/master#step-5--writing-out)
-    + [Step 6: Full Code](https://github.com/VorTECHsa/dynamicio/tree/master#step-6--full-code)
-  * [Utilising `asyncio`](https://github.com/VorTECHsa/dynamicio/tree/master#utilising--asyncio)
+    + [Step 5: Writing out](https://github.com/VorTECHsa/dynamicio/tree/master#step-5-writing-out)
+    + [Step 6: Full Code](https://github.com/VorTECHsa/dynamicio/tree/master#step-6-full-code)
+  * [Utilising `asyncio`](https://github.com/VorTECHsa/dynamicio/tree/master#utilising-asyncio)
 - [Testing Locally](https://github.com/VorTECHsa/dynamicio/tree/master#testing-locally)
 - [Last notes](https://github.com/VorTECHsa/dynamicio/tree/master#last-notes)
 
@@ -53,13 +53,13 @@ a big part of your code be concerned with I/O operations.
 ### Managing various Resources
 First, it's the various type of resources you need to interact with; object storage (S3 or GCS)
 databases (Athena, Big Query, Postgres), Kafka and many more. For each of these, you have 
-dependencies on various libraries such as `fsspec`, `gcfs`, `boto3`, `aws-wrangler`,
-`sql-alchemy`, `tables`, `kafka-python` and many more. 
+dependencies on various libraries such as `boto3`, `awswrangler`, `SQLAlchemy`,
+`tables` (for `hdf5`), `confluent-kafka` and many more. 
 
 ### Managing Various Data Types
-![data-types](https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/data-types.png?raw=True)
+<img src="https://raw.githubusercontent.com/VorTECHsa/dynamicio/master/docs/images/data-formats.svg" alt="parquet, hdf5, json and csv, each with its own kwargs" width="900">
 
-Then it's the various data types you need handle, `parquet`, `hdfs`, `csv`, `json` and many
+Then it's the various data types you need to handle, `parquet`, `hdf5`, `csv`, `json` and many
 others, each of which come with their own set of configuration `kwargs`, things like the 
 orientation of the dataset (`json`) or the parquet engine you want 
 to use behind the scenes (`pyarrow` or `fastparquet`).
@@ -108,6 +108,8 @@ Quoting from the same paper:
 > An important strategy for combating glue-code is to wrap black-box packages into common API's. This allows supporting
 > infrastructure to be more reusable and reduces the cost of changing packages.
 
+<img src="https://raw.githubusercontent.com/VorTECHsa/dynamicio/master/docs/images/how-it-works.svg" alt="Resolve the resource definition, read it, validate it against the schema, emit metrics" width="900">
+
 Dynamicio (or dynamic(i/o)) serves exactly that; it serves as a convenient wrapper around `pandas` I/O operations. It's a manifestation of 
 the dependency inversion principle--a layer of indirection if you want--which keeps your code DRY and increases re-usability, effectively 
 decoupling business logic from the I/O layer.
@@ -121,7 +123,9 @@ decoupling business logic from the I/O layer.
 
 ## Supported sources and data formats
 
-<img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/supported_sources.png?raw=True" width="750">
+<img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/supported_sources.png?raw=True" alt="Amazon S3, PostgreSQL, Kafka and Amazon Athena logos" width="750">
+
+<img src="https://raw.githubusercontent.com/VorTECHsa/dynamicio/master/docs/images/supported-sources.svg" alt="Sources dynamicio reads from and sinks it writes to: S3 and local files, PostgreSQL, Athena (read only), Kafka (write only)" width="900">
 
 - **S3** (or local) Input & Output, for single files (`type: s3`) and for prefixes holding many files (`type: s3_path_prefix`):
   - `parquet`
@@ -209,7 +213,7 @@ Notes:
 >> uv add dynamicio
 ```
 
-To contribute, see [CONTRIBUTING.md](CONTRIBUTING.md) (the project is managed with [uv](https://docs.astral.sh/uv/)).
+To contribute, see [CONTRIBUTING.md](https://github.com/VorTECHsa/dynamicio/blob/master/CONTRIBUTING.md) (the project is managed with [uv](https://docs.astral.sh/uv/)).
 
 ## API Documentation
 Read our docs here: https://vortechsa.github.io/dynamicio/
@@ -237,7 +241,7 @@ to S3 for further processing.
 
 Assume you want to build a pipeline that looks something like the image below:
 
-<img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/sample-pipeline.png?raw=True" width="600">
+<img src="https://raw.githubusercontent.com/VorTECHsa/dynamicio/master/docs/images/sample-pipeline.svg" alt="An Airflow DAG: FOO from S3 and BAR from Postgres go through the staging and transform tasks into S3 and Kafka" width="900">
 
 Assume the below repository structure, which implements this pipeline, for the purpose of this tutorial. It is also the
 structure we recommend for a data pipeline repository (see [Recommended project structure](#recommended-project-structure) below):
