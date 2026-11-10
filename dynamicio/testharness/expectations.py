@@ -28,6 +28,8 @@ class Expectations:  # pylint: disable=too-many-instance-attributes
         ignore_columns: Leave these columns out of the comparison (timestamps, run ids ...).
         list_columns_to_sort: List-valued columns whose element order does not matter.
         assertions: Extra checks that run after the frames matched, e.g. ``lambda actual, expected: assert actual["price"].min() >= 0``.
+        check_parquet_schema: For parquet outputs (other types are skipped), also require the same arrow schema and pandas index as the expected file (the loaded frames can
+            hide a difference in nullability, timestamp units or a stored index). Applied by ``ExpectedOutputs.check``.
     """
 
     check_row_order: bool = False
@@ -41,6 +43,7 @@ class Expectations:  # pylint: disable=too-many-instance-attributes
     ignore_columns: Tuple[str, ...] = ()
     list_columns_to_sort: Tuple[str, ...] = ()
     assertions: Tuple[FrameAssertion, ...] = ()
+    check_parquet_schema: bool = False
 
     @classmethod
     def strict(cls) -> "Expectations":

@@ -1,7 +1,8 @@
 """A session that lazily checks the outputs of a task against their expected files."""
 
+import itertools
 import os
-from typing import Any, List, Mapping, Optional, Tuple
+from typing import Any, Iterable, List, Mapping, Optional, Tuple
 
 import pandas as pd
 
@@ -10,6 +11,7 @@ from dynamicio.testharness.expectations import Expectations
 from dynamicio.testharness.frame_comparison import FrameComparison
 from dynamicio.testharness.output_files import OutputFiles
 from dynamicio.testharness.output_mismatch_error import OutputMismatchError
+from dynamicio.testharness.parquet_schema_comparison import ParquetSchemaComparison
 
 
 class ExpectedOutputs:
@@ -19,6 +21,8 @@ class ExpectedOutputs:
 
     Args:
         expectations: The default rules of every check (see :class:`Expectations`); a single check can refine them.
+        environment: The environment of the resource definitions to check, e.g. ``"LOCAL"``. State it in every test: it is the environment the task under
+            test must run in (see :class:`EnvironmentSwitch`). Defaults to the one each config selects. A single check can override it.
         keep_files: Keep the generated files even when they matched (by default they are removed, so the next run starts clean).
         update_expected: Overwrite the expected files with the generated outputs instead of comparing. Defaults to the ``DYNAMICIO_UPDATE_EXPECTED`` env var.
 
@@ -30,8 +34,9 @@ class ExpectedOutputs:
 
     UPDATE_ENV_VAR = "DYNAMICIO_UPDATE_EXPECTED"
 
-    def __init__(self, expectations: Optional[Expectations] = None, keep_files: bool = False, update_expected: Optional[bool] = None):
+    def __init__(self, expectations: Optional[Expectations] = None, keep_files: bool = False, update_expected: Optional[bool] = None, environment: Optional[str] = None):
         self.expectations = expectations or Expectations()
+        self.environment = environment
         self.keep_files = keep_files
         self.update_expected = os.environ.get(self.UPDATE_ENV_VAR, "").lower() in ("1", "true", "yes") if update_expected is None else update_expected
         self.errors: List[Tuple[str, str]] = []
@@ -46,20 +51,31 @@ class ExpectedOutputs:
             self.raise_if_failed()
 
     @staticmethod
-    def read_generated(config: IOConfig, source_key: str, params: Optional[Mapping[str, Any]] = None) -> pd.DataFrame:
+    def read_generated(config: IOConfig, source_key: str, params: Optional[Mapping[str, Any]] = None, environment: Optional[str] = None) -> pd.DataFrame:
         """The output the task generated for ``source_key``."""
-        return OutputFiles(config, source_key, params).read_generated()
+        return OutputFiles(config, source_key, params, environment).read_generated()
 
     @staticmethod
-    def read_expected(config: IOConfig, source_key: str, params: Optional[Mapping[str, Any]] = None) -> pd.DataFrame:
+    def read_expected(config: IOConfig, source_key: str, params: Optional[Mapping[str, Any]] = None, environment: Optional[str] = None) -> pd.DataFrame:
         """The reference output declared for ``source_key``."""
-        return OutputFiles(config, source_key, params).read_expected()
+        return OutputFiles(config, source_key, params, environment).read_expected()
 
     @staticmethod
-    def clear(config: IOConfig, *source_keys: str, params: Optional[Mapping[str, Any]] = None) -> None:
+    def clear(config: IOConfig, *source_keys: str, params: Optional[Mapping[str, Any]] = None, environment: Optional[str] = None) -> None:
         """Remove leftovers of earlier runs (generated files of ``source_keys``) so a stale file can not pass for a fresh output."""
         for source_key in source_keys:
-            OutputFiles(config, source_key, params).remove_generated()
+            OutputFiles(config, source_key, params, environment).remove_generated()
+
+    @staticmethod
+    def combinations(grid: Mapping[str, Iterable[Any]]) -> List[Mapping[str, Any]]:
+        """Every combination of the ``grid`` values, as ``params`` dicts."""
+        return [dict(zip(grid, values)) for values in itertools.product(*grid.values())]
+
+    @classmethod
+    def clear_each(cls, config: IOConfig, source_key: str, grid: Mapping[str, Iterable[Any]], environment: Optional[str] = None) -> None:
+        """:meth:`clear` the generated file of ``source_key`` for every combination of the ``grid`` values."""
+        for params in cls.combinations(grid):
+            cls.clear(config, source_key, params=params, environment=environment)
 
     def compare(self, actual: pd.DataFrame, expected: pd.DataFrame, name: str, expectations: Optional[Expectations] = None) -> bool:
         """Compare two frames, recording the failure under ``name`` instead of raising. Returns whether they matched."""
@@ -77,6 +93,7 @@ class ExpectedOutputs:
         *,
         label: Optional[str] = None,
         params: Optional[Mapping[str, Any]] = None,
+        environment: Optional[str] = None,
         expectations: Optional[Expectations] = None,
         **rules: Any,
     ) -> bool:
@@ -90,6 +107,7 @@ class ExpectedOutputs:
             source_key: The resource name.
             label: Name in the report (default ``source_key``, with ``params`` appended when given).
             params: Values for ``{placeholders}`` in the generated and expected paths.
+            environment: The environment to check instead of the session's.
             expectations: Rules for this check instead of the session's.
             **rules: Individual :class:`Expectations` fields to change for this check only, e.g. ``ignore_columns=["updated_at"]``.
 
@@ -97,7 +115,7 @@ class ExpectedOutputs:
             Whether the output matched (or was updated).
         """
         name = label or (f"{source_key}{dict(params)}" if params else source_key)
-        files = OutputFiles(config, source_key, params)
+        files = OutputFiles(config, source_key, params, environment or self.environment)
         try:
             if not files.generated_exists():
                 raise FileNotFoundError(f"no generated output at {files.generated_path}; did the task run in environment {files.environment_name!r}?")
@@ -107,7 +125,11 @@ class ExpectedOutputs:
             else:
                 if not files.expected_exists():
                     raise FileNotFoundError(f"no expected output at {files.expected_path}; generate it with {self.UPDATE_ENV_VAR}=1")
-                if not self.compare(files.read_generated(), files.read_expected(), name, (expectations or self.expectations).with_(**rules)):
+                rules_of_check = (expectations or self.expectations).with_(**rules)
+                matched = self.compare(files.read_generated(), files.read_expected(), name, rules_of_check)
+                if rules_of_check.check_parquet_schema and files.is_parquet:
+                    matched = self._compare_parquet_schema(files, name) and matched
+                if not matched:
                     return False
                 self.passed.append(name)
         except (ValueError, OSError) as error:
@@ -116,6 +138,42 @@ class ExpectedOutputs:
         if not self.keep_files:
             files.remove_generated()
         return True
+
+    def _compare_parquet_schema(self, files: OutputFiles, name: str) -> bool:
+        try:
+            ParquetSchemaComparison.compare(files.generated_path, files.expected_path)
+        except AssertionError as error:
+            self.errors.append((name, str(error)))
+            return False
+        return True
+
+    def check_each(
+        self,
+        config: IOConfig,
+        source_key: str,
+        grid: Mapping[str, Iterable[Any]],
+        *,
+        environment: Optional[str] = None,
+        expectations: Optional[Expectations] = None,
+        **rules: Any,
+    ) -> bool:
+        """Run :meth:`check` for every combination of the ``grid`` values, for a resource whose path has several ``{placeholders}``.
+
+        Example: ``outputs.check_each(config, "PART", {"table": ["events", "cargoes"], "shard": range(4)})`` checks 8 files and reports each by its own params.
+
+        Args:
+            config: The ``IOConfig`` the task wrote the output with.
+            source_key: The resource name.
+            grid: For each placeholder, the values it takes.
+            environment: The environment to check instead of the session's.
+            expectations: Rules for these checks instead of the session's.
+            **rules: Individual :class:`Expectations` fields to change for these checks only.
+
+        Returns:
+            Whether every combination matched.
+        """
+        results = [self.check(config, source_key, params=params, environment=environment, expectations=expectations, **rules) for params in self.combinations(grid)]
+        return all(results)
 
     def raise_if_failed(self) -> None:
         """Raise one :class:`OutputMismatchError` listing every recorded failure."""

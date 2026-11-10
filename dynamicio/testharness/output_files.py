@@ -17,12 +17,23 @@ class OutputFiles:
         config: The ``IOConfig`` (in its LOCAL-style environment) the task wrote the output with.
         source_key: The resource name.
         params: Values for ``{placeholders}`` in the generated and expected paths, for outputs whose file name carries a runtime parameter such as a date.
+        environment: The environment to look the resource up in; by default the one the ``config`` selects.
     """
 
-    def __init__(self, config: IOConfig, source_key: str, params: Optional[Mapping[str, Any]] = None):
+    def __init__(self, config: IOConfig, source_key: str, params: Optional[Mapping[str, Any]] = None, environment: Optional[str] = None):
         self.config = config
         self.source_key = source_key
         self.params = params
+        self.selected_environment = environment
+
+    @property
+    def resource(self):
+        """The definition of the resource in the environment under test."""
+        binding = self.config.config.bindings[self.source_key]
+        try:
+            return binding.get_binding_for_environment(self.environment_name)
+        except KeyError:
+            raise ValueError(f"{self.source_key} has no environment {self.environment_name!r}; it defines {sorted(binding.environments)}") from None
 
     def _format(self, path: str) -> str:
         return path.format(**self.params) if self.params else path
@@ -30,12 +41,12 @@ class OutputFiles:
     @property
     def environment_name(self) -> str:
         """The environment the config selects, for messages."""
-        return self.config.env_identifier
+        return self.selected_environment or self.config.env_identifier
 
     @property
     def generated_path(self) -> str:
         """The local path the task writes the resource to."""
-        local = getattr(self.config.get(self.source_key), "local", None)
+        local = getattr(self.resource, "local", None)
         file_path = getattr(local, "file_path", None)
         if file_path is None:
             raise ValueError(f"{self.source_key} is not a single-file local resource in environment {self.environment_name!r}; only those can be checked")
@@ -44,13 +55,13 @@ class OutputFiles:
     @property
     def expected_path(self) -> str:
         """The path of the reference file declared under ``expected``."""
-        expected = self.config.get(self.source_key).expected
+        expected = self.resource.expected
         if expected is None:
             raise ValueError(f"{self.source_key} declares no `expected` path in environment {self.environment_name!r}")
         return self._format(expected.path)
 
     def _file_type(self, path: str, use_expected: bool) -> str:
-        environment = self.config.get(self.source_key)
+        environment = self.resource
         declared = environment.expected.file_type if use_expected and environment.expected else None
         declared = declared or getattr(getattr(environment, "local", None), "file_type", None)
         if declared is not None:
@@ -59,9 +70,14 @@ class OutputFiles:
         return {"h5": "hdf"}.get(extension, extension)
 
     @property
+    def is_parquet(self) -> bool:
+        """Whether the resource is written as parquet."""
+        return self._file_type(self.generated_path, use_expected=False) == "parquet"
+
+    @property
     def read_options(self) -> Mapping[str, Any]:
         """Reader options for both files: the JSON ``orient`` the resource is written with, overridden by ``expected.options``."""
-        environment = self.config.get(self.source_key)
+        environment = self.resource
         options = {"orient": environment.options["orient"]} if "orient" in environment.options else {}
         if environment.expected:
             options.update(environment.expected.options)

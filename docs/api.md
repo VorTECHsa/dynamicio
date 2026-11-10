@@ -62,6 +62,18 @@ Compare the outputs a task generated locally with the `expected` files declared 
 
 ::: dynamicio.testharness.output_files
 
+### Parquet layout
+
+::: dynamicio.testharness.parquet_schema_comparison
+
+### Environment
+
+::: dynamicio.testharness.environment_switch
+
+### Sandbox
+
+::: dynamicio.testharness.output_sandbox
+
 ### Error
 
 ::: dynamicio.testharness.output_mismatch_error

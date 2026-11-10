@@ -1306,6 +1306,7 @@ like any other, so one broken output never hides the others.
 | `ignore_columns=["run_id"]` | `()` | Leave volatile columns (timestamps, run ids) out |
 | `list_columns_to_sort=["tags"]` | `()` | List-valued columns whose element order does not matter |
 | `assertions=[fn, ...]` | `()` | Your own checks `fn(actual, expected)`, run after the frames matched; raise `AssertionError` to fail |
+| `check_parquet_schema` | `False` | For parquet, also require the same arrow schema and stored pandas index as the expected file, which loaded frames can hide |
 
 ```python
 from dynamicio.testharness import ExpectedOutputs, Expectations
@@ -1330,12 +1331,31 @@ with ExpectedOutputs(session) as outputs:
 | Feature | Effect |
 |---|---|
 | `outputs.check(..., params={"day": "2024-01-01"})` | Fills `{day}` in the generated and expected paths, for outputs whose file name carries a runtime parameter |
+| `outputs.check_each(config, "KEY", {"table": [...], "shard": range(4)})` | `check` for every combination of the placeholder values, each reported by its own params |
+| `ExpectedOutputs.clear_each(config, "KEY", grid)` | `clear` for every combination of the placeholder values |
+| `ExpectedOutputs(environment="NAME")`, `outputs.check(..., environment="NAME")` | Say which environment of the resource to read and compare, instead of the config's own `env_identifier` (an unknown name is reported as a failure listing the defined ones) |
 | `outputs.check(..., label="...")` | The name used in the report (default: the resource name, with `params`) |
 | `ExpectedOutputs(keep_files=True)` | Keep the generated files even when they match |
 | `ExpectedOutputs.clear(config, "KEY", ...)` | Remove leftovers of an earlier, interrupted run at the start of a test |
 | `ExpectedOutputs.read_generated(...)` / `read_expected(...)` | Get the frames yourself |
 | `outputs.compare(actual_df, expected_df, "name")` | Record a comparison of frames you built, without any files |
 | `outputs.errors`, `outputs.passed`, `outputs.updated` | Inspect the outcome without raising |
+
+Tests that write the same local outputs (the same task run in different ways) overwrite each other's files, and with `pytest-xdist` they race. Wrap such a
+test in `OutputSandbox(tmp_path, output_config)`: the outputs of that config go below `tmp_path` and the checks follow them (the `expected` files stay put).
+Pass the task's *output* configs only, an input config would be redirected too. Nest it inside an `EnvironmentSwitch` when the test runs in another environment.
+
+#### Stating the environment
+
+A test should say which environment it runs in, not rely on whatever the config holds. `EnvironmentSwitch(environment, *configs)` sets `env_identifier` of the
+given `IOConfig`s for the `with` block and restores it afterwards, also when the test fails (no `monkeypatch` needed). A config that defines no resource in that
+environment is rejected up front, so a typo cannot silently run against the wrong files:
+
+```python
+with EnvironmentSwitch("LOCAL_E2E", input_config, output_config), ExpectedOutputs(environment="LOCAL_E2E") as outputs:
+    Task().run()
+    outputs.check(output_config, "FINAL_BAR")
+```
 
 The building blocks are public too: `FrameComparison(expectations).compare(a, b)` compares two frames (raising `AssertionError`) and `OutputFiles(config, key, params)`
 finds, reads, removes and promotes the files of one resource.

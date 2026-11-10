@@ -20,6 +20,13 @@ OUT:
     kafka:
       kafka_server: "broker"
       kafka_topic: "topic"
+  VARIANT:
+    type: "local"
+    local:
+      file_path: "[[ ROOT ]]/variant_{day}.parquet"
+      file_type: "parquet"
+    expected:
+      path: "[[ ROOT ]]/expected/variant_{day}.parquet"
 NO_EXPECTED:
   LOCAL:
     type: "local"
