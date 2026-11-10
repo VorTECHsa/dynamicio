@@ -318,12 +318,12 @@ Everything that describes *what data the pipeline touches* lives together under 
 | Path | Holds |
 |---|---|
 | `src/resources/definitions/*.yaml` | Resource definitions: where each dataset lives per environment, its format and options. YAML, so a bucket or path can change without touching code |
-| `src/resources/schemas/*.py` | The datasets' Pandera models: columns, dtypes, validations, metrics. One module per definitions file (`input.py` next to `definitions/input.yaml`), or per runner and direction in a bigger pipeline (`stage.py`, `transform.py`, ...) |
+| `src/resources/schemas/*.py` | The datasets' Pandera models: columns, dtypes, validations, metrics. One module per definitions file (`input.py` next to `definitions/staging_input.yaml`), or per runner and direction in a bigger pipeline (`stage.py`, `transform.py`, ...) |
 | `src/resources/io.py` | The `UnifiedIO`/`DynamicDataIO` subclasses used to read and write them |
 | `src/config/environment.py` | The values behind the `[[ DYNAMIC ]]` variables in the definitions, and the `RESOURCES` path |
 | `src/config/constants.py` | Constants shared by the runners, e.g. writer options |
 | `src/runners/` | The pipeline steps: they import from `src.resources` and never open a file or table directly |
-| `tests/` | Tests mirror the `src/` tree (`tests/runners/test_staging.py` tests `src/runners/staging.py`, and so on), plus `tests/test_pipeline.py` for the end-to-end run, and the sample data under `tests/data` (the `sample` environment points at it) |
+| `tests/` | Tests mirror the `src/` tree (`tests/runners/test_staging.py` tests `src/runners/staging.py`, and so on), plus `tests/test_pipeline.py` for the end-to-end run, and the sample data under `tests/data` (the `LOCAL` environment points at it) |
 
 Rules of thumb: a dataset is added by touching `src/resources` only (definition, model, optionally an IO class); a runner
 changes only when its logic changes. Keep the models next to the definitions that use them so a resource and its contract
@@ -342,98 +342,192 @@ resources
     └── transform_output.yaml
 ```
 
-The recommended structure is one input and one output definition per runner. The walkthrough below uses three files (`input.yaml`, `raw.yaml`,
-`processed.yaml`) and the environment names `sample` and `actual` to keep the explanation short; the `demo/` project splits them per runner and
-names its environments `LOCAL`, `DEV` and `PROD`. Environment names are yours to choose: they are only the keys you select with `env_identifier`.
+The recommended structure is one input and one output definition per runner, as above and in `demo/`. Each resource lists its environments (`LOCAL`, `DEV`
+and `PROD` in the demo), **the local one first**: the first environment listed is the default of the testing tools (see [Choosing the environment](#choosing-the-environment)).
+Environment names are yours to choose: they are only the keys you select with `env_identifier`.
 
 The definitions are plain YAML, so repetition can be removed with anchors: `&name` marks a block, `*name` reuses it, and `<<: *name` merges it with the keys
 written next to it taking precedence. In the demo, `PROD` reuses `DEV`'s `s3`, `postgres` and `kafka` blocks and Kafka `options`, overriding only the host or bucket.
 
 Schemas are not part of the resource definitions: they are declared as Pandera models in the `src/resources/schemas/` package, one module per group of datasets (see Step 4.1).
 
-You will need to define your pipeline's resources by creating three `yaml` files. The first is:
+You will need to define your pipeline's resources by creating four `yaml` files, the ones in `demo/src/resources/definitions`. The first is:
 
-- `input.yaml` which concerns data read by the **staging** task;
+- `staging_input.yaml`, which concerns data read by the **staging** task:
 
 ```yaml
 ---
+# `&name` anchors a block and `*name` reuses it; `<<: *name` merges it, and keys written next to it override. DEV and PROD only differ by their hosts.
 FOO:
-  sample:
+  LOCAL:
     type: "local"
     local:
       file_path: "[[ TEST_RESOURCES ]]/data/input/foo.csv"
       file_type: "csv"
-  actual:
+  DEV:
     type: "s3"
-    s3:
-      bucket: "[[ S3_YOUR_INPUT_BUCKET ]]"
+    s3: &foo_s3
+      bucket: "[[ DEV_S3_INPUT_BUCKET ]]"
       file_path: "data/foo.h5"
       file_type: "hdf"
+  PROD:
+    type: "s3"
+    s3:
+      <<: *foo_s3
+      bucket: "[[ PROD_S3_INPUT_BUCKET ]]"
 
 BAR:
-  sample:
+  LOCAL:
     type: "local"
     local:
       file_path: "[[ TEST_RESOURCES ]]/data/input/bar.parquet"
       file_type: "parquet"
-  actual:
+  DEV:
     type: "postgres"
-    postgres:
-      db_host: "[[ DB_HOST ]]"
+    postgres: &bar_postgres
+      db_host: "[[ DEV_DB_HOST ]]"
       db_port: "[[ DB_PORT ]]"
       db_name: "[[ DB_NAME ]]"
       db_user: "[[ DB_USER ]]"
       db_password: "[[ DB_PASS ]]"
+  PROD:
+    type: "postgres"
+    postgres:
+      <<: *bar_postgres
+      db_host: "[[ PROD_DB_HOST ]]"
+
+ORDERS:
+  LOCAL:
+    type: "local_batch"
+    local:
+      path_prefix: "[[ TEST_RESOURCES ]]/data/input/orders/"
+      file_type: "parquet"
+  DEV:
+    type: "s3_path_prefix"
+    s3: &orders_s3
+      bucket: "[[ DEV_S3_INPUT_BUCKET ]]"
+      path_prefix: "data/orders/"
+      file_type: "parquet"
+  PROD:
+    type: "s3_path_prefix"
+    s3:
+      <<: *orders_s3
+      bucket: "[[ PROD_S3_INPUT_BUCKET ]]"
 ```
 
-- the `raw.yaml`, which concerns data coming out of the **staging** task and go into the **transform** task:
+- `staging_output.yaml`, which concerns data written by the **staging** task and read by the **transform** task. Its `LOCAL` environments declare an
+  `expected` path, the reference file a test compares the generated output with (see [Declaring the expected output](#declaring-the-expected-output)):
 
 ```yaml
 ---
 STAGED_FOO:
-  sample:
+  LOCAL:
     type: "local"
     local:
       file_path: "[[ TEST_RESOURCES ]]/data/raw/staged_foo.parquet"
       file_type: "parquet"
-  actual:
+    expected:
+      path: "[[ TEST_RESOURCES ]]/data/raw/expected/staged_foo.parquet"
+  DEV:
     type: "s3"
-    s3:
-      bucket: "[[ S3_YOUR_OUTPUT_BUCKET ]]"
+    s3: &foo_s3
+      bucket: "[[ DEV_S3_OUTPUT_BUCKET ]]"
       file_path: "live/data/raw/staged_foo.parquet"
       file_type: "parquet"
+  PROD:
+    type: "s3"
+    s3:
+      <<: *foo_s3
+      bucket: "[[ PROD_S3_OUTPUT_BUCKET ]]"
 
 STAGED_BAR:
-  sample:
+  LOCAL:
     type: "local"
     local:
       file_path: "[[ TEST_RESOURCES ]]/data/raw/staged_bar.parquet"
       file_type: "parquet"
-  actual:
+    expected:
+      path: "[[ TEST_RESOURCES ]]/data/raw/expected/staged_bar.parquet"
+  DEV:
     type: "s3"
-    s3:
-      bucket: "[[ S3_YOUR_OUTPUT_BUCKET ]]"
+    s3: &bar_s3
+      bucket: "[[ DEV_S3_OUTPUT_BUCKET ]]"
       file_path: "live/data/raw/staged_bar.parquet"
       file_type: "parquet"
+  PROD:
+    type: "s3"
+    s3:
+      <<: *bar_s3
+      bucket: "[[ PROD_S3_OUTPUT_BUCKET ]]"
 ```
-- and the `processed.yaml`, which concerns data coming out of the **transform** task:
+
+- `transform_input.yaml`, which concerns the data the **transform** task reads (the staged data):
+
+```yaml
+---
+STAGED_FOO:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/raw/staged_foo.parquet"
+      file_type: "parquet"
+  DEV:
+    type: "s3"
+    s3: &foo_s3
+      bucket: "[[ DEV_S3_OUTPUT_BUCKET ]]"
+      file_path: "live/data/raw/staged_foo.parquet"
+      file_type: "parquet"
+  PROD:
+    type: "s3"
+    s3:
+      <<: *foo_s3
+      bucket: "[[ PROD_S3_OUTPUT_BUCKET ]]"
+
+STAGED_BAR:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/raw/staged_bar.parquet"
+      file_type: "parquet"
+  DEV:
+    type: "s3"
+    s3: &bar_s3
+      bucket: "[[ DEV_S3_OUTPUT_BUCKET ]]"
+      file_path: "live/data/raw/staged_bar.parquet"
+      file_type: "parquet"
+  PROD:
+    type: "s3"
+    s3:
+      <<: *bar_s3
+      bucket: "[[ PROD_S3_OUTPUT_BUCKET ]]"
+```
+
+- and `transform_output.yaml`, which concerns data written by the **transform** task:
+
 ```yaml
 ---
 FINAL_FOO:
-  sample:
+  LOCAL:
     type: "local"
     local:
       file_path: "[[ TEST_RESOURCES ]]/data/processed/final_foo.parquet"
       file_type: "parquet"
-  actual:
+    expected:
+      path: "[[ TEST_RESOURCES ]]/data/processed/expected/final_foo.parquet"
+  DEV:
     type: "s3"
-    s3:
-      bucket: "[[ S3_YOUR_OUTPUT_BUCKET ]]"
+    s3: &foo_s3
+      bucket: "[[ DEV_S3_OUTPUT_BUCKET ]]"
       file_path: "live/data/processed/final_foo.parquet"
       file_type: "parquet"
+  PROD:
+    type: "s3"
+    s3:
+      <<: *foo_s3
+      bucket: "[[ PROD_S3_OUTPUT_BUCKET ]]"
 
 FINAL_BAR:
-  sample:
+  LOCAL:
     type: "local"
     local:
       file_path: "[[ TEST_RESOURCES ]]/data/processed/final_bar.parquet"
@@ -443,27 +537,34 @@ FINAL_BAR:
       coerce_timestamps: "ms"
       allow_truncated_timestamps: false
       row_group_size: 1000000
-  actual:
+    expected:
+      path: "[[ TEST_RESOURCES ]]/data/processed/expected/final_bar.parquet"
+  DEV:
     type: "kafka"
-    kafka:
-      kafka_server: "[[ KAFKA_SERVER ]]"
+    kafka: &bar_kafka
+      kafka_server: "[[ DEV_KAFKA_BROKER ]]"
       kafka_topic: "[[ KAFKA_TOPIC ]]"
-    options:
+    options: &bar_kafka_options
       compression_type: "snappy"
       max_in_flight_requests_per_connection: 10
       batch_size: 262144
       request_timeout_ms: 60000 # 60s
       buffer_memory: 134217728  # 128MB
-
+  PROD:
+    type: "kafka"
+    kafka:
+      <<: *bar_kafka
+      kafka_server: "[[ PROD_KAFKA_BROKER ]]"
+    options: *bar_kafka_options
 ```
 
 We will hence refer to these files as **"resource definitions"**.
 
-The first, `input.yaml` defines the input sources for the **staging** task, handled by the respective module (`runners/staging.py`) while the
-second one, defines its output; similarly for **transform**. These files are parsed by `dynamicio.config.IOConfig` to generated configuration i/o
-instances referred to as "source configs" (see `demo/src/__init__.py`).
+Each runner has an input and an output definition: `staging_input.yaml` defines the sources of the **staging** task, handled by the respective module
+(`runners/staging.py`), `staging_output.yaml` what it writes; similarly for **transform**. These files are parsed by `dynamicio.config.IOConfig` to generate
+configuration i/o instances referred to as "source configs" (see `demo/src/__init__.py`).
 
-Notice that under every source there are two layers: `sample` and `actual`. They point to the variants of the same
+Notice that under every source there are one layer per environment: `LOCAL`, `DEV` and `PROD`. They point to the variants of the same
 dataset, depending on whether it is called from the local environment or from the cloud (we will showcase how this
 distinction takes place later).
 
@@ -473,7 +574,7 @@ class kept next to them in a module of `src/resources/schemas/` (we will cover t
 #### Step 2: Defining your environment variables
 
 Also notice that paths to datasets are embedded with dynamic values identified with double squared brackets, e.g.
-`[[ S3_YOUR_OUTPUT_BUCKET ]]`. These can be defined in a module in your repository.
+`[[ DEV_S3_OUTPUT_BUCKET ]]`. These can be defined in a module in your repository.
 
 Resource definitions (`*.yaml` files) work in conjunction with `global` and `environment` variables:
 
@@ -493,31 +594,34 @@ Let's have a look inside.
 """A module for configuring all environment variables."""
 import os
 
-ENVIRONMENT = "sample"
-CLOUD_ENV = "DEV"
+ENVIRONMENT = "LOCAL"
 RESOURCES = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../resources")
 TEST_RESOURCES = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../tests")
-S3_YOUR_INPUT_BUCKET = None
-S3_YOUR_OUTPUT_BUCKET = None
-KAFKA_SERVER = None
+DEV_S3_INPUT_BUCKET = None
+DEV_S3_OUTPUT_BUCKET = None
+PROD_S3_INPUT_BUCKET = None
+PROD_S3_OUTPUT_BUCKET = None
+DEV_KAFKA_BROKER = None
+PROD_KAFKA_BROKER = None
 KAFKA_TOPIC = None
-DB_HOST = None
+DEV_DB_HOST = None
+PROD_DB_HOST = None
 DB_PORT = None
 DB_NAME = None
 DB_USER = None
 DB_PASS = None
 REFERENCE_DATA_STATE_KEY = None
-LOWER_THAN_LIMIT = 1000         # We will discuss this one later in step 4. 
+LOWER_THAN_LIMIT = 1000
 ```
 
 This module will be passed as an input parameter to instances of the `dynamicio.config.IOConfig` class. Let's cover
 some of its variables:
 
 - ```python
-  "ENVIRONMENT": "sample",
+  ENVIRONMENT = "LOCAL"
   ```
-  used to distinguish between local and cloud runs of your module. It assumes that this environment variable is
-  defined in the cloud environment where your module is executed from.
+  the environment your module runs in, one of the keys under each resource in the resource definitions (`LOCAL`, `DEV` or `PROD`). In the cloud, set it from
+  an environment variable of the place where your module is executed from, e.g. `os.getenv("ENVIRONMENT", "LOCAL")`.
 - ```python
   "TEST_RESOURCES": os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../tests"),
   ```
@@ -526,15 +630,15 @@ some of its variables:
 ```yaml
 ---
 FOO:
-  sample:
+  LOCAL:
     type: "local"
     local:
       file_path: "[[ TEST_RESOURCES ]]/data/input/foo.csv"
       file_type: "csv"
-  actual:
+  DEV:
     type: "s3"
     s3:
-      bucket: "[[ S3_YOUR_INPUT_BUCKET ]]"
+      bucket: "[[ DEV_S3_INPUT_BUCKET ]]"
       file_path: "data/foo.h5"
       file_type: "hdf"
 ```
@@ -558,8 +662,8 @@ src
 which allows it to be automatically loaded on call of any module within the `demo.src` package.
 
 ```python
-"""Set config IOs"""
-__all__ = ["input_config", "raw_config", "processed_config"]
+"""Set config IOs."""
+__all__ = ["staging_input_config", "staging_output_config", "transform_input_config", "transform_output_config"]
 
 import logging
 import os
@@ -572,47 +676,37 @@ logging.basicConfig(level=logging.INFO)
 logging.getLogger("kafka").setLevel(logging.WARNING)
 
 
-input_config = IOConfig(
-    path_to_source_yaml=(os.path.join(RESOURCES, "definitions/input.yaml")),
-    env_identifier=ENVIRONMENT,
-    dynamic_vars=environment,
-)
-raw_config = IOConfig(
-    path_to_source_yaml=(os.path.join(RESOURCES, "definitions/raw.yaml")),
-    env_identifier=ENVIRONMENT,
-    dynamic_vars=environment,
-)
-processed_config = IOConfig(
-    path_to_source_yaml=(os.path.join(RESOURCES, "definitions/processed.yaml")),
-    env_identifier=ENVIRONMENT,
-    dynamic_vars=environment,
-)
-
+# One input and one output definition per runner.
+staging_input_config = IOConfig(os.path.join(RESOURCES, "definitions/staging_input.yaml"), env_identifier=ENVIRONMENT, dynamic_vars=environment)
+staging_output_config = IOConfig(os.path.join(RESOURCES, "definitions/staging_output.yaml"), env_identifier=ENVIRONMENT, dynamic_vars=environment)
+transform_input_config = IOConfig(os.path.join(RESOURCES, "definitions/transform_input.yaml"), env_identifier=ENVIRONMENT, dynamic_vars=environment)
+transform_output_config = IOConfig(os.path.join(RESOURCES, "definitions/transform_output.yaml"), env_identifier=ENVIRONMENT, dynamic_vars=environment)
 ```
 
 On loading, `IOConfig` will load the respective configs for all resources in the form of a multi-layered dictionary, e.g.,
-for `actual`:
+for `FOO`:
 
 ```python
 import demo.src.config.environment
 
 {
     "FOO": {
-        "sample": {
+        "LOCAL": {
             "type": "local",
             "local": {
                 "file_path": f"{demo.src.config.environment.TEST_RESOURCES}/data/input/foo.csv",
                 "file_type": "csv",
             },
         },
-        "actual": {
+        "DEV": {
             "type": "s3",
             "s3": {
-                "bucket": f"{demo.src.config.environment.S3_YOUR_INPUT_BUCKET}",
+                "bucket": f"{demo.src.config.environment.DEV_S3_INPUT_BUCKET}",
                 "file_path": "data/foo.h5",
                 "file_type": "hdf"
             }
         },
+        # "PROD": ...
     }
 }
 ```
@@ -621,15 +715,15 @@ Then, depending on the value of the `env_identifier` parameter, the respective s
 with:
 
 ```python
-foo_io = input_config.get(source_key="FOO")
+foo_io = staging_input_config.get(source_key="FOO")
 ```
 
-and with `env_identifier="actual"`, the output would be:
+and with `env_identifier="DEV"`, the output would be:
 
 ```python
 "type": "s3",
 "s3": {
-    "bucket": f"{demo.src.config.environment.S3_YOUR_INPUT_BUCKET}",
+    "bucket": f"{demo.src.config.environment.DEV_S3_INPUT_BUCKET}",
     "file_path": "data/foo.h5",
     "file_type": "hdf"
 }
@@ -731,7 +825,7 @@ class InputIO(UnifiedIO):
     schema = SCHEMA_FROM_ARGUMENT
 
 
-foo_df = InputIO(source_config=input_config.get(source_key="FOO"), schema=Foo, apply_schema_validations=True, log_schema_metrics=True).read()
+foo_df = InputIO(source_config=staging_input_config.get(source_key="FOO"), schema=Foo, apply_schema_validations=True, log_schema_metrics=True).read()
 ```
 
 The `schema=` argument takes precedence over the class attribute; omitting it with `SCHEMA_FROM_ARGUMENT` raises `SchemaNotFoundError`.
@@ -764,9 +858,9 @@ For example:
 ```yaml
 ---
 FOO:
-  sample:
+  LOCAL:
   ...
-  actual:
+  DEV:
   ...
   schema:
     file_path: "[[ RESOURCES ]]/schemas/input/foo.yaml"
@@ -990,10 +1084,10 @@ instead of `NaN` for missing values). Dict-style schemas are not converted autom
 To then load from `S3` you simply do:
 
 ```python
-    foo_df = InputIO(source_config=input_config.get(source_key="FOO"), schema=Foo, apply_schema_validations=True, log_schema_metrics=True).read()
+    foo_df = InputIO(source_config=staging_input_config.get(source_key="FOO"), schema=Foo, apply_schema_validations=True, log_schema_metrics=True).read()
 ```
 
-which will load the `FOO` dataset from the `actual` definition (here an `S3` object) as a dataframe. With the environment set to `sample` the same call reads the local sample file instead.
+which will load the `FOO` dataset from the `DEV` definition (here an `S3` object) as a dataframe. With the environment set to `LOCAL` the same call reads the local sample file instead.
 
 ##### Step 4.3b: Loading from `Postgres`
 
@@ -1005,7 +1099,7 @@ This data model defines the table, the columns and their respective SQL types.
 To, then, load from `postgres` you simply do:
 
 ```python
-    bar_df = InputIO(source_config=input_config.get(source_key="BAR"), schema=Bar, apply_schema_validations=True, log_schema_metrics=True).read()
+    bar_df = InputIO(source_config=staging_input_config.get(source_key="BAR"), schema=Bar, apply_schema_validations=True, log_schema_metrics=True).read()
 ```
 
 which will load the table defined for `BAR` as a dataframe.
@@ -1016,7 +1110,7 @@ which will load the table defined for `BAR` as a dataframe.
 passed when instantiating the IO class (which takes precedence):
 
 ```python
-    events_df = InputIO(source_config=input_config.get(source_key="EVENTS_ATHENA"), query="SELECT id, ts FROM events LIMIT 10").read()
+    events_df = InputIO(source_config=staging_input_config.get(source_key="EVENTS_ATHENA"), query="SELECT id, ts FROM events LIMIT 10").read()
 ```
 
 where `InputIO` mixes in `WithAthena`. See [Athena I/O](#athena-i-o) for the available options.
@@ -1025,40 +1119,12 @@ where `InputIO` mixes in `WithAthena`. See [Athena I/O](#athena-i-o) for the ava
 
 Sinking data is done in a very similar way. You need to:
 
-1. Define your output resource definitions, in our case in `raw.yaml`
-
-```yaml
----
-STAGED_FOO:
-  sample:
-    type: "local"
-    local:
-      file_path: "[[ TEST_RESOURCES ]]/data/raw/staged_foo.parquet"
-      file_type: "parquet"
-  actual:
-    type: "s3"
-    s3:
-      bucket: "[[ S3_YOUR_OUTPUT_BUCKET ]]"
-      file_path: "live/data/raw/staged_foo.parquet"
-      file_type: "parquet"
-
-STAGED_BAR:
-  sample:
-    type: "local"
-    local:
-      file_path: "[[ TEST_RESOURCES ]]/data/raw/staged_bar.parquet"
-      file_type: "parquet"
-  actual:
-    type: "s3"
-    s3:
-      bucket: "[[ S3_YOUR_OUTPUT_BUCKET ]]"
-      file_path: "live/data/raw/staged_bar.parquet"
-      file_type: "parquet"
-```
+1. Define your output resource definitions, in our case in `staging_output.yaml` (shown in Step 1), with the `LOCAL`, `DEV` and `PROD` environments
+   and, in `LOCAL`, the `expected` path a test compares the output with.
 
 2. You need to define the respective dynamic values found in your resource definitions
    in your `src/config/environment.py`
-3. You need to create an instance of the `IOConfig` class for the `raw.yaml` in the
+3. You need to create an instance of the `IOConfig` class for the `staging_output.yaml` in the
    `__init__.py` file (we already did this).
 4. Define the additional `DynamicDataIO` subclasses in the `src/resources/io.py` module,
    dictating through the schema the list of columns, and their types (also used for schema validation).
@@ -1068,8 +1134,8 @@ STAGED_BAR:
 `demo/src/runners/staging.py`:
 ```python
     ...
-    StagedFoo(source_config=raw_config.get(source_key="STAGED_FOO"), **constants.TO_PARQUET_KWARGS).write(foo_df)
-    StagedBar(source_config=raw_config.get(source_key="STAGED_BAR")).write(bar_df)
+    StagedFoo(source_config=staging_output_config.get(source_key="STAGED_FOO"), **constants.TO_PARQUET_KWARGS).write(foo_df)
+    StagedBar(source_config=staging_output_config.get(source_key="STAGED_BAR")).write(bar_df)
 ```
 
 Notice that you can pass all `pandas` options to write out, when for instance you are writing out `parquet`.
@@ -1092,7 +1158,7 @@ Of course this is not a problem as parquet is the format used by both resources 
 ...
 
 FINAL_BAR:
-  sample:
+  LOCAL:
     type: "local"
     local:
       file_path: "[[ TEST_RESOURCES ]]/data/processed/final_bar.parquet"
@@ -1102,17 +1168,25 @@ FINAL_BAR:
       coerce_timestamps: "ms"
       allow_truncated_timestamps: false
       row_group_size: 1000000
-  actual:
+    expected:
+      path: "[[ TEST_RESOURCES ]]/data/processed/expected/final_bar.parquet"
+  DEV:
     type: "kafka"
-    kafka:
-      kafka_server: "[[ KAFKA_SERVER ]]"
+    kafka: &bar_kafka
+      kafka_server: "[[ DEV_KAFKA_BROKER ]]"
       kafka_topic: "[[ KAFKA_TOPIC ]]"
-    options:                                      <---- Options for writing to a Kafka Topic
+    options: &bar_kafka_options                   <---- Options for writing to a Kafka Topic
       compression_type: "snappy"
       max_in_flight_requests_per_connection: 10
       batch_size: 262144
       request_timeout_ms: 60000 # 60s
       buffer_memory: 134217728  # 128MB
+  PROD:
+    type: "kafka"
+    kafka:
+      <<: *bar_kafka
+      kafka_server: "[[ PROD_KAFKA_BROKER ]]"
+    options: *bar_kafka_options
 ```
 
 Here, we have a case where different options need to be used for each environment as it deals with a different source. This is gracefully managed through resource 
@@ -1136,7 +1210,7 @@ and looks like:
 """Add module docstring...."""
 import logging
 
-from demo.src import input_config, raw_config
+from demo.src import staging_input_config, staging_output_config
 from demo.src.config import constants
 from demo.src.resources.io import InputIO, StagedBar, StagedFoo
 
@@ -1152,8 +1226,8 @@ def main() -> None:
     # LOAD DATA
     logger.info("Loading data from live sources...")
 
-    bar_df = InputIO(source_config=input_config.get(source_key="BAR"), schema=Bar, apply_schema_validations=True, log_schema_metrics=True).read()
-    foo_df = InputIO(source_config=input_config.get(source_key="FOO"), schema=Foo, apply_schema_validations=True, log_schema_metrics=True).read()
+    bar_df = InputIO(source_config=staging_input_config.get(source_key="BAR"), schema=Bar, apply_schema_validations=True, log_schema_metrics=True).read()
+    foo_df = InputIO(source_config=staging_input_config.get(source_key="FOO"), schema=Foo, apply_schema_validations=True, log_schema_metrics=True).read()
 
     logger.info("Data successfully loaded from live sources...")
 
@@ -1166,8 +1240,8 @@ def main() -> None:
 
     # SINK DATA
     logger.info("Begin sinking data to staging area:")
-    StagedFoo(source_config=raw_config.get(source_key="STAGED_FOO"), **constants.TO_PARQUET_KWARGS).write(foo_df)
-    StagedBar(source_config=raw_config.get(source_key="STAGED_BAR")).write(bar_df)
+    StagedFoo(source_config=staging_output_config.get(source_key="STAGED_FOO"), **constants.TO_PARQUET_KWARGS).write(foo_df)
+    StagedBar(source_config=staging_output_config.get(source_key="STAGED_BAR")).write(bar_df)
     logger.info("Data staging is complete...")
 
 ```
@@ -1180,8 +1254,7 @@ An example can be found in the second of the two demo tasks, namely, the `transf
 import asyncio
 import logging
 
-import demo.src.config.environment
-from demo.src import processed_config, raw_config
+from demo.src import transform_input_config, transform_output_config
 from demo.src.resources.io import InputIO, StagedBar, StagedFoo
 
 logger = logging.getLogger(__name__)
@@ -1197,8 +1270,8 @@ async def main() -> None:
     logger.info("Loading data from live sources...")
 
     [bar_df, foo_df] = await asyncio.gather(
-        StagedBar(source_config=raw_config.get(source_key="STAGED_BAR")).async_read(),
-        StagedFoo(source_config=raw_config.get(source_key="STAGED_FOO")).async_read()
+        StagedBar(source_config=transform_input_config.get(source_key="STAGED_BAR")).async_read(),
+        StagedFoo(source_config=transform_input_config.get(source_key="STAGED_FOO")).async_read()
     )
 
     logger.info("Data successfully loaded from live sources...")
@@ -1211,10 +1284,10 @@ async def main() -> None:
     logger.info("Transformations applied successfully...")
 
     # SINK DATA
-    logger.info(f"Begin sinking data to staging area: S3:{demo.src.config.environment.S3_YOUR_OUTPUT_BUCKET}:live/data/raw")
+    logger.info("Begin sinking data to the processed area:")
     await asyncio.gather(
-        InputIO(source_config=processed_config.get(source_key="FINAL_FOO"), schema=FinalFoo, apply_schema_validations=True, log_schema_metrics=True).async_write(foo_df),
-        InputIO(source_config=processed_config.get(source_key="FINAL_BAR"), schema=FinalBar, apply_schema_validations=True, log_schema_metrics=True).async_write(bar_df),
+        InputIO(source_config=transform_output_config.get(source_key="FINAL_FOO"), schema=FinalFoo, apply_schema_validations=True, log_schema_metrics=True).async_write(foo_df),
+        InputIO(source_config=transform_output_config.get(source_key="FINAL_BAR"), schema=FinalBar, apply_schema_validations=True, log_schema_metrics=True).async_write(bar_df),
     )
     logger.info("Data staging is complete...")
 
@@ -1322,9 +1395,9 @@ session = Expectations(ignore_columns=["run_id"]).also_assert(prices_are_positiv
 
 with ExpectedOutputs(session) as outputs:
     staging.main()
-    outputs.check(raw_config, "STAGED_FOO")                                   # session rules
-    outputs.check(processed_config, "FINAL_BAR", sort_by=["id"], rtol=1e-3)   # relaxed for this output only
-    outputs.check(processed_config, "FINAL_FOO", expectations=Expectations.strict())   # strict for this output
+    outputs.check(staging_output_config, "STAGED_FOO")                                   # session rules
+    outputs.check(transform_output_config, "FINAL_BAR", sort_by=["id"], rtol=1e-3)   # relaxed for this output only
+    outputs.check(transform_output_config, "FINAL_FOO", expectations=Expectations.strict())   # strict for this output
 ```
 
 `Expectations.strict()` requires row and column order and exact floats; `Expectations.lenient()` ignores dtypes and loosens the tolerance to `1e-3`;
