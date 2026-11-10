@@ -1543,8 +1543,9 @@ class TestS3FileWithMissingKey:
             yield client
 
     @pytest.mark.unit
+    @pytest.mark.usefixtures("s3_bucket")
     @pytest.mark.parametrize("source_key, io_class", [("READ_FROM_S3_CSV", ReadS3CsvIO), ("READ_FROM_S3_JSON", ReadS3JsonIO)], ids=["csv", "json"])
-    def test_a_missing_key_raises_object_not_found(self, s3_bucket, source_key, io_class):
+    def test_a_missing_key_raises_object_not_found(self, source_key, io_class):
         # Given a bucket with no object at the key of the source
         config = self._config(source_key)
 
