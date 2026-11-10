@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v10.0.1
 
 - fix: an S3 path-prefix read with no objects under the prefix raises `dynamicio.errors.NoObjectsFoundError("No objects found under s3://...")`. Before, it raised the pandas error `ValueError: No objects to concatenate`, which a caller cannot tell apart from other `ValueError`s. The change applies to all the file types (parquet, csv, json, hdf) and to the hdf `no_disk_space` read. `NoObjectsFoundError` is a `FileNotFoundError` and a `ValueError`, so a caller can treat the prefix as a missing source, and code that catches `ValueError` works as before. An S3 parquet `file_path` that ends in `/` and has no objects raises the same error. It raised a plain `FileNotFoundError` before. Objects that are all empty do not change: a parquet prefix returns an empty frame, and a csv, json or hdf prefix raises the pandas `ValueError` as before
 
