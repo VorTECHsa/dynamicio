@@ -28,9 +28,9 @@ class TestOutputFiles:
             _ = OutputFiles(config, "NO_EXPECTED").expected_path
 
     @pytest.mark.unit
-    def test_only_single_file_local_resources_can_be_checked(self, prod_config):
+    def test_only_single_file_local_resources_can_be_checked(self, config):
         with pytest.raises(ValueError, match="not a single-file local resource"):
-            _ = OutputFiles(prod_config, "OUT").generated_path
+            _ = OutputFiles(config, "OUT", environment="PROD").generated_path
 
     @pytest.mark.unit
     def test_generated_and_expected_are_read_and_the_generated_can_be_removed_or_promoted(self, config):

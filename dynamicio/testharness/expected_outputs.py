@@ -2,11 +2,12 @@
 
 import itertools
 import os
-from typing import Any, Iterable, List, Mapping, Optional, Tuple
+from typing import Any, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 import pandas as pd
 
 from dynamicio.config import IOConfig
+from dynamicio.testharness.environment_switch import EnvironmentSwitch
 from dynamicio.testharness.expectations import Expectations
 from dynamicio.testharness.frame_comparison import FrameComparison
 from dynamicio.testharness.output_files import OutputFiles
@@ -21,8 +22,11 @@ class ExpectedOutputs:
 
     Args:
         expectations: The default rules of every check (see :class:`Expectations`); a single check can refine them.
-        environment: The environment of the resource definitions to check, e.g. ``"LOCAL"``. State it in every test: it is the environment the task under
-            test must run in (see :class:`EnvironmentSwitch`). Defaults to the one each config selects. A single check can override it.
+        environment: The environment of the resource definitions, e.g. ``"LOCAL_E2E"``. Inside the ``with`` block every ``IOConfig`` that defines it
+            selects it, so the task under test runs in it too, and the checks compare its outputs; the configs get their own environment back on exit. It
+            defaults to the first environment each resource definition lists (conventionally the local one), whatever the process runs in. A single check
+            can override it.
+        configs: Switch only these ``IOConfig`` objects instead of every one that exists.
         keep_files: Keep the generated files even when they matched (by default they are removed, so the next run starts clean).
         update_expected: Overwrite the expected files with the generated outputs instead of comparing. Defaults to the ``DYNAMICIO_UPDATE_EXPECTED`` env var.
 
@@ -34,9 +38,18 @@ class ExpectedOutputs:
 
     UPDATE_ENV_VAR = "DYNAMICIO_UPDATE_EXPECTED"
 
-    def __init__(self, expectations: Optional[Expectations] = None, keep_files: bool = False, update_expected: Optional[bool] = None, environment: Optional[str] = None):
+    def __init__(
+        self,
+        expectations: Optional[Expectations] = None,
+        keep_files: bool = False,
+        update_expected: Optional[bool] = None,
+        environment: Optional[str] = None,
+        configs: Optional[Sequence[IOConfig]] = None,
+    ):
         self.expectations = expectations or Expectations()
         self.environment = environment
+        self.configs = configs
+        self._switches: List[EnvironmentSwitch] = []
         self.keep_files = keep_files
         self.update_expected = os.environ.get(self.UPDATE_ENV_VAR, "").lower() in ("1", "true", "yes") if update_expected is None else update_expected
         self.errors: List[Tuple[str, str]] = []
@@ -44,9 +57,14 @@ class ExpectedOutputs:
         self.updated: List[str] = []
 
     def __enter__(self) -> "ExpectedOutputs":
+        switch = EnvironmentSwitch(self.environment, *self.configs) if self.configs is not None else EnvironmentSwitch.of_all(self.environment)
+        switch.__enter__()
+        self._switches.append(switch)
         return self
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
+        if self._switches:
+            self._switches.pop().__exit__(exc_type, exc_value, traceback)
         if exc_type is None:  # never mask an error raised by the task itself
             self.raise_if_failed()
 

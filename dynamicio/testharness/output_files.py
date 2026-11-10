@@ -17,7 +17,7 @@ class OutputFiles:
         config: The ``IOConfig`` (in its LOCAL-style environment) the task wrote the output with.
         source_key: The resource name.
         params: Values for ``{placeholders}`` in the generated and expected paths, for outputs whose file name carries a runtime parameter such as a date.
-        environment: The environment to look the resource up in; by default the one the ``config`` selects.
+        environment: The environment to look the resource up in; by default the first one the resource definitions list.
     """
 
     def __init__(self, config: IOConfig, source_key: str, params: Optional[Mapping[str, Any]] = None, environment: Optional[str] = None):
@@ -40,8 +40,8 @@ class OutputFiles:
 
     @property
     def environment_name(self) -> str:
-        """The environment the config selects, for messages."""
-        return self.selected_environment or self.config.env_identifier
+        """The environment looked up: the selected one, else the first one the resource definitions list."""
+        return self.selected_environment or self.config.default_environment
 
     @property
     def generated_path(self) -> str:

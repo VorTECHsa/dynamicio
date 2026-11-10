@@ -317,3 +317,55 @@ class TestEnvironment:
                 pass
 
         assert config.env_identifier == "LOCAL"
+
+
+class TestSessionSwitchesEveryConfig:
+    @pytest.mark.unit
+    def test_a_session_makes_every_config_that_defines_the_environment_select_it_and_restores_them(self, config, prod_config):
+        with ExpectedOutputs(environment="VARIANT"):
+            assert (config.env_identifier, prod_config.env_identifier) == ("VARIANT", "VARIANT")
+
+        assert (config.env_identifier, prod_config.env_identifier) == ("LOCAL", "PROD")
+
+    @pytest.mark.unit
+    def test_a_session_restores_the_configs_when_the_test_body_fails(self, config):
+        with pytest.raises(RuntimeError):
+            with ExpectedOutputs(environment="VARIANT"):
+                raise RuntimeError("boom")
+
+        assert config.env_identifier == "LOCAL"
+
+    @pytest.mark.unit
+    def test_without_an_environment_each_config_selects_the_first_one_its_definitions_list_whatever_the_process_runs_in(self, config, prod_config):
+        assert prod_config.default_environment == "LOCAL"
+
+        with ExpectedOutputs():
+            assert (config.env_identifier, prod_config.env_identifier) == ("LOCAL", "LOCAL")
+
+        assert prod_config.env_identifier == "PROD"
+
+    @pytest.mark.unit
+    def test_a_session_can_be_limited_to_some_configs(self, config, prod_config):
+        with ExpectedOutputs(environment="VARIANT", configs=[config]):
+            assert (config.env_identifier, prod_config.env_identifier) == ("VARIANT", "PROD")
+
+    @pytest.mark.unit
+    def test_configs_that_do_not_define_the_environment_are_left_alone(self, config, tmp_path):
+        other_yaml = tmp_path / "other.yaml"
+        other_yaml.write_text('ONLY_LOCAL:\n  LOCAL:\n    type: "local"\n    local:\n      file_path: "/tmp/x.parquet"\n      file_type: "parquet"\n')
+        other = IOConfig(str(other_yaml), env_identifier="LOCAL", dynamic_vars=config.dynamic_vars)
+
+        with ExpectedOutputs(environment="VARIANT"):
+            assert (config.env_identifier, other.env_identifier) == ("VARIANT", "LOCAL")
+
+    @pytest.mark.unit
+    def test_an_environment_no_config_defines_is_rejected(self, config):
+        with pytest.raises(ValueError, match="no resource definitions define the environment 'TYPO'"):
+            with ExpectedOutputs(environment="TYPO"):
+                pass
+
+        assert config.env_identifier == "LOCAL"
+
+    @pytest.mark.unit
+    def test_io_configs_know_every_live_instance(self, config, prod_config):
+        assert config in IOConfig.instances() and prod_config in IOConfig.instances()

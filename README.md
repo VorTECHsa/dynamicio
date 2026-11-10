@@ -40,6 +40,10 @@ A repository for hosting the `dynamicio` library, used as a wrapper for `pandas`
     + [Step 6: Full Code](https://github.com/VorTECHsa/dynamicio/tree/master#step-6-full-code)
   * [Utilising `asyncio`](https://github.com/VorTECHsa/dynamicio/tree/master#utilising-asyncio)
 - [Testing Locally](https://github.com/VorTECHsa/dynamicio/tree/master#testing-locally)
+  * [Declaring the expected output](https://github.com/VorTECHsa/dynamicio/tree/master#declaring-the-expected-output)
+  * [Asserting lazily with `dynamicio.testharness`](https://github.com/VorTECHsa/dynamicio/tree/master#asserting-lazily-with-dynamiciotestharness)
+  * [Choosing the environment](https://github.com/VorTECHsa/dynamicio/tree/master#choosing-the-environment)
+  * [Recommended testing practices](https://github.com/VorTECHsa/dynamicio/tree/master#recommended-testing-practices)
 - [Last notes](https://github.com/VorTECHsa/dynamicio/tree/master#last-notes)
 
 <small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
@@ -1333,7 +1337,7 @@ with ExpectedOutputs(session) as outputs:
 | `outputs.check(..., params={"day": "2024-01-01"})` | Fills `{day}` in the generated and expected paths, for outputs whose file name carries a runtime parameter |
 | `outputs.check_each(config, "KEY", {"table": [...], "shard": range(4)})` | `check` for every combination of the placeholder values, each reported by its own params |
 | `ExpectedOutputs.clear_each(config, "KEY", grid)` | `clear` for every combination of the placeholder values |
-| `ExpectedOutputs(environment="NAME")`, `outputs.check(..., environment="NAME")` | Say which environment of the resource to read and compare, instead of the config's own `env_identifier` (an unknown name is reported as a failure listing the defined ones) |
+| `ExpectedOutputs(environment="NAME")`, `outputs.check(..., environment="NAME")` | Run and check in that environment (see [Choosing the environment](#choosing-the-environment)); an unknown name is reported as a failure listing the defined ones |
 | `outputs.check(..., label="...")` | The name used in the report (default: the resource name, with `params`) |
 | `ExpectedOutputs(keep_files=True)` | Keep the generated files even when they match |
 | `ExpectedOutputs.clear(config, "KEY", ...)` | Remove leftovers of an earlier, interrupted run at the start of a test |
@@ -1343,13 +1347,25 @@ with ExpectedOutputs(session) as outputs:
 
 Tests that write the same local outputs (the same task run in different ways) overwrite each other's files, and with `pytest-xdist` they race. Wrap such a
 test in `OutputSandbox(tmp_path, output_config)`: the outputs of that config go below `tmp_path` and the checks follow them (the `expected` files stay put).
-Pass the task's *output* configs only, an input config would be redirected too. Nest it inside an `EnvironmentSwitch` when the test runs in another environment.
+Pass the task's *output* configs only, an input config would be redirected too. Open it inside the `ExpectedOutputs(environment=...)` block (or an `EnvironmentSwitch`) when the test runs in another environment, so it redirects that environment's resources.
 
-#### Stating the environment
+### Choosing the environment
 
-A test should say which environment it runs in, not rely on whatever the config holds. `EnvironmentSwitch(environment, *configs)` sets `env_identifier` of the
-given `IOConfig`s for the `with` block and restores it afterwards, also when the test fails (no `monkeypatch` needed). A config that defines no resource in that
-environment is rejected up front, so a typo cannot silently run against the wrong files:
+A test should say which environment it runs in, rather than rely on whatever `ENVIRONMENT` the process happens to have. Resource definitions list their
+environments in order, and **the first one listed is the default** (list the local one first, as in the examples above). `ExpectedOutputs` picks the
+environment like this:
+
+- `ExpectedOutputs()` uses, for every `IOConfig`, the first environment its resource definitions list, whatever the process runs in.
+- `ExpectedOutputs(environment="LOCAL_E2E")` makes every `IOConfig` that defines `LOCAL_E2E` select it for the `with` block, so the task under test runs in it
+  too, and the checks compare its outputs. The configs get their own `env_identifier` back on exit, also when the test fails, so no `monkeypatch` is needed.
+  A name that no config defines raises a `ValueError` on entering, so a typo cannot silently run against the wrong files.
+- `ExpectedOutputs(..., configs=[input_config, output_config])` switches only those configs.
+
+`IOConfig` objects are normally created once per process (module-level names the tasks import), and the switch changes their `env_identifier`, which is
+read on every `get`. `IOConfig.instances()` lists the live ones.
+
+To make the switch visible in the test, or to switch configs without checking outputs, use `EnvironmentSwitch(environment, *configs)`. It validates that every
+config defines the environment, and restores them on exit:
 
 ```python
 with EnvironmentSwitch("LOCAL_E2E", input_config, output_config), ExpectedOutputs(environment="LOCAL_E2E") as outputs:
@@ -1367,6 +1383,71 @@ DYNAMICIO_UPDATE_EXPECTED=1 uv run pytest demo/tests/test_pipeline.py   # writes
 ```
 
 The end-to-end test above is `demo/tests/test_pipeline.py`; the sample data it runs on lives under `demo/tests/data`.
+
+### Recommended testing practices
+
+These are the patterns the harness is built for. They keep tests short, deterministic and the same everywhere, so a test reads like the one next to it.
+
+**Test layers**
+
+| Layer | What it proves | How |
+|---|---|---|
+| Unit | One transformation does the right thing | Plain pandas frames in, frames out; no I/O. Use `outputs.compare(actual_df, expected_df, "name")` for the comparison report |
+| Task integration | A task reads its resources and writes the expected outputs | One test per task, `LOCAL` data, `ExpectedOutputs` as above |
+| End to end | The tasks hand data to each other | Run the tasks in DAG order in a `LOCAL_E2E` environment, so each reads the previous task's output, then check all outputs |
+
+The unit tests mock backends; none of this proves that a CLOUD reader or writer works. For that, add a test that runs against a `CLOUD` resource definition
+with an in-memory object store (see `_json_object_store` in `tests/test_mixins/test_s3_mixins.py`), and check a change of I/O against a development account
+before releasing it.
+
+**Make every test look the same**
+
+```python
+ENVIRONMENT = "LOCAL"
+
+
+class TestStageTask:
+    @pytest.mark.integration
+    def test_stage_task_with_mock_sample_input_data(self):
+        # Given: the configs of the task and the sample data, both in the ENVIRONMENT
+        with EnvironmentSwitch(ENVIRONMENT, stage_input_config, stage_output_config), ExpectedOutputs(environment=ENVIRONMENT) as outputs:
+            # When
+            Stage({}).run()
+
+            # Then
+            outputs.check(stage_output_config, "STAGED_FOO")
+```
+
+- Name the environment in the test, in one constant, and use the same `with` block in every test. Do not hide it in a fixture or patch `env_identifier`.
+- Put the run inside the block: checks are lazy, so the report lists everything that differs, and an exception from the task itself is never masked.
+- Test the task through the same entry point the scheduler uses (`Stage({}).run()`, `python -m ...`), not through its internals.
+
+**Expected outputs**
+
+- Declare `expected:` in the resource definition, next to the `local` path, and keep the reference files in version control next to the sample data. A reviewer
+  then sees an intended change of output in the diff.
+- Regenerate them with `DYNAMICIO_UPDATE_EXPECTED=1` and review the diff; never edit them by hand.
+- Keep the defaults strict (dtypes, tolerance `1e-5`) and relax one output with `check(..., sort_by=[...], ignore_columns=[...])` when it is genuinely volatile
+  (run ids, timestamps, unordered lists), so the reason sits next to the check.
+- Use `Expectations(check_parquet_schema=True)` for parquet outputs that other systems read: a loaded frame can hide a changed arrow schema or index.
+- A resource whose path has several `{placeholders}` (tables, shards) is one `check_each(config, "KEY", grid)`, and `ExpectedOutputs.clear_each` removes leftovers first.
+
+**Determinism**
+
+- Fix everything that varies between runs before the task runs: the clock (`time.time`), the number of worker processes if it changes the order of results,
+  random seeds, and the `as_of` timestamp the scheduler would pass. Do it with a fixture the test requests by name, not an autouse one.
+- Sample data is small, generic and committed. Never test against production data or credentials.
+
+**Parallel runs**
+
+- Tests that write the same local outputs race under `pytest-xdist`. Give each its own directory with `OutputSandbox(tmp_path, output_config)`, or give each
+  test its own environment variant. Run the end-to-end test on its own, as it writes the shared files of every stage.
+- In CI, run the integration tests in parallel (`pytest -n auto --dist loadfile`) and the end-to-end test separately.
+
+**Where a test belongs**
+
+A test that exercises your own logic (for example that results do not depend on how work is split into shards) is not a dynamicio test, even if it uses the
+harness to check files: keep it with the code it tests. Tests of the task wiring (resources in, outputs out) are the ones that belong with the task tests.
 
 ##  Last notes
 
