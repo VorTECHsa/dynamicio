@@ -342,6 +342,9 @@ The recommended structure is one input and one output definition per runner. The
 `processed.yaml`) and the environment names `sample` and `actual` to keep the explanation short; the `demo/` project splits them per runner and
 names its environments `LOCAL`, `DEV` and `PROD`. Environment names are yours to choose: they are only the keys you select with `env_identifier`.
 
+The definitions are plain YAML, so repetition can be removed with anchors: `&name` marks a block, `*name` reuses it, and `<<: *name` merges it with the keys
+written next to it taking precedence. In the demo, `PROD` reuses `DEV`'s `s3`, `postgres` and `kafka` blocks and Kafka `options`, overriding only the host or bucket.
+
 Schemas are not part of the resource definitions: they are declared as Pandera models in the `src/resources/schemas/` package, one module per group of datasets (see Step 4.1).
 
 You will need to define your pipeline's resources by creating three `yaml` files. The first is:
