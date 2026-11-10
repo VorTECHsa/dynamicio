@@ -5,7 +5,7 @@
 
 ## Context
 
-A downstream pipeline reads `s3_path_prefix` parquet prefixes with `no_disk_space: true`. Some objects there predate columns added to the schema years ago (`model_action`). On the branch the read failed with `pyarrow.lib.ArrowInvalid: No match for FieldRef.Name(model_action) in id: string`.
+A downstream pipeline reads `s3_path_prefix` parquet prefixes with `no_disk_space: true`. Some objects there predate columns added to the schema years ago (`status`). On the branch the read failed with `pyarrow.lib.ArrowInvalid: No match for FieldRef.Name(status) in id: string`.
 
 How `master` behaves:
 

@@ -66,7 +66,7 @@ class ReadS3ParquetIO(UnifiedIO):
 
 
 class ReadS3ParquetWithLateColumnIO(UnifiedIO):
-    schema = {"id": "int64", "foo_name": "object", "model_action": "object"}
+    schema = {"id": "int64", "foo_name": "object", "status": "object"}
 
 
 class ReadS3ParquetWEmptyFilesIO(UnifiedIO):

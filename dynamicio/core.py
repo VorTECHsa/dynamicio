@@ -1,30 +1,33 @@
 """Implements the DynamicDataIO class which provides functionality for data: loading; sinking, and; schema validation."""
 
 # pylint: disable=no-member
-__all__ = ["DynamicDataIO", "SCHEMA_FROM_FILE", "CASTING_WARNING_MSG"]
+__all__ = ["DynamicDataIO", "SCHEMA_FROM_FILE", "SCHEMA_FROM_ARGUMENT", "CASTING_WARNING_MSG"]
 
 import asyncio
 import inspect
 import re
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, List, Mapping, MutableMapping, Optional, Tuple
+from typing import Any, List, Mapping, MutableMapping, Optional, Tuple, Type
 
 import pandas as pd
 import pydantic
 from magic_logger import logger
+from pandera.pandas import DataFrameModel
 
 # Application Imports
-from dynamicio import validations
 from dynamicio.config.pydantic import DataframeSchema, IOEnvironment, SchemaColumn
 from dynamicio.errors import CASTING_WARNING_MSG, NOTICE_MSG, ColumnsDataTypeError, SchemaNotFoundError, SchemaValidationError
-from dynamicio.metrics import get_metric
+from dynamicio.schema import validations
+from dynamicio.schema.metrics import get_metric
+from dynamicio.schema.models import dataframe_validator, to_dataframe_schema
 
 SCHEMA_FROM_FILE = {"schema": object()}
+SCHEMA_FROM_ARGUMENT = {"schema": object()}
 
 pool = ThreadPoolExecutor()
 
 
-class DynamicDataIO:
+class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
     """Given a `src.utils.dynamicio.config.IOConfig` object, it generates an object with access to a series of methods for cloud I/O operations and data validations.
 
     Example:
@@ -51,6 +54,8 @@ class DynamicDataIO:
         log_schema_metrics: bool = False,
         show_casting_warnings: bool = False,
         strict_dtype_check: bool = False,
+        *,
+        schema: Optional[Type[DataFrameModel]] = None,
         **options: MutableMapping[str, Any],
     ):
         """Class constructor.
@@ -61,6 +66,7 @@ class DynamicDataIO:
             log_schema_metrics: Logs schema metrics on either read() or write()
             show_casting_warnings: Logs casting warnings on either read() or write() if set to True
             strict_dtype_check: Applies strict dtype check on either read() or write(), confirming the correct type for all rows per column, if set to True
+            schema: A Pandera `DataFrameModel` for this instance. Takes precedence over the class attribute; required when the class sets `schema = SCHEMA_FROM_ARGUMENT`
             options: Any additional kwargs that may be used throughout the lifecycle of the object
         """
         if type(self) is DynamicDataIO:  # pylint: disable=unidiomatic-typecheck
@@ -74,8 +80,19 @@ class DynamicDataIO:
         self.strict_dtype_check = strict_dtype_check
         self.options = self._get_options(options, source_config.options)
         source_name = self.sources_config.data_backend_type.value
-        if self.schema is SCHEMA_FROM_FILE:
+        self._dataframe_validator = None  # the dataframe-level part of a Pandera model, if any
+        if schema is not None:
+            if not (inspect.isclass(schema) and issubclass(schema, DataFrameModel)):
+                raise TypeError(f"schema must be a pandera DataFrameModel subclass, got {schema!r}")
+            active_schema = to_dataframe_schema(schema)
+            self._dataframe_validator = dataframe_validator(schema)
+        elif self.schema is SCHEMA_FROM_ARGUMENT:
+            active_schema = None
+        elif self.schema is SCHEMA_FROM_FILE:
             active_schema = self.sources_config.dynamicio_schema
+        elif inspect.isclass(self.schema) and issubclass(self.schema, DataFrameModel):
+            active_schema = to_dataframe_schema(self.schema)
+            self._dataframe_validator = dataframe_validator(self.schema)
         else:
             active_schema = self._schema_from_obj(self)
 
@@ -133,7 +150,9 @@ class DynamicDataIO:
         if not inspect.getmodule(cls).__name__.startswith("dynamicio"):
             assert "schema" in cls.__dict__
 
-            if cls.schema is None or (cls.schema is not SCHEMA_FROM_FILE and len(cls.schema) == 0):
+            if inspect.isclass(cls.schema) and issubclass(cls.schema, DataFrameModel):
+                return
+            if cls.schema is None or (cls.schema not in (SCHEMA_FROM_FILE, SCHEMA_FROM_ARGUMENT) and len(cls.schema) == 0):
                 raise ValueError(f"schema for class {cls} cannot be None or empty...")
 
     async def async_read(self):
@@ -205,18 +224,23 @@ class DynamicDataIO:
                 the exception object is a `List[str]`, where each element is the name of a
                 validation that failed.
         """
-        failed_validations = {}
+        failed_validations: dict = {}
         for column in self.schema_validations.keys():
             col_validations = self.schema_validations[column]
             for validation in col_validations:
                 if validation.apply:
-                    validator = validations.ALL_VALIDATORS[validation.name]
+                    validator = validations.pandera_check if "pandera_check" in validation.options else validations.ALL_VALIDATORS[validation.name]
                     validation_result = validator(self.name, df, column, **validation.options)
                     if not validation_result.valid:
-                        failed_validations[validation.name] = validation_result.message
+                        failed_validations.setdefault(validation.name, []).append(validation_result.message)
+
+        if getattr(self, "_dataframe_validator", None) is not None:
+            for name, message in validations.dataframe_failures(self.name, df, self._dataframe_validator).items():
+                failed_validations.setdefault(name, []).append(message)
 
         if len(failed_validations) > 0:
-            raise SchemaValidationError(failed_validations)
+            # One entry per validation name; when several columns fail the same validation their messages are joined, none are lost.
+            raise SchemaValidationError({name: "; ".join(messages) for name, messages in failed_validations.items()})
 
         return self
 
@@ -264,6 +288,24 @@ class DynamicDataIO:
         words = re.findall(r"\d[A-Z]+|[A-Z]?[a-z\d]+|[A-Z]{2,}(?=[A-Z][a-z]|\d|\W|$)|\d+|[A-Z]{2,}|[A-Z]", string_to_transform)
         return "_".join(map(str.lower, words)).upper()
 
+    @staticmethod
+    def _is_declared_dtype(declared: str, found: Any) -> bool:
+        """Whether a column's dtype is the declared one.
+
+        Compares dtypes, not their names: the name of `string[pyarrow]` is `string`, which never equals the declared string and recast the column on every read.
+        A bare `category` accepts any categorical dtype, and a bare `string` any string storage, as their names did: only `string[python]` or `string[pyarrow]`
+        ask for one storage. A declared type pandas does not know is not declared by anything: the cast reports it.
+        """
+        try:
+            expected = pd.api.types.pandas_dtype(declared)
+        except TypeError:
+            return False
+        if isinstance(expected, pd.CategoricalDtype) and expected.categories is None:
+            return isinstance(found, pd.CategoricalDtype)
+        if isinstance(expected, pd.StringDtype) and declared.strip() == "string":
+            return isinstance(found, pd.StringDtype)
+        return bool(expected == found)
+
     def _has_valid_dtypes(self, df: pd.DataFrame) -> bool:
         """Checks if `df` has the expected dtypes defined in `schema`.
 
@@ -288,7 +330,7 @@ class DynamicDataIO:
             expected_dtype = col_info.data_type
             found_dtype = dtypes[column_name].name
 
-            if found_dtype != expected_dtype:
+            if not self._is_declared_dtype(expected_dtype, dtypes[column_name]):
                 if self.show_casting_warnings:
                     logger.info(f"Expected: '{expected_dtype}' dtype for {self.name}['{column_name}'], " f"found '{found_dtype}'")
                 try:

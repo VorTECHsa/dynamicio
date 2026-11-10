@@ -97,4 +97,7 @@ Do not publish a release candidate just to test locally. Release candidates are 
 
 - Commit and PR titles are semantic: `type(RND-12345): subject` (types: feat, fix, perf, docs, test, chore, ci, ...); the PR title
   checker enforces it.
+- Prefer methods, static methods and small single-purpose classes over loose module-level functions: a function belongs to the class whose data or
+  concept it serves (a pure helper is a `@staticmethod`), which keeps related behaviour in one place and lowers cognitive load. Where a function was
+  already importable, keep its name as a module-level alias of the method.
 - Keep diffs focused; keep the surrounding style (Google-style docstrings, `pydocstyle` convention google).

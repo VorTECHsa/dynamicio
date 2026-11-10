@@ -4,6 +4,7 @@ import argparse
 import glob
 import os
 import pprint
+import sys
 from typing import Mapping, MutableMapping, Optional, Sequence
 
 import pandas as pd  # type: ignore
@@ -11,6 +12,7 @@ import yaml
 
 # Application Imports
 from dynamicio.errors import InvalidDatasetTypeError
+from dynamicio.schema.migrate import migrate
 
 
 def parse_args(args: Optional[Sequence] = None) -> argparse.Namespace:
@@ -102,7 +104,26 @@ def main(args: argparse.Namespace):
         pprint.pprint(json_schema)
 
 
+def run_migrate(argv: Sequence[str]) -> None:
+    """The ``dynamicio migrate`` subcommand: YAML schemas to Pandera models, plus an LLM prompt for the call sites."""
+    parser = argparse.ArgumentParser(prog="dynamicio migrate", description="Convert YAML schemas into Pandera models")
+    parser.add_argument("path", help="directory searched for YAML schema files")
+    parser.add_argument(
+        "-o", "--output", default="schemas.py", help="a models module (ends with .py) or a package directory with one module per sub-directory of the YAML schemas (default: schemas.py)"
+    )
+    parser.add_argument("--scan", default="", help="directory searched for call sites to list in the prompt (default: the current directory)")
+    args = parser.parse_args(argv)
+    report = migrate(args.path, args.output, args.scan)
+    print(f"Wrote {len(report['models'])} models to {report['module']}: {', '.join(report['models'])}")
+    if report["todos"]:
+        print(f"Dynamic variables to import by hand: {', '.join(report['todos'])}")
+    print(f"Wrote {report['prompt']} ({report['call_sites']} call sites to review). Give it to your LLM or edit them by hand.")
+
+
 def run():
     """Entry point for the dynamicio cli.py."""
+    if sys.argv[1:2] == ["migrate"]:
+        run_migrate(sys.argv[2:])
+        return
     args = parse_args()
     main(args)

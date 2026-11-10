@@ -5,7 +5,7 @@ import pytest
 
 # Application Imports
 from dynamicio.config import IOConfig
-from dynamicio.validations import (
+from dynamicio.schema.validations import (
     has_acceptable_percentage_of_nulls,
     has_no_null_values,
     has_unique_values,
