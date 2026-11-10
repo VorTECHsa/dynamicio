@@ -2,22 +2,20 @@
 # noqa
 import pytest
 
+from demo.src import staging_output_config
+from demo.src.runners import staging
+from dynamicio.testharness import ExpectedOutputs
+
 
 class TestStaging:
-    @pytest.mark.unit
-    def test_a_function(self):
-        # Given
-
-        # When
-
-        # Then
-        assert True
-
     @pytest.mark.integration
-    def test_a_combination_of_functions(self):
-        # Given
+    def test_staging_writes_the_staged_foo_and_bar_datasets(self):
+        # Given the LOCAL sample inputs (staging_input.yaml) and the expected outputs declared in staging_output.yaml
 
         # When
+        with ExpectedOutputs() as outputs:
+            staging.main()
 
-        # Then
-        assert True
+            # Then
+            outputs.check(staging_output_config, "STAGED_FOO")
+            outputs.check(staging_output_config, "STAGED_BAR")
