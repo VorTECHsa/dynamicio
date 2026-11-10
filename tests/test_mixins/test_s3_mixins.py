@@ -1367,7 +1367,10 @@ class TestS3PathPrefixParquetSchemaEvolution:
     @pytest.mark.unit
     def test_s3_file_path_ending_in_a_slash_with_no_objects_raises(self):
         schema = ReadS3ParquetWithLateColumnIO(source_config=self._config()).schema
-        with patch.object(dynamicio.mixins.with_s3, "s3_read_down", return_value=[]), pytest.raises(FileNotFoundError, match="No objects found under s3://bucket/dir/"):
+        with (
+            patch.object(dynamicio.mixins.with_s3, "s3_read_down", return_value=[]),
+            pytest.raises(dynamicio.errors.NoObjectsFoundError, match="No objects found under s3://bucket/dir/"),
+        ):
             dynamicio.mixins.with_s3.WithS3File._read_s3_parquet_file("s3://bucket/dir/", schema)
 
     @pytest.mark.unit
@@ -1410,6 +1413,84 @@ class TestS3PathPrefixParquetSchemaEvolution:
         with patch.object(dynamicio.mixins.with_s3, "s3_read_down", side_effect=lambda _url, reader, **_: [reader(self._parquet(old)), reader(self._parquet(old))]):
             with pytest.raises(ValueError, match="missing from every parquet object"):
                 ReadS3ParquetWithLateColumnIO(source_config=self._config()).read()
+
+
+class TestS3PathPrefixWithNoObjects:
+    """A prefix with no objects (for example on the first run, before anything was written) is a missing source."""
+
+    @staticmethod
+    def _config(source_key):
+        return IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key=source_key)
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("no_disk_space", [False, True])
+    def test_a_parquet_prefix_with_no_objects_raises_no_objects_found(self, no_disk_space):
+        # Given
+        config = self._config("READ_FROM_S3_PATH_PREFIX_PARQUET")
+
+        # When / Then
+        with (
+            patch.object(dynamicio.mixins.with_s3, "s3_read_down", return_value=[]),
+            pytest.raises(dynamicio.errors.NoObjectsFoundError, match="No objects found under s3://mock-bucket/data/some_dir/"),
+        ):
+            ReadS3ParquetIO(source_config=config, no_disk_space=no_disk_space).read()
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "source_key, io_class",
+        [("READ_FROM_S3_PATH_PREFIX_CSV", ReadS3CsvIO), ("READ_FROM_S3_PATH_PREFIX_JSON", ReadS3JsonIO), ("READ_FROM_S3_PATH_PREFIX_HDF", ReadS3HdfIO)],
+    )
+    def test_a_synced_prefix_with_no_objects_raises_no_objects_found(self, source_key, io_class):
+        # Given an s3_sync_down that downloads nothing into the temporary directory
+        config = self._config(source_key)
+
+        # When / Then
+        with (
+            patch.object(dynamicio.mixins.with_s3, "s3_sync_down"),
+            pytest.raises(dynamicio.errors.NoObjectsFoundError, match="No objects found under s3://mock-bucket/"),
+        ):
+            io_class(source_config=config).read()
+
+    @pytest.mark.unit
+    def test_an_hdf_prefix_with_no_objects_raises_no_objects_found_with_no_disk_space_option(self):
+        # Given
+        config = self._config("READ_FROM_S3_PATH_PREFIX_HDF")
+
+        # When / Then
+        with (
+            patch.object(dynamicio.mixins.with_s3.WithS3PathPrefix, "_iter_s3_files", return_value=iter([])),
+            pytest.raises(dynamicio.errors.NoObjectsFoundError, match="No objects found under s3://mock-bucket/data/some_dir/"),
+        ):
+            ReadS3HdfIO(source_config=config, no_disk_space=True).read()
+
+    @pytest.mark.unit
+    def test_no_objects_found_is_a_file_not_found_error_and_a_value_error(self):
+        # Given callers that catch FileNotFoundError for a missing source, and callers that caught the ValueError
+        # "No objects to concatenate" that pandas raised for an empty prefix before
+        error = dynamicio.errors.NoObjectsFoundError("No objects found under s3://bucket/prefix/")
+
+        # Then
+        assert isinstance(error, FileNotFoundError)
+        assert isinstance(error, ValueError)
+
+    @pytest.mark.unit
+    def test_a_prefix_with_objects_that_are_all_empty_still_returns_an_empty_frame(self):
+        # Given
+        config = self._config("READ_FROM_S3_PATH_PREFIX_PARQUET")
+        buffer = io.BytesIO()
+        pd.DataFrame({"id": pd.Series([], dtype="int64"), "foo_name": pd.Series([], dtype=object), "bar": pd.Series([], dtype="int64")}).to_parquet(buffer)
+        buffer.seek(0)
+
+        # When
+        with patch.object(dynamicio.mixins.with_s3, "s3_read_down", side_effect=lambda _url, reader, **_: [reader(buffer)]):
+            df = ReadS3ParquetIO(source_config=config).read()
+
+        # Then
+        assert df.empty and df.columns.tolist() == ["id", "foo_name", "bar"]
 
 
 class TestS3ParquetTransferPaths:

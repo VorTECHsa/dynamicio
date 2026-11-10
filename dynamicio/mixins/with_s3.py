@@ -36,6 +36,7 @@ from pandas import DataFrame, Series
 
 # Application Imports
 from dynamicio.config.pydantic import DataframeSchema, S3DataEnvironment, S3PathPrefixEnvironment
+from dynamicio.errors import NoObjectsFoundError
 from dynamicio.mixins import utils, with_local
 from dynamicio.mixins.utils import get_file_type_value
 
@@ -540,6 +541,7 @@ class WithS3PathPrefix(with_local.WithLocal):
         Raises:
         - ValueError: If the `file_type` specified in the configuration is not supported, or (parquet) if a schema column
         is missing from every object under the prefix.
+        - NoObjectsFoundError: If there are no objects under the prefix. It is a `FileNotFoundError` and a `ValueError`.
 
         Configuration Keys:
         - `bucket` (str): Name of the S3 bucket.
@@ -579,6 +581,8 @@ class WithS3PathPrefix(with_local.WithLocal):
                 dfs: List[DataFrame] = []
                 for fobj in self._iter_s3_files(full_path, file_ext=".h5", max_memory_use=1024**3):  # 1 gib
                     dfs.append(HdfIO().load(fobj))
+                if not dfs:
+                    raise NoObjectsFoundError(f"No objects found under {full_path}")
                 df = pd.concat(dfs, ignore_index=True)
                 columns = [column for column in df.columns.to_list() if column in self.schema.columns.keys()]
                 return df[columns]
@@ -595,6 +599,8 @@ class WithS3PathPrefix(with_local.WithLocal):
                 results = s3_read_down(prefix, reader, include_pattern=f"**/{suffix}")
             else:
                 results = s3_read_down(full_path, reader)
+            if not results:
+                raise NoObjectsFoundError(f"No objects found under {full_path}")
             return _concat_parquet_objects([df for df in results if len(df) > 0] or results, absent, full_path, self.schema, options)
 
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -604,8 +610,11 @@ class WithS3PathPrefix(with_local.WithLocal):
             else:
                 s3_sync_down(full_path, temp_dir)
 
+            files = os.listdir(temp_dir)
+            if not files:
+                raise NoObjectsFoundError(f"No objects found under {full_path}")
             dfs: List[DataFrame] = []
-            for file in os.listdir(temp_dir):
+            for file in files:
                 df = getattr(self, f"_read_{file_type}_file")(os.path.join(temp_dir, file), self.schema, **options)  # type: ignore
                 if len(df) > 0:
                     dfs.append(df)
@@ -720,7 +729,7 @@ class WithS3File:
         results = s3_read_down(s3_path, lambda fobj: _read_parquet_object(fobj, schema, kwargs, absent))
         dfs = [df for df in results if len(df) > 0] or results
         if not dfs:
-            raise FileNotFoundError(f"No objects found under {s3_path}")
+            raise NoObjectsFoundError(f"No objects found under {s3_path}")
         return _concat_parquet_objects(dfs, absent, s3_path, schema, kwargs)
 
     @staticmethod
