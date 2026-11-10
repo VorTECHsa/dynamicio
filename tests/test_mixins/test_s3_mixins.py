@@ -1518,7 +1518,10 @@ class TestS3PathPrefixWithNoObjects:
 
 
 class TestS3FileWithMissingKey:
-    """A csv or json `file_path`, or a parquet `file_path` read with awswrangler, whose key does not exist is a missing source."""
+    """A csv or json `file_path` whose key does not exist is a missing source.
+
+    The reads go to moto's in-memory S3 with the awswrangler readers not mocked, so the tests show the error that awswrangler raises for a missing key.
+    """
 
     @staticmethod
     def _config(source_key):
@@ -1528,28 +1531,43 @@ class TestS3FileWithMissingKey:
             dynamic_vars=constants,
         ).get(source_key=source_key)
 
+    @pytest.fixture
+    def s3_bucket(self, monkeypatch):
+        moto = pytest.importorskip("moto")  # dev dependency only; the dependency-ranges CI jobs do not install it
+        for name, value in {"AWS_ACCESS_KEY_ID": "testing", "AWS_SECRET_ACCESS_KEY": "testing", "AWS_DEFAULT_REGION": "us-east-1"}.items():
+            monkeypatch.setenv(name, value)
+        monkeypatch.delenv("AWS_PROFILE", raising=False)
+        with moto.mock_aws():
+            client = boto3.client("s3")
+            client.create_bucket(Bucket=constants.MOCK_BUCKET)
+            yield client
+
     @pytest.mark.unit
-    @pytest.mark.parametrize(
-        "source_key, io_class, wrangler_read, options",
-        [
-            ("READ_FROM_S3_CSV", ReadS3CsvIO, "read_csv", {}),
-            ("READ_FROM_S3_JSON", ReadS3JsonIO, "read_json", {}),
-            ("READ_FROM_S3_PARQUET", ReadS3ParquetIO, "read_parquet", {"s3_additional_kwargs": {"RequestPayer": "requester"}}),
-        ],
-        ids=["csv", "json", "parquet_with_awswrangler"],
-    )
-    def test_a_missing_key_raises_object_not_found(self, source_key, io_class, wrangler_read, options):
-        # Given
+    @pytest.mark.parametrize("source_key, io_class", [("READ_FROM_S3_CSV", ReadS3CsvIO), ("READ_FROM_S3_JSON", ReadS3JsonIO)], ids=["csv", "json"])
+    def test_a_missing_key_raises_object_not_found(self, s3_bucket, source_key, io_class):
+        # Given a bucket with no object at the key of the source
         config = self._config(source_key)
 
         # When / Then
-        with (
-            patch.object(dynamicio.mixins.with_s3.wr.s3, wrangler_read, side_effect=NoFilesFound("No files Found on: s3://mock-bucket/missing.")),
-            pytest.raises(dynamicio.errors.ObjectNotFoundError, match=r"No object found at s3://mock-bucket/") as raised,
-        ):
-            io_class(source_config=config, **options).read()
+        with pytest.raises(dynamicio.errors.ObjectNotFoundError, match=f"No object found at s3://{constants.MOCK_BUCKET}/{constants.MOCK_KEY}") as raised:
+            io_class(source_config=config).read()
 
         assert isinstance(raised.value.__cause__, NoFilesFound)
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("source_key, io_class", [("READ_FROM_S3_CSV", ReadS3CsvIO), ("READ_FROM_S3_JSON", ReadS3JsonIO)], ids=["csv", "json"])
+    def test_an_existing_key_returns_its_frame(self, s3_bucket, source_key, io_class):
+        # Given
+        config = self._config(source_key)
+        df = pd.DataFrame({"id": [1, 2], "foo_name": ["a", "b"], "bar": [10, 20]})
+        body = df.to_csv(index=False) if source_key == "READ_FROM_S3_CSV" else df.to_json(orient="records")
+        s3_bucket.put_object(Bucket=constants.MOCK_BUCKET, Key=constants.MOCK_KEY, Body=body.encode())
+
+        # When
+        read_df = io_class(source_config=config).read()
+
+        # Then
+        pd.testing.assert_frame_equal(read_df.reset_index(drop=True), df)
 
     @pytest.mark.unit
     def test_object_not_found_is_a_file_not_found_error_and_a_no_files_found_error(self):

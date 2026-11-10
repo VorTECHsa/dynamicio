@@ -686,9 +686,8 @@ class WithS3File:
             DataFrame
 
         Raises:
-            ObjectNotFoundError: If the key of a csv or json file, or of a parquet file read with awswrangler, does not exist. It is a
-                `FileNotFoundError` and an awswrangler `NoFilesFound`. The default parquet read and the hdf read raise the botocore
-                `ClientError` of S3 for a missing key.
+            ObjectNotFoundError: If the key of a csv or json file does not exist. It is a `FileNotFoundError` and an awswrangler
+                `NoFilesFound`. The errors of the parquet and hdf reads for a missing key do not change.
         """
         s3_config = self.sources_config.s3
         file_type = get_file_type_value(s3_config.file_type)
@@ -744,10 +743,7 @@ class WithS3File:
         kwargs.pop("columns", None)
         kwargs.setdefault("boto3_session", _shared_boto3_session())
         # A one-element list is read as-is; a bare string is treated as a prefix and costs an extra ListObjectsV2.
-        try:
-            return wr.s3.read_parquet(path=[s3_path], columns=(list(schema.columns.keys())), **kwargs)
-        except NoFilesFound as err:
-            raise ObjectNotFoundError(f"No object found at {s3_path}") from err
+        return wr.s3.read_parquet(path=[s3_path], columns=(list(schema.columns.keys())), **kwargs)
 
     @staticmethod
     @utils.allow_options(utils.args_of(wr.s3.read_csv, pd.read_csv))

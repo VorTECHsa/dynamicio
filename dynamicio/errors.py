@@ -106,7 +106,7 @@ class NoObjectsFoundError(FileNotFoundError, ValueError):
 
 
 class ObjectNotFoundError(FileNotFoundError, NoFilesFound):
-    """Error raised when the S3 key of a csv or json `file_path`, or of a parquet `file_path` read with awswrangler, does not exist.
+    """Error raised when the S3 key of a csv or json `file_path` does not exist.
 
     It is a `FileNotFoundError`, so a caller can treat it as a missing source. It is also an awswrangler `NoFilesFound`: earlier releases raised
     `NoFilesFound` for a missing key, and callers that catch `NoFilesFound` must not change.
