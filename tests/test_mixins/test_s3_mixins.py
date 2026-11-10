@@ -1468,6 +1468,29 @@ class TestS3PathPrefixWithNoObjects:
             ReadS3HdfIO(source_config=config, no_disk_space=True).read()
 
     @pytest.mark.unit
+    def test_an_hdf_prefix_with_objects_concatenates_them_with_no_disk_space_option(self):
+        # Given 2 h5 objects under the prefix, one of them with a column that is not in the schema
+        config = self._config("READ_FROM_S3_PATH_PREFIX_HDF")
+        hdf_io = dynamicio.mixins.with_s3.HdfIO()
+        frames = [
+            pd.DataFrame({"id": [1], "foo_name": ["a"], "bar": [10], "extra": [0.5]}),
+            pd.DataFrame({"id": [2], "foo_name": ["b"], "bar": [20], "extra": [1.5]}),
+        ]
+        fobjs = []
+        for index, frame in enumerate(frames):
+            fobj = io.BytesIO()
+            hdf_io.save(frame, fobj, label=f"part_{index}.h5")
+            fobj.seek(0)
+            fobjs.append(fobj)
+
+        # When
+        with patch.object(dynamicio.mixins.with_s3.WithS3PathPrefix, "_iter_s3_files", return_value=iter(fobjs)):
+            df = ReadS3HdfIO(source_config=config, no_disk_space=True).read()
+
+        # Then
+        pd.testing.assert_frame_equal(df, pd.DataFrame({"id": [1, 2], "foo_name": ["a", "b"], "bar": [10, 20]}))
+
+    @pytest.mark.unit
     def test_no_objects_found_is_a_file_not_found_error_and_a_value_error(self):
         # Given callers that catch FileNotFoundError for a missing source, and callers that caught the ValueError
         # "No objects to concatenate" that pandas raised for an empty prefix before
