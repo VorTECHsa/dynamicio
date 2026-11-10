@@ -157,7 +157,7 @@ When reading a parquet `s3_path_prefix`, such objects are read with the columns 
 are filled with nulls; a warning lists each column and how many objects lacked it:
 
 ```text
-[s3] Some objects under s3://bucket/live/state/ lack columns that are filled with nulls: {'model_action': 2} (objects lacking each column)
+[s3] Some objects under s3://bucket/live/state/ lack columns that are filled with nulls: {'status': 2} (objects lacking each column)
 ```
 
 This tolerance is deliberate and bounded: a column that is missing from *every* object raises a `ValueError`, and a

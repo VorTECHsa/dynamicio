@@ -16,15 +16,15 @@ class Bar(pa.DataFrameModel):
         name = "bar"
 
 
-class Events(pa.DataFrameModel):
-    """Migrated from the dynamicio schema 'events'."""
+class Orders(pa.DataFrameModel):
+    """Migrated from the dynamicio schema 'orders'."""
 
-    event_id: Series[int] = pa.Field(nullable=True, unique=True, metadata={"dynamicio": {"metrics": ["Counts"]}})
-    vessel: Series[str] = pa.Field(nullable=False)
-    model_action: Series[str] = pa.Field(nullable=True)
+    order_id: Series[int] = pa.Field(nullable=True, unique=True, metadata={"dynamicio": {"metrics": ["Counts"]}})
+    customer: Series[str] = pa.Field(nullable=False)
+    status: Series[str] = pa.Field(nullable=True)
 
     class Config:
-        name = "events"
+        name = "orders"
 
 
 class Foo(pa.DataFrameModel):

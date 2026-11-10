@@ -27,15 +27,15 @@ BAR:
       db_user: "[[ DB_USER ]]"
       db_password: "[[ DB_PASS ]]"
 
-EVENTS:
+ORDERS:
   sample:
     type: "local_batch"
     local:
-      path_prefix: "[[ TEST_RESOURCES ]]/data/input/events/"
+      path_prefix: "[[ TEST_RESOURCES ]]/data/input/orders/"
       file_type: "parquet"
   actual:
     type: "s3_path_prefix"
     s3:
       bucket: "[[ S3_YOUR_INPUT_BUCKET ]]"
-      path_prefix: "data/events/"
+      path_prefix: "data/orders/"
       file_type: "parquet"

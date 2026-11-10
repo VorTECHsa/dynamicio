@@ -1288,8 +1288,8 @@ class TestS3PathPrefixParquetSchemaEvolution:
 
     @classmethod
     def _old_and_new(cls):
-        old = pd.DataFrame({"id": [1, 2], "foo_name": ["a", "b"]})  # predates `model_action`
-        new = pd.DataFrame({"id": [3], "foo_name": ["c"], "model_action": ["x"]})
+        old = pd.DataFrame({"id": [1, 2], "foo_name": ["a", "b"]})  # predates `status`
+        new = pd.DataFrame({"id": [3], "foo_name": ["c"], "status": ["x"]})
         return old, new
 
     @pytest.mark.unit
@@ -1304,10 +1304,10 @@ class TestS3PathPrefixParquetSchemaEvolution:
             df = ReadS3ParquetWithLateColumnIO(source_config=self._config()).read()
 
         # Then
-        assert df.columns.tolist() == ["id", "foo_name", "model_action"]
+        assert df.columns.tolist() == ["id", "foo_name", "status"]
         assert sorted(df["id"].tolist()) == [1, 2, 3]
-        assert df.loc[df["id"] == 3, "model_action"].iloc[0] == "x"
-        assert df.loc[df["id"].isin([1, 2]), "model_action"].isna().all()
+        assert df.loc[df["id"] == 3, "status"].iloc[0] == "x"
+        assert df.loc[df["id"].isin([1, 2]), "status"].isna().all()
 
     @pytest.mark.unit
     def test_objects_lacking_a_schema_column_are_filled_with_nulls_with_no_disk_space_option(self):
@@ -1319,8 +1319,8 @@ class TestS3PathPrefixParquetSchemaEvolution:
             df = ReadS3ParquetWithLateColumnIO(source_config=self._config(), no_disk_space=True).read()
 
         # Then
-        assert df.columns.tolist() == ["id", "foo_name", "model_action"]
-        assert len(df) == 3 and df["model_action"].isna().sum() == 2
+        assert df.columns.tolist() == ["id", "foo_name", "status"]
+        assert len(df) == 3 and df["status"].isna().sum() == 2
 
     @pytest.mark.unit
     def test_prefix_whose_objects_are_all_empty_returns_an_empty_frame_with_schema_columns(self):
@@ -1344,7 +1344,7 @@ class TestS3PathPrefixParquetSchemaEvolution:
             df = ReadS3ParquetWithLateColumnIO(source_config=self._config()).read()
 
         # Then
-        assert df["model_action"].tolist() == [None, None, "x"]
+        assert df["status"].tolist() == [None, None, "x"]
 
     @pytest.mark.unit
     def test_s3_file_path_ending_in_a_slash_reads_all_objects_under_it_like_a_dataset(self):
@@ -1362,7 +1362,7 @@ class TestS3PathPrefixParquetSchemaEvolution:
         # Then no GetObject on the "dir/" key, objects concatenated in listing order, missing columns null-filled
         mock_download.assert_not_called()
         mock_read_down.assert_called_once()
-        assert df["id"].tolist() == [1, 2, 3] and df["model_action"].tolist() == [None, None, "x"]
+        assert df["id"].tolist() == [1, 2, 3] and df["status"].tolist() == [None, None, "x"]
 
     @pytest.mark.unit
     def test_s3_file_path_ending_in_a_slash_with_no_objects_raises(self):
@@ -1384,7 +1384,7 @@ class TestS3PathPrefixParquetSchemaEvolution:
 
         # Then
         (message,) = [c.args[0] for c in mock_logger.warning.call_args_list]
-        assert "'model_action': 2" in message
+        assert "'status': 2" in message
 
     @pytest.mark.unit
     def test_no_warning_is_logged_when_every_object_has_all_columns(self):
