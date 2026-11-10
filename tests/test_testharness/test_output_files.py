@@ -49,3 +49,22 @@ class TestOutputFiles:
     def test_an_unsupported_file_type_is_rejected(self):
         with pytest.raises(ValueError, match="Unsupported file type"):
             OutputFiles.read_file("x.txt", "txt")
+
+    @pytest.mark.unit
+    def test_json_is_read_with_the_orient_the_resource_is_written_with(self, config):
+        files = OutputFiles(config, "JSON_RECORDS")
+        frame = pd.DataFrame({"a": [1, 2], "b": ["x", "y"]})
+        frame.to_json(files.generated_path, orient="records")
+
+        pd.testing.assert_frame_equal(files.read_generated(), frame)
+
+    @pytest.mark.unit
+    def test_expected_options_override_how_both_files_are_read(self, config):
+        files = OutputFiles(config, "JSON_INDEX")
+        frame = pd.DataFrame({"a": [1, 2]}, index=["r1", "r2"])
+        frame.to_json(files.generated_path, orient="index")
+        files.promote_generated()
+
+        assert files.read_options == {"orient": "index"}
+        pd.testing.assert_frame_equal(files.read_generated(), frame)
+        pd.testing.assert_frame_equal(files.read_expected(), frame)

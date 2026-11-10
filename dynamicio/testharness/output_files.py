@@ -58,21 +58,32 @@ class OutputFiles:
         extension = os.path.splitext(path)[1].lstrip(".").lower()
         return {"h5": "hdf"}.get(extension, extension)
 
+    @property
+    def read_options(self) -> Mapping[str, Any]:
+        """Reader options for both files: the JSON ``orient`` the resource is written with, overridden by ``expected.options``."""
+        environment = self.config.get(self.source_key)
+        options = {"orient": environment.options["orient"]} if "orient" in environment.options else {}
+        if environment.expected:
+            options.update(environment.expected.options)
+        return options
+
     @staticmethod
-    def read_file(path: str, file_type: str) -> pd.DataFrame:
-        """Read a file with plain pandas, so no schema or cast hides a difference."""
+    def read_file(path: str, file_type: str, **options: Any) -> pd.DataFrame:
+        """Read a file with plain pandas, so no schema or cast hides a difference. ``options`` go to the reader (``orient`` only to JSON)."""
         readers = {"parquet": pd.read_parquet, "csv": pd.read_csv, "json": pd.read_json, "hdf": pd.read_hdf}
         if file_type not in readers:
             raise ValueError(f"Unsupported file type {file_type!r} for {path}")
-        return readers[file_type](path)
+        if file_type != "json":
+            options.pop("orient", None)
+        return readers[file_type](path, **options)
 
     def read_generated(self) -> pd.DataFrame:
         """The output the task generated."""
-        return self.read_file(self.generated_path, self._file_type(self.generated_path, use_expected=False))
+        return self.read_file(self.generated_path, self._file_type(self.generated_path, use_expected=False), **self.read_options)
 
     def read_expected(self) -> pd.DataFrame:
         """The reference output."""
-        return self.read_file(self.expected_path, self._file_type(self.expected_path, use_expected=True))
+        return self.read_file(self.expected_path, self._file_type(self.expected_path, use_expected=True), **self.read_options)
 
     def generated_exists(self) -> bool:
         """Whether the task wrote its output."""

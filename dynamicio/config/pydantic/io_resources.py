@@ -44,6 +44,7 @@ class ExpectedSubSection(BaseModel):
 
     path: str
     file_type: Optional[FileType] = None  # defaults to the file type of the environment's `local` section, then to the file extension
+    options: Mapping = pydantic.Field(default_factory=dict)  # pandas reader options (e.g. `orient`) for both files; override the environment's own `orient`
 
 
 class IOBinding(BaseModel):

@@ -26,6 +26,26 @@ NO_EXPECTED:
     local:
       file_path: "[[ ROOT ]]/no_expected.csv"
       file_type: "csv"
+JSON_RECORDS:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ ROOT ]]/records.json"
+      file_type: "json"
+    options:
+      orient: "records"
+    expected:
+      path: "[[ ROOT ]]/expected/records.json"
+JSON_INDEX:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ ROOT ]]/index.json"
+      file_type: "json"
+    expected:
+      path: "[[ ROOT ]]/expected/index.json"
+      options:
+        orient: "index"
 """
 
 PARAMS = {"day": "monday"}
