@@ -20,6 +20,8 @@ class OutputFiles:
         environment: The environment to look the resource up in; by default the first one the resource definitions list.
     """
 
+    JSON_READ_OPTIONS = ("orient", "lines")
+
     def __init__(self, config: IOConfig, source_key: str, params: Optional[Mapping[str, Any]] = None, environment: Optional[str] = None):
         self.config = config
         self.source_key = source_key
@@ -76,21 +78,22 @@ class OutputFiles:
 
     @property
     def read_options(self) -> Mapping[str, Any]:
-        """Reader options for both files: the JSON ``orient`` the resource is written with, overridden by ``expected.options``."""
+        """Reader options for both files: the JSON ``orient`` and ``lines`` the resource is written with, overridden by ``expected.options``."""
         environment = self.resource
-        options = {"orient": environment.options["orient"]} if "orient" in environment.options else {}
+        options = {name: environment.options[name] for name in self.JSON_READ_OPTIONS if name in environment.options}
         if environment.expected:
             options.update(environment.expected.options)
         return options
 
     @staticmethod
     def read_file(path: str, file_type: str, **options: Any) -> pd.DataFrame:
-        """Read a file with plain pandas, so no schema or cast hides a difference. ``options`` go to the reader (``orient`` only to JSON)."""
+        """Read a file with plain pandas, so no schema or cast hides a difference. ``options`` go to the reader (``orient`` and ``lines`` only to JSON)."""
         readers = {"parquet": pd.read_parquet, "csv": pd.read_csv, "json": pd.read_json, "hdf": pd.read_hdf}
         if file_type not in readers:
             raise ValueError(f"Unsupported file type {file_type!r} for {path}")
         if file_type != "json":
-            options.pop("orient", None)
+            for name in OutputFiles.JSON_READ_OPTIONS:
+                options.pop(name, None)
         return readers[file_type](path, **options)
 
     def read_generated(self) -> pd.DataFrame:
@@ -115,6 +118,13 @@ class OutputFiles:
             os.remove(self.generated_path)
 
     def promote_generated(self) -> None:
-        """Make the generated file the new reference (creating the expected directory if needed)."""
+        """Make the generated file the new reference (creating the expected directory if needed).
+
+        Raises:
+            ValueError: If the reference is declared in another file type than the output, as copying would leave a reference the checks cannot read.
+        """
+        generated_type, expected_type = self._file_type(self.generated_path, use_expected=False), self._file_type(self.expected_path, use_expected=True)
+        if generated_type != expected_type:
+            raise ValueError(f"cannot copy a {generated_type} output over a {expected_type} reference; declare the reference as {generated_type} or regenerate it in {expected_type}")
         os.makedirs(os.path.dirname(os.path.abspath(self.expected_path)), exist_ok=True)
         shutil.copyfile(self.generated_path, self.expected_path)

@@ -1259,7 +1259,7 @@ FINAL_BAR:
 
 `expected` is optional and per environment: reading and writing ignore it, so DEV and PROD stay as they are, and the test harness reads it from
 whichever environment the test runs in (`expected.file_type` is optional and defaults to the `local` file type).
-JSON files are read with the `orient` the resource's `options` declare; `expected.options` (e.g. `options: {orient: index}`) sets reader options for both files when they differ.
+JSON files are read with the `orient` and `lines` the resource's `options` declare (so JSON Lines outputs work); `expected.options` (e.g. `options: {orient: index}`) sets reader options for both files when they differ. Update mode refuses to copy an output over a reference declared in another file type.
 
 ### Asserting lazily with `dynamicio.testharness`
 

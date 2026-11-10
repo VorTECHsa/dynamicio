@@ -15,6 +15,13 @@ class FrameComparison:
         self.expectations = expectations
 
     @staticmethod
+    def _require_columns(df: pd.DataFrame, columns: Sequence[str], rule: str) -> None:
+        """Fail the comparison, instead of raising a ``KeyError`` that would abort the whole session, when a column a rule names is missing."""
+        missing = [column for column in columns if column not in df.columns]
+        if missing:
+            raise AssertionError(f"Columns {missing} named in `{rule}` are missing; the frame has {list(df.columns)}")
+
+    @staticmethod
     def _sort_list_columns(df: pd.DataFrame, columns: Sequence[str]) -> pd.DataFrame:
         df = df.copy()
         for column in columns:
@@ -33,6 +40,7 @@ class FrameComparison:
     def _select_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         rules = self.expectations
         if rules.only_columns is not None:
+            self._require_columns(df, rules.only_columns, "only_columns")
             df = df[list(rules.only_columns)]
         return df.drop(columns=[column for column in rules.ignore_columns if column in df.columns])
 
@@ -40,12 +48,14 @@ class FrameComparison:
         rules = self.expectations
         if rules.check_row_order or not rules.sort_by:
             return df
+        self._require_columns(df, rules.sort_by, "sort_by")
         return df.sort_values(list(rules.sort_by), kind="stable").reset_index(drop=True)
 
     def prepare(self, df: pd.DataFrame) -> pd.DataFrame:
         """The frame as the comparison sees it: columns selected, list columns and rows ordered."""
         df = self._select_columns(df)
         if self.expectations.list_columns_to_sort:
+            self._require_columns(df, self.expectations.list_columns_to_sort, "list_columns_to_sort")
             df = self._sort_list_columns(df, self.expectations.list_columns_to_sort)
         return self._order_rows(df)
 
@@ -65,7 +75,14 @@ class FrameComparison:
 
     def compare(self, actual: pd.DataFrame, expected: pd.DataFrame) -> None:
         """Raise ``AssertionError`` if ``actual`` does not satisfy the expectations against ``expected``."""
-        actual, expected = self.prepare(actual), self.prepare(expected)
+        try:
+            actual = self.prepare(actual)
+        except AssertionError as error:
+            raise AssertionError(f"actual output: {error}") from None
+        try:
+            expected = self.prepare(expected)
+        except AssertionError as error:
+            raise AssertionError(f"expected output: {error}") from None
         try:
             self._assert_equal(actual, expected)
         except TypeError as error:

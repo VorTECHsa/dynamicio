@@ -369,3 +369,51 @@ class TestSessionSwitchesEveryConfig:
     @pytest.mark.unit
     def test_io_configs_know_every_live_instance(self, config, prod_config):
         assert config in IOConfig.instances() and prod_config in IOConfig.instances()
+
+
+class TestReviewFindings:
+    @pytest.mark.unit
+    def test_json_lines_outputs_are_read_with_the_lines_option_of_the_resource(self, config):
+        files = OutputFiles(config, "JSON_LINES")
+        df = pd.DataFrame({"a": [1, 2, 3]})
+        df.to_json(files.generated_path, orient="records", lines=True)
+        df.to_json(files.expected_path, orient="records", lines=True)
+
+        with ExpectedOutputs() as outputs:
+            outputs.check(config, "JSON_LINES")
+
+        assert outputs.passed == ["JSON_LINES"]
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("rule", [{"list_columns_to_sort": ["tags"]}, {"only_columns": ["tags"]}, {"sort_by": ["tags"]}])
+    def test_a_column_a_rule_names_that_the_output_lacks_is_a_failure_that_does_not_abort_the_session(self, config, rule):
+        files = OutputFiles(config, "OUT", PARAMS)
+        pd.DataFrame({"a": [1]}).to_parquet(files.generated_path)
+        pd.DataFrame({"a": [1], "tags": [[1]]}).to_parquet(files.expected_path)
+        other = OutputFiles(config, "OUT", {"day": "tuesday"})
+        pd.DataFrame({"a": [1]}).to_parquet(other.generated_path)
+        pd.DataFrame({"a": [1]}).to_parquet(other.expected_path)
+
+        with pytest.raises(OutputMismatchError) as caught:
+            with ExpectedOutputs() as outputs:
+                outputs.check(config, "OUT", params=PARAMS, **rule)
+                outputs.check(config, "OUT", params={"day": "tuesday"})
+
+        assert "actual output" in str(caught.value) and "tags" in str(caught.value)
+        assert len(outputs.passed) == 1  # the second check still ran
+
+    @pytest.mark.unit
+    def test_update_mode_refuses_to_overwrite_a_reference_declared_in_another_file_type(self, config):
+        files = OutputFiles(config, "CSV_WITH_JSON_REFERENCE")
+        pd.DataFrame({"a": [1]}).to_csv(files.generated_path, index=False)
+        pd.DataFrame({"a": [1]}).to_json(files.expected_path)
+        with open(files.expected_path, encoding="utf-8") as file:
+            reference = file.read()
+
+        outputs = ExpectedOutputs(update_expected=True)
+
+        assert not outputs.check(config, "CSV_WITH_JSON_REFERENCE")
+        assert "cannot copy a csv output over a json reference" in outputs.errors[0][1]
+        with open(files.expected_path, encoding="utf-8") as file:
+            assert file.read() == reference
+        assert os.path.exists(files.generated_path)

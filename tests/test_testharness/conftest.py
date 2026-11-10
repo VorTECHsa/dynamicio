@@ -43,6 +43,26 @@ JSON_RECORDS:
       orient: "records"
     expected:
       path: "[[ ROOT ]]/expected/records.json"
+JSON_LINES:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ ROOT ]]/lines.json"
+      file_type: "json"
+    options:
+      orient: "records"
+      lines: true
+    expected:
+      path: "[[ ROOT ]]/expected/lines.json"
+CSV_WITH_JSON_REFERENCE:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ ROOT ]]/mixed.csv"
+      file_type: "csv"
+    expected:
+      path: "[[ ROOT ]]/expected/mixed.json"
+      file_type: "json"
 JSON_INDEX:
   LOCAL:
     type: "local"
