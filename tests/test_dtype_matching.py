@@ -8,7 +8,7 @@ import pytest
 
 from dynamicio import UnifiedIO
 from dynamicio.config.pydantic import DataframeSchema
-from dynamicio.core import _is_declared_dtype
+from dynamicio.core import DynamicDataIO
 
 
 def _io(dtype: str) -> UnifiedIO:
@@ -57,4 +57,4 @@ def test_a_storage_specific_string_declaration_casts_the_other_storage():
 
 @pytest.mark.unit
 def test_a_declared_dtype_pandas_does_not_know_is_matched_by_nothing_instead_of_raising():
-    assert _is_declared_dtype("strng", pd.Series(["1"]).dtype) is False
+    assert DynamicDataIO._is_declared_dtype("strng", pd.Series(["1"]).dtype) is False

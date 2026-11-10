@@ -27,24 +27,6 @@ SCHEMA_FROM_ARGUMENT = {"schema": object()}
 pool = ThreadPoolExecutor()
 
 
-def _is_declared_dtype(declared: str, found: Any) -> bool:
-    """Whether a column's dtype is the declared one.
-
-    Compares dtypes, not their names: the name of `string[pyarrow]` is `string`, which never equals the declared string and recast the column on every read.
-    A bare `category` accepts any categorical dtype, and a bare `string` any string storage, as their names did: only `string[python]` or `string[pyarrow]`
-    ask for one storage. A declared type pandas does not know is not declared by anything: the cast reports it.
-    """
-    try:
-        expected = pd.api.types.pandas_dtype(declared)
-    except TypeError:
-        return False
-    if isinstance(expected, pd.CategoricalDtype) and expected.categories is None:
-        return isinstance(found, pd.CategoricalDtype)
-    if isinstance(expected, pd.StringDtype) and declared.strip() == "string":
-        return isinstance(found, pd.StringDtype)
-    return bool(expected == found)
-
-
 class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
     """Given a `src.utils.dynamicio.config.IOConfig` object, it generates an object with access to a series of methods for cloud I/O operations and data validations.
 
@@ -306,6 +288,24 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
         words = re.findall(r"\d[A-Z]+|[A-Z]?[a-z\d]+|[A-Z]{2,}(?=[A-Z][a-z]|\d|\W|$)|\d+|[A-Z]{2,}|[A-Z]", string_to_transform)
         return "_".join(map(str.lower, words)).upper()
 
+    @staticmethod
+    def _is_declared_dtype(declared: str, found: Any) -> bool:
+        """Whether a column's dtype is the declared one.
+
+        Compares dtypes, not their names: the name of `string[pyarrow]` is `string`, which never equals the declared string and recast the column on every read.
+        A bare `category` accepts any categorical dtype, and a bare `string` any string storage, as their names did: only `string[python]` or `string[pyarrow]`
+        ask for one storage. A declared type pandas does not know is not declared by anything: the cast reports it.
+        """
+        try:
+            expected = pd.api.types.pandas_dtype(declared)
+        except TypeError:
+            return False
+        if isinstance(expected, pd.CategoricalDtype) and expected.categories is None:
+            return isinstance(found, pd.CategoricalDtype)
+        if isinstance(expected, pd.StringDtype) and declared.strip() == "string":
+            return isinstance(found, pd.StringDtype)
+        return bool(expected == found)
+
     def _has_valid_dtypes(self, df: pd.DataFrame) -> bool:
         """Checks if `df` has the expected dtypes defined in `schema`.
 
@@ -330,7 +330,7 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
             expected_dtype = col_info.data_type
             found_dtype = dtypes[column_name].name
 
-            if not _is_declared_dtype(expected_dtype, dtypes[column_name]):
+            if not self._is_declared_dtype(expected_dtype, dtypes[column_name]):
                 if self.show_casting_warnings:
                     logger.info(f"Expected: '{expected_dtype}' dtype for {self.name}['{column_name}'], " f"found '{found_dtype}'")
                 try:
