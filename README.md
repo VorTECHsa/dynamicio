@@ -118,7 +118,7 @@ decoupling business logic from the I/O layer.
 `dynamic(i/o)` supports:
 * seamless transition between environments; 
 * abstracting away from resource and data types through `resource definitions`; 
-* honouring your expectations on data through `schema definitions`;
+* honouring your expectations on data through `schema definitions`, declared as [Pandera](https://pandera.readthedocs.io) models;
 * metrics auto-generation (logging) for monitoring purposes.
 
 ## Supported sources and data formats
@@ -684,6 +684,8 @@ However, if you need to use different mixins for different datasets, you can do 
 You only need your own class per dataset when the schema is fixed on the class, as in `StagedFoo`. The dataset's name always comes from the model's `Config.name` (upper-cased, e.g. `staged_foo` becomes `STAGED_FOO`).
 
 ##### Step 4.1. Pandera models
+
+<a href="https://pandera.readthedocs.io"><img src="https://raw.githubusercontent.com/VorTECHsa/dynamicio/master/docs/images/pandera-banner.png" alt="Pandera" width="240"></a>
 
 Schemas are declared in Python as [Pandera](https://pandera.readthedocs.io) `DataFrameModel` classes. Resource definitions
 stay in YAML; only the schema moves into code. Pandera is the *declaration* layer: dynamicio still runs the validations and
