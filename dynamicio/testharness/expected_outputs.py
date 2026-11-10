@@ -34,6 +34,7 @@ class ExpectedOutputs:
         errors: ``(name, message)`` of each failed check.
         passed: Names of the checks that matched.
         updated: Names of the checks whose expected file was rewritten.
+        skipped: Resources :meth:`check_all` left out because their paths have ``{placeholders}`` that no ``params`` fill; check those with ``check_each``.
     """
 
     UPDATE_ENV_VAR = "DYNAMICIO_UPDATE_EXPECTED"
@@ -55,6 +56,7 @@ class ExpectedOutputs:
         self.errors: List[Tuple[str, str]] = []
         self.passed: List[str] = []
         self.updated: List[str] = []
+        self.skipped: List[str] = []
 
     def __enter__(self) -> "ExpectedOutputs":
         switch = EnvironmentSwitch(self.environment, *self.configs) if self.configs is not None else EnvironmentSwitch.of_all(self.environment)
@@ -83,6 +85,14 @@ class ExpectedOutputs:
         """Remove leftovers of earlier runs (generated files of ``source_keys``) so a stale file can not pass for a fresh output."""
         for source_key in source_keys:
             OutputFiles(config, source_key, params, environment).remove_generated()
+
+    @staticmethod
+    def clear_all(config: IOConfig, params: Optional[Mapping[str, Any]] = None, environment: Optional[str] = None) -> None:
+        """:meth:`clear` every output of ``config`` that declares an ``expected`` path (those with unfilled ``{placeholders}`` are left alone)."""
+        for source_key in OutputFiles.declaring_expected(config, environment):
+            files = OutputFiles(config, source_key, params, environment)
+            if not files.placeholders:
+                files.remove_generated()
 
     @staticmethod
     def combinations(grid: Mapping[str, Iterable[Any]]) -> List[Mapping[str, Any]]:
@@ -164,6 +174,49 @@ class ExpectedOutputs:
             self.errors.append((name, str(error)))
             return False
         return True
+
+    def check_all(
+        self,
+        config: IOConfig,
+        *,
+        skip: Sequence[str] = (),
+        rules_for: Optional[Mapping[str, Mapping[str, Any]]] = None,
+        params: Optional[Mapping[str, Any]] = None,
+        environment: Optional[str] = None,
+        expectations: Optional[Expectations] = None,
+        **rules: Any,
+    ) -> bool:
+        """Run :meth:`check` for every resource of ``config`` that declares an ``expected`` path, so a new output is checked without touching the test.
+
+        Resources whose paths have ``{placeholders}`` that ``params`` does not fill are left out and listed in ``skipped``; check those with ``check_each``.
+
+        Example: ``outputs.check_all(stage_output_config, rules_for={"STAGED_CARGOES": {"list_columns_to_sort": ["product_id"]}}, skip=["STAGED_RAW"])``.
+
+        Args:
+            config: The ``IOConfig`` the task wrote the outputs with.
+            skip: Resources not to check.
+            rules_for: For a resource, the :class:`Expectations` fields to change for its check only.
+            params: Values for ``{placeholders}`` in the paths of every resource.
+            environment: The environment to check instead of the session's.
+            expectations: Rules for these checks instead of the session's.
+            **rules: Individual :class:`Expectations` fields to change for every check.
+
+        Returns:
+            Whether every check matched.
+        """
+        rules_for = rules_for or {}
+        unknown = sorted((set(skip) | set(rules_for)) - set(config.sources))
+        if unknown:
+            raise ValueError(f"{unknown} are not resources of the config; it has {sorted(config.sources)}")
+        results = []
+        for source_key in OutputFiles.declaring_expected(config, environment or self.environment):
+            if source_key in skip:
+                continue
+            if OutputFiles(config, source_key, params, environment or self.environment).placeholders:
+                self.skipped.append(source_key)
+                continue
+            results.append(self.check(config, source_key, params=params, environment=environment, expectations=expectations, **{**rules, **rules_for.get(source_key, {})}))
+        return all(results)
 
     def check_each(
         self,

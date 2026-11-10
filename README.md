@@ -1357,10 +1357,8 @@ class TestPipeline:
             staging.main()
             asyncio.run(transform.main())
 
-            outputs.check(staging_output_config, "STAGED_FOO")
-            outputs.check(staging_output_config, "STAGED_BAR")
-            outputs.check(transform_output_config, "FINAL_FOO")
-            outputs.check(transform_output_config, "FINAL_BAR")
+            outputs.check_all(staging_output_config)  # STAGED_FOO and STAGED_BAR: every output that declares `expected`
+            outputs.check_all(transform_output_config)  # FINAL_FOO and FINAL_BAR
 ```
 
 `check` reads the generated and the expected file with plain pandas (no schema or cast can hide a difference) and compares them under a set of
@@ -1408,8 +1406,10 @@ with ExpectedOutputs(session) as outputs:
 | Feature | Effect |
 |---|---|
 | `outputs.check(..., params={"day": "2024-01-01"})` | Fills `{day}` in the generated and expected paths, for outputs whose file name carries a runtime parameter |
+| `outputs.check_all(config, skip=[...], rules_for={"KEY": {...}})` | `check` for every resource of the config that declares `expected`, so a new output is covered without touching the test; those with unfilled `{placeholders}` are listed in `outputs.skipped` |
 | `outputs.check_each(config, "KEY", {"table": [...], "shard": range(4)})` | `check` for every combination of the placeholder values, each reported by its own params |
 | `ExpectedOutputs.clear_each(config, "KEY", grid)` | `clear` for every combination of the placeholder values |
+| `ExpectedOutputs.clear_all(config)` | `clear` every output of the config that declares `expected`, so a stale file of an earlier run can not pass for a fresh one |
 | `ExpectedOutputs(environment="NAME")`, `outputs.check(..., environment="NAME")` | Run and check in that environment (see [Choosing the environment](#choosing-the-environment)); an unknown name is reported as a failure listing the defined ones |
 | `outputs.check(..., label="...")` | The name used in the report (default: the resource name, with `params`) |
 | `ExpectedOutputs(keep_files=True)` | Keep the generated files even when they match |
@@ -1503,6 +1503,8 @@ class TestStageTask:
 - Keep the defaults strict (dtypes, tolerance `1e-5`) and relax one output with `check(..., sort_by=[...], ignore_columns=[...])` when it is genuinely volatile
   (run ids, timestamps, unordered lists), so the reason sits next to the check.
 - Use `Expectations(check_parquet_schema=True)` for parquet outputs that other systems read: a loaded frame can hide a changed arrow schema or index.
+- Prefer `outputs.check_all(output_config)` to a list of `check` calls: it covers every output that declares `expected`, so an output added later is verified
+  without touching the test. Name an exception with `skip=[...]`, and relax one output with `rules_for={"KEY": {"sort_by": [...]}}`.
 - A resource whose path has several `{placeholders}` (tables, shards) is one `check_each(config, "KEY", grid)`, and `ExpectedOutputs.clear_each` removes leftovers first.
 
 **Determinism**

@@ -2,7 +2,8 @@
 
 import os
 import shutil
-from typing import Any, Mapping, Optional
+import string
+from typing import Any, List, Mapping, Optional
 
 import pandas as pd
 
@@ -36,6 +37,28 @@ class OutputFiles:
             return binding.get_binding_for_environment(self.environment_name)
         except KeyError:
             raise ValueError(f"{self.source_key} has no environment {self.environment_name!r}; it defines {sorted(binding.environments)}") from None
+
+    @staticmethod
+    def declaring_expected(config: IOConfig, environment: Optional[str] = None) -> List[str]:
+        """The resources of ``config`` that declare an ``expected`` path in the environment: the outputs a test can check."""
+        keys = []
+        for source_key in config.sources:
+            try:
+                declared = OutputFiles(config, source_key, environment=environment).resource.expected
+            except ValueError:  # the resource has no such environment
+                continue
+            if declared is not None:
+                keys.append(source_key)
+        return keys
+
+    @property
+    def placeholders(self) -> List[str]:
+        """The ``{placeholders}`` of the paths that ``params`` does not fill."""
+        paths = [self.resource.expected.path] if self.resource.expected else []
+        local = getattr(self.resource, "local", None)
+        paths += [getattr(local, "file_path", None) or ""]
+        names = {name for path in paths for _, name, _, _ in string.Formatter().parse(path) if name}
+        return sorted(names - set(self.params or {}))
 
     def _format(self, path: str) -> str:
         return path.format(**self.params) if self.params else path

@@ -24,10 +24,8 @@ class TestPipeline:
             staging.main()
             asyncio.run(transform.main())
 
-            outputs.check(staging_output_config, "STAGED_FOO")
-            outputs.check(staging_output_config, "STAGED_BAR")
-            outputs.check(transform_output_config, "FINAL_FOO")
-            outputs.check(transform_output_config, "FINAL_BAR")
+            outputs.check_all(staging_output_config)  # STAGED_FOO and STAGED_BAR: every output that declares `expected`
+            outputs.check_all(transform_output_config)  # FINAL_FOO and FINAL_BAR
 
     @pytest.mark.end_to_end
     def test_every_mismatch_is_reported_at_once(self):

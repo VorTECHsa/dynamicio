@@ -417,3 +417,68 @@ class TestReviewFindings:
         with open(files.expected_path, encoding="utf-8") as file:
             assert file.read() == reference
         assert os.path.exists(files.generated_path)
+
+
+class TestCheckAll:
+    @staticmethod
+    def write(config, source_key, df, expected_df=None):
+        files = OutputFiles(config, source_key, PARAMS if source_key == "BY_DAY" else None)
+        df.to_parquet(files.generated_path)
+        (df if expected_df is None else expected_df).to_parquet(files.expected_path)
+
+    @pytest.mark.unit
+    def test_checks_every_output_that_declares_an_expected_path_and_nothing_else(self, task_config):
+        frame = pd.DataFrame({"a": [1]})
+        self.write(task_config, "FIRST", frame)
+        self.write(task_config, "SECOND", frame)
+        frame.to_parquet(OutputFiles(task_config, "UNCHECKED").generated_path)
+
+        with ExpectedOutputs() as outputs:
+            outputs.check_all(task_config)
+
+        assert outputs.passed == ["FIRST", "SECOND"]
+        assert outputs.skipped == ["BY_DAY"]  # its path has a {day} no params fill
+        assert os.path.exists(OutputFiles(task_config, "UNCHECKED").generated_path)
+
+    @pytest.mark.unit
+    def test_an_output_the_task_did_not_write_is_reported_not_forgotten(self, task_config):
+        self.write(task_config, "FIRST", pd.DataFrame({"a": [1]}))
+        os.remove(OutputFiles(task_config, "FIRST").generated_path)
+
+        with pytest.raises(OutputMismatchError) as caught:
+            with ExpectedOutputs() as outputs:
+                outputs.check_all(task_config, skip=["SECOND"])
+
+        assert [name for name, _ in caught.value.errors] == ["FIRST"]
+
+    @pytest.mark.unit
+    def test_params_fill_placeholders_and_rules_apply_to_one_resource(self, task_config):
+        self.write(task_config, "FIRST", pd.DataFrame({"a": [1], "run": [1]}), pd.DataFrame({"a": [1], "run": [2]}))
+        self.write(task_config, "SECOND", pd.DataFrame({"a": [1]}))
+        self.write(task_config, "BY_DAY", pd.DataFrame({"a": [1]}))
+
+        with ExpectedOutputs() as outputs:
+            outputs.check_all(task_config, params=PARAMS, rules_for={"FIRST": {"ignore_columns": ["run"]}})
+
+        assert len(outputs.passed) == 3 and not outputs.skipped
+
+    @pytest.mark.unit
+    def test_a_name_that_is_not_a_resource_is_rejected(self, task_config):
+        with pytest.raises(ValueError, match="TYPO"):
+            ExpectedOutputs().check_all(task_config, skip=["TYPO"])
+
+    @pytest.mark.unit
+    def test_clear_all_removes_stale_outputs_but_never_unchecked_files(self, task_config):
+        frame = pd.DataFrame({"a": [1]})
+        self.write(task_config, "FIRST", frame)
+        frame.to_parquet(OutputFiles(task_config, "UNCHECKED").generated_path)
+
+        ExpectedOutputs.clear_all(task_config)
+
+        assert not os.path.exists(OutputFiles(task_config, "FIRST").generated_path)
+        assert os.path.exists(OutputFiles(task_config, "FIRST").expected_path)
+        assert os.path.exists(OutputFiles(task_config, "UNCHECKED").generated_path)
+
+    @pytest.mark.unit
+    def test_a_config_without_the_environment_checks_nothing(self, task_config):
+        assert ExpectedOutputs().check_all(task_config, environment="DEV")

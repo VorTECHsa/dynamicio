@@ -90,3 +90,40 @@ def config(tmp_path):
 @pytest.fixture
 def prod_config(config):
     return IOConfig(config.path_to_source_yaml, env_identifier="PROD", dynamic_vars=config.dynamic_vars)
+
+
+TASK_DEFINITION = """
+---
+FIRST:
+  LOCAL:
+    type: "local"
+    local: {file_path: "[[ ROOT ]]/first.parquet", file_type: "parquet"}
+    expected: {path: "[[ ROOT ]]/expected/first.parquet"}
+  DEV:
+    type: "kafka"
+    kafka: {kafka_server: "broker", kafka_topic: "topic"}
+SECOND:
+  LOCAL:
+    type: "local"
+    local: {file_path: "[[ ROOT ]]/second.parquet", file_type: "parquet"}
+    expected: {path: "[[ ROOT ]]/expected/second.parquet"}
+UNCHECKED:
+  LOCAL:
+    type: "local"
+    local: {file_path: "[[ ROOT ]]/unchecked.parquet", file_type: "parquet"}
+BY_DAY:
+  LOCAL:
+    type: "local"
+    local: {file_path: "[[ ROOT ]]/by_{day}.parquet", file_type: "parquet"}
+    expected: {path: "[[ ROOT ]]/expected/by_{day}.parquet"}
+"""
+
+
+@pytest.fixture
+def task_config(tmp_path):
+    """A config shaped like the output definitions of a task: some resources declare `expected`, one is not meant to be checked, one has a placeholder."""
+    (tmp_path / "expected").mkdir()
+    (tmp_path / "task.yaml").write_text(TASK_DEFINITION)
+    module = ModuleType("vars")
+    module.ROOT = str(tmp_path)
+    return IOConfig(str(tmp_path / "task.yaml"), env_identifier="LOCAL", dynamic_vars=module)
