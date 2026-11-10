@@ -25,6 +25,7 @@ import pydantic
 import pytest
 import s3transfer.exceptions
 import yaml
+from awswrangler.exceptions import NoFilesFound
 from botocore.config import Config
 from botocore.exceptions import ClientError, ConnectionClosedError, EndpointConnectionError, ReadTimeoutError, ResponseStreamingError
 
@@ -1514,6 +1515,50 @@ class TestS3PathPrefixWithNoObjects:
 
         # Then
         assert df.empty and df.columns.tolist() == ["id", "foo_name", "bar"]
+
+
+class TestS3FileWithMissingKey:
+    """A csv or json `file_path`, or a parquet `file_path` read with awswrangler, whose key does not exist is a missing source."""
+
+    @staticmethod
+    def _config(source_key):
+        return IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key=source_key)
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "source_key, io_class, wrangler_read, options",
+        [
+            ("READ_FROM_S3_CSV", ReadS3CsvIO, "read_csv", {}),
+            ("READ_FROM_S3_JSON", ReadS3JsonIO, "read_json", {}),
+            ("READ_FROM_S3_PARQUET", ReadS3ParquetIO, "read_parquet", {"s3_additional_kwargs": {"RequestPayer": "requester"}}),
+        ],
+        ids=["csv", "json", "parquet_with_awswrangler"],
+    )
+    def test_a_missing_key_raises_object_not_found(self, source_key, io_class, wrangler_read, options):
+        # Given
+        config = self._config(source_key)
+
+        # When / Then
+        with (
+            patch.object(dynamicio.mixins.with_s3.wr.s3, wrangler_read, side_effect=NoFilesFound("No files Found on: s3://mock-bucket/missing.")),
+            pytest.raises(dynamicio.errors.ObjectNotFoundError, match=r"No object found at s3://mock-bucket/") as raised,
+        ):
+            io_class(source_config=config, **options).read()
+
+        assert isinstance(raised.value.__cause__, NoFilesFound)
+
+    @pytest.mark.unit
+    def test_object_not_found_is_a_file_not_found_error_and_a_no_files_found_error(self):
+        # Given callers that catch FileNotFoundError for a missing source, and callers that caught the awswrangler NoFilesFound before
+        error = dynamicio.errors.ObjectNotFoundError("No object found at s3://bucket/key.json")
+
+        # Then
+        assert isinstance(error, FileNotFoundError)
+        assert isinstance(error, NoFilesFound)
 
 
 class TestS3ParquetTransferPaths:

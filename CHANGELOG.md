@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- fix: an S3 read of a csv or json `file_path`, or of a parquet `file_path` with an awswrangler option, raises `dynamicio.errors.ObjectNotFoundError("No object found at s3://...")` when the key does not exist. Before, it raised the awswrangler `NoFilesFound`, which is not a `FileNotFoundError`. `ObjectNotFoundError` is a `FileNotFoundError` and a `NoFilesFound`, so a caller can treat the key as a missing source, and code that catches `NoFilesFound` works as before. The default parquet read and the hdf read do not change: they raise the botocore `ClientError` of S3 for a missing key
+
 ## v10.1.0
 
 - docs: refresh the standalone logo, clarify pandas-only support, remove unused and superseded images, and expose architecture decisions in the documentation navigation; the S3 benchmark page is replaced by ADR 0007, which keeps the headline figures (the full tables stay in PR #88).
