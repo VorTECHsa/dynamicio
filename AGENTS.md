@@ -100,4 +100,7 @@ Do not publish a release candidate just to test locally. Release candidates are 
 - Prefer methods, static methods and small single-purpose classes over loose module-level functions: a function belongs to the class whose data or
   concept it serves (a pure helper is a `@staticmethod`), which keeps related behaviour in one place and lowers cognitive load. Where a function was
   already importable, keep its name as a module-level alias of the method.
+- One class per module, named for its single responsibility (`expectations.py` holds `Expectations`, `frame_comparison.py` holds `FrameComparison`).
+  Group related modules in a package whose `__init__.py` re-exports the public names and says how the pieces fit together. Name packages and
+  classes for what they do (`testharness`, not `testing` or `utils`); a vague name is a sign the class does more than one thing.
 - Keep diffs focused; keep the surrounding style (Google-style docstrings, `pydocstyle` convention google).

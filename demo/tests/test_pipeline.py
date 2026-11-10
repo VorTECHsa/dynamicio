@@ -7,7 +7,7 @@ import pytest
 
 from demo.src import staging_output_config, transform_output_config
 from demo.src.runners import staging, transform
-from dynamicio.testing import ExpectedOutputs, OutputMismatchError
+from dynamicio.testharness import ExpectedOutputs, OutputMismatchError
 
 
 class TestPipeline:

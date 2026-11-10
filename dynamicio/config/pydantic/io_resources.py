@@ -107,7 +107,7 @@ class IOEnvironment(BaseModel):
     _parent: Optional[IOBinding] = None  # noqa: F821
     options: Mapping = pydantic.Field(default_factory=dict)
     data_backend_type: DataBackendType = pydantic.Field(alias="type", const=None)
-    expected: Optional[ExpectedSubSection] = None  # optional, ignored when reading or writing: used by `dynamicio.testing`
+    expected: Optional[ExpectedSubSection] = None  # optional, ignored when reading or writing: used by `dynamicio.testharness`
 
     if pydantic.VERSION.startswith("1."):
         # Pydantic 2 always treats underscore attributes as private and warns about this removed key.

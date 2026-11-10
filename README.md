@@ -1256,11 +1256,11 @@ FINAL_BAR:
 `expected` is optional and per environment: reading and writing ignore it, so DEV and PROD stay as they are, and the test harness reads it from
 whichever environment the test runs in (`expected.file_type` is optional and defaults to the `local` file type).
 
-### Asserting lazily with `dynamicio.testing`
+### Asserting lazily with `dynamicio.testharness`
 
-`dynamicio.testing.ExpectedOutputs` replaces the hand-written read-compare-delete code around a pipeline test. It collects *every* mismatch instead of
-stopping at the first, raises a single `OutputMismatchError` (an `AssertionError`) listing them all, removes the generated file of every output that matched,
-and keeps the ones that did not so you can inspect them:
+The `dynamicio.testharness` package replaces the hand-written read-compare-delete code around a pipeline test. Its `ExpectedOutputs` session collects *every*
+mismatch instead of stopping at the first, raises a single `OutputMismatchError` (an `AssertionError`) listing them all, removes the generated file of every
+output that matched, and keeps the ones that did not so you can inspect them:
 
 ```python
 import asyncio
@@ -1269,7 +1269,7 @@ import pytest
 
 from demo.src import staging_output_config, transform_output_config
 from demo.src.runners import staging, transform
-from dynamicio.testing import ExpectedOutputs
+from dynamicio.testharness import ExpectedOutputs
 
 
 class TestPipeline:
@@ -1285,21 +1285,59 @@ class TestPipeline:
             outputs.check(transform_output_config, "FINAL_BAR")
 ```
 
-`check` reads the generated file and the expected file with plain pandas (no schema or cast can hide a difference) and compares them with
-`pd.testing.assert_frame_equal(check_like=True)`, so row and column order are ignored. Options:
+`check` reads the generated and the expected file with plain pandas (no schema or cast can hide a difference) and compares them under a set of
+`Expectations`. An exception raised by the task itself is never masked by the report, and a missing generated or expected file is recorded as a failure
+like any other, so one broken output never hides the others.
 
-| Option | Effect |
+#### Making expectations stricter or more relaxed
+
+`Expectations` is an immutable set of rules. The defaults suit a pipeline test: same data, rows and columns in any order, dtypes included, floats within
+`rtol=1e-5`. Pass your own to a session (applies to every check), to one `check` (`expectations=...`), or change single rules for one `check` (`**rules`):
+
+| Rule | Default | Effect |
+|---|---|---|
+| `check_row_order` | `False` | Require rows in the same order. When ignored, rows are aligned by index label, or sorted by `sort_by` |
+| `check_column_order` | `False` | Require columns in the same order |
+| `check_dtype` | `True` | Require identical dtypes (`int64` is not `float64`) |
+| `check_exact`, `rtol`, `atol` | `False`, `1e-5`, `1e-8` | Exact floats, or the tolerance to compare them with |
+| `sort_by=["id"]` | `()` | Sort both frames by these columns first: for outputs whose index means nothing |
+| `only_columns=[...]` | all | Compare just these columns |
+| `ignore_columns=["run_id"]` | `()` | Leave volatile columns (timestamps, run ids) out |
+| `list_columns_to_sort=["tags"]` | `()` | List-valued columns whose element order does not matter |
+| `assertions=[fn, ...]` | `()` | Your own checks `fn(actual, expected)`, run after the frames matched; raise `AssertionError` to fail |
+
+```python
+from dynamicio.testharness import ExpectedOutputs, Expectations
+
+def prices_are_positive(actual, expected):
+    assert (actual["price"] > 0).all(), "non-positive price"
+
+session = Expectations(ignore_columns=["run_id"]).also_assert(prices_are_positive)
+
+with ExpectedOutputs(session) as outputs:
+    staging.main()
+    outputs.check(raw_config, "STAGED_FOO")                                   # session rules
+    outputs.check(processed_config, "FINAL_BAR", sort_by=["id"], rtol=1e-3)   # relaxed for this output only
+    outputs.check(processed_config, "FINAL_FOO", expectations=Expectations.strict())   # strict for this output
+```
+
+`Expectations.strict()` requires row and column order and exact floats; `Expectations.lenient()` ignores dtypes and loosens the tolerance to `1e-3`;
+`expectations.with_(...)` derives a variant. Dict, list and set cells (which pandas cannot hash) are compared by their canonical JSON.
+
+#### Other session features
+
+| Feature | Effect |
 |---|---|
-| `list_columns_to_sort=["tags"]` | List-valued columns whose element order does not matter |
-| `check_like=False` | Also compare row and column order |
-| `params={"day": "2024-01-01"}` | Fills `{day}` in the generated and expected paths, for outputs whose file name carries a runtime parameter |
-| `label="..."` | The name used in the report (default: the resource name) |
-| any `assert_frame_equal` option | e.g. `check_dtype=False`, `rtol=1e-3` |
+| `outputs.check(..., params={"day": "2024-01-01"})` | Fills `{day}` in the generated and expected paths, for outputs whose file name carries a runtime parameter |
+| `outputs.check(..., label="...")` | The name used in the report (default: the resource name, with `params`) |
 | `ExpectedOutputs(keep_files=True)` | Keep the generated files even when they match |
+| `ExpectedOutputs.clear(config, "KEY", ...)` | Remove leftovers of an earlier, interrupted run at the start of a test |
+| `ExpectedOutputs.read_generated(...)` / `read_expected(...)` | Get the frames yourself |
+| `outputs.compare(actual_df, expected_df, "name")` | Record a comparison of frames you built, without any files |
+| `outputs.errors`, `outputs.passed`, `outputs.updated` | Inspect the outcome without raising |
 
-Dict, list and set cells (which pandas cannot hash) are compared by their canonical JSON. A missing generated or expected file is recorded as a failure like any other,
-so one broken output never hides the others. An exception raised by the task itself is never masked by the report. Use `ExpectedOutputs.clear(config, "KEY", ...)`
-at the start of a test to remove leftovers of an earlier, interrupted run, and `ExpectedOutputs.read_generated(...)` / `read_expected(...)` to get the frames yourself.
+The building blocks are public too: `FrameComparison(expectations).compare(a, b)` compares two frames (raising `AssertionError`) and `OutputFiles(config, key, params)`
+finds, reads, removes and promotes the files of one resource.
 
 When a change of output is intended, regenerate the reference files instead of editing them by hand:
 

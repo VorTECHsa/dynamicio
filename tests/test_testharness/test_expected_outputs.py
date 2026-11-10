@@ -1,71 +1,21 @@
-# pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring, redefined-outer-name
+# pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring
 import os
-from types import ModuleType
 
 import pandas as pd
 import pytest
 
-from dynamicio.config import IOConfig
-from dynamicio.testing import ExpectedOutputs, OutputMismatchError
-
-DEFINITION = """
----
-OUT:
-  LOCAL:
-    type: "local"
-    local:
-      file_path: "[[ ROOT ]]/out_{day}.parquet"
-      file_type: "parquet"
-    expected:
-      path: "[[ ROOT ]]/expected/out_{day}.parquet"
-  PROD:
-    type: "kafka"
-    kafka:
-      kafka_server: "broker"
-      kafka_topic: "topic"
-NO_EXPECTED:
-  LOCAL:
-    type: "local"
-    local:
-      file_path: "[[ ROOT ]]/no_expected.csv"
-      file_type: "csv"
-"""
-
-PARAMS = {"day": "monday"}
-
-
-@pytest.fixture
-def config(tmp_path):
-    (tmp_path / "expected").mkdir()
-    (tmp_path / "definition.yaml").write_text(DEFINITION)
-    module = ModuleType("vars")
-    module.ROOT = str(tmp_path)
-    return IOConfig(str(tmp_path / "definition.yaml"), env_identifier="LOCAL", dynamic_vars=module)
+from dynamicio.testharness import ExpectedOutputs, Expectations, OutputFiles, OutputMismatchError
+from tests.test_testharness.conftest import PARAMS
 
 
 def _write(config, df, expected=None):
-    df.to_parquet(ExpectedOutputs.generated_path(config, "OUT", PARAMS))
-    (df if expected is None else expected).to_parquet(ExpectedOutputs.expected_path(config, "OUT", PARAMS))
+    files = OutputFiles(config, "OUT", PARAMS)
+    df.to_parquet(files.generated_path)
+    (df if expected is None else expected).to_parquet(files.expected_path)
 
 
-class TestExpectedKey:
-    @pytest.mark.unit
-    def test_expected_is_optional_and_per_environment(self, config):
-        assert config.get("OUT").expected.path.endswith("expected/out_{day}.parquet")
-        assert config.get("NO_EXPECTED").expected is None
-        prod = IOConfig(config.path_to_source_yaml, env_identifier="PROD", dynamic_vars=config.dynamic_vars)
-        assert prod.get("OUT").expected is None
-
-    @pytest.mark.unit
-    def test_a_resource_without_expected_cannot_be_checked(self, config):
-        with pytest.raises(ValueError, match="declares no `expected` path"):
-            ExpectedOutputs.expected_path(config, "NO_EXPECTED")
-
-    @pytest.mark.unit
-    def test_only_single_file_local_resources_can_be_checked(self, config):
-        prod = IOConfig(config.path_to_source_yaml, env_identifier="PROD", dynamic_vars=config.dynamic_vars)
-        with pytest.raises(ValueError, match="not a single-file local resource"):
-            ExpectedOutputs.generated_path(prod, "OUT")
+def _generated(config):
+    return OutputFiles(config, "OUT", PARAMS).generated_path
 
 
 class TestExpectedOutputs:
@@ -77,7 +27,7 @@ class TestExpectedOutputs:
             assert outputs.check(config, "OUT", params=PARAMS)
 
         assert outputs.passed == ["OUT{'day': 'monday'}"]
-        assert not os.path.exists(ExpectedOutputs.generated_path(config, "OUT", PARAMS))
+        assert not os.path.exists(_generated(config))
 
     @pytest.mark.unit
     def test_keep_files_leaves_a_matching_output(self, config):
@@ -86,7 +36,7 @@ class TestExpectedOutputs:
         with ExpectedOutputs(keep_files=True) as outputs:
             outputs.check(config, "OUT", params=PARAMS)
 
-        assert os.path.exists(ExpectedOutputs.generated_path(config, "OUT", PARAMS))
+        assert os.path.exists(_generated(config))
 
     @pytest.mark.unit
     def test_mismatches_are_collected_then_raised_once_and_the_file_is_kept(self, config):
@@ -99,13 +49,13 @@ class TestExpectedOutputs:
 
         assert [name for name, _ in error.value.errors] == ["first", "second"]
         assert "The following AssertionErrors occurred (2)" in str(error.value)
-        assert os.path.exists(ExpectedOutputs.generated_path(config, "OUT", PARAMS))
+        assert os.path.exists(_generated(config))
 
     @pytest.mark.unit
     def test_a_missing_generated_or_expected_file_is_a_collected_failure(self, config):
         outputs = ExpectedOutputs()
         outputs.check(config, "OUT", params=PARAMS)
-        pd.DataFrame({"a": [1]}).to_parquet(ExpectedOutputs.generated_path(config, "OUT", PARAMS))
+        pd.DataFrame({"a": [1]}).to_parquet(_generated(config))
         outputs.check(config, "OUT", params=PARAMS)
 
         assert "no generated output" in outputs.errors[0][1]
@@ -124,14 +74,6 @@ class TestExpectedOutputs:
 
         with ExpectedOutputs() as outputs:
             outputs.check(config, "OUT", params=PARAMS, list_columns_to_sort=["tags"])
-
-    @pytest.mark.unit
-    def test_dict_columns_are_compared_by_content(self):
-        outputs = ExpectedOutputs()
-
-        assert outputs.compare(pd.DataFrame({"d": [{"a": 1, "b": 2}]}), pd.DataFrame({"d": [{"b": 2, "a": 1}]}), "same")
-        assert not outputs.compare(pd.DataFrame({"d": [{"a": 1}]}), pd.DataFrame({"d": [{"a": 2}]}), "different")
-        assert [name for name, _ in outputs.errors] == ["different"]
 
     @pytest.mark.unit
     def test_long_messages_are_truncated(self):
@@ -169,4 +111,32 @@ class TestExpectedOutputs:
         ExpectedOutputs.clear(config, "OUT", params=PARAMS)
         ExpectedOutputs.clear(config, "OUT", params=PARAMS)  # absent files are fine
 
-        assert not os.path.exists(ExpectedOutputs.generated_path(config, "OUT", PARAMS))
+        assert not os.path.exists(_generated(config))
+
+    @pytest.mark.unit
+    def test_rules_can_be_relaxed_for_one_check_only(self, config):
+        _write(config, pd.DataFrame({"a": [1], "ts": [1]}), expected=pd.DataFrame({"a": [1], "ts": [2]}))
+        outputs = ExpectedOutputs(keep_files=True)
+
+        assert outputs.check(config, "OUT", params=PARAMS, ignore_columns=["ts"])
+        assert not outputs.check(config, "OUT", params=PARAMS)
+
+    @pytest.mark.unit
+    def test_session_expectations_apply_to_every_check_and_can_be_replaced_per_check(self, config):
+        _write(config, pd.DataFrame({"a": [1]}), expected=pd.DataFrame({"a": [1.0]}))
+        outputs = ExpectedOutputs(Expectations.lenient(), keep_files=True)
+
+        assert outputs.check(config, "OUT", params=PARAMS)
+        assert not outputs.check(config, "OUT", params=PARAMS, expectations=Expectations.strict())
+
+    @pytest.mark.unit
+    def test_a_failing_custom_assertion_is_reported_with_its_message(self, config):
+        def fewer_than_two_rows(actual, _expected):
+            assert len(actual) < 2, "too many rows"
+
+        _write(config, pd.DataFrame({"a": [1, 2]}))
+        outputs = ExpectedOutputs()
+
+        outputs.check(config, "OUT", params=PARAMS, assertions=[fewer_than_two_rows])
+
+        assert "too many rows" in outputs.errors[0][1]
