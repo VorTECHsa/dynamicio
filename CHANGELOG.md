@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- feat: resource definitions accept an optional `expected: {path, file_type}` key per environment, the reference file a test compares the generated output against. Reading and writing ignore it, so existing definitions and their behaviour are unchanged. (`IOEnvironment.expected` is `None` when absent, which adds an `expected: None` entry to the model's `dict()` output.)
+- feat: `dynamicio.testing.ExpectedOutputs` and `OutputMismatchError`: run a task in a `LOCAL` environment, then lazily compare each generated output with its `expected` file. All mismatches are collected and raised once; generated files of matching outputs are removed (the others are kept); list columns can be compared ignoring element order, dict columns by content; paths can carry `{placeholders}` filled from `params`; `DYNAMICIO_UPDATE_EXPECTED=1` regenerates the expected files. See "Testing Locally" in the README.
+- docs: the `demo/` project now has one input and one output definition per runner (`staging_input`, `staging_output`, `transform_input`, `transform_output`) with `LOCAL`, `DEV` and `PROD` environments, and its end-to-end test uses `ExpectedOutputs`.
+
 ## v10.0.0
 
 - fix: `dynamicio migrate` writes a YAML `object` column as `Series[object]`, not `Series[str]`. `object` meant "any values", and list columns declared `str` fail plain Pandera validation (and would be recast under pandas 3). Models already generated with `Series[str]` for list columns should be changed to `Series[object]`; the generated module now says where `str` is safe

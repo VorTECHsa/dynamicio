@@ -1,41 +1,61 @@
 ---
 FOO:
-  sample:
+  LOCAL:
     type: "local"
     local:
       file_path: "[[ TEST_RESOURCES ]]/data/input/foo.csv"
       file_type: "csv"
-  actual:
+  DEV:
     type: "s3"
     s3:
-      bucket: "[[ S3_YOUR_INPUT_BUCKET ]]"
+      bucket: "[[ DEV_S3_INPUT_BUCKET ]]"
+      file_path: "data/foo.h5"
+      file_type: "hdf"
+  PROD:
+    type: "s3"
+    s3:
+      bucket: "[[ PROD_S3_INPUT_BUCKET ]]"
       file_path: "data/foo.h5"
       file_type: "hdf"
 
 BAR:
-  sample:
+  LOCAL:
     type: "local"
     local:
       file_path: "[[ TEST_RESOURCES ]]/data/input/bar.parquet"
       file_type: "parquet"
-  actual:
+  DEV:
     type: "postgres"
     postgres:
-      db_host: "[[ DB_HOST ]]"
+      db_host: "[[ DEV_DB_HOST ]]"
+      db_port: "[[ DB_PORT ]]"
+      db_name: "[[ DB_NAME ]]"
+      db_user: "[[ DB_USER ]]"
+      db_password: "[[ DB_PASS ]]"
+  PROD:
+    type: "postgres"
+    postgres:
+      db_host: "[[ PROD_DB_HOST ]]"
       db_port: "[[ DB_PORT ]]"
       db_name: "[[ DB_NAME ]]"
       db_user: "[[ DB_USER ]]"
       db_password: "[[ DB_PASS ]]"
 
 ORDERS:
-  sample:
+  LOCAL:
     type: "local_batch"
     local:
       path_prefix: "[[ TEST_RESOURCES ]]/data/input/orders/"
       file_type: "parquet"
-  actual:
+  DEV:
     type: "s3_path_prefix"
     s3:
-      bucket: "[[ S3_YOUR_INPUT_BUCKET ]]"
+      bucket: "[[ DEV_S3_INPUT_BUCKET ]]"
+      path_prefix: "data/orders/"
+      file_type: "parquet"
+  PROD:
+    type: "s3_path_prefix"
+    s3:
+      bucket: "[[ PROD_S3_INPUT_BUCKET ]]"
       path_prefix: "data/orders/"
       file_type: "parquet"

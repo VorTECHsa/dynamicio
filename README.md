@@ -259,9 +259,10 @@ demo
 │   ├── resources
 │   │   ├── __init__.py
 │   │   ├── definitions
-│   │   │   ├── input.yaml
-│   │   │   ├── processed.yaml
-│   │   │   └── raw.yaml
+│   │   │   ├── staging_input.yaml
+│   │   │   ├── staging_output.yaml
+│   │   │   ├── transform_input.yaml
+│   │   │   └── transform_output.yaml
 │   │   ├── io.py
 │   │   └── schemas
 │   │       ├── __init__.py
@@ -276,7 +277,6 @@ demo
 │           └── runner_selection.py
 └── tests
     ├── __init__.py
-    ├── conftest.py
     ├── config
     │   ├── __init__.py
     │   └── constants.py
@@ -332,10 +332,15 @@ We will start with defining our input and output resources as yaml files. These 
 ```shell
 resources
 └── definitions
-    ├── input.yaml
-    ├── processed.yaml
-    └── raw.yaml
+    ├── staging_input.yaml
+    ├── staging_output.yaml
+    ├── transform_input.yaml
+    └── transform_output.yaml
 ```
+
+The recommended structure is one input and one output definition per runner. The walkthrough below uses three files (`input.yaml`, `raw.yaml`,
+`processed.yaml`) and the environment names `sample` and `actual` to keep the explanation short; the `demo/` project splits them per runner and
+names its environments `LOCAL`, `DEV` and `PROD`. Environment names are yours to choose: they are only the keys you select with `env_identifier`.
 
 Schemas are not part of the resource definitions: they are declared as Pandera models in the `src/resources/schemas/` package, one module per group of datasets (see Step 4.1).
 
@@ -1073,7 +1078,7 @@ TO_PARQUET_KWARGS = {
 ```
 
 Of course this is not a problem as parquet is the format used by both resources in either environment. This is not always the case however. See in 
-`demo/src/resources/definitions/processed.yaml`:
+`demo/src/resources/definitions/transform_output.yaml` (here with its `LOCAL`, `DEV` and `PROD` environments):
 
 ```yaml
 ---
@@ -1214,99 +1219,92 @@ In short, you simply need to utilise the `async_read()` or the `async_write()` m
 After following the above documentation, at this point it should be clear that `dynamic(i/o)` is optimised for enabling
 seamless local testing for your pipelines.
 
-Simply by configuring your `ENVIRONMENT`'s default value to `sample` and provided that you have the required tests data
-sources in the necessary directories, it becomes very simple to test your pipelines end-to-end in seconds, eliminating
-the need to deploy your dags and wait for their tasks to be provided access to processing resources.
+Simply by selecting the `LOCAL` environment (`ENVIRONMENT = "LOCAL"`) and provided that you have the required test data in the
+necessary directories, it becomes very simple to test your pipelines end-to-end in seconds, eliminating the need to deploy your dags and
+wait for their tasks to be provided access to processing resources.
 
-All you need to do is mimic the order of execution of your tasks, running them in procedural order.
+All you need to do is mimic the order of execution of your tasks, running them in procedural order, then compare what they wrote with what you expect.
 
-In the case of our example, you would have to:
+### Declaring the expected output
 
-1. Add the necessary data under `tests/data`:
+An output that a test should verify declares, in its `LOCAL` environment, an optional `expected` key next to the data it writes:
 
-```shell
-└── tests
-    ├── __init__.py
-    ├── conftest.py
-    ├── config
-    │   ├── __init__.py
-    │   └── constants.py
-    ├── data
-    │   ├── input
-    │   │   ├── bar.parquet
-    │   │   └── foo.csv
-    │   ├── processed
-    │   │   └── expected
-    │   │       ├── final_bar.parquet
-    │   │       └── final_foo.parquet
-    │   └── raw
-    │       └── expected
-    │           ├── staged_bar.parquet
-    │           └── staged_foo.parquet
-    ├── resources
-    │   ├── __init__.py
-    │   └── test_prefix_schema_evolution.py
-    ├── runners
-    │   ├── __init__.py
-    │   ├── conftest.py
-    │   ├── test_staging.py
-    │   ├── test_transform.py
-    │   └── utils
-    │       ├── __init__.py
-    │       └── test_runner_selection.py
-    └── test_pipeline.py
+```yaml
+FINAL_BAR:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/processed/final_bar.parquet"
+      file_type: "parquet"
+    expected:
+      path: "[[ TEST_RESOURCES ]]/data/processed/expected/final_bar.parquet"   # file_type defaults to the one above
+  DEV:
+    type: "kafka"
+    kafka:
+      kafka_server: "[[ DEV_KAFKA_BROKER ]]"
+      kafka_topic: "[[ KAFKA_TOPIC ]]"
+  PROD:
+    type: "kafka"
+    kafka:
+      kafka_server: "[[ PROD_KAFKA_BROKER ]]"
+      kafka_topic: "[[ KAFKA_TOPIC ]]"
 ```
 
-2. Implement an end-to-end, black-box style test that simply generates the expected data output given a
-   specific input (deleting the output after the assertion)
+`expected` is optional and per environment: reading and writing ignore it, so DEV and PROD stay as they are, and the test harness reads it from
+whichever environment the test runs in (`expected.file_type` is optional and defaults to the `local` file type).
 
-An example end-to-end test in this case, for a single airflow task would look like:
+### Asserting lazily with `dynamicio.testing`
+
+`dynamicio.testing.ExpectedOutputs` replaces the hand-written read-compare-delete code around a pipeline test. It collects *every* mismatch instead of
+stopping at the first, raises a single `OutputMismatchError` (an `AssertionError`) listing them all, removes the generated file of every output that matched,
+and keeps the ones that did not so you can inspect them:
 
 ```python
-"""An example pipeline to showcase how dynamicio can bt used for setting up a local e2e testing!"""
-# pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring, unused-argument, too-few-public-methods
-# noqa
-import os
+import asyncio
 
-import pandas as pd
 import pytest
 
-from demo.src import processed_config, raw_config
+from demo.src import staging_output_config, transform_output_config
 from demo.src.runners import staging, transform
+from dynamicio.testing import ExpectedOutputs
 
 
 class TestPipeline:
-    """Example e2e test."""
-
     @pytest.mark.end_to_end
-    def test_dag_with_mock_sample_input_data(
-        self,
-        expected_staged_foo_df,
-        expected_staged_bar_df,
-        expected_final_foo_df,
-        expected_final_bar_df,
-    ):
-        """Showcases how you can leverage dynamicio to read local data for fast feedback when you want to run your pipelines locally."""
-        # Given
-        # The src/resources/definitions/input.yaml
+    def test_dag_with_mock_sample_input_data(self):
+        with ExpectedOutputs() as outputs:
+            staging.main()
+            asyncio.run(transform.main())
 
-        # When
-        staging.main()
-        transform.main()
-
-        # Then
-        try:
-            assert expected_staged_foo_df.equals(pd.read_parquet(raw_config.get(source_key="STAGED_FOO")["local"]["file_path"]))
-            assert expected_staged_bar_df.equals(pd.read_parquet(raw_config.get(source_key="STAGED_BAR")["local"]["file_path"]))
-            assert expected_final_foo_df.equals(pd.read_parquet(processed_config.get(source_key="FINAL_FOO")["local"]["file_path"]))
-            assert expected_final_bar_df.equals(pd.read_parquet(processed_config.get(source_key="FINAL_BAR")["local"]["file_path"]))
-        finally:
-            os.remove(raw_config.get(source_key="STAGED_FOO")["local"]["file_path"])
-            os.remove(raw_config.get(source_key="STAGED_BAR")["local"]["file_path"])
-            os.remove(processed_config.get(source_key="FINAL_FOO")["local"]["file_path"])
-            os.remove(processed_config.get(source_key="FINAL_BAR")["local"]["file_path"])
-
+            outputs.check(staging_output_config, "STAGED_FOO")
+            outputs.check(staging_output_config, "STAGED_BAR")
+            outputs.check(transform_output_config, "FINAL_FOO")
+            outputs.check(transform_output_config, "FINAL_BAR")
 ```
+
+`check` reads the generated file and the expected file with plain pandas (no schema or cast can hide a difference) and compares them with
+`pd.testing.assert_frame_equal(check_like=True)`, so row and column order are ignored. Options:
+
+| Option | Effect |
+|---|---|
+| `list_columns_to_sort=["tags"]` | List-valued columns whose element order does not matter |
+| `check_like=False` | Also compare row and column order |
+| `params={"day": "2024-01-01"}` | Fills `{day}` in the generated and expected paths, for outputs whose file name carries a runtime parameter |
+| `label="..."` | The name used in the report (default: the resource name) |
+| any `assert_frame_equal` option | e.g. `check_dtype=False`, `rtol=1e-3` |
+| `ExpectedOutputs(keep_files=True)` | Keep the generated files even when they match |
+
+Dict, list and set cells (which pandas cannot hash) are compared by their canonical JSON. A missing generated or expected file is recorded as a failure like any other,
+so one broken output never hides the others. An exception raised by the task itself is never masked by the report. Use `ExpectedOutputs.clear(config, "KEY", ...)`
+at the start of a test to remove leftovers of an earlier, interrupted run, and `ExpectedOutputs.read_generated(...)` / `read_expected(...)` to get the frames yourself.
+
+When a change of output is intended, regenerate the reference files instead of editing them by hand:
+
+```shell
+DYNAMICIO_UPDATE_EXPECTED=1 uv run pytest demo/tests/test_pipeline.py   # writes the generated outputs over the expected files; review the diff
+```
+
+The end-to-end test above is `demo/tests/test_pipeline.py`; the sample data it runs on lives under `demo/tests/data`.
 
 ##  Last notes
 

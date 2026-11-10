@@ -1,19 +1,27 @@
 ---
 FINAL_FOO:
-  sample:
+  LOCAL:
     type: "local"
     local:
       file_path: "[[ TEST_RESOURCES ]]/data/processed/final_foo.parquet"
       file_type: "parquet"
-  actual:
+    expected:
+      path: "[[ TEST_RESOURCES ]]/data/processed/expected/final_foo.parquet"
+  DEV:
     type: "s3"
     s3:
-      bucket: "[[ S3_YOUR_OUTPUT_BUCKET ]]"
+      bucket: "[[ DEV_S3_OUTPUT_BUCKET ]]"
+      file_path: "live/data/processed/final_foo.parquet"
+      file_type: "parquet"
+  PROD:
+    type: "s3"
+    s3:
+      bucket: "[[ PROD_S3_OUTPUT_BUCKET ]]"
       file_path: "live/data/processed/final_foo.parquet"
       file_type: "parquet"
 
 FINAL_BAR:
-  sample:
+  LOCAL:
     type: "local"
     local:
       file_path: "[[ TEST_RESOURCES ]]/data/processed/final_bar.parquet"
@@ -23,10 +31,23 @@ FINAL_BAR:
       coerce_timestamps: "ms"
       allow_truncated_timestamps: false
       row_group_size: 1000000
-  actual:
+    expected:
+      path: "[[ TEST_RESOURCES ]]/data/processed/expected/final_bar.parquet"
+  DEV:
     type: "kafka"
     kafka:
-      kafka_server: "[[ KAFKA_SERVER ]]"
+      kafka_server: "[[ DEV_KAFKA_BROKER ]]"
+      kafka_topic: "[[ KAFKA_TOPIC ]]"
+    options:
+      compression_type: "snappy"
+      max_in_flight_requests_per_connection: 10
+      batch_size: 262144
+      request_timeout_ms: 60000 # 60s
+      buffer_memory: 134217728  # 128MB
+  PROD:
+    type: "kafka"
+    kafka:
+      kafka_server: "[[ PROD_KAFKA_BROKER ]]"
       kafka_topic: "[[ KAFKA_TOPIC ]]"
     options:
       compression_type: "snappy"
