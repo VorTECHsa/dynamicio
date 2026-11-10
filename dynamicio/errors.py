@@ -13,6 +13,7 @@ __all__ = [
     "SchemaNotFoundError",
     "SchemaValidationError",
     "InvalidDatasetTypeError",
+    "NoObjectsFoundError",
     "CASTING_WARNING_MSG",
     "NOTICE_MSG",
 ]
@@ -91,6 +92,14 @@ class InvalidDatasetTypeError(DynamicIOError):
 
     ERROR_STR = "The dataset provided is not amongst the supported types (parquet, json, csv, h5) handled by dynamicio."
     ERROR_STR_DETAILED = "Dataset: {0} provided is not amongst the supported types (parquet, json, csv, h5) handled by dynamicio."
+
+
+class NoObjectsFoundError(FileNotFoundError, ValueError):
+    """Error raised when an S3 path prefix, or an S3 parquet `file_path` that ends in `/`, has no objects.
+
+    It is a `FileNotFoundError`, so a caller can treat it as a missing source. It is also a `ValueError`: in earlier releases, a path prefix
+    with no objects raised the pandas `ValueError: No objects to concatenate`, and callers that catch `ValueError` must not change.
+    """
 
 
 # Warning messages
