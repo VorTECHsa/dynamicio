@@ -17,7 +17,7 @@ from dynamicio.testharness.parquet_schema_comparison import ParquetSchemaCompari
 from dynamicio.testharness.session_report import SessionReport
 
 
-class ExpectedOutputs:
+class ExpectedOutputs:  # pylint: disable=too-many-instance-attributes
     """Lazily compares the outputs a task generated locally with the ``expected`` files declared in their resource definitions.
 
     Use it as a context manager to raise the collected errors on exit, or call :meth:`raise_if_failed` yourself.
