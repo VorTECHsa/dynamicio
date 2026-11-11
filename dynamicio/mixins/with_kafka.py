@@ -2,16 +2,18 @@
 
 # pylint: disable=no-member, protected-access, too-few-public-methods, broad-exception-raised
 
+import logging
 from typing import Any, Callable, Mapping, MutableMapping, Optional
 
 import pandas as pd  # type: ignore
 import simplejson
 from confluent_kafka import Producer
-from magic_logger import logger
 
 # Application Imports
 from dynamicio.config.pydantic import DataframeSchema, KafkaDataEnvironment
 from dynamicio.mixins import utils
+
+logger = logging.getLogger(__name__)
 
 
 class WithKafka:

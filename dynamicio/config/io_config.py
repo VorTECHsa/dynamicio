@@ -55,6 +55,7 @@ would return:
 
 __all__ = ["IOConfig", "SafeDynamicResourceLoader", "SafeDynamicSchemaLoader"]
 
+import logging
 import re
 import weakref
 from types import ModuleType
@@ -62,10 +63,11 @@ from typing import Any, List, MutableMapping
 
 import pydantic
 import yaml
-from magic_logger import logger
 
 # Application Imports
 from dynamicio.config.pydantic import BindingsYaml, IOEnvironment
+
+logger = logging.getLogger(__name__)
 
 
 class SafeDynamicResourceLoader(yaml.SafeLoader):

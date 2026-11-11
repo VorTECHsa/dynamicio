@@ -3,13 +3,14 @@
 # pylint: disable=no-member, protected-access, too-few-public-methods
 
 import inspect
+import logging
 import string
 from contextlib import contextmanager
 from enum import Enum
 from functools import wraps
 from typing import Any, Callable, Collection, Iterable, Mapping, MutableMapping, Optional, Union
 
-from magic_logger import logger
+logger = logging.getLogger(__name__)
 
 
 def allow_options(options: Union[Iterable[str], Callable]):

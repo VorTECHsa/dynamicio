@@ -5,13 +5,13 @@ __all__ = ["DynamicDataIO", "SCHEMA_FROM_FILE", "SCHEMA_FROM_ARGUMENT", "CASTING
 
 import asyncio
 import inspect
+import logging
 import re
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, List, Mapping, MutableMapping, Optional, Tuple, Type
 
 import pandas as pd
 import pydantic
-from magic_logger import logger
 from pandera.pandas import DataFrameModel
 
 # Application Imports
@@ -20,6 +20,8 @@ from dynamicio.errors import CASTING_WARNING_MSG, NOTICE_MSG, ColumnsDataTypeErr
 from dynamicio.schema import validations
 from dynamicio.schema.metrics import get_metric
 from dynamicio.schema.models import dataframe_validator, to_dataframe_schema
+
+logger = logging.getLogger(__name__)
 
 SCHEMA_FROM_FILE = {"schema": object()}
 SCHEMA_FROM_ARGUMENT = {"schema": object()}
