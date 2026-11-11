@@ -1,9 +1,9 @@
 """A package for wrapping your I/O operations."""
 
+import logging
+import logging.config
 import os
 from contextlib import suppress
-
-from magic_logger import logger
 
 try:
     from importlib.metadata import PackageNotFoundError, version
@@ -19,6 +19,8 @@ with suppress(Exception):
 # Application Imports
 from dynamicio.core import DynamicDataIO
 from dynamicio.mixins import WithAthena, WithKafka, WithLocal, WithLocalBatch, WithPostgres, WithS3File, WithS3PathPrefix
+
+logger = logging.getLogger(__name__)
 
 os.environ["LC_CTYPE"] = "en_US.UTF"  # Set your locale to a unicode-compatible one
 
@@ -50,6 +52,8 @@ logging_config = {
     },
     "loggers": {
         "": {"handlers": ["default"], "level": "INFO", "propagate": False},
+        # The dynamicio modules create their loggers on import, before this config runs, so the config names them to keep them enabled
+        "dynamicio": {"propagate": True},
         "dynamicio.metrics": {"handlers": ["metrics"], "level": "INFO", "propagate": False},
         "awscli": {
             "handlers": ["default"],
@@ -60,4 +64,4 @@ logging_config = {
 }
 
 if os.environ.get("DYNAMICIO_DO_NOT_CONFIGURE_LOGGING", "") != "1":
-    logger.dict_config(logging_config)
+    logging.config.dictConfig(logging_config)

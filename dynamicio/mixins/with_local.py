@@ -3,19 +3,21 @@
 """This module provides mixins that are providing Local FS I/O support."""
 
 import glob
+import logging
 import os
 from threading import Lock
 from typing import Any, MutableMapping
 
 import pandas as pd
 from fastparquet import ParquetFile, write
-from magic_logger import logger
 from pyarrow.parquet import read_table, write_table
 
 # Application Imports
 from dynamicio.config.pydantic import DataframeSchema, LocalBatchDataEnvironment, LocalDataEnvironment
 from dynamicio.mixins import utils
 from dynamicio.mixins.utils import get_file_type_value
+
+logger = logging.getLogger(__name__)
 
 hdf_lock = Lock()
 

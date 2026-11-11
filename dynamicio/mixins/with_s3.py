@@ -5,6 +5,7 @@ import collections
 import dataclasses
 import fnmatch
 import io
+import logging
 import os
 import random
 import shutil
@@ -32,7 +33,6 @@ import tables
 from awswrangler.exceptions import NoFilesFound
 from botocore.config import Config
 from botocore.exceptions import ConnectionClosedError, ConnectTimeoutError, EndpointConnectionError, IncompleteReadError, ReadTimeoutError, ResponseStreamingError
-from magic_logger import logger
 from pandas import DataFrame, Series
 
 # Application Imports
@@ -40,6 +40,8 @@ from dynamicio.config.pydantic import DataframeSchema, S3DataEnvironment, S3Path
 from dynamicio.errors import NoObjectsFoundError, ObjectNotFoundError
 from dynamicio.mixins import utils, with_local
 from dynamicio.mixins.utils import get_file_type_value
+
+logger = logging.getLogger(__name__)
 
 _SESSION_LOCK = threading.Lock()
 _SESSION: Dict[int, boto3.Session] = {}

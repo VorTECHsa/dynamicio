@@ -2,17 +2,19 @@
 
 # pylint: disable=no-member, protected-access, too-few-public-methods
 
+import logging
 from typing import Any, MutableMapping
 
 import awswrangler as wr
 import boto3
 import pandas as pd
-from magic_logger import logger
 
 # Application Imports
 from dynamicio.config.pydantic import AthenaDataEnvironment
 from dynamicio.mixins.utils import allow_options
 from dynamicio.mixins.with_s3 import _shared_boto3_session
+
+logger = logging.getLogger(__name__)
 
 
 class WithAthena:

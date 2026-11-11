@@ -3,13 +3,13 @@
 """This module provides mixins that are providing Postgres I/O support."""
 
 import csv
+import logging
 import tempfile
 import threading
 from contextlib import contextmanager
 from typing import Any, Dict, Generator, MutableMapping, Union
 
 import pandas as pd
-from magic_logger import logger
 from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, Float, Integer, MetaData, String, Table, create_engine, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.declarative import declarative_base
@@ -21,6 +21,8 @@ from sqlalchemy.orm.session import sessionmaker
 # Application Imports
 from dynamicio.config.pydantic import DataframeSchema, PostgresDataEnvironment
 from dynamicio.mixins import utils
+
+logger = logging.getLogger(__name__)
 
 Session = sessionmaker(autoflush=True)  # pylint: disable=invalid-name
 
