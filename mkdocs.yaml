@@ -5,7 +5,6 @@ nav:
   - Home: index.md
   - API Reference: api.md
   - Architecture Decisions: adr/README.md
-  - S3 Performance: perf-s3-io.md
 
 plugins:
   - techdocs-core

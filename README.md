@@ -155,7 +155,7 @@ S3 is accessed directly through `boto3`, with one client shared per process (saf
 
 Historical v8.1.0 benchmarks measured single-file reads about 2.4x faster and writes about 1.3x faster than the
 pre-v8.1.0 implementation. Prefix transfers were broadly on par at equal worker counts; results depend on the workload
-([benchmarks](https://github.com/VorTECHsa/dynamicio/blob/master/docs/perf-s3-io.md),
+([evidence](https://github.com/VorTECHsa/dynamicio/blob/master/docs/adr/0007-s3-io-performance-evidence.md),
 [design decision](https://github.com/VorTECHsa/dynamicio/blob/master/docs/adr/0001-direct-boto3-s3-io.md)).
 
 #### Parquet prefixes that changed schema over time

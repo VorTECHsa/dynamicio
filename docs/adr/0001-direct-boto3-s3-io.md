@@ -27,7 +27,7 @@ Constraint: promoting the branch must not change dynamicio behaviour for existin
 
 ## Consequences
 
-- Versus `master`: single-file reads ~2.4x faster, writes ~1.3x faster, lower CPU per call (see [perf-s3-io.md](../perf-s3-io.md)).
+- Versus `master`: single-file reads ~2.4x faster, writes ~1.3x faster, lower CPU per call (evidence in [ADR 0007](0007-s3-io-performance-evidence.md)).
 - Prefix sync is on par with `master`'s aws-cli sync at equal worker count; the 32-worker default adds a modest download gain and nothing on uplink-bound uploads.
 - Breaking (`feat!`) for anything relying on the `aws` script or s3fs arriving transitively through dynamicio.
 - Wrangler-only kwargs still work but take the slower path.
