@@ -59,6 +59,7 @@ def expected_input_yaml_dict():
         "bindings": {
             "READ_FROM_S3_CSV_ALT": {
                 "name": "READ_FROM_S3_CSV_ALT",
+                "missing_ok": False,
                 "environments": {
                     "LOCAL": {
                         "options": {},
@@ -84,6 +85,7 @@ def expected_input_yaml_dict():
             },
             "READ_FROM_S3_CSV": {
                 "name": "READ_FROM_S3_CSV",
+                "missing_ok": False,
                 "environments": {
                     "LOCAL": {
                         "options": {},
@@ -171,6 +173,7 @@ def expected_input_yaml_dict():
             },
             "READ_FROM_S3_JSON": {
                 "name": "READ_FROM_S3_JSON",
+                "missing_ok": False,
                 "environments": {
                     "LOCAL": {
                         "options": {},
@@ -196,6 +199,7 @@ def expected_input_yaml_dict():
             },
             "READ_FROM_S3_HDF": {
                 "name": "READ_FROM_S3_HDF",
+                "missing_ok": False,
                 "environments": {
                     "LOCAL": {
                         "options": {},
@@ -221,6 +225,7 @@ def expected_input_yaml_dict():
             },
             "READ_FROM_S3_PARQUET": {
                 "name": "READ_FROM_S3_PARQUET",
+                "missing_ok": False,
                 "environments": {
                     "LOCAL": {
                         "options": {},
@@ -246,6 +251,7 @@ def expected_input_yaml_dict():
             },
             "READ_FROM_POSTGRES": {
                 "name": "READ_FROM_POSTGRES",
+                "missing_ok": False,
                 "environments": {
                     "LOCAL": {
                         "options": {},
@@ -273,6 +279,7 @@ def expected_input_yaml_dict():
             },
             "READ_FROM_KAFKA": {
                 "name": "READ_FROM_KAFKA",
+                "missing_ok": False,
                 "environments": {
                     "LOCAL": {
                         "options": {},
@@ -297,6 +304,7 @@ def expected_input_yaml_dict():
             },
             "TEMPLATED_FILE_PATH": {
                 "name": "TEMPLATED_FILE_PATH",
+                "missing_ok": False,
                 "environments": {
                     "LOCAL": {
                         "options": {},
@@ -322,6 +330,7 @@ def expected_input_yaml_dict():
             },
             "READ_FROM_PARQUET_TEMPLATED": {
                 "name": "READ_FROM_PARQUET_TEMPLATED",
+                "missing_ok": False,
                 "environments": {
                     "LOCAL": {
                         "options": {},
@@ -347,6 +356,7 @@ def expected_input_yaml_dict():
             },
             "REPLACE_SCHEMA_WITH_DYN_VARS": {
                 "name": "REPLACE_SCHEMA_WITH_DYN_VARS",
+                "missing_ok": False,
                 "environments": {
                     "LOCAL": {
                         "options": {},
@@ -424,6 +434,7 @@ def expected_input_yaml_dict():
 def expected_s3_csv_local_mapping():
     return {
         "name": "READ_FROM_S3_CSV",
+        "missing_ok": False,
         "environments": {
             "LOCAL": {
                 "options": {},
@@ -741,6 +752,7 @@ def input_schema_definition():
 def expected_schema_definition():
     return {
         "name": "READ_FROM_S3_CSV",
+        "missing_ok": False,
         "environments": {
             "LOCAL": {
                 "options": {},

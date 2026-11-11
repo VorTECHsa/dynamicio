@@ -164,14 +164,20 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(pool, self.read)
 
-    def read(self) -> pd.DataFrame:
+    def read(self) -> Optional[pd.DataFrame]:
         """Reads data source and returns a schema validated dataframe (by means of _apply_schema).
 
         Returns:
-            A pandas dataframe or an iterable.
+            A pandas dataframe or an iterable. None if the source does not exist and its binding sets `missing_ok: true`.
         """
         source_name = self.sources_config.data_backend_type.value
-        df = getattr(self, f"_read_from_{source_name}")()
+        try:
+            df = getattr(self, f"_read_from_{source_name}")()
+        except FileNotFoundError as err:
+            if not self.sources_config.missing_ok:
+                raise
+            logger.warning(f"Source {self.name!r} does not exist and its binding sets missing_ok: returning None. ({err})")
+            return None
 
         df = self._apply_schema(df)
         if self.apply_schema_validations:
