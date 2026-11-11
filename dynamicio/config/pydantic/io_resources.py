@@ -39,6 +39,14 @@ class FileType(str, enum.Enum):
     hdf = "hdf"
 
 
+class ExpectedSubSection(BaseModel):
+    """Config section for the expected output of a resource: the reference file a test compares the newly generated output against."""
+
+    path: str
+    file_type: Optional[FileType] = None  # defaults to the file type of the environment's `local` section, then to the file extension
+    options: Mapping = pydantic.Field(default_factory=dict)  # pandas reader options (e.g. `orient`) for both files; override the environment's own `orient`
+
+
 class IOBinding(BaseModel):
     """A binding for a single i/o object."""
 
@@ -100,6 +108,7 @@ class IOEnvironment(BaseModel):
     _parent: Optional[IOBinding] = None  # noqa: F821
     options: Mapping = pydantic.Field(default_factory=dict)
     data_backend_type: DataBackendType = pydantic.Field(alias="type", const=None)
+    expected: Optional[ExpectedSubSection] = None  # optional, ignored when reading or writing: used by `dynamicio.testharness`
 
     if pydantic.VERSION.startswith("1."):
         # Pydantic 2 always treats underscore attributes as private and warns about this removed key.

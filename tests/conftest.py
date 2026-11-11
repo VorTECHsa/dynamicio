@@ -63,6 +63,7 @@ def expected_input_yaml_dict():
                     "LOCAL": {
                         "options": {},
                         "data_backend_type": "local",
+                        "expected": None,
                         "local": {
                             "file_path": f"{constants.TEST_RESOURCES}/data/input/some_csv_to_read.csv",
                             "file_type": "csv",
@@ -71,6 +72,7 @@ def expected_input_yaml_dict():
                     "CLOUD": {
                         "options": {},
                         "data_backend_type": "s3",
+                        "expected": None,
                         "s3": {
                             "file_path": "mock-key",
                             "file_type": "csv",
@@ -86,6 +88,7 @@ def expected_input_yaml_dict():
                     "LOCAL": {
                         "options": {},
                         "data_backend_type": "local",
+                        "expected": None,
                         "local": {
                             "file_path": f"{constants.TEST_RESOURCES}/data/input/some_csv_to_read.csv",
                             "file_type": "csv",
@@ -94,6 +97,7 @@ def expected_input_yaml_dict():
                     "CLOUD": {
                         "options": {},
                         "data_backend_type": "s3",
+                        "expected": None,
                         "s3": {
                             "file_path": "mock-key",
                             "file_type": "csv",
@@ -171,6 +175,7 @@ def expected_input_yaml_dict():
                     "LOCAL": {
                         "options": {},
                         "data_backend_type": "local",
+                        "expected": None,
                         "local": {
                             "file_path": f"{constants.TEST_RESOURCES}/data/input/some_json_to_read.json",
                             "file_type": "json",
@@ -179,6 +184,7 @@ def expected_input_yaml_dict():
                     "CLOUD": {
                         "options": {},
                         "data_backend_type": "s3",
+                        "expected": None,
                         "s3": {
                             "file_path": "mock-key",
                             "file_type": "json",
@@ -194,6 +200,7 @@ def expected_input_yaml_dict():
                     "LOCAL": {
                         "options": {},
                         "data_backend_type": "local",
+                        "expected": None,
                         "local": {
                             "file_path": f"{constants.TEST_RESOURCES}/data/input/some_hdf_to_read.h5",
                             "file_type": "hdf",
@@ -202,6 +209,7 @@ def expected_input_yaml_dict():
                     "CLOUD": {
                         "options": {},
                         "data_backend_type": "s3",
+                        "expected": None,
                         "s3": {
                             "file_path": "mock-key",
                             "file_type": "hdf",
@@ -217,6 +225,7 @@ def expected_input_yaml_dict():
                     "LOCAL": {
                         "options": {},
                         "data_backend_type": "local",
+                        "expected": None,
                         "local": {
                             "file_path": f"{constants.TEST_RESOURCES}/data/input/some_parquet_to_read.parquet",
                             "file_type": "parquet",
@@ -225,6 +234,7 @@ def expected_input_yaml_dict():
                     "CLOUD": {
                         "options": {},
                         "data_backend_type": "s3",
+                        "expected": None,
                         "s3": {
                             "file_path": "s3:sample-prefix/mock-key",
                             "file_type": "parquet",
@@ -240,6 +250,7 @@ def expected_input_yaml_dict():
                     "LOCAL": {
                         "options": {},
                         "data_backend_type": "local",
+                        "expected": None,
                         "local": {
                             "file_path": f"{constants.TEST_RESOURCES}/data/input/some_pg_parquet_to_read.parquet",
                             "file_type": "parquet",
@@ -248,6 +259,7 @@ def expected_input_yaml_dict():
                     "CLOUD": {
                         "options": {},
                         "data_backend_type": "postgres",
+                        "expected": None,
                         "postgres": {
                             "db_host": "127.0.0.1",
                             "db_port": "17039",
@@ -265,6 +277,7 @@ def expected_input_yaml_dict():
                     "LOCAL": {
                         "options": {},
                         "data_backend_type": "local",
+                        "expected": None,
                         "local": {
                             "file_path": f"{constants.TEST_RESOURCES}/data/input/some_parquet_to_read.parquet",
                             "file_type": "parquet",
@@ -273,6 +286,7 @@ def expected_input_yaml_dict():
                     "CLOUD": {
                         "options": {},
                         "data_backend_type": "kafka",
+                        "expected": None,
                         "kafka": {
                             "kafka_server": "mock-kafka-server",
                             "kafka_topic": "mock-kafka-topic",
@@ -287,6 +301,7 @@ def expected_input_yaml_dict():
                     "LOCAL": {
                         "options": {},
                         "data_backend_type": "local",
+                        "expected": None,
                         "local": {
                             "file_path": f"{constants.TEST_RESOURCES}/data/input/{{file_name_to_replace}}.csv",
                             "file_type": "csv",
@@ -295,6 +310,7 @@ def expected_input_yaml_dict():
                     "CLOUD": {
                         "options": {},
                         "data_backend_type": "s3",
+                        "expected": None,
                         "s3": {
                             "file_path": "path/to/{file_name_to_replace}.csv",
                             "file_type": "csv",
@@ -310,6 +326,7 @@ def expected_input_yaml_dict():
                     "LOCAL": {
                         "options": {},
                         "data_backend_type": "local",
+                        "expected": None,
                         "local": {
                             "file_path": f"{constants.TEST_RESOURCES}/data/input/{{file_name_to_replace}}.parquet",
                             "file_type": "parquet",
@@ -318,6 +335,7 @@ def expected_input_yaml_dict():
                     "CLOUD": {
                         "options": {},
                         "data_backend_type": "s3",
+                        "expected": None,
                         "s3": {
                             "file_path": "path/to/{file_name_to_replace}.parquet",
                             "file_type": "parquet",
@@ -333,6 +351,7 @@ def expected_input_yaml_dict():
                     "LOCAL": {
                         "options": {},
                         "data_backend_type": "local",
+                        "expected": None,
                         "local": {
                             "file_path": f"{constants.TEST_RESOURCES}/data/input/{{file_name_to_replace}}.parquet",
                             "file_type": "parquet",
@@ -409,6 +428,7 @@ def expected_s3_csv_local_mapping():
             "LOCAL": {
                 "options": {},
                 "data_backend_type": "local",
+                "expected": None,
                 "local": {
                     "file_path": f"{constants.TEST_RESOURCES}/data/input/some_csv_to_read.csv",
                     "file_type": "csv",
@@ -417,6 +437,7 @@ def expected_s3_csv_local_mapping():
             "CLOUD": {
                 "options": {},
                 "data_backend_type": "s3",
+                "expected": None,
                 "s3": {
                     "file_path": "mock-key",
                     "file_type": "csv",
@@ -530,6 +551,7 @@ def expected_postgres_cloud_mapping():
     return {
         "options": {},
         "data_backend_type": "postgres",
+        "expected": None,
         "postgres": {
             "db_host": "127.0.0.1",
             "db_port": "17039",
@@ -723,6 +745,7 @@ def expected_schema_definition():
             "LOCAL": {
                 "options": {},
                 "data_backend_type": "local",
+                "expected": None,
                 "local": {
                     "file_path": f"{constants.TEST_RESOURCES}/data/input/some_csv_to_read.csv",
                     "file_type": "csv",
@@ -731,6 +754,7 @@ def expected_schema_definition():
             "CLOUD": {
                 "options": {},
                 "data_backend_type": "s3",
+                "expected": None,
                 "s3": {
                     "file_path": "mock-key",
                     "file_type": "csv",

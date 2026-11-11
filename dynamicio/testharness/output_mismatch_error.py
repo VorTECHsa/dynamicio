@@ -1,0 +1,29 @@
+"""The error raised when generated outputs differ from their expected counterparts."""
+
+from typing import List, Sequence, Tuple
+
+
+class OutputMismatchError(AssertionError):
+    """Raised once, after all checks ran, listing every output that did not match its expected counterpart.
+
+    Attributes:
+        errors: ``(name, message)`` for each failed check, in the order the checks ran.
+        passed: Names of the checks that matched, listed in the message so a failure also shows what is healthy.
+    """
+
+    MAX_MESSAGE_CHARS = 1000
+
+    def __init__(self, errors: Sequence[Tuple[str, str]], passed: Sequence[str] = ()):
+        self.errors: List[Tuple[str, str]] = list(errors)
+        self.passed: List[str] = list(passed)
+        super().__init__(self._format(self.errors, self.passed))
+
+    @classmethod
+    def _format(cls, errors: Sequence[Tuple[str, str]], passed: Sequence[str]) -> str:
+        lines = [f"The following AssertionErrors occurred ({len(errors)}):"]
+        for name, message in errors:
+            shortened = message if len(message) <= cls.MAX_MESSAGE_CHARS else f"{message[:cls.MAX_MESSAGE_CHARS]}... (truncated)"
+            lines.append(f"\n[{name}]\n{shortened}")
+        if passed:
+            lines.append(f"\nMatched ({len(passed)}): {', '.join(passed)}")
+        return "\n".join(lines)

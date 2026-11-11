@@ -42,6 +42,50 @@ docstrings.
 
 ::: dynamicio.schema.validations
 
+## Test harness
+
+Compare the outputs a task generated locally with the `expected` files declared in its resource definitions.
+
+### Session
+
+::: dynamicio.testharness.expected_outputs
+
+### Expectations
+
+::: dynamicio.testharness.expectations
+
+### Comparison
+
+::: dynamicio.testharness.frame_comparison
+
+### Files
+
+::: dynamicio.testharness.output_files
+
+### Parquet layout
+
+::: dynamicio.testharness.parquet_schema_comparison
+
+### Environment
+
+::: dynamicio.testharness.environment_switch
+
+### Sandbox
+
+::: dynamicio.testharness.output_sandbox
+
+### Report
+
+::: dynamicio.testharness.session_report
+
+### Pytest plugin
+
+::: dynamicio.testharness.pytest_plugin
+
+### Error
+
+::: dynamicio.testharness.output_mismatch_error
+
 ## Errors
 
 ::: dynamicio.errors

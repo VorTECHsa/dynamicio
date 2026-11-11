@@ -56,6 +56,7 @@ would return:
 __all__ = ["IOConfig", "SafeDynamicResourceLoader", "SafeDynamicSchemaLoader"]
 
 import re
+import weakref
 from types import ModuleType
 from typing import Any, List, MutableMapping
 
@@ -179,6 +180,8 @@ class IOConfig:
     env_identifier: str
     config: BindingsYaml
 
+    _instances: "weakref.WeakSet[IOConfig]" = weakref.WeakSet()
+
     def __init__(self, path_to_source_yaml: str, env_identifier: str, dynamic_vars: ModuleType):
         """Class constructor.
 
@@ -192,6 +195,20 @@ class IOConfig:
         self.env_identifier = env_identifier
         self.dynamic_vars = dynamic_vars
         self.config = self._parse_sources_config()
+        IOConfig._instances.add(self)
+
+    @classmethod
+    def instances(cls) -> List["IOConfig"]:
+        """Every ``IOConfig`` that is alive, so a test harness can select an environment for all of them at once."""
+        return list(cls._instances)
+
+    @property
+    def default_environment(self) -> str:
+        """The first environment the resource definitions list (conventionally the local one), independent of the ``env_identifier`` of the process."""
+        for binding in self.config.bindings.values():
+            for name in binding.environments:
+                return name
+        return self.env_identifier
 
     def _parse_sources_config(self) -> BindingsYaml:
         """Parses the yaml input and return a dictionary.

@@ -2,11 +2,13 @@
 [![codecov](https://codecov.io/gh/VorTECHsa/dynamicio/graph/badge.svg?token=McZFwD2QPh)](https://codecov.io/gh/VorTECHsa/dynamicio)
 [<img src="https://img.shields.io/badge/slack-@vortexa/dynamicio_public-purple.svg?logo=slack">](https://join.slack.com/share/enQtMzg2Nzk3ODY3MzEzNi0yNTU1ZmIyN2JkMGFhZjhhZWVjNzA2OWUzNWIyMjMyYmYzZmE4MzBjYWQ3YjdhNjU1MGU2NjFkNzMyZDllMzE2?raw=True)
 
-<img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/logo-transparent.png?raw=True" width="500"> <img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/wrapped-panda.png?raw=True" width="100">
+<img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/logo-transparent.png?raw=True" alt="dynamicio — Wrap your I/O" width="500"> <img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/wrapped-panda.png?raw=True" alt="The dynamicio panda mascot" width="100">
 
-A repository for hosting the `dynamicio` library, used as a wrapper for `pandas` i/o operations.
+Configuration-driven I/O for `pandas` dataframes, with YAML resource definitions and Pandera schema models.
 
--- Logo illustrated by [Nick Loucas](https://www.linkedin.com/in/nickloucas/)
+Dataframe execution currently supports pandas only; Polars is not yet supported.
+
+-- Original logo illustrated by [Nick Loucas](https://www.linkedin.com/in/nickloucas/); the refreshed logo retains its circular I/O motif.
 
 ## Table of Contents
 - [Why wrap your i/o?](https://github.com/VorTECHsa/dynamicio/tree/master#why-wrap-your-io)
@@ -40,6 +42,10 @@ A repository for hosting the `dynamicio` library, used as a wrapper for `pandas`
     + [Step 6: Full Code](https://github.com/VorTECHsa/dynamicio/tree/master#step-6-full-code)
   * [Utilising `asyncio`](https://github.com/VorTECHsa/dynamicio/tree/master#utilising-asyncio)
 - [Testing Locally](https://github.com/VorTECHsa/dynamicio/tree/master#testing-locally)
+  * [Declaring the expected output](https://github.com/VorTECHsa/dynamicio/tree/master#declaring-the-expected-output)
+  * [Asserting lazily with `dynamicio.testharness`](https://github.com/VorTECHsa/dynamicio/tree/master#asserting-lazily-with-dynamiciotestharness)
+  * [Choosing the environment](https://github.com/VorTECHsa/dynamicio/tree/master#choosing-the-environment)
+  * [Recommended testing practices](https://github.com/VorTECHsa/dynamicio/tree/master#recommended-testing-practices)
 - [Last notes](https://github.com/VorTECHsa/dynamicio/tree/master#last-notes)
 
 <small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
@@ -123,8 +129,6 @@ decoupling business logic from the I/O layer.
 
 ## Supported sources and data formats
 
-<img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/supported_sources.png?raw=True" alt="Amazon S3, PostgreSQL, Kafka and Amazon Athena logos" width="750">
-
 <img src="https://raw.githubusercontent.com/VorTECHsa/dynamicio/master/docs/images/supported-sources.svg" alt="Sources dynamicio reads from and sinks it writes to: S3 and local files, PostgreSQL, Athena (read only), Kafka (write only)" width="900">
 
 - **S3** (or local) Input & Output, for single files (`type: s3`) and for prefixes holding many files (`type: s3_path_prefix`):
@@ -149,9 +153,9 @@ S3 is accessed directly through `boto3`, with one client shared per process (saf
 * **No `awscli` or `s3fs`**: they are no longer dependencies, so installing `dynamicio` no longer puts an `aws` command
   in your environment. Credentials come from the usual `boto3` chain (environment, profile, IAM role).
 
-Compared with the previous implementation, single-file reads are about 2.4x faster and writes about 1.3x faster, and
-prefix reads/writes are on par or better, using less CPU per call
-([benchmarks](https://github.com/VorTECHsa/dynamicio/blob/master/docs/perf-s3-io.md),
+Historical v8.1.0 benchmarks measured single-file reads about 2.4x faster and writes about 1.3x faster than the
+pre-v8.1.0 implementation. Prefix transfers were broadly on par at equal worker counts; results depend on the workload
+([evidence](https://github.com/VorTECHsa/dynamicio/blob/master/docs/adr/0007-s3-io-performance-evidence.md),
 [design decision](https://github.com/VorTECHsa/dynamicio/blob/master/docs/adr/0001-direct-boto3-s3-io.md)).
 
 #### Parquet prefixes that changed schema over time
@@ -259,9 +263,10 @@ demo
 │   ├── resources
 │   │   ├── __init__.py
 │   │   ├── definitions
-│   │   │   ├── input.yaml
-│   │   │   ├── processed.yaml
-│   │   │   └── raw.yaml
+│   │   │   ├── staging_input.yaml
+│   │   │   ├── staging_output.yaml
+│   │   │   ├── transform_input.yaml
+│   │   │   └── transform_output.yaml
 │   │   ├── io.py
 │   │   └── schemas
 │   │       ├── __init__.py
@@ -276,7 +281,6 @@ demo
 │           └── runner_selection.py
 └── tests
     ├── __init__.py
-    ├── conftest.py
     ├── config
     │   ├── __init__.py
     │   └── constants.py
@@ -314,12 +318,12 @@ Everything that describes *what data the pipeline touches* lives together under 
 | Path | Holds |
 |---|---|
 | `src/resources/definitions/*.yaml` | Resource definitions: where each dataset lives per environment, its format and options. YAML, so a bucket or path can change without touching code |
-| `src/resources/schemas/*.py` | The datasets' Pandera models: columns, dtypes, validations, metrics. One module per definitions file (`input.py` next to `definitions/input.yaml`), or per runner and direction in a bigger pipeline (`stage.py`, `transform.py`, ...) |
+| `src/resources/schemas/*.py` | The datasets' Pandera models: columns, dtypes, validations, metrics. One module per definitions file (`input.py` next to `definitions/staging_input.yaml`), or per runner and direction in a bigger pipeline (`stage.py`, `transform.py`, ...) |
 | `src/resources/io.py` | The `UnifiedIO`/`DynamicDataIO` subclasses used to read and write them |
 | `src/config/environment.py` | The values behind the `[[ DYNAMIC ]]` variables in the definitions, and the `RESOURCES` path |
 | `src/config/constants.py` | Constants shared by the runners, e.g. writer options |
 | `src/runners/` | The pipeline steps: they import from `src.resources` and never open a file or table directly |
-| `tests/` | Tests mirror the `src/` tree (`tests/runners/test_staging.py` tests `src/runners/staging.py`, and so on), plus `tests/test_pipeline.py` for the end-to-end run, and the sample data under `tests/data` (the `sample` environment points at it) |
+| `tests/` | Tests mirror the `src/` tree (`tests/runners/test_staging.py` tests `src/runners/staging.py`, and so on), plus `tests/test_pipeline.py` for the end-to-end run, and the sample data under `tests/data` (the `LOCAL` environment points at it) |
 
 Rules of thumb: a dataset is added by touching `src/resources` only (definition, model, optionally an IO class); a runner
 changes only when its logic changes. Keep the models next to the definitions that use them so a resource and its contract
@@ -332,96 +336,198 @@ We will start with defining our input and output resources as yaml files. These 
 ```shell
 resources
 └── definitions
-    ├── input.yaml
-    ├── processed.yaml
-    └── raw.yaml
+    ├── staging_input.yaml
+    ├── staging_output.yaml
+    ├── transform_input.yaml
+    └── transform_output.yaml
 ```
+
+The recommended structure is one input and one output definition per runner, as above and in `demo/`. Each resource lists its environments (`LOCAL`, `DEV`
+and `PROD` in the demo), **the local one first**: the first environment listed is the default of the testing tools (see [Choosing the environment](#choosing-the-environment)).
+Environment names are yours to choose: they are only the keys you select with `env_identifier`.
+
+The definitions are plain YAML, so repetition can be removed with anchors: `&name` marks a block, `*name` reuses it, and `<<: *name` merges it with the keys
+written next to it taking precedence. In the demo, `PROD` reuses `DEV`'s `s3`, `postgres` and `kafka` blocks and Kafka `options`, overriding only the host or bucket.
 
 Schemas are not part of the resource definitions: they are declared as Pandera models in the `src/resources/schemas/` package, one module per group of datasets (see Step 4.1).
 
-You will need to define your pipeline's resources by creating three `yaml` files. The first is:
+You will need to define your pipeline's resources by creating four `yaml` files, the ones in `demo/src/resources/definitions`. The first is:
 
-- `input.yaml` which concerns data read by the **staging** task;
+- `staging_input.yaml`, which concerns data read by the **staging** task:
 
 ```yaml
 ---
+# `&name` anchors a block and `*name` reuses it; `<<: *name` merges it, and keys written next to it override. DEV and PROD only differ by their hosts.
 FOO:
-  sample:
+  LOCAL:
     type: "local"
     local:
       file_path: "[[ TEST_RESOURCES ]]/data/input/foo.csv"
       file_type: "csv"
-  actual:
+  DEV:
     type: "s3"
-    s3:
-      bucket: "[[ S3_YOUR_INPUT_BUCKET ]]"
+    s3: &foo_s3
+      bucket: "[[ DEV_S3_INPUT_BUCKET ]]"
       file_path: "data/foo.h5"
       file_type: "hdf"
+  PROD:
+    type: "s3"
+    s3:
+      <<: *foo_s3
+      bucket: "[[ PROD_S3_INPUT_BUCKET ]]"
 
 BAR:
-  sample:
+  LOCAL:
     type: "local"
     local:
       file_path: "[[ TEST_RESOURCES ]]/data/input/bar.parquet"
       file_type: "parquet"
-  actual:
+  DEV:
     type: "postgres"
-    postgres:
-      db_host: "[[ DB_HOST ]]"
+    postgres: &bar_postgres
+      db_host: "[[ DEV_DB_HOST ]]"
       db_port: "[[ DB_PORT ]]"
       db_name: "[[ DB_NAME ]]"
       db_user: "[[ DB_USER ]]"
       db_password: "[[ DB_PASS ]]"
+  PROD:
+    type: "postgres"
+    postgres:
+      <<: *bar_postgres
+      db_host: "[[ PROD_DB_HOST ]]"
+
+ORDERS:
+  LOCAL:
+    type: "local_batch"
+    local:
+      path_prefix: "[[ TEST_RESOURCES ]]/data/input/orders/"
+      file_type: "parquet"
+  DEV:
+    type: "s3_path_prefix"
+    s3: &orders_s3
+      bucket: "[[ DEV_S3_INPUT_BUCKET ]]"
+      path_prefix: "data/orders/"
+      file_type: "parquet"
+  PROD:
+    type: "s3_path_prefix"
+    s3:
+      <<: *orders_s3
+      bucket: "[[ PROD_S3_INPUT_BUCKET ]]"
 ```
 
-- the `raw.yaml`, which concerns data coming out of the **staging** task and go into the **transform** task:
+- `staging_output.yaml`, which concerns data written by the **staging** task and read by the **transform** task. Its `LOCAL` environments declare an
+  `expected` path, the reference file a test compares the generated output with (see [Declaring the expected output](#declaring-the-expected-output)):
 
 ```yaml
 ---
 STAGED_FOO:
-  sample:
+  LOCAL:
     type: "local"
     local:
       file_path: "[[ TEST_RESOURCES ]]/data/raw/staged_foo.parquet"
       file_type: "parquet"
-  actual:
+    expected:
+      path: "[[ TEST_RESOURCES ]]/data/raw/expected/staged_foo.parquet"
+  DEV:
     type: "s3"
-    s3:
-      bucket: "[[ S3_YOUR_OUTPUT_BUCKET ]]"
+    s3: &foo_s3
+      bucket: "[[ DEV_S3_OUTPUT_BUCKET ]]"
       file_path: "live/data/raw/staged_foo.parquet"
       file_type: "parquet"
+  PROD:
+    type: "s3"
+    s3:
+      <<: *foo_s3
+      bucket: "[[ PROD_S3_OUTPUT_BUCKET ]]"
 
 STAGED_BAR:
-  sample:
+  LOCAL:
     type: "local"
     local:
       file_path: "[[ TEST_RESOURCES ]]/data/raw/staged_bar.parquet"
       file_type: "parquet"
-  actual:
+    expected:
+      path: "[[ TEST_RESOURCES ]]/data/raw/expected/staged_bar.parquet"
+  DEV:
     type: "s3"
-    s3:
-      bucket: "[[ S3_YOUR_OUTPUT_BUCKET ]]"
+    s3: &bar_s3
+      bucket: "[[ DEV_S3_OUTPUT_BUCKET ]]"
       file_path: "live/data/raw/staged_bar.parquet"
       file_type: "parquet"
+  PROD:
+    type: "s3"
+    s3:
+      <<: *bar_s3
+      bucket: "[[ PROD_S3_OUTPUT_BUCKET ]]"
 ```
-- and the `processed.yaml`, which concerns data coming out of the **transform** task:
+
+- `transform_input.yaml`, which concerns the data the **transform** task reads (the staged data):
+
+```yaml
+---
+STAGED_FOO:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/raw/staged_foo.parquet"
+      file_type: "parquet"
+  DEV:
+    type: "s3"
+    s3: &foo_s3
+      bucket: "[[ DEV_S3_OUTPUT_BUCKET ]]"
+      file_path: "live/data/raw/staged_foo.parquet"
+      file_type: "parquet"
+  PROD:
+    type: "s3"
+    s3:
+      <<: *foo_s3
+      bucket: "[[ PROD_S3_OUTPUT_BUCKET ]]"
+
+STAGED_BAR:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/raw/staged_bar.parquet"
+      file_type: "parquet"
+  DEV:
+    type: "s3"
+    s3: &bar_s3
+      bucket: "[[ DEV_S3_OUTPUT_BUCKET ]]"
+      file_path: "live/data/raw/staged_bar.parquet"
+      file_type: "parquet"
+  PROD:
+    type: "s3"
+    s3:
+      <<: *bar_s3
+      bucket: "[[ PROD_S3_OUTPUT_BUCKET ]]"
+```
+
+- and `transform_output.yaml`, which concerns data written by the **transform** task:
+
 ```yaml
 ---
 FINAL_FOO:
-  sample:
+  LOCAL:
     type: "local"
     local:
       file_path: "[[ TEST_RESOURCES ]]/data/processed/final_foo.parquet"
       file_type: "parquet"
-  actual:
+    expected:
+      path: "[[ TEST_RESOURCES ]]/data/processed/expected/final_foo.parquet"
+  DEV:
     type: "s3"
-    s3:
-      bucket: "[[ S3_YOUR_OUTPUT_BUCKET ]]"
+    s3: &foo_s3
+      bucket: "[[ DEV_S3_OUTPUT_BUCKET ]]"
       file_path: "live/data/processed/final_foo.parquet"
       file_type: "parquet"
+  PROD:
+    type: "s3"
+    s3:
+      <<: *foo_s3
+      bucket: "[[ PROD_S3_OUTPUT_BUCKET ]]"
 
 FINAL_BAR:
-  sample:
+  LOCAL:
     type: "local"
     local:
       file_path: "[[ TEST_RESOURCES ]]/data/processed/final_bar.parquet"
@@ -431,27 +537,34 @@ FINAL_BAR:
       coerce_timestamps: "ms"
       allow_truncated_timestamps: false
       row_group_size: 1000000
-  actual:
+    expected:
+      path: "[[ TEST_RESOURCES ]]/data/processed/expected/final_bar.parquet"
+  DEV:
     type: "kafka"
-    kafka:
-      kafka_server: "[[ KAFKA_SERVER ]]"
+    kafka: &bar_kafka
+      kafka_server: "[[ DEV_KAFKA_BROKER ]]"
       kafka_topic: "[[ KAFKA_TOPIC ]]"
-    options:
+    options: &bar_kafka_options
       compression_type: "snappy"
       max_in_flight_requests_per_connection: 10
       batch_size: 262144
       request_timeout_ms: 60000 # 60s
       buffer_memory: 134217728  # 128MB
-
+  PROD:
+    type: "kafka"
+    kafka:
+      <<: *bar_kafka
+      kafka_server: "[[ PROD_KAFKA_BROKER ]]"
+    options: *bar_kafka_options
 ```
 
 We will hence refer to these files as **"resource definitions"**.
 
-The first, `input.yaml` defines the input sources for the **staging** task, handled by the respective module (`runners/staging.py`) while the
-second one, defines its output; similarly for **transform**. These files are parsed by `dynamicio.config.IOConfig` to generated configuration i/o
-instances referred to as "source configs" (see `demo/src/__init__.py`).
+Each runner has an input and an output definition: `staging_input.yaml` defines the sources of the **staging** task, handled by the respective module
+(`runners/staging.py`), `staging_output.yaml` what it writes; similarly for **transform**. These files are parsed by `dynamicio.config.IOConfig` to generate
+configuration i/o instances referred to as "source configs" (see `demo/src/__init__.py`).
 
-Notice that under every source there are two layers: `sample` and `actual`. They point to the variants of the same
+Notice that under every source there are one layer per environment: `LOCAL`, `DEV` and `PROD`. They point to the variants of the same
 dataset, depending on whether it is called from the local environment or from the cloud (we will showcase how this
 distinction takes place later).
 
@@ -461,7 +574,7 @@ class kept next to them in a module of `src/resources/schemas/` (we will cover t
 #### Step 2: Defining your environment variables
 
 Also notice that paths to datasets are embedded with dynamic values identified with double squared brackets, e.g.
-`[[ S3_YOUR_OUTPUT_BUCKET ]]`. These can be defined in a module in your repository.
+`[[ DEV_S3_OUTPUT_BUCKET ]]`. These can be defined in a module in your repository.
 
 Resource definitions (`*.yaml` files) work in conjunction with `global` and `environment` variables:
 
@@ -481,31 +594,34 @@ Let's have a look inside.
 """A module for configuring all environment variables."""
 import os
 
-ENVIRONMENT = "sample"
-CLOUD_ENV = "DEV"
+ENVIRONMENT = "LOCAL"
 RESOURCES = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../resources")
 TEST_RESOURCES = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../tests")
-S3_YOUR_INPUT_BUCKET = None
-S3_YOUR_OUTPUT_BUCKET = None
-KAFKA_SERVER = None
+DEV_S3_INPUT_BUCKET = None
+DEV_S3_OUTPUT_BUCKET = None
+PROD_S3_INPUT_BUCKET = None
+PROD_S3_OUTPUT_BUCKET = None
+DEV_KAFKA_BROKER = None
+PROD_KAFKA_BROKER = None
 KAFKA_TOPIC = None
-DB_HOST = None
+DEV_DB_HOST = None
+PROD_DB_HOST = None
 DB_PORT = None
 DB_NAME = None
 DB_USER = None
 DB_PASS = None
 REFERENCE_DATA_STATE_KEY = None
-LOWER_THAN_LIMIT = 1000         # We will discuss this one later in step 4. 
+LOWER_THAN_LIMIT = 1000
 ```
 
 This module will be passed as an input parameter to instances of the `dynamicio.config.IOConfig` class. Let's cover
 some of its variables:
 
 - ```python
-  "ENVIRONMENT": "sample",
+  ENVIRONMENT = "LOCAL"
   ```
-  used to distinguish between local and cloud runs of your module. It assumes that this environment variable is
-  defined in the cloud environment where your module is executed from.
+  the environment your module runs in, one of the keys under each resource in the resource definitions (`LOCAL`, `DEV` or `PROD`). In the cloud, set it from
+  an environment variable of the place where your module is executed from, e.g. `os.getenv("ENVIRONMENT", "LOCAL")`.
 - ```python
   "TEST_RESOURCES": os.path.join(os.path.dirname(os.path.realpath(__file__)), "../../tests"),
   ```
@@ -514,15 +630,15 @@ some of its variables:
 ```yaml
 ---
 FOO:
-  sample:
+  LOCAL:
     type: "local"
     local:
       file_path: "[[ TEST_RESOURCES ]]/data/input/foo.csv"
       file_type: "csv"
-  actual:
+  DEV:
     type: "s3"
     s3:
-      bucket: "[[ S3_YOUR_INPUT_BUCKET ]]"
+      bucket: "[[ DEV_S3_INPUT_BUCKET ]]"
       file_path: "data/foo.h5"
       file_type: "hdf"
 ```
@@ -546,8 +662,8 @@ src
 which allows it to be automatically loaded on call of any module within the `demo.src` package.
 
 ```python
-"""Set config IOs"""
-__all__ = ["input_config", "raw_config", "processed_config"]
+"""Set config IOs."""
+__all__ = ["staging_input_config", "staging_output_config", "transform_input_config", "transform_output_config"]
 
 import logging
 import os
@@ -560,47 +676,37 @@ logging.basicConfig(level=logging.INFO)
 logging.getLogger("kafka").setLevel(logging.WARNING)
 
 
-input_config = IOConfig(
-    path_to_source_yaml=(os.path.join(RESOURCES, "definitions/input.yaml")),
-    env_identifier=ENVIRONMENT,
-    dynamic_vars=environment,
-)
-raw_config = IOConfig(
-    path_to_source_yaml=(os.path.join(RESOURCES, "definitions/raw.yaml")),
-    env_identifier=ENVIRONMENT,
-    dynamic_vars=environment,
-)
-processed_config = IOConfig(
-    path_to_source_yaml=(os.path.join(RESOURCES, "definitions/processed.yaml")),
-    env_identifier=ENVIRONMENT,
-    dynamic_vars=environment,
-)
-
+# One input and one output definition per runner.
+staging_input_config = IOConfig(os.path.join(RESOURCES, "definitions/staging_input.yaml"), env_identifier=ENVIRONMENT, dynamic_vars=environment)
+staging_output_config = IOConfig(os.path.join(RESOURCES, "definitions/staging_output.yaml"), env_identifier=ENVIRONMENT, dynamic_vars=environment)
+transform_input_config = IOConfig(os.path.join(RESOURCES, "definitions/transform_input.yaml"), env_identifier=ENVIRONMENT, dynamic_vars=environment)
+transform_output_config = IOConfig(os.path.join(RESOURCES, "definitions/transform_output.yaml"), env_identifier=ENVIRONMENT, dynamic_vars=environment)
 ```
 
 On loading, `IOConfig` will load the respective configs for all resources in the form of a multi-layered dictionary, e.g.,
-for `actual`:
+for `FOO`:
 
 ```python
 import demo.src.config.environment
 
 {
     "FOO": {
-        "sample": {
+        "LOCAL": {
             "type": "local",
             "local": {
                 "file_path": f"{demo.src.config.environment.TEST_RESOURCES}/data/input/foo.csv",
                 "file_type": "csv",
             },
         },
-        "actual": {
+        "DEV": {
             "type": "s3",
             "s3": {
-                "bucket": f"{demo.src.config.environment.S3_YOUR_INPUT_BUCKET}",
+                "bucket": f"{demo.src.config.environment.DEV_S3_INPUT_BUCKET}",
                 "file_path": "data/foo.h5",
                 "file_type": "hdf"
             }
         },
+        # "PROD": ...
     }
 }
 ```
@@ -609,15 +715,15 @@ Then, depending on the value of the `env_identifier` parameter, the respective s
 with:
 
 ```python
-foo_io = input_config.get(source_key="FOO")
+foo_io = staging_input_config.get(source_key="FOO")
 ```
 
-and with `env_identifier="actual"`, the output would be:
+and with `env_identifier="DEV"`, the output would be:
 
 ```python
 "type": "s3",
 "s3": {
-    "bucket": f"{demo.src.config.environment.S3_YOUR_INPUT_BUCKET}",
+    "bucket": f"{demo.src.config.environment.DEV_S3_INPUT_BUCKET}",
     "file_path": "data/foo.h5",
     "file_type": "hdf"
 }
@@ -719,7 +825,7 @@ class InputIO(UnifiedIO):
     schema = SCHEMA_FROM_ARGUMENT
 
 
-foo_df = InputIO(source_config=input_config.get(source_key="FOO"), schema=Foo, apply_schema_validations=True, log_schema_metrics=True).read()
+foo_df = InputIO(source_config=staging_input_config.get(source_key="FOO"), schema=Foo, apply_schema_validations=True, log_schema_metrics=True).read()
 ```
 
 The `schema=` argument takes precedence over the class attribute; omitting it with `SCHEMA_FROM_ARGUMENT` raises `SchemaNotFoundError`.
@@ -752,9 +858,9 @@ For example:
 ```yaml
 ---
 FOO:
-  sample:
+  LOCAL:
   ...
-  actual:
+  DEV:
   ...
   schema:
     file_path: "[[ RESOURCES ]]/schemas/input/foo.yaml"
@@ -978,10 +1084,10 @@ instead of `NaN` for missing values). Dict-style schemas are not converted autom
 To then load from `S3` you simply do:
 
 ```python
-    foo_df = InputIO(source_config=input_config.get(source_key="FOO"), schema=Foo, apply_schema_validations=True, log_schema_metrics=True).read()
+    foo_df = InputIO(source_config=staging_input_config.get(source_key="FOO"), schema=Foo, apply_schema_validations=True, log_schema_metrics=True).read()
 ```
 
-which will load the `FOO` dataset from the `actual` definition (here an `S3` object) as a dataframe. With the environment set to `sample` the same call reads the local sample file instead.
+which will load the `FOO` dataset from the `DEV` definition (here an `S3` object) as a dataframe. With the environment set to `LOCAL` the same call reads the local sample file instead.
 
 ##### Step 4.3b: Loading from `Postgres`
 
@@ -993,7 +1099,7 @@ This data model defines the table, the columns and their respective SQL types.
 To, then, load from `postgres` you simply do:
 
 ```python
-    bar_df = InputIO(source_config=input_config.get(source_key="BAR"), schema=Bar, apply_schema_validations=True, log_schema_metrics=True).read()
+    bar_df = InputIO(source_config=staging_input_config.get(source_key="BAR"), schema=Bar, apply_schema_validations=True, log_schema_metrics=True).read()
 ```
 
 which will load the table defined for `BAR` as a dataframe.
@@ -1004,49 +1110,21 @@ which will load the table defined for `BAR` as a dataframe.
 passed when instantiating the IO class (which takes precedence):
 
 ```python
-    events_df = InputIO(source_config=input_config.get(source_key="EVENTS_ATHENA"), query="SELECT id, ts FROM events LIMIT 10").read()
+    events_df = InputIO(source_config=staging_input_config.get(source_key="EVENTS_ATHENA"), query="SELECT id, ts FROM events LIMIT 10").read()
 ```
 
-where `InputIO` mixes in `WithAthena`. See [Athena I/O](#athena-i-o) for the available options.
+where `InputIO` mixes in `WithAthena`. See [Athena I/O](#athena-io) for the available options.
 
 #### Step 5: Writing out
 
 Sinking data is done in a very similar way. You need to:
 
-1. Define your output resource definitions, in our case in `raw.yaml`
-
-```yaml
----
-STAGED_FOO:
-  sample:
-    type: "local"
-    local:
-      file_path: "[[ TEST_RESOURCES ]]/data/raw/staged_foo.parquet"
-      file_type: "parquet"
-  actual:
-    type: "s3"
-    s3:
-      bucket: "[[ S3_YOUR_OUTPUT_BUCKET ]]"
-      file_path: "live/data/raw/staged_foo.parquet"
-      file_type: "parquet"
-
-STAGED_BAR:
-  sample:
-    type: "local"
-    local:
-      file_path: "[[ TEST_RESOURCES ]]/data/raw/staged_bar.parquet"
-      file_type: "parquet"
-  actual:
-    type: "s3"
-    s3:
-      bucket: "[[ S3_YOUR_OUTPUT_BUCKET ]]"
-      file_path: "live/data/raw/staged_bar.parquet"
-      file_type: "parquet"
-```
+1. Define your output resource definitions, in our case in `staging_output.yaml` (shown in Step 1), with the `LOCAL`, `DEV` and `PROD` environments
+   and, in `LOCAL`, the `expected` path a test compares the output with.
 
 2. You need to define the respective dynamic values found in your resource definitions
    in your `src/config/environment.py`
-3. You need to create an instance of the `IOConfig` class for the `raw.yaml` in the
+3. You need to create an instance of the `IOConfig` class for the `staging_output.yaml` in the
    `__init__.py` file (we already did this).
 4. Define the additional `DynamicDataIO` subclasses in the `src/resources/io.py` module,
    dictating through the schema the list of columns, and their types (also used for schema validation).
@@ -1056,8 +1134,8 @@ STAGED_BAR:
 `demo/src/runners/staging.py`:
 ```python
     ...
-    StagedFoo(source_config=raw_config.get(source_key="STAGED_FOO"), **constants.TO_PARQUET_KWARGS).write(foo_df)
-    StagedBar(source_config=raw_config.get(source_key="STAGED_BAR")).write(bar_df)
+    StagedFoo(source_config=staging_output_config.get(source_key="STAGED_FOO"), **constants.TO_PARQUET_KWARGS).write(foo_df)
+    StagedBar(source_config=staging_output_config.get(source_key="STAGED_BAR")).write(bar_df)
 ```
 
 Notice that you can pass all `pandas` options to write out, when for instance you are writing out `parquet`.
@@ -1073,14 +1151,14 @@ TO_PARQUET_KWARGS = {
 ```
 
 Of course this is not a problem as parquet is the format used by both resources in either environment. This is not always the case however. See in 
-`demo/src/resources/definitions/processed.yaml`:
+`demo/src/resources/definitions/transform_output.yaml` (here with its `LOCAL`, `DEV` and `PROD` environments):
 
 ```yaml
 ---
 ...
 
 FINAL_BAR:
-  sample:
+  LOCAL:
     type: "local"
     local:
       file_path: "[[ TEST_RESOURCES ]]/data/processed/final_bar.parquet"
@@ -1090,17 +1168,25 @@ FINAL_BAR:
       coerce_timestamps: "ms"
       allow_truncated_timestamps: false
       row_group_size: 1000000
-  actual:
+    expected:
+      path: "[[ TEST_RESOURCES ]]/data/processed/expected/final_bar.parquet"
+  DEV:
     type: "kafka"
-    kafka:
-      kafka_server: "[[ KAFKA_SERVER ]]"
+    kafka: &bar_kafka
+      kafka_server: "[[ DEV_KAFKA_BROKER ]]"
       kafka_topic: "[[ KAFKA_TOPIC ]]"
-    options:                                      <---- Options for writing to a Kafka Topic
+    options: &bar_kafka_options                   <---- Options for writing to a Kafka Topic
       compression_type: "snappy"
       max_in_flight_requests_per_connection: 10
       batch_size: 262144
       request_timeout_ms: 60000 # 60s
       buffer_memory: 134217728  # 128MB
+  PROD:
+    type: "kafka"
+    kafka:
+      <<: *bar_kafka
+      kafka_server: "[[ PROD_KAFKA_BROKER ]]"
+    options: *bar_kafka_options
 ```
 
 Here, we have a case where different options need to be used for each environment as it deals with a different source. This is gracefully managed through resource 
@@ -1124,7 +1210,7 @@ and looks like:
 """Add module docstring...."""
 import logging
 
-from demo.src import input_config, raw_config
+from demo.src import staging_input_config, staging_output_config
 from demo.src.config import constants
 from demo.src.resources.io import InputIO, StagedBar, StagedFoo
 
@@ -1140,8 +1226,8 @@ def main() -> None:
     # LOAD DATA
     logger.info("Loading data from live sources...")
 
-    bar_df = InputIO(source_config=input_config.get(source_key="BAR"), schema=Bar, apply_schema_validations=True, log_schema_metrics=True).read()
-    foo_df = InputIO(source_config=input_config.get(source_key="FOO"), schema=Foo, apply_schema_validations=True, log_schema_metrics=True).read()
+    bar_df = InputIO(source_config=staging_input_config.get(source_key="BAR"), schema=Bar, apply_schema_validations=True, log_schema_metrics=True).read()
+    foo_df = InputIO(source_config=staging_input_config.get(source_key="FOO"), schema=Foo, apply_schema_validations=True, log_schema_metrics=True).read()
 
     logger.info("Data successfully loaded from live sources...")
 
@@ -1154,8 +1240,8 @@ def main() -> None:
 
     # SINK DATA
     logger.info("Begin sinking data to staging area:")
-    StagedFoo(source_config=raw_config.get(source_key="STAGED_FOO"), **constants.TO_PARQUET_KWARGS).write(foo_df)
-    StagedBar(source_config=raw_config.get(source_key="STAGED_BAR")).write(bar_df)
+    StagedFoo(source_config=staging_output_config.get(source_key="STAGED_FOO"), **constants.TO_PARQUET_KWARGS).write(foo_df)
+    StagedBar(source_config=staging_output_config.get(source_key="STAGED_BAR")).write(bar_df)
     logger.info("Data staging is complete...")
 
 ```
@@ -1168,8 +1254,7 @@ An example can be found in the second of the two demo tasks, namely, the `transf
 import asyncio
 import logging
 
-import demo.src.config.environment
-from demo.src import processed_config, raw_config
+from demo.src import transform_input_config, transform_output_config
 from demo.src.resources.io import InputIO, StagedBar, StagedFoo
 
 logger = logging.getLogger(__name__)
@@ -1185,8 +1270,8 @@ async def main() -> None:
     logger.info("Loading data from live sources...")
 
     [bar_df, foo_df] = await asyncio.gather(
-        StagedBar(source_config=raw_config.get(source_key="STAGED_BAR")).async_read(),
-        StagedFoo(source_config=raw_config.get(source_key="STAGED_FOO")).async_read()
+        StagedBar(source_config=transform_input_config.get(source_key="STAGED_BAR")).async_read(),
+        StagedFoo(source_config=transform_input_config.get(source_key="STAGED_FOO")).async_read()
     )
 
     logger.info("Data successfully loaded from live sources...")
@@ -1199,10 +1284,10 @@ async def main() -> None:
     logger.info("Transformations applied successfully...")
 
     # SINK DATA
-    logger.info(f"Begin sinking data to staging area: S3:{demo.src.config.environment.S3_YOUR_OUTPUT_BUCKET}:live/data/raw")
+    logger.info("Begin sinking data to the processed area:")
     await asyncio.gather(
-        InputIO(source_config=processed_config.get(source_key="FINAL_FOO"), schema=FinalFoo, apply_schema_validations=True, log_schema_metrics=True).async_write(foo_df),
-        InputIO(source_config=processed_config.get(source_key="FINAL_BAR"), schema=FinalBar, apply_schema_validations=True, log_schema_metrics=True).async_write(bar_df),
+        InputIO(source_config=transform_output_config.get(source_key="FINAL_FOO"), schema=FinalFoo, apply_schema_validations=True, log_schema_metrics=True).async_write(foo_df),
+        InputIO(source_config=transform_output_config.get(source_key="FINAL_BAR"), schema=FinalBar, apply_schema_validations=True, log_schema_metrics=True).async_write(bar_df),
     )
     logger.info("Data staging is complete...")
 
@@ -1214,99 +1299,249 @@ In short, you simply need to utilise the `async_read()` or the `async_write()` m
 After following the above documentation, at this point it should be clear that `dynamic(i/o)` is optimised for enabling
 seamless local testing for your pipelines.
 
-Simply by configuring your `ENVIRONMENT`'s default value to `sample` and provided that you have the required tests data
-sources in the necessary directories, it becomes very simple to test your pipelines end-to-end in seconds, eliminating
-the need to deploy your dags and wait for their tasks to be provided access to processing resources.
+Simply by selecting the `LOCAL` environment (`ENVIRONMENT = "LOCAL"`) and provided that you have the required test data in the
+necessary directories, it becomes very simple to test your pipelines end-to-end in seconds, eliminating the need to deploy your dags and
+wait for their tasks to be provided access to processing resources.
 
-All you need to do is mimic the order of execution of your tasks, running them in procedural order.
+All you need to do is mimic the order of execution of your tasks, running them in procedural order, then compare what they wrote with what you expect.
 
-In the case of our example, you would have to:
+### Declaring the expected output
 
-1. Add the necessary data under `tests/data`:
+An output that a test should verify declares, in its `LOCAL` environment, an optional `expected` key next to the data it writes:
 
-```shell
-└── tests
-    ├── __init__.py
-    ├── conftest.py
-    ├── config
-    │   ├── __init__.py
-    │   └── constants.py
-    ├── data
-    │   ├── input
-    │   │   ├── bar.parquet
-    │   │   └── foo.csv
-    │   ├── processed
-    │   │   └── expected
-    │   │       ├── final_bar.parquet
-    │   │       └── final_foo.parquet
-    │   └── raw
-    │       └── expected
-    │           ├── staged_bar.parquet
-    │           └── staged_foo.parquet
-    ├── resources
-    │   ├── __init__.py
-    │   └── test_prefix_schema_evolution.py
-    ├── runners
-    │   ├── __init__.py
-    │   ├── conftest.py
-    │   ├── test_staging.py
-    │   ├── test_transform.py
-    │   └── utils
-    │       ├── __init__.py
-    │       └── test_runner_selection.py
-    └── test_pipeline.py
+```yaml
+FINAL_BAR:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/processed/final_bar.parquet"
+      file_type: "parquet"
+    expected:
+      path: "[[ TEST_RESOURCES ]]/data/processed/expected/final_bar.parquet"   # file_type defaults to the one above
+  DEV:
+    type: "kafka"
+    kafka:
+      kafka_server: "[[ DEV_KAFKA_BROKER ]]"
+      kafka_topic: "[[ KAFKA_TOPIC ]]"
+  PROD:
+    type: "kafka"
+    kafka:
+      kafka_server: "[[ PROD_KAFKA_BROKER ]]"
+      kafka_topic: "[[ KAFKA_TOPIC ]]"
 ```
 
-2. Implement an end-to-end, black-box style test that simply generates the expected data output given a
-   specific input (deleting the output after the assertion)
+`expected` is optional and per environment: reading and writing ignore it, so DEV and PROD stay as they are, and the test harness reads it from
+whichever environment the test runs in (`expected.file_type` is optional and defaults to the `local` file type).
+JSON files are read with the `orient` and `lines` the resource's `options` declare (so JSON Lines outputs work); `expected.options` (e.g. `options: {orient: index}`) sets reader options for both files when they differ. Update mode refuses to copy an output over a reference declared in another file type.
 
-An example end-to-end test in this case, for a single airflow task would look like:
+### Asserting lazily with `dynamicio.testharness`
+
+The `dynamicio.testharness` package replaces the hand-written read-compare-delete code around a pipeline test. Its `ExpectedOutputs` session collects *every*
+mismatch instead of stopping at the first, raises a single `OutputMismatchError` (an `AssertionError`) listing them all, removes the generated file of every
+output that matched, and keeps the ones that did not so you can inspect them:
 
 ```python
-"""An example pipeline to showcase how dynamicio can bt used for setting up a local e2e testing!"""
-# pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring, unused-argument, too-few-public-methods
-# noqa
-import os
+import asyncio
 
-import pandas as pd
 import pytest
 
-from demo.src import processed_config, raw_config
+from demo.src import staging_output_config, transform_output_config
 from demo.src.runners import staging, transform
+from dynamicio.testharness import ExpectedOutputs
 
 
 class TestPipeline:
-    """Example e2e test."""
-
     @pytest.mark.end_to_end
-    def test_dag_with_mock_sample_input_data(
-        self,
-        expected_staged_foo_df,
-        expected_staged_bar_df,
-        expected_final_foo_df,
-        expected_final_bar_df,
-    ):
-        """Showcases how you can leverage dynamicio to read local data for fast feedback when you want to run your pipelines locally."""
-        # Given
-        # The src/resources/definitions/input.yaml
+    def test_dag_with_mock_sample_input_data(self):
+        with ExpectedOutputs() as outputs:
+            staging.main()
+            asyncio.run(transform.main())
 
-        # When
-        staging.main()
-        transform.main()
+            outputs.check_all(staging_output_config)  # STAGED_FOO and STAGED_BAR: every output that declares `expected`
+            outputs.check_all(transform_output_config)  # FINAL_FOO and FINAL_BAR
+```
 
-        # Then
-        try:
-            assert expected_staged_foo_df.equals(pd.read_parquet(raw_config.get(source_key="STAGED_FOO")["local"]["file_path"]))
-            assert expected_staged_bar_df.equals(pd.read_parquet(raw_config.get(source_key="STAGED_BAR")["local"]["file_path"]))
-            assert expected_final_foo_df.equals(pd.read_parquet(processed_config.get(source_key="FINAL_FOO")["local"]["file_path"]))
-            assert expected_final_bar_df.equals(pd.read_parquet(processed_config.get(source_key="FINAL_BAR")["local"]["file_path"]))
-        finally:
-            os.remove(raw_config.get(source_key="STAGED_FOO")["local"]["file_path"])
-            os.remove(raw_config.get(source_key="STAGED_BAR")["local"]["file_path"])
-            os.remove(processed_config.get(source_key="FINAL_FOO")["local"]["file_path"])
-            os.remove(processed_config.get(source_key="FINAL_BAR")["local"]["file_path"])
+`check` reads the generated and the expected file with plain pandas (no schema or cast can hide a difference) and compares them under a set of
+`Expectations`. An exception raised by the task itself is never masked by the report, and a missing generated or expected file is recorded as a failure
+like any other, so one broken output never hides the others.
+
+#### Making expectations stricter or more relaxed
+
+`Expectations` is an immutable set of rules. The defaults suit a pipeline test: same data, rows and columns in any order, dtypes included, floats within
+`rtol=1e-5`. Pass your own to a session (applies to every check), to one `check` (`expectations=...`), or change single rules for one `check` (`**rules`):
+
+| Rule | Default | Effect |
+|---|---|---|
+| `check_row_order` | `False` | Require rows in the same order. When ignored, rows are aligned by index label, or sorted by `sort_by` |
+| `check_column_order` | `False` | Require columns in the same order |
+| `check_dtype` | `True` | Require identical dtypes (`int64` is not `float64`) |
+| `check_exact`, `rtol`, `atol` | `False`, `1e-5`, `1e-8` | Exact floats, or the tolerance to compare them with |
+| `sort_by=["id"]` | `()` | Sort both frames by these columns first: for outputs whose index means nothing |
+| `only_columns=[...]` | all | Compare just these columns |
+| `ignore_columns=["run_id"]` | `()` | Leave volatile columns (timestamps, run ids) out |
+| `list_columns_to_sort=["tags"]` | `()` | List-valued columns whose element order does not matter |
+| `assertions=[fn, ...]` | `()` | Your own checks `fn(actual, expected)`, run after the frames matched; raise `AssertionError` to fail |
+| `check_parquet_schema` | `False` | For parquet, also require the same arrow schema and stored pandas index as the expected file, which loaded frames can hide |
+
+```python
+from dynamicio.testharness import ExpectedOutputs, Expectations
+
+def prices_are_positive(actual, expected):
+    assert (actual["price"] > 0).all(), "non-positive price"
+
+session = Expectations(ignore_columns=["run_id"]).also_assert(prices_are_positive)
+
+with ExpectedOutputs(session) as outputs:
+    staging.main()
+    outputs.check(staging_output_config, "STAGED_FOO")                                   # session rules
+    outputs.check(transform_output_config, "FINAL_BAR", sort_by=["id"], rtol=1e-3)   # relaxed for this output only
+    outputs.check(transform_output_config, "FINAL_FOO", expectations=Expectations.strict())   # strict for this output
+```
+
+`Expectations.strict()` requires row and column order and exact floats; `Expectations.lenient()` ignores dtypes and loosens the tolerance to `1e-3`;
+`expectations.with_(...)` derives a variant. Dict, list and set cells (which pandas cannot hash) are compared by their canonical JSON.
+
+#### What a run verified
+
+`check_all` decides at runtime which outputs it verifies (those whose resource definition declares `expected`), so the test file alone does not list
+them. The harness therefore says it, for passing runs as well as failing ones. At the end of the session it prints:
 
 ```
+2 matched, 0 failed  [demo/tests/runners/test_staging.py::TestStaging::test_staging_writes_the_staged_foo_and_bar_datasets]
+  ✓ STAGED_FOO  10 rows x 4 columns, as staged_foo.parquet
+  ✓ STAGED_BAR  10 rows x 4 columns, as staged_bar.parquet
+```
+
+and pytest repeats every session in its terminal summary (green `✓` matched, red `✗` failed, yellow `↻` updated and `-` skipped), because pytest hides the
+output of passing tests otherwise. Use `-s` to see the live print, `-p no:dynamicio` to turn the summary off, and `outputs.report` (a `SessionReport`)
+to build your own. A failure's `OutputMismatchError` also lists the outputs that matched. Nothing is printed when a session checked nothing.
+
+Why `check_all` stays the recommended default, with that report: a list of `check` calls drifts (an output added to the definition is silently
+unverified, the failure mode that matters most in a regression test), while the definition is already the single source of truth of which outputs have a
+reference. The report restores the visibility a hand-written list gave. If you prefer the list, keep writing `check` calls; both work together.
+
+#### Other session features
+
+| Feature | Effect |
+|---|---|
+| `outputs.check(..., params={"day": "2024-01-01"})` | Fills `{day}` in the generated and expected paths, for outputs whose file name carries a runtime parameter |
+| `outputs.check_all(config, skip=[...], rules_for={"KEY": {...}})` | `check` for every resource of the config that declares `expected`, so a new output is covered without touching the test; those with unfilled `{placeholders}` are listed in `outputs.skipped` |
+| `outputs.check_each(config, "KEY", {"table": [...], "shard": range(4)})` | `check` for every combination of the placeholder values, each reported by its own params |
+| `ExpectedOutputs.clear_each(config, "KEY", grid)` | `clear` for every combination of the placeholder values |
+| `ExpectedOutputs.clear_all(config)` | `clear` every output of the config that declares `expected`, so a stale file of an earlier run can not pass for a fresh one |
+| `ExpectedOutputs(environment="NAME")`, `outputs.check(..., environment="NAME")` | Run and check in that environment (see [Choosing the environment](#choosing-the-environment)); an unknown name is reported as a failure listing the defined ones |
+| `outputs.check(..., label="...")` | The name used in the report (default: the resource name, with `params`) |
+| `ExpectedOutputs(keep_files=True)` | Keep the generated files even when they match |
+| `ExpectedOutputs.clear(config, "KEY", ...)` | Remove leftovers of an earlier, interrupted run at the start of a test |
+| `ExpectedOutputs.read_generated(...)` / `read_expected(...)` | Get the frames yourself |
+| `outputs.compare(actual_df, expected_df, "name")` | Record a comparison of frames you built, without any files |
+| `outputs.errors`, `outputs.passed`, `outputs.updated`, `outputs.skipped`, `outputs.report` | Inspect the outcome without raising; `report` is the structured account described in [What a run verified](#what-a-run-verified) |
+
+Tests that write the same local outputs (the same task run in different ways) overwrite each other's files, and with `pytest-xdist` they race. Wrap such a
+test in `OutputSandbox(tmp_path, output_config)`: the outputs of that config go below `tmp_path` and the checks follow them (the `expected` files stay put).
+Pass the task's *output* configs only, an input config would be redirected too. Open it inside the `ExpectedOutputs(environment=...)` block (or an `EnvironmentSwitch`) when the test runs in another environment, so it redirects that environment's resources.
+
+### Choosing the environment
+
+A test should say which environment it runs in, rather than rely on whatever `ENVIRONMENT` the process happens to have. Resource definitions list their
+environments in order, and **the first one listed is the default** (list the local one first, as in the examples above). `ExpectedOutputs` picks the
+environment like this:
+
+- `ExpectedOutputs()` uses, for every `IOConfig`, the first environment its resource definitions list, whatever the process runs in.
+- `ExpectedOutputs(environment="LOCAL_E2E")` makes every `IOConfig` that defines `LOCAL_E2E` select it for the `with` block, so the task under test runs in it
+  too, and the checks compare its outputs. The configs get their own `env_identifier` back on exit, also when the test fails, so no `monkeypatch` is needed.
+  A name that no config defines raises a `ValueError` on entering, so a typo cannot silently run against the wrong files.
+- `ExpectedOutputs(..., configs=[input_config, output_config])` switches only those configs.
+
+`IOConfig` objects are normally created once per process (module-level names the tasks import), and the switch changes their `env_identifier`, which is
+read on every `get`. `IOConfig.instances()` lists the live ones.
+
+To make the switch visible in the test, or to switch configs without checking outputs, use `EnvironmentSwitch(environment, *configs)`. It validates that every
+config defines the environment, and restores them on exit:
+
+```python
+with EnvironmentSwitch("LOCAL_E2E", input_config, output_config), ExpectedOutputs(environment="LOCAL_E2E") as outputs:
+    Task().run()
+    outputs.check(output_config, "FINAL_BAR")
+```
+
+The building blocks are public too: `FrameComparison(expectations).compare(a, b)` compares two frames (raising `AssertionError`) and `OutputFiles(config, key, params)`
+finds, reads, removes and promotes the files of one resource.
+
+When a change of output is intended, regenerate the reference files instead of editing them by hand:
+
+```shell
+DYNAMICIO_UPDATE_EXPECTED=1 uv run pytest demo/tests/test_pipeline.py   # writes the generated outputs over the expected files; review the diff
+```
+
+The end-to-end test above is `demo/tests/test_pipeline.py`; the sample data it runs on lives under `demo/tests/data`.
+
+### Recommended testing practices
+
+These are the patterns the harness is built for. They keep tests short, deterministic and the same everywhere, so a test reads like the one next to it.
+
+**Test layers**
+
+| Layer | What it proves | How |
+|---|---|---|
+| Unit | One transformation does the right thing | Plain pandas frames in, frames out; no I/O. Use `outputs.compare(actual_df, expected_df, "name")` for the comparison report |
+| Task integration | A task reads its resources and writes the expected outputs | One test per task, `LOCAL` data, `ExpectedOutputs` as above |
+| End to end | The tasks hand data to each other | Run the tasks in DAG order in a `LOCAL_E2E` environment, so each reads the previous task's output, then check all outputs |
+
+The unit tests mock backends; none of this proves that a CLOUD reader or writer works. For that, add a test that runs against a `CLOUD` resource definition
+with an in-memory object store (see `_json_object_store` in `tests/test_mixins/test_s3_mixins.py`), and check a change of I/O against a development account
+before releasing it.
+
+**Make every test look the same**
+
+```python
+ENVIRONMENT = "LOCAL"
+
+
+class TestStageTask:
+    @pytest.mark.integration
+    def test_stage_task_with_mock_sample_input_data(self):
+        # Given: the configs of the task and the sample data, both in the ENVIRONMENT
+        with EnvironmentSwitch(ENVIRONMENT, stage_input_config, stage_output_config), ExpectedOutputs(environment=ENVIRONMENT) as outputs:
+            # When
+            Stage({}).run()
+
+            # Then
+            outputs.check(stage_output_config, "STAGED_FOO")
+```
+
+- Name the environment in the test, in one constant, and use the same `with` block in every test. Do not hide it in a fixture or patch `env_identifier`.
+- Put the run inside the block: checks are lazy, so the report lists everything that differs, and an exception from the task itself is never masked.
+- Test the task through the same entry point the scheduler uses (`Stage({}).run()`, `python -m ...`), not through its internals.
+
+**Expected outputs**
+
+- Declare `expected:` in the resource definition, next to the `local` path, and keep the reference files in version control next to the sample data. A reviewer
+  then sees an intended change of output in the diff.
+- Regenerate them with `DYNAMICIO_UPDATE_EXPECTED=1` and review the diff; never edit them by hand.
+- Keep the defaults strict (dtypes, tolerance `1e-5`) and relax one output with `check(..., sort_by=[...], ignore_columns=[...])` when it is genuinely volatile
+  (run ids, timestamps, unordered lists), so the reason sits next to the check.
+- Use `Expectations(check_parquet_schema=True)` for parquet outputs that other systems read: a loaded frame can hide a changed arrow schema or index.
+- Prefer `outputs.check_all(output_config)` to a list of `check` calls: it covers every output that declares `expected`, so an output added later is verified
+  without touching the test. Name an exception with `skip=[...]`, and relax one output with `rules_for={"KEY": {"sort_by": [...]}}`.
+- A resource whose path has several `{placeholders}` (tables, shards) is one `check_each(config, "KEY", grid)`, and `ExpectedOutputs.clear_each` removes leftovers first.
+
+**Determinism**
+
+- Fix everything that varies between runs before the task runs: the clock (`time.time`), the number of worker processes if it changes the order of results,
+  random seeds, and the `as_of` timestamp the scheduler would pass. Do it with a fixture the test requests by name, not an autouse one.
+- Sample data is small, generic and committed. Never test against production data or credentials.
+
+**Parallel runs**
+
+- Tests that write the same local outputs race under `pytest-xdist`. Give each its own directory with `OutputSandbox(tmp_path, output_config)`, or give each
+  test its own environment variant. Run the end-to-end test on its own, as it writes the shared files of every stage.
+- In CI, run the integration tests in parallel (`pytest -n auto --dist loadfile`) and the end-to-end test separately.
+
+**Where a test belongs**
+
+A test that exercises your own logic (for example that results do not depend on how work is split into shards) is not a dynamicio test, even if it uses the
+harness to check files: keep it with the code it tests. Tests of the task wiring (resources in, outputs out) are the ones that belong with the task tests.
 
 ##  Last notes
 
