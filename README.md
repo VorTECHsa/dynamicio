@@ -2,11 +2,13 @@
 [![codecov](https://codecov.io/gh/VorTECHsa/dynamicio/graph/badge.svg?token=McZFwD2QPh)](https://codecov.io/gh/VorTECHsa/dynamicio)
 [<img src="https://img.shields.io/badge/slack-@vortexa/dynamicio_public-purple.svg?logo=slack">](https://join.slack.com/share/enQtMzg2Nzk3ODY3MzEzNi0yNTU1ZmIyN2JkMGFhZjhhZWVjNzA2OWUzNWIyMjMyYmYzZmE4MzBjYWQ3YjdhNjU1MGU2NjFkNzMyZDllMzE2?raw=True)
 
-<img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/logo-transparent.png?raw=True" width="500"> <img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/wrapped-panda.png?raw=True" width="100">
+<img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/logo-transparent.png?raw=True" alt="dynamicio — Wrap your I/O" width="500"> <img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/wrapped-panda.png?raw=True" alt="The dynamicio panda mascot" width="100">
 
-A repository for hosting the `dynamicio` library, used as a wrapper for `pandas` i/o operations.
+Configuration-driven I/O for `pandas` dataframes, with YAML resource definitions and Pandera schema models.
 
--- Logo illustrated by [Nick Loucas](https://www.linkedin.com/in/nickloucas/)
+Dataframe execution currently supports pandas only; Polars is not yet supported.
+
+-- Original logo illustrated by [Nick Loucas](https://www.linkedin.com/in/nickloucas/); the refreshed logo retains its circular I/O motif.
 
 ## Table of Contents
 - [Why wrap your i/o?](https://github.com/VorTECHsa/dynamicio/tree/master#why-wrap-your-io)
@@ -127,8 +129,6 @@ decoupling business logic from the I/O layer.
 
 ## Supported sources and data formats
 
-<img src="https://github.com/VorTECHsa/dynamicio/blob/master/docs/images/supported_sources.png?raw=True" alt="Amazon S3, PostgreSQL, Kafka and Amazon Athena logos" width="750">
-
 <img src="https://raw.githubusercontent.com/VorTECHsa/dynamicio/master/docs/images/supported-sources.svg" alt="Sources dynamicio reads from and sinks it writes to: S3 and local files, PostgreSQL, Athena (read only), Kafka (write only)" width="900">
 
 - **S3** (or local) Input & Output, for single files (`type: s3`) and for prefixes holding many files (`type: s3_path_prefix`):
@@ -153,8 +153,8 @@ S3 is accessed directly through `boto3`, with one client shared per process (saf
 * **No `awscli` or `s3fs`**: they are no longer dependencies, so installing `dynamicio` no longer puts an `aws` command
   in your environment. Credentials come from the usual `boto3` chain (environment, profile, IAM role).
 
-Compared with the previous implementation, single-file reads are about 2.4x faster and writes about 1.3x faster, and
-prefix reads/writes are on par or better, using less CPU per call
+Historical v8.1.0 benchmarks measured single-file reads about 2.4x faster and writes about 1.3x faster than the
+pre-v8.1.0 implementation. Prefix transfers were broadly on par at equal worker counts; results depend on the workload
 ([benchmarks](https://github.com/VorTECHsa/dynamicio/blob/master/docs/perf-s3-io.md),
 [design decision](https://github.com/VorTECHsa/dynamicio/blob/master/docs/adr/0001-direct-boto3-s3-io.md)).
 
@@ -1113,7 +1113,7 @@ passed when instantiating the IO class (which takes precedence):
     events_df = InputIO(source_config=staging_input_config.get(source_key="EVENTS_ATHENA"), query="SELECT id, ts FROM events LIMIT 10").read()
 ```
 
-where `InputIO` mixes in `WithAthena`. See [Athena I/O](#athena-i-o) for the available options.
+where `InputIO` mixes in `WithAthena`. See [Athena I/O](#athena-io) for the available options.
 
 #### Step 5: Writing out
 
