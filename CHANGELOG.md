@@ -1,6 +1,6 @@
 # Changelog
 
-## v10.0.2
+## v10.1.1
 
 - fix: an S3 read of a csv or json `file_path` raises `dynamicio.errors.ObjectNotFoundError("No object found at s3://...")` when the key does not exist. Before, it raised the awswrangler `NoFilesFound`, which is not a `FileNotFoundError`. `ObjectNotFoundError` is a `FileNotFoundError` and a `NoFilesFound`, so a caller can treat the key as a missing source, and code that catches `NoFilesFound` works as before. The errors of the parquet and hdf reads for a missing key do not change
 
