@@ -10,7 +10,7 @@ class FakeReporter:
         self.written = []
 
     def write_sep(self, sep, title):
-        self.written.append(("sep", title, {}))
+        self.written.append((sep, title, {}))
 
     def write_line(self, line, **markup):
         self.written.append(("line", line, markup))
