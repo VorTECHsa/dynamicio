@@ -10,3 +10,4 @@ Number sequentially, never rewrite an accepted ADR (supersede it with a new one)
 | [0003](0003-athena-via-aws-wrangler.md) | Read Athena through AWS Wrangler; drop PyAthena and `s3_staging_dir` | Accepted |
 | [0004](0004-ranged-parquet-reads-with-filters.md) | Read filtered single-file parquet over S3 byte ranges | Accepted |
 | [0005](0005-pandera-schema-declaration.md) | Declare schemas as Pandera models; dynamicio keeps validation and metrics | Accepted |
+| [0006](0006-expected-outputs-test-harness.md) | Test harness: expected outputs declared in resource definitions, `check_all` and the session report | Accepted |
