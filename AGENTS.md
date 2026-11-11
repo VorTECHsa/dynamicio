@@ -52,7 +52,9 @@ Downstream pipelines upgrade by a **version bump only**, so I/O behaviour must s
 - A new option must be on the `utils.allow_options` list of each reader or writer that uses it. An option that is
   not on the list is dropped with only a warning, so a missing entry fails silently. Add a test that the option
   reaches the reader or writer through the public `IO(...)` call.
-- Add a `CHANGELOG.md` entry for every user-visible change, and update README/docs when options change.
+- Add a `CHANGELOG.md` entry for every user-visible change, and update README/docs when options change. File it under the heading of the
+  stable version the branch will release (`## vX.Y.Z`, the next one you can anticipate: patch for fixes, minor for features, major for breaking
+  changes), never under `## Unreleased`. If the branch has no such heading yet, add it above the latest release.
 
 ## Testing against real AWS locally (no release needed)
 
@@ -88,9 +90,11 @@ Do not publish a release candidate just to test locally. Release candidates are 
 - Tag from **master after the PR is merged** (or an rc from the feature branch), and tag an explicit commit sha:
   `git tag -a vX.Y.Z <sha> -m "..."` then `git push origin vX.Y.Z`. Check `git pull` actually succeeded first; a failed pull
   silently tags a stale commit.
-- The tag must carry its changelog. Release PR (the only change in it): rename `## Unreleased` in `CHANGELOG.md` to `## vX.Y.Z`. Tag the merge commit.
-  CI fails a final tag without a `## vX.Y.Z` heading, publishes README + CHANGELOG as the PyPI description (`hatch-fancy-pypi-readme`) and
-  creates the GitHub release with that section as notes. Release candidates skip these checks.
+- The tag must carry its changelog, so a feature PR already files its entries under `## vX.Y.Z` (see Compatibility rules above) and **no release PR is needed**:
+  after the PR is merged, tag the merge commit. If another PR released that version first, or the anticipated bump was wrong, rename the heading in
+  the feature PR before merging (a heading is only a prediction; the tag is what decides). CI fails a final tag without a `## vX.Y.Z` heading,
+  publishes README + CHANGELOG as the PyPI description (`hatch-fancy-pypi-readme`) and creates the GitHub release with that section as notes.
+  Release candidates skip these checks.
 - Do not merge pull requests or publish a final release unless the maintainer asked you to; open the PR and hand over.
 
 ## Conventions
