@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v10.1.0
 
 - docs: refresh the standalone logo, clarify pandas-only support, remove unused and superseded images, and expose architecture decisions in the documentation navigation; the S3 benchmark page is replaced by ADR 0007, which keeps the headline figures (the full tables stay in PR #88).
 - feat: resource definitions accept an optional `expected: {path, file_type, options}` key per environment, the reference file a test compares the generated output against. Reading and writing ignore it, so existing definitions and their behaviour are unchanged. (`IOEnvironment.expected` is `None` when absent, which adds an `expected: None` entry to the model's `dict()` output.)
