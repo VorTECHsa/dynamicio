@@ -21,6 +21,7 @@ The pieces, one class per module:
 - :class:`OutputFiles`: finds, reads, removes and promotes the generated and expected files of a resource.
 - :class:`OutputMismatchError`: the error that reports all failed checks at once.
 - :class:`OutputSandbox`: redirects the local outputs of a task into a scratch directory, so tests that write the same files can run in parallel.
+- :class:`SessionReport`: the account of what a session verified, printed for passing runs too (by the pytest plugin of this package).
 - :class:`ParquetSchemaComparison`: compares the arrow schema and pandas index of two parquet files (``Expectations(check_parquet_schema=True)``).
 
 Example::
@@ -31,7 +32,18 @@ Example::
         outputs.check(processed_config, "FINAL_BAR", list_columns_to_sort=["tags"], rtol=1e-3)
 """
 
-__all__ = ["EnvironmentSwitch", "ExpectedOutputs", "Expectations", "FrameAssertion", "FrameComparison", "OutputFiles", "OutputMismatchError", "OutputSandbox", "ParquetSchemaComparison"]
+__all__ = [
+    "EnvironmentSwitch",
+    "ExpectedOutputs",
+    "Expectations",
+    "FrameAssertion",
+    "FrameComparison",
+    "OutputFiles",
+    "OutputMismatchError",
+    "OutputSandbox",
+    "ParquetSchemaComparison",
+    "SessionReport",
+]
 
 from dynamicio.testharness.environment_switch import EnvironmentSwitch
 from dynamicio.testharness.expectations import Expectations, FrameAssertion
@@ -41,3 +53,4 @@ from dynamicio.testharness.output_files import OutputFiles
 from dynamicio.testharness.output_mismatch_error import OutputMismatchError
 from dynamicio.testharness.output_sandbox import OutputSandbox
 from dynamicio.testharness.parquet_schema_comparison import ParquetSchemaComparison
+from dynamicio.testharness.session_report import SessionReport

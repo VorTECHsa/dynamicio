@@ -1401,6 +1401,25 @@ with ExpectedOutputs(session) as outputs:
 `Expectations.strict()` requires row and column order and exact floats; `Expectations.lenient()` ignores dtypes and loosens the tolerance to `1e-3`;
 `expectations.with_(...)` derives a variant. Dict, list and set cells (which pandas cannot hash) are compared by their canonical JSON.
 
+#### What a run verified
+
+`check_all` decides at runtime which outputs it verifies (those whose resource definition declares `expected`), so the test file alone does not list
+them. The harness therefore says it, for passing runs as well as failing ones. At the end of the session it prints:
+
+```
+2 matched, 0 failed  [demo/tests/runners/test_staging.py::TestStaging::test_staging_writes_the_staged_foo_and_bar_datasets]
+  ✓ STAGED_FOO  10 rows x 4 columns, as staged_foo.parquet
+  ✓ STAGED_BAR  10 rows x 4 columns, as staged_bar.parquet
+```
+
+and pytest repeats every session in its terminal summary (green `✓` matched, red `✗` failed, yellow `↻` updated and `-` skipped), because pytest hides the
+output of passing tests otherwise. Use `-s` to see the live print, `-p no:dynamicio` to turn the summary off, and `outputs.report` (a `SessionReport`)
+to build your own. A failure's `OutputMismatchError` also lists the outputs that matched. Nothing is printed when a session checked nothing.
+
+Why `check_all` stays the recommended default, with that report: a list of `check` calls drifts (an output added to the definition is silently
+unverified, the failure mode that matters most in a regression test), while the definition is already the single source of truth of which outputs have a
+reference. The report restores the visibility a hand-written list gave. If you prefer the list, keep writing `check` calls; both work together.
+
 #### Other session features
 
 | Feature | Effect |
@@ -1416,7 +1435,7 @@ with ExpectedOutputs(session) as outputs:
 | `ExpectedOutputs.clear(config, "KEY", ...)` | Remove leftovers of an earlier, interrupted run at the start of a test |
 | `ExpectedOutputs.read_generated(...)` / `read_expected(...)` | Get the frames yourself |
 | `outputs.compare(actual_df, expected_df, "name")` | Record a comparison of frames you built, without any files |
-| `outputs.errors`, `outputs.passed`, `outputs.updated` | Inspect the outcome without raising |
+| `outputs.errors`, `outputs.passed`, `outputs.updated`, `outputs.skipped`, `outputs.report` | Inspect the outcome without raising; `report` is the structured account described in [What a run verified](#what-a-run-verified) |
 
 Tests that write the same local outputs (the same task run in different ways) overwrite each other's files, and with `pytest-xdist` they race. Wrap such a
 test in `OutputSandbox(tmp_path, output_config)`: the outputs of that config go below `tmp_path` and the checks follow them (the `expected` files stay put).

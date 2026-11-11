@@ -41,6 +41,9 @@ Changelog = "https://github.com/VorTECHsa/dynamicio/blob/master/CHANGELOG.md"
 [project.scripts]
 dynamicio = "dynamicio.cli:run"
 
+[project.entry-points.pytest11]
+dynamicio = "dynamicio.testharness.pytest_plugin"
+
 [dependency-groups]
 dev = [
     "black",

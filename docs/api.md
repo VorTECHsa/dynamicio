@@ -74,6 +74,14 @@ Compare the outputs a task generated locally with the `expected` files declared 
 
 ::: dynamicio.testharness.output_sandbox
 
+### Report
+
+::: dynamicio.testharness.session_report
+
+### Pytest plugin
+
+::: dynamicio.testharness.pytest_plugin
+
 ### Error
 
 ::: dynamicio.testharness.output_mismatch_error

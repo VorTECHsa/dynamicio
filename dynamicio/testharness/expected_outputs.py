@@ -2,7 +2,8 @@
 
 import itertools
 import os
-from typing import Any, Iterable, List, Mapping, Optional, Sequence, Tuple
+import sys
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 import pandas as pd
 
@@ -13,6 +14,7 @@ from dynamicio.testharness.frame_comparison import FrameComparison
 from dynamicio.testharness.output_files import OutputFiles
 from dynamicio.testharness.output_mismatch_error import OutputMismatchError
 from dynamicio.testharness.parquet_schema_comparison import ParquetSchemaComparison
+from dynamicio.testharness.session_report import SessionReport
 
 
 class ExpectedOutputs:
@@ -57,6 +59,7 @@ class ExpectedOutputs:
         self.passed: List[str] = []
         self.updated: List[str] = []
         self.skipped: List[str] = []
+        self._described: Dict[str, str] = {}
 
     def __enter__(self) -> "ExpectedOutputs":
         switch = EnvironmentSwitch(self.environment, *self.configs) if self.configs is not None else EnvironmentSwitch.of_all(self.environment)
@@ -67,8 +70,22 @@ class ExpectedOutputs:
     def __exit__(self, exc_type, exc_value, traceback) -> None:
         if self._switches:
             self._switches.pop().__exit__(exc_type, exc_value, traceback)
+        self._publish_report()
         if exc_type is None:  # never mask an error raised by the task itself
             self.raise_if_failed()
+
+    @property
+    def report(self) -> SessionReport:
+        """What this session verified so far: the outputs that matched (with their size), failed, were updated or skipped."""
+        matched = {name: self._described.get(name, "") for name in self.passed}
+        return SessionReport(matched, self.errors, self.updated, self.skipped, os.environ.get("PYTEST_CURRENT_TEST", "").split(" ")[0])
+
+    def _publish_report(self) -> None:
+        """Print the report and record it for the pytest plugin, so a green run says which outputs it verified."""
+        report = self.report
+        if not report.is_empty:
+            sys.stdout.write(report.text() + "\n")
+            SessionReport.recorded.append(report)
 
     @staticmethod
     def read_generated(config: IOConfig, source_key: str, params: Optional[Mapping[str, Any]] = None, environment: Optional[str] = None) -> pd.DataFrame:
@@ -154,12 +171,14 @@ class ExpectedOutputs:
                 if not files.expected_exists():
                     raise FileNotFoundError(f"no expected output at {files.expected_path}; generate it with {self.UPDATE_ENV_VAR}=1")
                 rules_of_check = (expectations or self.expectations).with_(**rules)
-                matched = self.compare(files.read_generated(), files.read_expected(), name, rules_of_check)
+                generated, reference = files.read_generated(), files.read_expected()
+                matched = self.compare(generated, reference, name, rules_of_check)
                 if rules_of_check.check_parquet_schema and files.is_parquet:
                     matched = self._compare_parquet_schema(files, name) and matched
                 if not matched:
                     return False
                 self.passed.append(name)
+                self._described[name] = f"{len(generated)} rows x {len(generated.columns)} columns, as {os.path.basename(files.expected_path)}"
         except (ValueError, OSError) as error:
             self.errors.append((name, f"{type(error).__name__}: {error}"))
             return False
@@ -249,4 +268,4 @@ class ExpectedOutputs:
     def raise_if_failed(self) -> None:
         """Raise one :class:`OutputMismatchError` listing every recorded failure."""
         if self.errors:
-            raise OutputMismatchError(self.errors)
+            raise OutputMismatchError(self.errors, self.passed)
