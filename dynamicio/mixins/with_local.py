@@ -5,9 +5,10 @@
 import glob
 import os
 from threading import Lock
-from typing import Any, MutableMapping
+from typing import Any, Mapping, MutableMapping
 
 import pandas as pd
+import pyarrow as pa
 from fastparquet import ParquetFile, write
 from magic_logger import logger
 from pyarrow.parquet import read_table, write_table
@@ -233,21 +234,39 @@ class WithLocal:
     def _write_parquet_file(df: pd.DataFrame, file_path: str, **options: Any):
         """Write a dataframe as a parquet file using `df.to_parquet`.
 
-        All `options` are passed directly to `df.to_parquet`.
+        All `options` are passed directly to `df.to_parquet`. The exception is `file_metadata`, a mapping of extra key-value pairs
+        for the footer of the file. When it is given, the table is built as `df.to_parquet` builds it (`index` and `schema` work as
+        there) and written with `pyarrow.parquet.write_table`, so only the options of that function (and `index`, `schema`) apply.
 
         Args:
             df: A dataframe write out.
             file_path: The location where the file needs to be written.
             options: Options relative to writing a parquet file.
+
+        Raises:
+            ValueError: If `file_metadata` is given with the fastparquet engine, which cannot write it.
         """
+        file_metadata = options.pop("file_metadata", None)
         if options.get("engine") == "fastparquet":
+            if file_metadata:
+                raise ValueError("[parquet] `file_metadata` needs the pyarrow engine; fastparquet cannot write it.")
             return WithLocal.__write_with_fastparquet(df, file_path, **options)
+        if file_metadata:
+            return WithLocal.__write_with_file_metadata(df, file_path, file_metadata, **options)
         return WithLocal.__write_with_pyarrow(df, file_path, **options)
 
     @classmethod
     @utils.allow_options([*utils.args_of(pd.DataFrame.to_parquet), *utils.args_of(write_table)])
     def __write_with_pyarrow(cls, df: pd.DataFrame, filepath: str, **options: Any):
         return df.to_parquet(filepath, **options)
+
+    @classmethod
+    @utils.allow_options([*utils.args_of(write_table), "index", "schema", "engine"])
+    def __write_with_file_metadata(cls, df: pd.DataFrame, filepath: str, file_metadata: Mapping[str, Any], **options: Any):
+        options.pop("engine", None)
+        table = pa.Table.from_pandas(df, schema=options.pop("schema", None), preserve_index=options.pop("index", None))
+        extra = {str(key).encode(): str(value).encode() for key, value in file_metadata.items()}
+        write_table(table.replace_schema_metadata({**(table.schema.metadata or {}), **extra}), filepath, **options)
 
     @classmethod
     @utils.allow_options([*utils.args_of(pd.DataFrame.to_parquet), *utils.args_of(write)])

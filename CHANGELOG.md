@@ -1,5 +1,12 @@
 # Changelog
 
+## v10.3.0
+
+- feat: `dynamicio.resource_location.ResourceLocation.of(config.get(source_key=...), write=False, **template)` returns the pyarrow file system and path of a single `local` or `s3_file` resource for its environment, with the `{placeholders}` of the path filled from `template`. A task that must open the file itself (a parquet footer read, an arrow-table stream) no longer reads `config.s3.bucket` and `config.local.file_path`. For S3 it is the per-process file system that dynamicio uses for ranged reads, released at exit (the pyarrow S3 shutdown hang of ADR 0004 is handled there); `write=True` gives it the `bucket-owner-full-control` ACL and creates the missing directory of a local path.
+- feat: a single-file S3 parquet read reads byte ranges (as it does with `filters`) when the caller passes `columns`: the footer and the column chunks of those columns, not the whole object. Rows, index and dtypes are unchanged. Only a `columns` list given by the caller counts, not the columns dynamicio takes from the schema, so reads without `columns` or `filters` are unchanged. As with `filters`, errors of such a read are pyarrow's (`FileNotFoundError`, `OSError`), not botocore's `ClientError`, and a fastparquet engine or a non-pyarrow `filesystem` downloads the object as before (ADR 0008).
+- feat: the `file_metadata` write option adds key-value pairs to the footer of a parquet file (local and S3), for example a build time that a later task reads. Without it the file is written exactly as before. With the fastparquet engine, or with awswrangler-only options, it raises `ValueError`.
+- docs: ADR 0008 records these three additions and amends ADR 0004.
+
 ## v10.1.0
 
 - docs: refresh the standalone logo, clarify pandas-only support, remove unused and superseded images, and expose architecture decisions in the documentation navigation; the S3 benchmark page is replaced by ADR 0007, which keeps the headline figures (the full tables stay in PR #88).

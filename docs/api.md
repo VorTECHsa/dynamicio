@@ -38,6 +38,10 @@ docstrings.
 
 ::: dynamicio.mixins.utils
 
+## Resource location
+
+::: dynamicio.resource_location
+
 ## Validation
 
 ::: dynamicio.schema.validations

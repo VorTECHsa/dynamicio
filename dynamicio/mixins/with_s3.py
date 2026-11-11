@@ -220,18 +220,21 @@ def _retry_transient(operation: Callable[[], _T], description: str) -> _T:
     raise AssertionError("unreachable")  # pragma: no cover
 
 
-def _s3_filesystem(bucket: str) -> pafs.S3FileSystem:
+def _s3_filesystem(bucket: str, write: bool = False) -> pafs.S3FileSystem:
     """Return a per-process pyarrow S3 file system in the region of `bucket` (same default credential chain as boto3).
+
+    With `write`, the objects it creates carry the `bucket-owner-full-control` ACL, as every other dynamicio S3 write does.
 
     The region lookup is a network call, so it runs outside `_SESSION_LOCK`: a slow lookup must not block the boto3
     client of other threads. A failed lookup raises and caches nothing. Entries of other processes are dropped, as
     the boto3 session and client caches do.
     """
-    key = (os.getpid(), bucket)
+    key = (os.getpid(), bucket, write)
     filesystem = _FILESYSTEM.get(key)
     if filesystem is not None:
         return filesystem
-    filesystem = pafs.S3FileSystem(region=pafs.resolve_s3_region(bucket))
+    extra = {"default_metadata": {"ACL": "bucket-owner-full-control"}} if write else {}
+    filesystem = pafs.S3FileSystem(region=pafs.resolve_s3_region(bucket), **extra)
     with _SESSION_LOCK:
         for stale in [k for k in _FILESYSTEM if k[0] != key[0]]:
             del _FILESYSTEM[stale]
@@ -701,10 +704,12 @@ class WithS3File:
         the same pandas/pyarrow options as local reads. If options only awswrangler understands are given (e.g.
         `s3_additional_kwargs`, `pyarrow_additional_kwargs`), awswrangler does the read instead.
 
-        With non-empty `filters`, pyarrow reads the object over S3 byte ranges: it reads the footer, skips the row groups
-        whose statistics cannot match, and fetches only the column chunks of the remaining ones. A caller `filesystem`
+        With non-empty `filters` or a `columns` list given by the caller, pyarrow reads the object over S3 byte ranges: it reads
+        the footer, skips the row groups whose statistics cannot match, and fetches only the column chunks of the columns
+        and row groups it needs. The columns that dynamicio takes from the schema when the caller gives none do not trigger
+        this. A caller `filesystem`
         is used for this read only if it is a `pyarrow.fs.FileSystem`; with another file system (e.g. fsspec) or with
-        fastparquet, the object is downloaded as without `filters`. Errors on the ranged read come from pyarrow
+        fastparquet, the object is downloaded as without them. Errors on the ranged read come from pyarrow
         (`FileNotFoundError`, `OSError`), not from botocore (`ClientError`).
         """
         if _WRANGLER_ONLY_READ_PARQUET & kwargs.keys():
@@ -717,7 +722,7 @@ class WithS3File:
         if engine == "auto":
             engine = pd.get_option("io.parquet.engine")
         filesystem = kwargs.get("filesystem")
-        if kwargs.get("filters") and engine != "fastparquet" and (filesystem is None or isinstance(filesystem, pafs.FileSystem)):
+        if (kwargs.get("filters") or kwargs.get("columns")) and engine != "fastparquet" and (filesystem is None or isinstance(filesystem, pafs.FileSystem)):
             filesystem = filesystem or _s3_filesystem(bucket)
             return with_local.WithLocal._read_parquet_file(f"{bucket}/{key}", schema, **{**kwargs, "filesystem": filesystem})  # pylint: disable=protected-access
         return with_local.WithLocal._read_parquet_file(_download_to_memory(bucket, key), schema, **kwargs)  # type: ignore[arg-type] # pylint: disable=protected-access
@@ -812,6 +817,8 @@ class WithS3File:
             raise ValueError("[s3-parquet] Parquet output path must be a file, not a directory (e.g., 's3://bucket/data.parquet').")
 
         if _WRANGLER_ONLY_WRITE_PARQUET & kwargs.keys():
+            if kwargs.get("file_metadata"):
+                raise ValueError(f"[s3-parquet] `file_metadata` cannot be combined with the awswrangler-only options {sorted(_WRANGLER_ONLY_WRITE_PARQUET & kwargs.keys())}.")
             WithS3File._write_s3_parquet_file_with_wrangler(df, s3_path, **kwargs)
             return
         kwargs.pop("use_threads", None)

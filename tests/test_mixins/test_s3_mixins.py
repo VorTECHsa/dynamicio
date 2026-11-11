@@ -1694,6 +1694,43 @@ class TestS3ParquetRangedRead:
         assert df["id"].tolist() == [0, 1, 2, 3] and df.columns.tolist() == ["id", "foo_name", "bar"]
 
     @pytest.mark.unit
+    def test_read_with_caller_columns_reads_byte_ranges_of_those_columns_only(self, bucket_root):
+        # Given the column chunks of "foo_name" and "bar" can not be decoded, so a read that fetches them fails
+        path = self._object_path(bucket_root)
+        metadata = pq.ParquetFile(path).metadata
+        with open(path, "r+b") as fobj:
+            for row_group in range(metadata.num_row_groups):
+                for column_index in (1, 2):
+                    column = metadata.row_group(row_group).column(column_index)
+                    fobj.seek(column.dictionary_page_offset if column.has_dictionary_page else column.data_page_offset)
+                    fobj.write(b"\xff" * column.total_compressed_size)
+
+        # When
+        with (
+            patch.object(dynamicio.mixins.with_s3, "_s3_filesystem", return_value=self._local_s3(bucket_root)),
+            patch.object(dynamicio.mixins.with_s3, "_download_to_memory") as mock_download,
+        ):
+            df = ReadS3ParquetIO(source_config=self._config(), columns=["id"]).read()
+
+        # Then
+        mock_download.assert_not_called()
+        assert df.columns.tolist() == ["id"] and df["id"].tolist() == list(range(12))
+
+    @pytest.mark.unit
+    def test_read_with_caller_columns_returns_the_same_frame_as_the_full_download(self, bucket_root):
+        # Given
+        body = io.BytesIO(self._object_path(bucket_root).read_bytes())
+
+        # When
+        with patch.object(dynamicio.mixins.with_s3, "_s3_filesystem", return_value=self._local_s3(bucket_root)):
+            ranged = ReadS3ParquetIO(source_config=self._config(), columns=["bar", "id"]).read()
+        downloaded = dynamicio.mixins.with_local.WithLocal._read_parquet_file(body, ReadS3ParquetIO(source_config=self._config()).schema, columns=["bar", "id"])
+
+        # Then
+        assert ranged.columns.tolist() == ["bar", "id"]
+        pd.testing.assert_frame_equal(ranged, downloaded)
+
+    @pytest.mark.unit
     def test_filtered_read_returns_the_same_frame_as_the_full_download(self, bucket_root):
         # Given
         filters = [("id", ">=", 3), ("id", "<=", 9)]
@@ -1726,9 +1763,19 @@ class TestS3ParquetRangedRead:
     @pytest.mark.unit
     @pytest.mark.parametrize(
         "options",
-        [{}, {"filters": None}, {"filters": []}, {"filters": [("id", "==", 1)], "engine": "fastparquet"}, {"filters": [("id", "==", 1)], "filesystem": object()}],
+        [
+            {},
+            {"filters": None},
+            {"filters": []},
+            {"columns": None},
+            {"columns": []},
+            {"filters": [("id", "==", 1)], "engine": "fastparquet"},
+            {"columns": ["id"], "engine": "fastparquet"},
+            {"filters": [("id", "==", 1)], "filesystem": object()},
+            {"columns": ["id"], "filesystem": object()},
+        ],
     )
-    def test_read_without_filters_downloads_the_whole_object(self, options, expected_s3_parquet_df):
+    def test_read_without_filters_or_columns_downloads_the_whole_object(self, options, expected_s3_parquet_df):
         # Given
         body = io.BytesIO()
         expected_s3_parquet_df.to_parquet(body)
@@ -1857,6 +1904,25 @@ class TestS3ParquetRangedRead:
         assert [call.args for call in mock_region.call_args_list] == [("bucket-a",), ("bucket-b",), ("bucket-a",)]
 
     @pytest.mark.unit
+    def test_s3_filesystem_for_writes_is_a_separate_entry_that_sets_the_bucket_owner_acl(self):
+        # Given
+        dynamicio.mixins.with_s3._FILESYSTEM.clear()
+
+        # When
+        with (
+            patch.object(dynamicio.mixins.with_s3.pafs, "S3FileSystem", side_effect=lambda **_: object()) as mock_s3,
+            patch.object(dynamicio.mixins.with_s3.pafs, "resolve_s3_region", return_value="eu-west-1"),
+        ):
+            read = dynamicio.mixins.with_s3._s3_filesystem("bucket-a")
+            write = dynamicio.mixins.with_s3._s3_filesystem("bucket-a", write=True)
+            write_again = dynamicio.mixins.with_s3._s3_filesystem("bucket-a", write=True)
+        dynamicio.mixins.with_s3._FILESYSTEM.clear()
+
+        # Then
+        assert write is write_again and write is not read
+        assert [call.kwargs for call in mock_s3.call_args_list] == [{"region": "eu-west-1"}, {"region": "eu-west-1", "default_metadata": {"ACL": "bucket-owner-full-control"}}]
+
+    @pytest.mark.unit
     def test_s3_filesystem_drops_the_entries_of_other_processes(self):
         # Given
         dynamicio.mixins.with_s3._FILESYSTEM.clear()
@@ -1873,7 +1939,7 @@ class TestS3ParquetRangedRead:
         dynamicio.mixins.with_s3._FILESYSTEM.clear()
 
         # Then
-        assert keys == [(-1, "bucket-a")]
+        assert keys == [(-1, "bucket-a", False)]
 
     @pytest.mark.unit
     def test_s3_filesystem_resolves_the_region_without_the_session_lock_and_caches_no_failure(self):
@@ -2021,6 +2087,21 @@ class TestS3ParquetRangedReadOverS3Protocol:
 
         # Then
         assert ranged["id"].tolist() == list(range(150_000, 250_001))
+        pd.testing.assert_frame_equal(ranged, downloaded)
+
+    @pytest.mark.unit
+    def test_read_with_caller_columns_requests_only_byte_ranges_of_those_columns_over_s3(self, moto_s3_server, s3_object):
+        # When
+        with patch.object(dynamicio.mixins.with_s3, "_s3_filesystem", return_value=moto_s3_server.filesystem):
+            ranged = ReadS3ParquetIO(source_config=self._config(), columns=["id"]).read()
+        with patch.object(dynamicio.mixins.with_s3, "_shared_s3_client", return_value=moto_s3_server.client):
+            body = dynamicio.mixins.with_s3._download_to_memory(constants.MOCK_BUCKET, self.KEY)
+        downloaded = dynamicio.mixins.with_local.WithLocal._read_parquet_file(body, ReadS3ParquetIO(source_config=self._config()).schema, columns=["id"])
+
+        # Then
+        gets = [r for r in self._object_gets(moto_s3_server) if r["range"]]
+        assert gets and sum(r["bytes"] for r in gets) < len(s3_object) / 2
+        assert ranged["id"].tolist() == list(range(300_000))
         pd.testing.assert_frame_equal(ranged, downloaded)
 
     @pytest.mark.unit

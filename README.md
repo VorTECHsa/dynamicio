@@ -147,11 +147,36 @@ S3 is accessed directly through `boto3`, with one client shared per process (saf
 * **Single files** (`type: s3`): parquet is read with one `GetObject` and parsed in memory, and written with one
   `PutObject` (multipart above 16 MiB), using the same `pandas`/`pyarrow` options as local I/O. `awswrangler` is only
   used when you pass an option that only it supports, and for `csv`/`json`.
+  A single-file parquet read fetches only the byte ranges it needs when you pass `filters` or `columns`: it reads the footer,
+  skips the row groups whose statistics cannot match and fetches the column chunks of the requested columns. Without them
+  (the columns that the schema selects do not count), the whole object is downloaded as before.
 * **Prefixes** (`type: s3_path_prefix`): objects are listed and fetched by a pool of 32 threads, one request per object.
   Parquet objects are parsed in memory as they arrive, so parsing overlaps the download. `no_disk_space: true` is still
   accepted.
 * **No `awscli` or `s3fs`**: they are no longer dependencies, so installing `dynamicio` no longer puts an `aws` command
   in your environment. Credentials come from the usual `boto3` chain (environment, profile, IAM role).
+
+#### Opening a resource's file yourself
+
+When a task must open the file itself, for example to read a parquet footer or to stream a file as arrow tables, take the
+file system and path from the resource definition instead of reading its bucket and path, so the environment and the
+placeholders resolve as for a dynamicio read or write:
+
+```python
+from dynamicio.resource_location import ResourceLocation
+
+filesystem, path = ResourceLocation.of(config.get(source_key="VOYAGE_PART"), table="events", shard_index="3")
+footer = pyarrow.parquet.ParquetFile(path, filesystem=filesystem).metadata
+# write=True creates a missing local directory and gives S3 objects the bucket-owner-full-control ACL
+filesystem, path = ResourceLocation.of(config.get(source_key="VOYAGE_PART"), write=True, table="events", shard_index="3")
+```
+
+#### Extra key-value pairs in a parquet footer
+
+`file_metadata={"key": "value"}` (in the resource's `options` or the `IO(...)` call) adds the pairs to the footer of the written
+parquet file, next to the pandas metadata, for local and S3 files. The table is built as `DataFrame.to_parquet` builds it
+(`index` and `schema` work as there), so only the `pyarrow.parquet.write_table` options apply with it. It needs the
+pyarrow engine and is rejected together with awswrangler-only options.
 
 Historical v8.1.0 benchmarks measured single-file reads about 2.4x faster and writes about 1.3x faster than the
 pre-v8.1.0 implementation. Prefix transfers were broadly on par at equal worker counts; results depend on the workload

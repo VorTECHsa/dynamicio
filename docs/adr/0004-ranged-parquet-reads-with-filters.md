@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-10-30
 - Amends: decision 2 of [ADR 0001](0001-direct-boto3-s3-io.md), for reads with `filters` only
+- Amended by: [ADR 0008](0008-resource-location-column-ranged-reads-file-metadata.md), which also ranges reads that pass `columns`
 
 ## Context
 

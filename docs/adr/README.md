@@ -12,3 +12,4 @@ Number sequentially, never rewrite an accepted ADR (supersede it with a new one)
 | [0005](0005-pandera-schema-declaration.md) | Declare schemas as Pandera models; dynamicio keeps validation and metrics | Accepted |
 | [0006](0006-expected-outputs-test-harness.md) | Test harness: expected outputs declared in resource definitions, `check_all` and the session report | Accepted |
 | [0007](0007-s3-io-performance-evidence.md) | S3 I/O performance evidence behind the boto3 decision | Accepted |
+| [0008](0008-resource-location-column-ranged-reads-file-metadata.md) | Resource location for files opened by the caller, ranged reads for `columns`, parquet footer `file_metadata` | Accepted |
