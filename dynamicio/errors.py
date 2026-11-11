@@ -14,11 +14,14 @@ __all__ = [
     "SchemaValidationError",
     "InvalidDatasetTypeError",
     "NoObjectsFoundError",
+    "ObjectNotFoundError",
     "CASTING_WARNING_MSG",
     "NOTICE_MSG",
 ]
 
 from typing import Any, Optional
+
+from awswrangler.exceptions import NoFilesFound
 
 
 class DynamicIOError(Exception):
@@ -99,6 +102,14 @@ class NoObjectsFoundError(FileNotFoundError, ValueError):
 
     It is a `FileNotFoundError`, so a caller can treat it as a missing source. It is also a `ValueError`: in earlier releases, a path prefix
     with no objects raised the pandas `ValueError: No objects to concatenate`, and callers that catch `ValueError` must not change.
+    """
+
+
+class ObjectNotFoundError(FileNotFoundError, NoFilesFound):
+    """Error raised when the S3 key of a csv or json `file_path` does not exist.
+
+    It is a `FileNotFoundError`, so a caller can treat it as a missing source. It is also an awswrangler `NoFilesFound`: earlier releases raised
+    `NoFilesFound` for a missing key, and callers that catch `NoFilesFound` must not change.
     """
 
 

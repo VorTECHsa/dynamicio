@@ -29,6 +29,7 @@ import pyarrow.parquet as pq
 import s3transfer.exceptions
 import s3transfer.futures
 import tables
+from awswrangler.exceptions import NoFilesFound
 from botocore.config import Config
 from botocore.exceptions import ConnectionClosedError, ConnectTimeoutError, EndpointConnectionError, IncompleteReadError, ReadTimeoutError, ResponseStreamingError
 from magic_logger import logger
@@ -36,7 +37,7 @@ from pandas import DataFrame, Series
 
 # Application Imports
 from dynamicio.config.pydantic import DataframeSchema, S3DataEnvironment, S3PathPrefixEnvironment
-from dynamicio.errors import NoObjectsFoundError
+from dynamicio.errors import NoObjectsFoundError, ObjectNotFoundError
 from dynamicio.mixins import utils, with_local
 from dynamicio.mixins.utils import get_file_type_value
 
@@ -683,6 +684,10 @@ class WithS3File:
 
         Returns:
             DataFrame
+
+        Raises:
+            ObjectNotFoundError: If the key of a csv or json file does not exist. It is a `FileNotFoundError` and an awswrangler
+                `NoFilesFound`. The errors of the parquet and hdf reads for a missing key do not change.
         """
         s3_config = self.sources_config.s3
         file_type = get_file_type_value(s3_config.file_type)
@@ -744,7 +749,10 @@ class WithS3File:
     @utils.allow_options(utils.args_of(wr.s3.read_csv, pd.read_csv))
     def _read_s3_csv_file(s3_path: str, schema: DataframeSchema, **kwargs) -> pd.DataFrame:
         kwargs.pop("usecols", None)
-        return wr.s3.read_csv(path=s3_path, usecols=(list(schema.columns.keys())), **kwargs)
+        try:
+            return wr.s3.read_csv(path=s3_path, usecols=(list(schema.columns.keys())), **kwargs)
+        except NoFilesFound as err:
+            raise ObjectNotFoundError(f"No object found at {s3_path}") from err
 
     @staticmethod
     @utils.allow_options([*utils.args_of(wr.s3.read_json, pd.read_json), "single_record"])
@@ -757,7 +765,10 @@ class WithS3File:
             logger.warning("[s3-json-read] Ignoring 'convert_dates=True'. Handle datetime parsing post-read.")
         kwargs.pop("convert_dates", None)
 
-        raw_df = wr.s3.read_json(path=s3_path, orient=orient, lines=lines, **kwargs)
+        try:
+            raw_df = wr.s3.read_json(path=s3_path, orient=orient, lines=lines, **kwargs)
+        except NoFilesFound as err:
+            raise ObjectNotFoundError(f"No object found at {s3_path}") from err
 
         if is_single_record:
             # Re-wrap as a single dict row, mirroring the local JSON reader

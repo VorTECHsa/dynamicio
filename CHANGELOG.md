@@ -1,5 +1,10 @@
 # Changelog
 
+## v10.2.0
+
+- feat: a resource definition can set `missing_ok: true` on a source, beside its environments. When the reader of that source raises a `FileNotFoundError` (a missing local file, `ObjectNotFoundError`, `NoObjectsFoundError`), `read()` and `async_read()` return `None` and log a warning. All other errors raise as before. The default is `false`. `IOBinding.missing_ok` and `IOEnvironment.missing_ok` expose the flag, which adds a `missing_ok: False` entry to the `dict()` output of a binding. See "Optional sources: `missing_ok`" in the README
+- fix: an S3 read of a csv or json `file_path` raises `dynamicio.errors.ObjectNotFoundError("No object found at s3://...")` when the key does not exist. Before, it raised the awswrangler `NoFilesFound`, which is not a `FileNotFoundError`. `ObjectNotFoundError` is a `FileNotFoundError` and a `NoFilesFound`, so a caller can treat the key as a missing source, and code that catches `NoFilesFound` works as before. The errors of the parquet and hdf reads for a missing key do not change
+
 ## v10.1.0
 
 - docs: refresh the standalone logo, clarify pandas-only support, remove unused and superseded images, and expose architecture decisions in the documentation navigation; the S3 benchmark page is replaced by ADR 0007, which keeps the headline figures (the full tables stay in PR #88).

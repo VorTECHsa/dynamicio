@@ -56,6 +56,7 @@ class IOBinding(BaseModel):
         Union["IOEnvironment", "LocalDataEnvironment", "LocalBatchDataEnvironment", "S3DataEnvironment", "S3PathPrefixEnvironment", "KafkaDataEnvironment", "PostgresDataEnvironment"],
     ]
     dynamicio_schema: Union[table_spec.DataframeSchema, None] = pydantic.Field(default=None, alias="schema")
+    missing_ok: bool = False  # if true, `IO.read()` returns None when the source does not exist (FileNotFoundError)
 
     def get_binding_for_environment(self, environment: str) -> "IOEnvironment":
         """Fetch the IOEnvironment spec for the name provided."""
@@ -93,7 +94,7 @@ class IOBinding(BaseModel):
             raise ValueError(f"IOBinding must be a dict at the top level. (got {values!r} instead)")
         remapped_value = {"environments": {}}
         for key, value in values.items():
-            if key in ("__binding_name__", "schema"):
+            if key in ("__binding_name__", "schema", "missing_ok"):
                 # Passthrough params
                 remapped_value[key] = value
             else:
@@ -124,6 +125,11 @@ class IOEnvironment(BaseModel):
         if not self._parent:
             raise Exception("Parent field is not set.")
         return self._parent.dynamicio_schema
+
+    @property
+    def missing_ok(self) -> bool:
+        """Returns True if the binding declares that its source may not exist."""
+        return bool(self._parent and self._parent.missing_ok)
 
     def set_parent(self, parent: IOBinding):  # noqa: F821
         """Helper method to set parent config object."""
