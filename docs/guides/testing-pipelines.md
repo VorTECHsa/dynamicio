@@ -9,6 +9,10 @@ Simply by selecting the `LOCAL` environment (`ENVIRONMENT = "LOCAL"`) and provid
 necessary directories, it becomes very simple to test your pipelines end-to-end in seconds, eliminating the need to deploy your dags and
 wait for their tasks to be provided access to processing resources.
 
+This is the fast feedback loop that the seam between logic and I/O gives you (see [Why dynamicio](../getting-started/why-dynamicio.md)).
+It is as useful to a coding agent as to a person: the agent runs the real tasks against sample files, with no credentials and no deploy,
+and the harness below returns a verdict it can read, with every mismatch listed.
+
 All you need to do is mimic the order of execution of your tasks, running them in procedural order, then compare what they wrote with what you expect.
 
 ### Declaring the expected output

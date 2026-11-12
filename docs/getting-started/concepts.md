@@ -1,6 +1,7 @@
 # Concepts
 
-Why dynamicio exists, and the ideas it is built from.
+Why dynamicio exists, and the ideas it is built from. The short version is in [Why dynamicio](why-dynamicio.md): business logic
+should be independent of I/O, and the seam between them is what makes fast, safe local feedback possible.
 
 Working with `pandas` dataframes has opened up a new world of potential in Data Science. However,
 if you are using `pandas` to support production pipelines, whether ML or ETL, you end up having
@@ -68,7 +69,8 @@ Quoting from the same paper:
 
 Dynamicio (or dynamic(i/o)) serves exactly that; it serves as a convenient wrapper around `pandas` I/O operations. It's a manifestation of 
 the dependency inversion principle--a layer of indirection if you want--which keeps your code DRY and increases re-usability, effectively 
-decoupling business logic from the I/O layer.
+decoupling business logic from the I/O layer. That boundary is a *seam*: a place where behaviour changes (a different environment,
+a different storage, sample files in a test) without editing the code on either side.
 
 ## Main features
 `dynamic(i/o)` supports:

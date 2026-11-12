@@ -4,47 +4,42 @@
 
 # dynamicio
 
-**Configuration-driven I/O for `pandas` dataframes.** Declare *where* a dataset lives in YAML, declare *what* it looks
-like as a [Pandera](https://pandera.readthedocs.io) model, and read or write it with the same two lines of Python in
-every environment.
+**Keep business logic independent of I/O.** dynamicio is the seam between your `pandas` code and the places your data
+lives. Declare *where* a dataset is in YAML, declare *what* it looks like as a [Pandera](https://pandera.readthedocs.io)
+model, and your code calls `read()` and `write()`. The same code then runs on a laptop against sample files and in
+production against S3, PostgreSQL, Athena or Kafka.
 
 !!! note "pandas only"
     Dataframe execution supports `pandas`. Polars is not supported.
 
-## The problem
+## The point
 
-A production `pandas` pipeline spends much of its code on I/O: `boto3` for S3, `SQLAlchemy` for Postgres,
-`awswrangler` for Athena, `confluent-kafka` for Kafka, and per-format keyword arguments for `parquet`, `hdf`, `csv`
-and `json`. Add validation, metrics, and a way to run the same code against sample files on a laptop, and the pipeline
-turns into glue code that freezes it to the peculiarities of each library
-(see [Concepts](getting-started/concepts.md)).
-
-## The abstraction
-
-A **resource definition** is a YAML entry that names a dataset and, per environment, where it lives and in which
-format. An **IO class** is a small `UnifiedIO` subclass that carries a **schema**. Business logic only ever calls
-`read()` and `write()`:
+Developers should not have to think about connection strings, parquet engines, JSON orientations or which bucket a task
+reads this week. That code is not the logic they are paid to get right, and when it is mixed in with the logic, neither
+can change without the other.
 
 ```mermaid
 flowchart LR
-    Y[Resource definition<br/>YAML, per environment] --> R[Resolve for<br/>env_identifier]
-    R --> D[read / write<br/>S3, Postgres, Athena, Kafka, local]
-    D --> V[Cast, validate<br/>against the Pandera model]
-    V --> M[Emit METRIC<br/>log lines]
-    M --> F[pandas DataFrame]
+    B[Business logic<br/>DataFrame in, DataFrame out] --> I[IO class<br/>the seam<br/>read / write + schema]
+    I --> L[LOCAL<br/>sample files]
+    I --> D[DEV<br/>S3, Postgres, Athena]
+    I --> P[PROD<br/>S3, Postgres, Kafka]
 ```
 
-Switching `LOCAL` to `DEV` to `PROD` is a change of one identifier, not of code. Because a dataset's location is data,
-tests run the whole pipeline against sample files and compare the outputs with
-[expected files](guides/testing-pipelines.md), with no mocking of external services.
+Switching `LOCAL` to `DEV` to `PROD` is a change of one identifier, not of code. Read [Why dynamicio](getting-started/why-dynamicio.md)
+for the full argument.
 
-## Why use it
+## What you get
 
-- **One call site per dataset**, whatever the storage or format.
-- **Environments as configuration**: the same task runs locally, in development and in production.
-- **Schemas as Pandera models**: columns, dtypes, validations and metrics live in one reviewed place.
-- **Metrics for free**: distributions are logged as `METRIC` JSON lines you can parse in your log tooling.
-- **Test harness**: `dynamicio.testharness` verifies a task's outputs against reference files.
+- **Logic that does not know about storage.** One call site per dataset, whatever the storage or format.
+- **Fast, safe feedback.** Run the whole pipeline locally on sample files, with no credentials and no mocks of external
+  services, then check the outputs against [expected files](guides/testing-pipelines.md).
+- **A loop that suits coding agents.** An agent that changes a pipeline needs a place to run it that cannot hurt
+  production, and a check that says whether the change was right. A `LOCAL` environment and the test harness provide both.
+- **Data contracts.** Columns, dtypes, validations and metrics live in one reviewed Pandera model. A bad frame fails at
+  the boundary with every violation listed.
+- **Environments as configuration.** The same task runs locally, in development and in production.
+- **Metrics in your logs.** Distributions are logged as `METRIC` JSON lines.
 
 ## Supported sources and destinations
 
@@ -90,7 +85,7 @@ df = orders.read()
 
 ## Where next
 
-- [Quickstart](getting-started/quickstart.md) and [Concepts](getting-started/concepts.md)
+- [Why dynamicio](getting-started/why-dynamicio.md), [Quickstart](getting-started/quickstart.md) and [Concepts](getting-started/concepts.md)
 - Guides: [reading](guides/reading-data.md), [writing](guides/writing-data.md),
   [schemas and validation](guides/schemas-and-validation.md), [error handling](guides/error-handling.md)
 - [API reference](reference/index.md)

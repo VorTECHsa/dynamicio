@@ -4,10 +4,12 @@
 
 <img src="https://raw.githubusercontent.com/VorTECHsa/dynamicio/master/docs/images/logo-transparent.png" alt="dynamicio — Wrap your I/O" width="500"> <img src="https://raw.githubusercontent.com/VorTECHsa/dynamicio/master/docs/images/wrapped-panda.png" alt="The dynamicio panda mascot" width="100">
 
-**Stop rewriting the same pandas I/O code. Describe your data once in YAML, and read and write it anywhere.**
+**Keep your business logic independent of I/O.** dynamicio is the seam between your `pandas` code and the places your
+data lives: describe each dataset once in YAML, and your code just calls `read()` and `write()`.
 
-dynamicio wraps the I/O of a `pandas` pipeline in configuration. The same code reads a parquet file on your laptop, a CSV
-prefix on S3, a PostgreSQL table or an Athena query, and you pick which one by changing a single identifier.
+The same code reads a parquet file on your laptop, a CSV prefix on S3, a PostgreSQL table or an Athena query. You pick
+which one by changing a single identifier, so developers stop worrying about connection strings, file-format keyword
+arguments and which bucket a task reads this week.
 
 **Documentation:** [guides, examples and API reference](https://github.com/VorTECHsa/dynamicio/tree/master/docs)
 <!-- Replace the link above with the Read the Docs URL once the project is imported (docs/development/readthedocs-setup.md) -->
@@ -15,12 +17,14 @@ prefix on S3, a PostgreSQL table or an Athena query, and you pick which one by c
 
 ## Why dynamicio
 
-- **One place for "where is the data".** Resource definitions are YAML, per environment (`LOCAL`, `DEV`, `PROD`, or your own).
+- **Logic that does not know about storage.** Resource definitions are YAML, per environment (`LOCAL`, `DEV`, `PROD`, or your own).
   Moving a pipeline between environments never touches Python.
+- **Fast, safe feedback loops.** Run the real pipeline against sample files on your machine, with no cloud credentials, no deploy and
+  no mocks of external services. Compare the outputs with expected files using the built-in test harness (`dynamicio.testharness`).
+- **Made for the LLM era.** A coding agent that changes a pipeline needs somewhere safe to run it and a check that says whether the
+  change was right. A `LOCAL` environment and expected outputs give it both, and production credentials never enter the loop.
 - **Contracts for your dataframes.** A [Pandera](https://pandera.readthedocs.io) model declares columns, dtypes and validations. Bad data
-  fails at the boundary, not three steps later, and the same model can emit metrics.
-- **Local-first testing.** Run the real pipeline against sample files, then compare the outputs with expected files
-  using the built-in test harness (`dynamicio.testharness`).
+  fails at the boundary with every violation listed, not three steps later, and the same model can emit metrics.
 - **Pandas behaviour, not a new dialect.** Options in the YAML go to `pandas` / `awswrangler`, so what you know still applies.
 - **Sync and async.** Read and write from plain code or from `asyncio` services.
 
@@ -94,13 +98,14 @@ To run the same code against S3, add a `DEV` block to the YAML and set `env_iden
 
 ## Where next
 
-1. **New here?** The [quickstart](https://github.com/VorTECHsa/dynamicio/blob/master/docs/getting-started/quickstart.md) explains each step above,
+1. **The idea:** [why dynamicio](https://github.com/VorTECHsa/dynamicio/blob/master/docs/getting-started/why-dynamicio.md).
+2. **New here?** The [quickstart](https://github.com/VorTECHsa/dynamicio/blob/master/docs/getting-started/quickstart.md) explains each step above,
    and its code is run by the test suite.
-2. **Core ideas:** [concepts](https://github.com/VorTECHsa/dynamicio/blob/master/docs/getting-started/concepts.md): resource definitions, IO classes, schemas.
-3. **Task guides:** [reading](https://github.com/VorTECHsa/dynamicio/blob/master/docs/guides/reading-data.md),
+3. **Core ideas:** [concepts](https://github.com/VorTECHsa/dynamicio/blob/master/docs/getting-started/concepts.md): resource definitions, IO classes, schemas.
+4. **Task guides:** [reading](https://github.com/VorTECHsa/dynamicio/blob/master/docs/guides/reading-data.md),
    [writing](https://github.com/VorTECHsa/dynamicio/blob/master/docs/guides/writing-data.md),
    [testing pipelines](https://github.com/VorTECHsa/dynamicio/blob/master/docs/guides/testing-pipelines.md).
-4. **Reference:** [API reference](https://github.com/VorTECHsa/dynamicio/blob/master/docs/reference/index.md).
+5. **Reference:** [API reference](https://github.com/VorTECHsa/dynamicio/blob/master/docs/reference/index.md).
 
 ## Community and contributing
 

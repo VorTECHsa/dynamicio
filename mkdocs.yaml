@@ -91,6 +91,7 @@ plugins:
 nav:
   - Home: index.md
   - Getting started:
+      - Why dynamicio: getting-started/why-dynamicio.md
       - Installation: getting-started/installation.md
       - Quickstart: getting-started/quickstart.md
       - Concepts: getting-started/concepts.md
