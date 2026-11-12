@@ -24,7 +24,7 @@ App authorisation done in the browser. Do not create a `READTHEDOCS_TOKEN` secre
 | 11 | *Notifications*: add an email (or webhook) for **build failures** | No |
 | 12 | Optional: PyPI trusted publishing, see [Releasing](releasing.md#publishing-credentials) | PyPI project owner |
 | 13 | Verify the first build of `latest` (below) | No |
-| 14 | Once the URL is confirmed: replace the `Documentation` URL in `pyproject.toml`, add the URL to the README, and set the optional repository variable `DOCS_BASE_URL` (*Settings, Secrets and variables, Variables*, a variable, not a secret) so GitHub releases link to the version's documentation | No |
+| 14 | The `Documentation` URL in `pyproject.toml` and the README now use https://dynamicio.readthedocs.io/en/latest/. Set the optional repository variable `DOCS_BASE_URL` (*Settings, Secrets and variables, Variables*, a variable, not a secret) (to `https://dynamicio.readthedocs.io/en`) so GitHub releases link to the version's documentation | No |
 
 If step 3 is skipped, the project can still be imported manually, but pull request previews and the commit status
 need the GitHub App integration (webhooks are created by the App).

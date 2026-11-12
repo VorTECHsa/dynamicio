@@ -11,8 +11,7 @@ The same code reads a parquet file on your laptop, a CSV prefix on S3, a Postgre
 which one by changing a single identifier, so developers stop worrying about connection strings, file-format keyword
 arguments and which bucket a task reads this week.
 
-**Documentation:** [guides, examples and API reference](https://github.com/VorTECHsa/dynamicio/tree/master/docs)
-<!-- Replace the link above with the Read the Docs URL once the project is imported (docs/development/readthedocs-setup.md) -->
+**Documentation:** [dynamicio.readthedocs.io](https://dynamicio.readthedocs.io/en/latest/): guides, examples and API reference
 · **Changelog:** [CHANGELOG.md](https://github.com/VorTECHsa/dynamicio/blob/master/CHANGELOG.md)
 
 ## Why dynamicio
@@ -98,14 +97,14 @@ To run the same code against S3, add a `DEV` block to the YAML and set `env_iden
 
 ## Where next
 
-1. **The idea:** [why dynamicio](https://github.com/VorTECHsa/dynamicio/blob/master/docs/getting-started/why-dynamicio.md).
-2. **New here?** The [quickstart](https://github.com/VorTECHsa/dynamicio/blob/master/docs/getting-started/quickstart.md) explains each step above,
+1. **The idea:** [why dynamicio](https://dynamicio.readthedocs.io/en/latest/getting-started/why-dynamicio/).
+2. **New here?** The [quickstart](https://dynamicio.readthedocs.io/en/latest/getting-started/quickstart/) explains each step above,
    and its code is run by the test suite.
-3. **Core ideas:** [concepts](https://github.com/VorTECHsa/dynamicio/blob/master/docs/getting-started/concepts.md): resource definitions, IO classes, schemas.
-4. **Task guides:** [reading](https://github.com/VorTECHsa/dynamicio/blob/master/docs/guides/reading-data.md),
-   [writing](https://github.com/VorTECHsa/dynamicio/blob/master/docs/guides/writing-data.md),
-   [testing pipelines](https://github.com/VorTECHsa/dynamicio/blob/master/docs/guides/testing-pipelines.md).
-5. **Reference:** [API reference](https://github.com/VorTECHsa/dynamicio/blob/master/docs/reference/index.md).
+3. **Core ideas:** [concepts](https://dynamicio.readthedocs.io/en/latest/getting-started/concepts/): resource definitions, IO classes, schemas.
+4. **Task guides:** [reading](https://dynamicio.readthedocs.io/en/latest/guides/reading-data/),
+   [writing](https://dynamicio.readthedocs.io/en/latest/guides/writing-data/),
+   [testing pipelines](https://dynamicio.readthedocs.io/en/latest/guides/testing-pipelines/).
+5. **Reference:** [API reference](https://dynamicio.readthedocs.io/en/latest/reference/).
 
 ## Community and contributing
 

@@ -1,5 +1,5 @@
 <div class="dynamicio-hero" markdown>
-![dynamicio, wrap your I/O](images/logo-transparent.png){ width="420" }
+![dynamicio, wrap your I/O](images/logo-transparent.png){ width="420" } ![The dynamicio panda mascot](images/wrapped-panda.png){ width="100" }
 </div>
 
 # dynamicio
