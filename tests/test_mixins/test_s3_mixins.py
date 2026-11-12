@@ -1556,6 +1556,19 @@ class TestS3FileWithMissingKey:
         assert isinstance(raised.value.__cause__, NoFilesFound)
 
     @pytest.mark.unit
+    @pytest.mark.usefixtures("s3_bucket")
+    @pytest.mark.parametrize("source_key, io_class", [("READ_FROM_S3_CSV", ReadS3CsvIO), ("READ_FROM_S3_JSON", ReadS3JsonIO)], ids=["csv", "json"])
+    def test_a_missing_key_returns_none_when_missing_ok_is_true(self, source_key, io_class):
+        # Given a bucket with no object at the key of the source
+        config = self._config(source_key)
+
+        # When
+        df = io_class(source_config=config, missing_ok=True).read()
+
+        # Then
+        assert df is None
+
+    @pytest.mark.unit
     @pytest.mark.parametrize("source_key, io_class", [("READ_FROM_S3_CSV", ReadS3CsvIO), ("READ_FROM_S3_JSON", ReadS3JsonIO)], ids=["csv", "json"])
     def test_an_existing_key_returns_its_frame(self, s3_bucket, source_key, io_class):
         # Given

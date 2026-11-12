@@ -1,5 +1,10 @@
 # Changelog
 
+## v10.4.0
+
+- feat: the constructor of an IO class takes `missing_ok: bool = False`. With `missing_ok=True`, `read()` and `async_read()` return `None` and log a warning when the reader raises a `FileNotFoundError`. The caller handles the `None`, so the setting is in the code of the caller
+- chore: remove `missing_ok` from the resource definition. Release v10.2.0 added it, and it has no known user. A resource definition with a `missing_ok` key now fails to load, because dynamicio reads the key as an environment name. `IOBinding.missing_ok` and `IOEnvironment.missing_ok` are removed, and the `dict()` output of a binding has no `missing_ok` entry. Move the setting to the constructor of the IO class
+
 ## v10.3.0
 
 - chore: remove the `magic-logger` dependency. Each dynamicio module logs through `logging.getLogger(__name__)`, with the same logger names as before. `magic-logger` has only a source distribution, so an install with `uv sync --no-build` stopped with an error. `magic-logger` also called `inspect.stack()` on each log call. `dynamicio.logger` is a `logging.Logger` for the logger `dynamicio`, and it does not have the `dict_config`, `file_config`, `listen` and `stop_listening` methods. The logging config of `dynamicio/__init__.py` names the logger `dynamicio`, so `disable_existing_loggers` does not disable the module loggers. If you set `DYNAMICIO_DO_NOT_CONFIGURE_LOGGING=1` and call `logging.config.dictConfig` after the dynamicio import, name the logger `dynamicio` in your config or set `disable_existing_loggers` to `false`. If you do not, your config disables the dynamicio loggers
