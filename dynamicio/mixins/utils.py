@@ -50,11 +50,11 @@ def allow_options(options: Union[Iterable[str], Callable]):
     return read_with_valid_options
 
 
-def args_of(*funcs) -> set[str]:
+def args_of(*funcs: Callable) -> set[str]:
     """Retrieve a set of accepted keyword arguments from one or more functions.
 
     Args:
-        funcs: A list of functions to inspect.
+        *funcs: The functions to inspect.
 
     Returns:
         set[str]: A set of accepted keyword arguments.

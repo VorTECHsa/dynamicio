@@ -87,7 +87,7 @@ class SafeDynamicResourceLoader(yaml.SafeLoader):
             module: A global vars module with all the dynamic values defined in it.
 
         Returns:
-            type
+            type: The new loader subclass.
         """
         return type(f"{cls.__name__}_{module.__name__}", (cls,), {"module": module})
 
@@ -129,7 +129,7 @@ class SafeDynamicSchemaLoader(yaml.SafeLoader):
             module: A global vars module with all the dynamic values defined in it.
 
         Returns:
-            type
+            type: The new loader subclass.
         """
         return type(f"{cls.__name__}_{module.__name__}", (cls,), {"module": module})
 

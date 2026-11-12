@@ -164,7 +164,7 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
         """Allows the use of asyncio to concurrently read files in memory.
 
         Returns:
-            A pandas dataframe or an iterable.
+            pd.DataFrame | Iterable: A pandas dataframe or an iterable.
         """
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(pool, self.read)

@@ -82,13 +82,13 @@ def session_for(connection_string: str) -> Generator[SqlAlchemySession, None, No
 class WithPostgres:
     """Handles I/O operations for Postgres.
 
-    Args:
-       - options:
-           - `truncate_and_append: bool`: If True, truncates the table with CASCADE and appends new rows (faster but destructive).
-                                    If False (default), safely deletes all existing rows and then appends new rows.
-                                    Use truncate only if you are certain views and FK constraints can be dropped or tolerated.
-           - `create_table: bool`: If True, creates the table from the schema before writing when it does not exist.
-                                    The table has no primary key, because the schema does not say which columns form it.
+    Write options (passed as keyword arguments to `write`, or set under `options` in the resource definition):
+
+    - `truncate_and_append: bool`: If True, truncates the table with CASCADE and appends new rows (faster but destructive).
+      If False (default), safely deletes all existing rows and then appends new rows.
+      Use truncate only if you are certain views and FK constraints can be dropped or tolerated.
+    - `create_table: bool`: If True, creates the table from the schema before writing when it does not exist.
+      The table has no primary key, because the schema does not say which columns form it.
     """
 
     sources_config: PostgresDataEnvironment

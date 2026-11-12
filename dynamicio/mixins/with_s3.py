@@ -278,7 +278,7 @@ def s3_sync_down(source_url: str, dest_dir: str, include_pattern: Optional[str] 
         max_concurrency: Number of concurrent download threads.
 
     Raises:
-        Whatever boto3 raises if listing or any download fails.
+        botocore.exceptions.BotoCoreError: Whatever boto3 raises if listing or any download fails (a `ClientError` for a service error).
     """
     bucket, key_prefix = _split_s3_url(source_url)
     key_prefix = f"{key_prefix.rstrip('/')}/" if key_prefix else ""

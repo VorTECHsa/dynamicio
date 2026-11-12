@@ -1,21 +1,126 @@
 ---
-site_name: dynamicio Documentation
+site_name: dynamicio
+site_description: Configuration-driven I/O for pandas dataframes, with YAML resource definitions and Pandera schema models.
+# `site_url` is deliberately unset: Read the Docs supplies the canonical URL of each version it builds.
+repo_url: https://github.com/VorTECHsa/dynamicio
+repo_name: VorTECHsa/dynamicio
+edit_uri: edit/master/docs/
+docs_dir: docs
+strict: true
 
-nav:
-  - Home: index.md
-  - API Reference: api.md
-  - Architecture Decisions: adr/README.md
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
+
+theme:
+  name: material
+  logo: images/wrapped-panda.png
+  favicon: images/wrapped-panda.png
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - content.action.edit
+    - content.code.copy
+    - navigation.footer
+    - navigation.indexes
+    - navigation.sections
+    - navigation.top
+    - navigation.tracking
+    - search.highlight
+    - search.suggest
+    - toc.follow
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/VorTECHsa/dynamicio
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/dynamicio/
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets:
+      base_path: ["."]
+      check_paths: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
 
 plugins:
-  - techdocs-core
+  - search
   - mkdocstrings:
       handlers:
         python:
           options:
             docstring_style: google
+            docstring_options:
+              returns_named_value: false  # `Returns:` lines read `type: description`, as in the docstrings
             show_source: false
             show_signature_annotations: true
             members_order: source
             separate_signature: true
+            show_root_heading: true
+            show_root_full_path: false
+            heading_level: 3
+            filters: ["!^_"]
 
-docs_dir: docs
+nav:
+  - Home: index.md
+  - Getting started:
+      - Installation: getting-started/installation.md
+      - Quickstart: getting-started/quickstart.md
+      - Concepts: getting-started/concepts.md
+  - Guides:
+      - Resource definitions: guides/resource-definitions.md
+      - Environments and configuration: guides/configuration.md
+      - Reading data: guides/reading-data.md
+      - Writing data: guides/writing-data.md
+      - Schemas and validation: guides/schemas-and-validation.md
+      - Supported sources and formats: guides/sources-and-formats.md
+      - Using asyncio: guides/asyncio.md
+      - Testing pipelines locally: guides/testing-pipelines.md
+      - Error handling: guides/error-handling.md
+  - Examples:
+      - Basic I/O: examples/basic-io.md
+      - Pipelines: examples/pipelines.md
+  - API reference: reference/index.md
+  - Architecture decisions:
+      - adr/README.md
+      - "0001 Direct boto3 for S3 I/O": adr/0001-direct-boto3-s3-io.md
+      - "0002 Missing columns in parquet prefixes": adr/0002-tolerate-missing-columns-in-parquet-prefix-reads.md
+      - "0003 Athena via AWS Wrangler": adr/0003-athena-via-aws-wrangler.md
+      - "0004 Ranged parquet reads": adr/0004-ranged-parquet-reads-with-filters.md
+      - "0005 Pandera schema declaration": adr/0005-pandera-schema-declaration.md
+      - "0006 Expected outputs test harness": adr/0006-expected-outputs-test-harness.md
+      - "0007 S3 I/O performance evidence": adr/0007-s3-io-performance-evidence.md
+  - Development:
+      - Contributing: development/contributing.md
+      - Writing documentation: development/documentation.md
+      - Testing: development/testing.md
+      - Releasing: development/releasing.md
+      - Read the Docs setup: development/readthedocs-setup.md
+  - Changelog: changelog.md

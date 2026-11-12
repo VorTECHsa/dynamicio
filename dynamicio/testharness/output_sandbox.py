@@ -1,7 +1,7 @@
 """Redirects the local outputs of a task into a scratch directory, so tests that share resource definitions can not overwrite each other's files."""
 
 import os
-from typing import Dict, List
+from typing import Dict, List, Union
 
 from dynamicio.config import IOConfig
 
@@ -20,7 +20,7 @@ class OutputSandbox:
         configs: The ``IOConfig`` objects (in their LOCAL-style environment) the task writes with.
     """
 
-    def __init__(self, directory, *configs: IOConfig):
+    def __init__(self, directory: Union[str, os.PathLike], *configs: IOConfig):
         self.directory = str(directory)
         self.configs = configs
         self._original: Dict[int, tuple] = {}
