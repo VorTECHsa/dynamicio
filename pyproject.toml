@@ -35,6 +35,10 @@ dependencies = [
 ]
 
 [project.urls]
+# Documentation: the Read the Docs project is imported by the repository owner (docs/development/readthedocs-setup.md); replace this with its URL once confirmed
+Documentation = "https://github.com/VorTECHsa/dynamicio/tree/master/docs"
+Source = "https://github.com/VorTECHsa/dynamicio"
+Issues = "https://github.com/VorTECHsa/dynamicio/issues"
 Changelog = "https://github.com/VorTECHsa/dynamicio/blob/master/CHANGELOG.md"
 
 [project.scripts]
@@ -70,10 +74,9 @@ dev = [
     "yamllint",
 ]
 docs = [
-    "mkdocs",
+    "mkdocs<2",
     "mkdocs-material",
     "mkdocstrings[python]",
-    "mkdocs-techdocs-core",
 ]
 
 [build-system]

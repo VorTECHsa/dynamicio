@@ -32,44 +32,32 @@ You do not need to activate the environment: prefix commands with `uv run` (e.g.
 
 ## 2. Committing
 Based on how the repository has been configured, when you stage any new files to be committed, they will first be
-inspected by `isort`, `black`, `flake8`, `yamllint` and `pylint` by means of `pre-commit`. If errors are found by 
-`black`, you can simply re-add updated files to staging and try to commit again. Else, you will need to make some 
+inspected by `isort`, `black`, `flake8`, `yamllint` and `pylint` by means of `pre-commit`. If errors are found by
+`black`, you can simply re-add updated files to staging and try to commit again. Else, you will need to make some
 changes, stage the updated files and then try to commit again.
 
 Hooks have not been configured for docs generation and for running tests, as docs can skew the purpose of a commit
-and should be handled independently, while tests are not always part of a commit either. You can manually run these 
-checks, you by using the below make instructions:
+and should be handled independently, while tests are not always part of a commit either. You can manually run these
+checks by using the below make instructions:
 
 ```shell
 >> make check-linting
 >> make run-tests
->> make generate-docs (please, always update docs with every release)
+>> make generate-docs
 ```
 
-## 3. Tagging
-To tag a release candidate, you need to run the following command from your feature-branch:
-```shell
->> make tag-release-candidate
-```
-and follow the instructions.
+Commit and pull request titles are semantic: `type(RND-12345): subject` (`feat`, `fix`, `docs`, `chore`, ...).
 
-This script will:
-1. Ask you to provide a tag number after informing you of the latest tag;
-2. Create a new tag adding a changelog-message based on the semantic commits in the branch that are ahead of master, and;
-3. Push your tag to be built into an official release.
+## 3. Documentation and the changelog
 
-Once you have finalised and merged your feature-branch into master, you can then run the following command to tag a new release:
-```shell
->> make tag-new-release
-```
+- The documentation lives in `docs/` and is built with MkDocs (`make serve-docs` to preview, `make generate-docs` for the strict build CI runs).
+  See "Writing documentation" for the rules, including how examples are tested.
+- Add a `CHANGELOG.md` entry for every user-visible change, under the `## vX.Y.Z` heading of the version the branch will
+  release (patch for fixes, minor for features, major for breaking changes). There is no `## Unreleased` section. Internal-only changes may omit an entry.
+- A new option of a reader or writer must be on its `allow_options` list, and documented.
 
-This script will:
-1. Ask you to provide a tag number after informing you of the latest tag;
-2. Ask you to provide the name of the local branch you used to work on the new features you will be brining in;
-3. Create a new tag adding a changelog-message based on the semantic commits in the branch that are ahead of master, and;
-4. Push your tag to be built into an official release.
+## 4. Releasing
 
-
-Versions are not stored in the repo: the package version is derived from the git tag at build time (`hatch-vcs`), so a pushed
-`vX.Y.Z` tag is all the "Build and Publish" workflow needs to build and publish to PyPI. Pull requests that change code
-should add a `CHANGELOG.md` entry.
+Versions are not stored in the repo: the package version is derived from the git tag at build time (`hatch-vcs`). After the
+pull request is merged, tag the merge commit on `master` (`vX.Y.Z`, or `vX.Y.Z-rc.N` for a release candidate from a feature branch). The "Build and Publish"
+workflow then validates, builds and publishes it. The steps, and how to recover from a failed release, are in "Releasing".

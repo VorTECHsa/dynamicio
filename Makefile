@@ -63,6 +63,16 @@ generate-docs:
 serve-docs:
 	@uv run --group docs mkdocs serve
 
+# Re-export the pinned documentation tooling Read the Docs installs (docs/requirements.txt) from uv.lock
+docs-requirements:
+	@{ printf '%s\n' "# Pinned documentation tooling, exported from uv.lock (group \`docs\`). Do not edit: run \`make docs-requirements\` after changing the group." "# The package itself is not installed: mkdocstrings reads the source statically, so the build needs no runtime dependencies or credentials."; \
+	  uv export --only-group docs --no-hashes --no-emit-project --no-header; } > docs/requirements.txt
+
+# Release checks, as run by CI: make check-release TAG=vX.Y.Z
+check-release:
+	@uv run python .github/tools/release_tools.py check-tag $(TAG)
+	@uv run python .github/tools/release_tools.py check-changelog $(TAG)
+
 build-locally:
 	@uv build
 

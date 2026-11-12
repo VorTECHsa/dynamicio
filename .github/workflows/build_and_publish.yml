@@ -6,6 +6,9 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
+permissions:
+  contents: read  # least privilege by default; the publish job asks for more
+
 jobs:
   style-checks:
     runs-on: ubuntu-latest
@@ -118,16 +121,36 @@ jobs:
           files: coverage.xml
           flags: unittests
 
-  build-and-publish:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: ["style-checks", "test", "dependency-ranges"]
+  docs:
+    # The same strict build Read the Docs runs, so a broken page fails the pull request instead of the hosted build.
     runs-on: ubuntu-latest
-    permissions:
-      contents: write  # to create the GitHub release
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked --group docs
+
+      - name: Check that docs/requirements.txt (installed by Read the Docs) matches uv.lock
+        run: |
+          make docs-requirements
+          git diff --exit-code docs/requirements.txt || { echo "docs/requirements.txt is stale: run 'make docs-requirements' and commit it" >&2; exit 1; }
+
+      - name: Build the documentation (any warning fails)
+        run: uv run --frozen mkdocs build --strict
+
+  package:
+    # Builds the one set of distributions that a release publishes, and validates it. No secrets are available here.
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Important: full history and tags so hatch-vcs can derive the version
+          fetch-depth: 0  # full history and tags so hatch-vcs can derive the version
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v5
@@ -135,26 +158,94 @@ jobs:
           python-version: "3.10"
           enable-cache: true
 
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Build the sdist and the wheel
+        run: uv build --out-dir dist
+
+      - name: Validate the distribution metadata
+        run: uvx twine check --strict dist/*
+
+      - name: Check the built version against the tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: uv run --frozen python .github/tools/release_tools.py check-dist "$GITHUB_REF_NAME" dist
+
+      - name: Upload the distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+  validate-release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.10"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Check the tag format (vX.Y.Z or vX.Y.Z-rc.N)
+        run: uv run --frozen python .github/tools/release_tools.py check-tag "$GITHUB_REF_NAME"
+
       - name: Check that CHANGELOG.md has a section for this release
         if: ${{ !contains(github.ref_name, '-rc') }}
-        run: |
-          if ! grep -qx "## ${GITHUB_REF_NAME}" CHANGELOG.md; then
-            echo "CHANGELOG.md has no '## ${GITHUB_REF_NAME}' heading: rename '## Unreleased' in the release PR and tag the merge commit" >&2
-            exit 1
-          fi
+        run: uv run --frozen python .github/tools/release_tools.py check-changelog "$GITHUB_REF_NAME"
 
-      - name: Build and Publish to PyPI
+      - name: Check that a stable tag is on master
+        if: ${{ !contains(github.ref_name, '-rc') }}
+        run: |
+          git fetch origin master
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/master || { echo "$GITHUB_REF_NAME is not on master: merge the release PR first, then tag the merge commit" >&2; exit 1; }
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: ["style-checks", "test", "dependency-ranges", "docs", "package", "validate-release"]
+    runs-on: ubuntu-latest
+    concurrency:
+      group: release-${{ github.ref_name }}  # one release run per tag; a re-run waits instead of racing
+      cancel-in-progress: false
+    permissions:
+      contents: write  # to create the GitHub release
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.10"
+          enable-cache: true
+
+      - name: Download the validated distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - name: Publish to PyPI
         env:
           PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
-        run: |
-          uv build
-          uv publish --token "$PYPI_TOKEN"
+        # --check-url skips files PyPI already holds, so re-running a run that failed later is safe
+        run: uv publish --token "$PYPI_TOKEN" --check-url https://pypi.org/simple/ dist/*
 
-
-      - name: Create the GitHub release from the CHANGELOG section
+      - name: Create or update the GitHub release from the CHANGELOG section
         if: ${{ !contains(github.ref_name, '-rc') }}
         env:
           GH_TOKEN: ${{ github.token }}
+          DOCS_BASE_URL: ${{ vars.DOCS_BASE_URL }}  # optional repository variable: the Read the Docs site root
         run: |
-          awk -v tag="## ${GITHUB_REF_NAME}" '$0 == tag {on=1; next} /^## /{on=0} on' CHANGELOG.md > notes.md
-          gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes-file notes.md
+          uv run --frozen python .github/tools/release_tools.py notes "$GITHUB_REF_NAME" > notes.md
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md
+          else
+            gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes-file notes.md
+          fi
