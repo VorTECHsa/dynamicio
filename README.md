@@ -570,24 +570,19 @@ distinction takes place later).
 
 ##### Optional sources: `missing_ok`
 
-Some sources do not exist on every run, for example the state that a previous run writes, before the first run. Set
-`missing_ok: true` on the source, beside the environments, to read such a source:
+Some sources do not exist on every run, for example the state that a previous run writes, before the first run. Pass
+`missing_ok=True` to the constructor of the IO class to read such a source:
 
-```yaml
-PREVIOUS_RUN_STATE:
-  missing_ok: true
-  LOCAL:
-    type: "local"
-    local:
-      file_path: "[[ TEST_RESOURCES ]]/data/state.parquet"
-      file_type: "parquet"
+```python
+state_df = PreviousRunStateIO(source_config=input_config.get(source_key="PREVIOUS_RUN_STATE"), missing_ok=True).read()
 ```
 
 When the source does not exist, `read()` and `async_read()` return `None` and log a warning. "Does not exist" means
 that the reader raised a `FileNotFoundError`. This includes a missing local file, a missing S3 csv or json key
 (`dynamicio.errors.ObjectNotFoundError`) and an S3 path prefix with no objects (`dynamicio.errors.NoObjectsFoundError`).
 A missing S3 parquet or hdf key raises a botocore `ClientError`, so `missing_ok` does not cover it. All other errors,
-for example a denied access, raise as before. The default is `false`.
+for example a denied access, raise as before. The default is `False`. The caller handles the `None`, so the argument
+is in the code of the caller and not in the resource definition.
 
 Resource definitions say nothing about the *shape* of the data. That is the job of the **"schema definition"** of your dataset, a Python
 class kept next to them in a module of `src/resources/schemas/` (we will cover this in detail in Step 4).

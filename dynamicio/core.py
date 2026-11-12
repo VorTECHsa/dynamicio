@@ -58,6 +58,7 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
         strict_dtype_check: bool = False,
         *,
         schema: Optional[Type[DataFrameModel]] = None,
+        missing_ok: bool = False,
         **options: MutableMapping[str, Any],
     ):
         """Class constructor.
@@ -69,6 +70,7 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
             show_casting_warnings: Logs casting warnings on either read() or write() if set to True
             strict_dtype_check: Applies strict dtype check on either read() or write(), confirming the correct type for all rows per column, if set to True
             schema: A Pandera `DataFrameModel` for this instance. Takes precedence over the class attribute; required when the class sets `schema = SCHEMA_FROM_ARGUMENT`
+            missing_ok: If True, `read()` returns None when the source does not exist, instead of raising `FileNotFoundError`
             options: Any additional kwargs that may be used throughout the lifecycle of the object
         """
         if type(self) is DynamicDataIO:  # pylint: disable=unidiomatic-typecheck
@@ -80,6 +82,7 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
         self.log_schema_metrics = log_schema_metrics
         self.show_casting_warnings = show_casting_warnings
         self.strict_dtype_check = strict_dtype_check
+        self.missing_ok = missing_ok
         self.options = self._get_options(options, source_config.options)
         source_name = self.sources_config.data_backend_type.value
         self._dataframe_validator = None  # the dataframe-level part of a Pandera model, if any
@@ -170,15 +173,15 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
         """Reads data source and returns a schema validated dataframe (by means of _apply_schema).
 
         Returns:
-            A pandas dataframe or an iterable. None if the source does not exist and its binding sets `missing_ok: true`.
+            A pandas dataframe or an iterable. None if the source does not exist and `missing_ok` is True.
         """
         source_name = self.sources_config.data_backend_type.value
         try:
             df = getattr(self, f"_read_from_{source_name}")()
         except FileNotFoundError as err:
-            if not self.sources_config.missing_ok:
+            if not self.missing_ok:
                 raise
-            logger.warning(f"Source {self.name!r} does not exist and its binding sets missing_ok: returning None. ({err})")
+            logger.warning(f"Source {self.name!r} does not exist and missing_ok is set: returning None. ({err})")
             return None
 
         df = self._apply_schema(df)
