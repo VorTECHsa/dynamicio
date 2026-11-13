@@ -35,6 +35,8 @@ def make_io(tmp_path):
 
 
 class Checked(pa.DataFrameModel):
+    __dataset_name__ = "checked"
+
     code: Series[str] = pa.Field(str_matches=r"^[A-Z]{3}$")
     size: Series[int] = pa.Field()
     other: Series[int] = pa.Field()
@@ -82,6 +84,8 @@ def test_each_construct_fails_the_read(make_io, bad, failing):
 @pytest.mark.unit
 def test_an_ordered_model_fails_when_columns_are_out_of_order(make_io):
     class Ordered(pa.DataFrameModel):
+        __dataset_name__ = "ordered"
+
         a: Series[int]
         b: Series[int]
 
@@ -96,6 +100,8 @@ def test_an_ordered_model_fails_when_columns_are_out_of_order(make_io):
 @pytest.mark.unit
 def test_an_index_declared_on_the_model_is_checked(make_io):
     class Indexed(pa.DataFrameModel):
+        __dataset_name__ = "indexed"
+
         a: Series[int]
         idx: pa.typing.Index[int] = pa.Field(ge=0)
 
@@ -124,6 +130,8 @@ def test_options_dynamicio_cannot_honour_are_refused(config, message):
 @pytest.mark.unit
 def test_a_column_option_dynamicio_cannot_honour_is_refused():
     class Refused(pa.DataFrameModel):
+        __dataset_name__ = "refused"
+
         a: Series[int] = pa.Field(default=0)
 
     with pytest.raises(ValueError, match="default"):
@@ -135,6 +143,8 @@ def test_a_polars_model_is_refused():
     pl = pytest.importorskip("pandera.polars")
 
     class Frame(pl.DataFrameModel):
+        __dataset_name__ = "frame"
+
         a: int
 
     with pytest.raises(ValueError, match="pandas"):
@@ -144,6 +154,8 @@ def test_a_polars_model_is_refused():
 @pytest.mark.unit
 def test_str_follows_the_pandas_default_string_dtype():
     class Strings(pa.DataFrameModel):
+        __dataset_name__ = "strings"
+
         a: Series[str]
 
     assert to_dataframe_schema(Strings).columns["a"].data_type == str(pd.Series([""]).dtype)
@@ -152,6 +164,8 @@ def test_str_follows_the_pandas_default_string_dtype():
 @pytest.mark.unit
 def test_a_declared_coerce_gives_the_nullable_dtype():
     class Coerced(pa.DataFrameModel):
+        __dataset_name__ = "coerced"
+
         a: Series[int] = pa.Field(nullable=True, coerce=True)
 
     assert to_dataframe_schema(Coerced).columns["a"].data_type == "Int64"

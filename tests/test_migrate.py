@@ -11,12 +11,47 @@ from dynamicio import cli
 from dynamicio.config.pydantic.table_schema import DataframeSchema
 from dynamicio.schema.migrate import compile_module, migrate, render_model, render_module, schemas_equivalent
 from dynamicio.schema.models import to_dataframe_schema
-from tests.test_contracts.conftest import SCHEMA_SPEC
+
+# A v8 YAML schema exercising every validator and metric, with one non-applied validation.
+SCHEMA_SPEC = {
+    "name": "contract_dataset",
+    "columns": {
+        "a": {
+            "type": "int64",
+            "validations": {
+                "has_unique_values": {"apply": True, "options": {}},
+                "is_greater_than": {"apply": True, "options": {"threshold": 1}},
+                "is_between": {"apply": True, "options": {"lower": 0, "upper": 5}},
+            },
+            "metrics": ["Min", "Counts", "UniqueCounts"],
+        },
+        "b": {
+            "type": "object",
+            "validations": {
+                "has_no_null_values": {"apply": True, "options": {}},
+                "is_in": {"apply": True, "options": {"categorical_values": ["x", "y"]}},
+            },
+            "metrics": ["CountsPerLabel"],
+        },
+        "c": {
+            "type": "float64",
+            "validations": {
+                "has_no_null_values": {"apply": True, "options": {}},
+                "has_acceptable_percentage_of_nulls": {"apply": True, "options": {"threshold": 0.3}},
+                "is_lower_than_or_equal": {"apply": False, "options": {"threshold": 1}},
+            },
+            "metrics": ["Mean", "Max", "Std", "Variance"],
+        },
+    },
+}
+PRELUDE = "import pandas as pd\nfrom pandera.typing import Series\n\nfrom dynamicio.schema import DataModel, Field, Metric\n\n\n"
 
 
 @pytest.mark.unit
 def test_pandera_default_nullable_false_adds_a_not_null_validation_the_yaml_never_had():
     class Defaults(pa.DataFrameModel):  # pylint: disable=missing-class-docstring
+        __dataset_name__ = "defaults"
+
         a: Series[int]
 
     assert [v.name for v in to_dataframe_schema(Defaults).columns["a"].validations] == ["has_no_null_values"]
@@ -25,14 +60,14 @@ def test_pandera_default_nullable_false_adds_a_not_null_validation_the_yaml_neve
 @pytest.mark.unit
 def test_yaml_schema_migrates_to_a_model_that_compiles_back_to_the_same_schema():
     original = DataframeSchema(**SCHEMA_SPEC)
-    model = compile_module("import pandas as pd\nimport pandera.pandas as pa\nfrom pandera.typing import Series\n\n\n" + render_model(original))["ContractDataset"]
+    model = compile_module(PRELUDE + render_model(original))["ContractDataset"]
 
     assert schemas_equivalent(to_dataframe_schema(model), original)
 
 
 @pytest.mark.unit
 def test_migrated_model_filters_extra_columns_like_dynamicio_does():
-    model = compile_module("import pandas as pd\nimport pandera.pandas as pa\nfrom pandera.typing import Series\n\n\n" + render_model(DataframeSchema(**SCHEMA_SPEC)))["ContractDataset"]
+    model = compile_module(PRELUDE + render_model(DataframeSchema(**SCHEMA_SPEC)))["ContractDataset"]
     df = pd.DataFrame({"a": [2, 3, 4], "b": ["x", "y", "x"], "c": [1.0, 2.0, 3.0], "extra": [0, 0, 0]})
 
     out = model.validate(df)
@@ -54,7 +89,9 @@ def project(tmp_path, monkeypatch):
     schemas.mkdir(parents=True)
     (schemas / "contract.yaml").write_text(yaml.safe_dump(SCHEMA_SPEC, sort_keys=False))
     (schemas / "not_a_schema.yaml").write_text("foo: bar\n")
-    (tmp_path / "io.py").write_text("from dynamicio import UnifiedIO\nfrom dynamicio.core import SCHEMA_FROM_FILE\n\n\nclass IO(UnifiedIO):\n    schema = SCHEMA_FROM_FILE\n")
+    (tmp_path / "io.py").write_text(
+        "from dynamicio import UnifiedIO\nfrom dynamicio.core import SCHEMA_FROM_FILE\n\n\nclass IO(UnifiedIO):\n    schema = SCHEMA_FROM_FILE\n"
+    )  # a v8 call site
     (tmp_path / "definitions.yaml").write_text("---\nX:\n  LOCAL:\n    type: local\n  schema:\n    file_path: schemas/contract.yaml\n")
     monkeypatch.chdir(tmp_path)
     return tmp_path
@@ -88,7 +125,7 @@ def test_migrate_disambiguates_files_whose_schemas_share_a_name(project):
 
     assert sorted(report["models"]) == ["Contract", "SubContract"]
     namespace = compile_module((project / "schemas.py").read_text())
-    assert namespace["Contract"].Config.name == namespace["SubContract"].Config.name == "contract_dataset"
+    assert namespace["Contract"].__dataset_name__ == namespace["SubContract"].__dataset_name__ == "contract_dataset"
 
 
 @pytest.mark.unit
@@ -120,7 +157,7 @@ def test_is_in_with_mixed_type_categorical_values_migrates():
         name="mixed",
         columns={"c": {"type": "object", "validations": {"is_in": {"apply": True, "options": {"categorical_values": ["b", None, "a"]}}}, "metrics": []}},
     )
-    model = compile_module("import pandera.pandas as pa\nfrom pandera.typing import Series\n\n\n" + render_model(original))["Mixed"]
+    model = compile_module(PRELUDE + render_model(original))["Mixed"]
 
     assert schemas_equivalent(to_dataframe_schema(model), original)
 
@@ -131,7 +168,7 @@ def test_is_between_with_a_dynamic_variable_bound_migrates():
         name="dyn",
         columns={"y": {"type": "float64", "validations": {"is_between": {"apply": True, "options": {"lower": 1941, "upper": "[[ NEXT_YEAR ]]"}}}, "metrics": []}},
     )
-    model = compile_module("import pandera.pandas as pa\nfrom pandera.typing import Series\n\n\n" + 'NEXT_YEAR = "[[ NEXT_YEAR ]]"\n\n\n' + render_model(original))["Dyn"]
+    model = compile_module(PRELUDE + 'NEXT_YEAR = "[[ NEXT_YEAR ]]"\n\n\n' + render_model(original))["Dyn"]
 
     assert schemas_equivalent(to_dataframe_schema(model), original)
 
@@ -147,8 +184,31 @@ def test_an_explicit_default_option_is_equivalent_to_omitting_it():
 @pytest.mark.unit
 def test_dtype_aliases_migrate_to_their_pandas_names():
     original = DataframeSchema(name="al", columns={"a": {"type": "double", "validations": {}, "metrics": []}, "b": {"type": "int", "validations": {}, "metrics": []}})
-    model = compile_module("import pandera.pandas as pa\nfrom pandera.typing import Series\n\n\n" + render_model(original))["Al"]
+    model = compile_module(PRELUDE + render_model(original))["Al"]
 
+    assert schemas_equivalent(to_dataframe_schema(model), original)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "dtype, declared",
+    [
+        ("uint32", "np.uint32"),
+        ("uint64", "np.uint64"),
+        ("int32", "np.int32"),
+        ("float32", "np.float32"),
+        ("UInt32", "pd.UInt32Dtype"),
+        ("Int64", "pd.Int64Dtype"),
+        ("Float64", "pd.Float64Dtype"),
+        ("boolean", "pd.BooleanDtype"),
+    ],
+)
+def test_other_dtypes_migrate_to_types_not_calls(dtype, declared):
+    original = DataframeSchema(name="d", columns={"a": {"type": dtype, "validations": {}, "metrics": []}})
+    source = render_module({"D": original})
+    model = compile_module(source)["D"]
+
+    assert f"a: Series[{declared}]" in source and "pandas_dtype" not in source
     assert schemas_equivalent(to_dataframe_schema(model), original)
 
 
@@ -175,3 +235,60 @@ def test_a_yaml_object_column_migrates_to_object_and_keeps_list_values_valid():
     assert "label: Series[str]" not in source and "tags: Series[object]" in source and "label: Series[object]" in source
     assert schemas_equivalent(to_dataframe_schema(model), original)
     model.validate(pd.DataFrame({"tags": [["a", "b"], []], "label": ["x", None]}))  # plain Pandera accepts lists in an `object` column
+
+
+@pytest.mark.unit
+def test_migrated_models_use_the_typed_helpers_and_name_their_dataset(project):
+    migrate("resources/schemas", "schemas.py")
+
+    source = (project / "schemas.py").read_text()
+    assert "class Contract(DataModel, dataset='contract_dataset'):" in source
+    assert "metrics=[Metric.MIN, Metric.COUNTS, Metric.UNIQUE_COUNTS]" in source
+    assert "max_null_fraction=0.3" in source and "metrics=[Metric.MEAN, Metric.MAX, Metric.STD, Metric.VARIANCE]" in source
+    assert "from dynamicio.schema import DataModel, Field, Metric" in source
+    assert "metadata" not in source and "pa." not in source and "name = " not in source.split("class Config")[1]  # Config only keeps the column filter
+    assert 'strict = "filter"' in source
+
+
+@pytest.mark.unit
+def test_a_model_is_given_a_table_name_only_when_a_resource_definition_binds_its_schema_to_postgres(project):
+    (project / "resources" / "schemas" / "orders.yaml").write_text(yaml.safe_dump({**SCHEMA_SPEC, "name": "Orders_v2"}, sort_keys=False))
+    (project / "definitions.yaml").write_text(
+        "---\nORDERS:\n  LOCAL:\n    type: local\n  CLOUD:\n    type: postgres\n  schema:\n    file_path: schemas/orders.yaml\n"
+        "X:\n  LOCAL:\n    type: local\n  schema:\n    file_path: schemas/contract.yaml\n"
+    )
+
+    migrate("resources/schemas", "schemas.py")
+
+    namespace = compile_module((project / "schemas.py").read_text())
+    assert to_dataframe_schema(namespace["Orders"]).table_name == "Orders_v2"  # the exact spelling of the old schema name
+    assert to_dataframe_schema(namespace["Orders"]).name == "Orders_v2"
+    assert to_dataframe_schema(namespace["Contract"]).table_name is None
+
+
+@pytest.mark.unit
+def test_scan_points_the_postgres_lookup_at_the_resource_definitions_elsewhere(tmp_path, project):
+    definitions = tmp_path.parent / f"{tmp_path.name}_defs"
+    definitions.mkdir()
+    (definitions / "d.yaml").write_text("---\nX:\n  CLOUD:\n    type: postgres\n  schema:\n    file_path: s/contract.yaml\n")
+
+    migrate("resources/schemas", "schemas.py", scan=str(definitions))
+
+    assert to_dataframe_schema(compile_module((project / "schemas.py").read_text())["Contract"]).table_name == "contract_dataset"
+
+
+@pytest.mark.unit
+def test_postgres_models_can_be_read_by_a_postgres_io_class(project):
+    (project / "definitions.yaml").write_text("---\nX:\n  CLOUD:\n    type: postgres\n  schema:\n    file_path: schemas/contract.yaml\n")
+
+    migrate("resources/schemas", "schemas.py")
+
+    assert to_dataframe_schema(compile_module((project / "schemas.py").read_text())["Contract"]).table_name
+
+
+@pytest.mark.unit
+def test_the_prompt_tells_how_to_name_datasets_and_tables(project):
+    migrate("resources/schemas", "schemas.py")
+
+    prompt = (project / "MIGRATION_PROMPT.md").read_text()
+    assert "dataset=" in prompt and "table=" in prompt and "exactly" in prompt and "DataModel" in prompt

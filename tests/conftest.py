@@ -80,7 +80,6 @@ def expected_input_yaml_dict():
                         },
                     },
                 },
-                "dynamicio_schema": None,
             },
             "READ_FROM_S3_CSV": {
                 "name": "READ_FROM_S3_CSV",
@@ -102,69 +101,6 @@ def expected_input_yaml_dict():
                             "file_path": "mock-key",
                             "file_type": "csv",
                             "bucket": "mock-bucket",
-                        },
-                    },
-                },
-                "dynamicio_schema": {
-                    "name": "read_from_s3_csv",
-                    "columns": {
-                        "id": {
-                            "name": "id",
-                            "data_type": "int64",
-                            "validations": [
-                                {"name": "has_unique_values", "apply": True, "options": {}},
-                                {
-                                    "name": "has_no_null_values",
-                                    "apply": True,
-                                    "options": {},
-                                },
-                            ],
-                            "metrics": ["UniqueCounts", "Counts"],
-                        },
-                        "foo_name": {
-                            "name": "foo_name",
-                            "data_type": "object",
-                            "validations": [
-                                {
-                                    "name": "has_no_null_values",
-                                    "apply": True,
-                                    "options": {},
-                                },
-                                {
-                                    "name": "is_in",
-                                    "apply": True,
-                                    "options": {
-                                        "categorical_values": [
-                                            "class_a",
-                                            "class_b",
-                                            "class_c",
-                                        ]
-                                    },
-                                },
-                            ],
-                            "metrics": ["CountsPerLabel"],
-                        },
-                        "bar": {
-                            "name": "bar",
-                            "data_type": "int64",
-                            "validations": [
-                                {
-                                    "name": "has_no_null_values",
-                                    "apply": True,
-                                    "options": {},
-                                },
-                                {
-                                    "name": "is_greater_than",
-                                    "apply": True,
-                                    "options": {"threshold": 1000},
-                                },
-                                {
-                                    "name": "is_lower_than",
-                                    "apply": True,
-                                    "options": {"threshold": 2000},
-                                },
-                            ],
-                            "metrics": ["Min", "Max", "Mean", "Std", "Variance"],
                         },
                     },
                 },
@@ -192,7 +128,6 @@ def expected_input_yaml_dict():
                         },
                     },
                 },
-                "dynamicio_schema": None,
             },
             "READ_FROM_S3_HDF": {
                 "name": "READ_FROM_S3_HDF",
@@ -217,7 +152,6 @@ def expected_input_yaml_dict():
                         },
                     },
                 },
-                "dynamicio_schema": None,
             },
             "READ_FROM_S3_PARQUET": {
                 "name": "READ_FROM_S3_PARQUET",
@@ -242,7 +176,6 @@ def expected_input_yaml_dict():
                         },
                     },
                 },
-                "dynamicio_schema": None,
             },
             "READ_FROM_POSTGRES": {
                 "name": "READ_FROM_POSTGRES",
@@ -269,7 +202,6 @@ def expected_input_yaml_dict():
                         },
                     },
                 },
-                "dynamicio_schema": None,
             },
             "READ_FROM_KAFKA": {
                 "name": "READ_FROM_KAFKA",
@@ -293,7 +225,6 @@ def expected_input_yaml_dict():
                         },
                     },
                 },
-                "dynamicio_schema": None,
             },
             "TEMPLATED_FILE_PATH": {
                 "name": "TEMPLATED_FILE_PATH",
@@ -318,7 +249,6 @@ def expected_input_yaml_dict():
                         },
                     },
                 },
-                "dynamicio_schema": None,
             },
             "READ_FROM_PARQUET_TEMPLATED": {
                 "name": "READ_FROM_PARQUET_TEMPLATED",
@@ -343,7 +273,6 @@ def expected_input_yaml_dict():
                         },
                     },
                 },
-                "dynamicio_schema": None,
             },
             "REPLACE_SCHEMA_WITH_DYN_VARS": {
                 "name": "REPLACE_SCHEMA_WITH_DYN_VARS",
@@ -357,63 +286,6 @@ def expected_input_yaml_dict():
                             "file_type": "parquet",
                         },
                     }
-                },
-                "dynamicio_schema": {
-                    "name": "bar",
-                    "columns": {
-                        "column_a": {
-                            "name": "column_a",
-                            "data_type": "object",
-                            "validations": [
-                                {"name": "has_unique_values", "apply": True, "options": {}}
-                            ],
-                            "metrics": ["Counts"],
-                        },
-                        "column_b": {
-                            "name": "column_b",
-                            "data_type": "object",
-                            "validations": [
-                                {"name": "has_no_null_values", "apply": True, "options": {}}
-                            ],
-                            "metrics": ["CountsPerLabel"],
-                        },
-                        "column_c": {
-                            "name": "column_c",
-                            "data_type": "float64",
-                            "validations": [
-                                {
-                                    "name": "is_greater_than",
-                                    "apply": True,
-                                    "options": {"threshold": 1000},
-                                }
-                            ],
-                            "metrics": [],
-                        },
-                        "column_d": {
-                            "name": "column_d",
-                            "data_type": "float64",
-                            "validations": [
-                                {
-                                    "name": "is_lower_than",
-                                    "apply": True,
-                                    "options": {"threshold": 1000.0},
-                                }
-                            ],
-                            "metrics": ["Min", "Max", "Mean", "Std", "Variance"],
-                        },
-                        "0": {
-                            "name": "0",
-                            "data_type": "object",
-                            "validations": [],
-                            "metrics": [],
-                        },
-                        "1": {
-                            "name": "1",
-                            "data_type": "object",
-                            "validations": [],
-                            "metrics": [],
-                        },
-                    },
                 },
             },
         }
@@ -443,104 +315,6 @@ def expected_s3_csv_local_mapping():
                     "file_type": "csv",
                     "bucket": "mock-bucket",
                 },
-            },
-        },
-        "dynamicio_schema": {
-            "name": "read_from_s3_csv",
-            "columns": {
-                "id": {
-                    "name": "id",
-                    "data_type": "int64",
-                    "validations": [
-                        {"name": "has_unique_values", "apply": True, "options": {}},
-                        {"name": "has_no_null_values", "apply": True, "options": {}},
-                    ],
-                    "metrics": ["UniqueCounts", "Counts"],
-                },
-                "foo_name": {
-                    "name": "foo_name",
-                    "data_type": "object",
-                    "validations": [
-                        {"name": "has_no_null_values", "apply": True, "options": {}},
-                        {
-                            "name": "is_in",
-                            "apply": True,
-                            "options": {
-                                "categorical_values": ["class_a", "class_b", "class_c"]
-                            },
-                        },
-                    ],
-                    "metrics": ["CountsPerLabel"],
-                },
-                "bar": {
-                    "name": "bar",
-                    "data_type": "int64",
-                    "validations": [
-                        {"name": "has_no_null_values", "apply": True, "options": {}},
-                        {
-                            "name": "is_greater_than",
-                            "apply": True,
-                            "options": {"threshold": 1000},
-                        },
-                        {
-                            "name": "is_lower_than",
-                            "apply": True,
-                            "options": {"threshold": 2000},
-                        },
-                    ],
-                    "metrics": ["Min", "Max", "Mean", "Std", "Variance"],
-                },
-            },
-        },
-    }
-
-
-@pytest.fixture
-def expected_s3_csv_cloud_mapping():
-    return {
-        "name": "read_from_s3_csv",
-        "columns": {
-            "id": {
-                "name": "id",
-                "data_type": "int64",
-                "validations": [
-                    {"name": "has_unique_values", "apply": True, "options": {}},
-                    {"name": "has_no_null_values", "apply": True, "options": {}},
-                ],
-                "metrics": ["UniqueCounts", "Counts"],
-            },
-            "foo_name": {
-                "name": "foo_name",
-                "data_type": "object",
-                "validations": [
-                    {"name": "has_no_null_values", "apply": True, "options": {}},
-                    {
-                        "name": "is_in",
-                        "apply": True,
-                        "options": {
-                            "categorical_values": ["class_a", "class_b", "class_c"]
-                        },
-                    },
-                ],
-                "metrics": ["CountsPerLabel"],
-            },
-            "bar": {
-                "name": "bar",
-                "data_type": "int64",
-                "validations": [
-                    {"name": "has_no_null_values", "apply": True, "options": {}},
-                    {
-                        "name": "is_greater_than",
-                        "apply": True,
-                        "options": {"threshold": 1000},
-                    },
-                    {
-                        "name": "is_lower_than",
-                        "apply": True,
-                        "options": {"threshold": 2000},
-                    },
-                ],
-                "metrics": ["Min", "Max", "Mean", "Std", "Variance"],
             },
         },
     }
@@ -693,123 +467,6 @@ def input_messages_df():
             {"id": "message02", "foo": "yyyyyyyy", "bar": 1, "baz": ["d", "e", "f"]},
         ]
     )
-
-
-@pytest.fixture
-def input_schema_definition():
-    return {
-        "columns": {
-            "id": {
-                "metrics": ["UniqueCounts", "Counts"],
-                "type": "int64",
-                "validations": {
-                    "has_no_null_values": {"apply": True, "options": {}},
-                    "has_unique_values": {"apply": True, "options": {}},
-                },
-            },
-            "bar": {
-                "metrics": ["Min", "Max", "Mean", "Std", "Var"],
-                "type": "int64",
-                "validations": {
-                    "has_no_null_values": {"apply": True, "options": {}},
-                    "is_greater_than": {"apply": True, "options": {"threshold": 1000}},
-                    "is_lower_than": {"apply": True, "options": {"threshold": 2000}},
-                },
-            },
-            "foo_name": {
-                "metrics": None,
-                "type": "object",
-                "validations": {
-                    "is_in": {
-                        "apply": True,
-                        "options": {"categorical_values": ["class_a", "class_b", "class_c"]},
-                    },
-                    "has_no_null_values": {"apply": True, "options": {}},
-                },
-            },
-        },
-        "name": "read_from_s3_csv",
-    }
-
-
-# @pytest.fixture
-# def expected_schema():
-#     return {"id": "int64", "foo_name": "object", "bar": "int64"}
-
-
-@pytest.fixture
-def expected_schema_definition():
-    return {
-        "name": "READ_FROM_S3_CSV",
-        "environments": {
-            "LOCAL": {
-                "options": {},
-                "data_backend_type": "local",
-                "expected": None,
-                "local": {
-                    "file_path": f"{constants.TEST_RESOURCES}/data/input/some_csv_to_read.csv",
-                    "file_type": "csv",
-                },
-            },
-            "CLOUD": {
-                "options": {},
-                "data_backend_type": "s3",
-                "expected": None,
-                "s3": {
-                    "file_path": "mock-key",
-                    "file_type": "csv",
-                    "bucket": "mock-bucket",
-                },
-            },
-        },
-        "dynamicio_schema": {
-            "name": "read_from_s3_csv",
-            "columns": {
-                "id": {
-                    "name": "id",
-                    "data_type": "int64",
-                    "validations": [
-                        {"name": "has_unique_values", "apply": True, "options": {}},
-                        {"name": "has_no_null_values", "apply": True, "options": {}},
-                    ],
-                    "metrics": ["UniqueCounts", "Counts"],
-                },
-                "foo_name": {
-                    "name": "foo_name",
-                    "data_type": "object",
-                    "validations": [
-                        {"name": "has_no_null_values", "apply": True, "options": {}},
-                        {
-                            "name": "is_in",
-                            "apply": True,
-                            "options": {
-                                "categorical_values": ["class_a", "class_b", "class_c"]
-                            },
-                        },
-                    ],
-                    "metrics": ["CountsPerLabel"],
-                },
-                "bar": {
-                    "name": "bar",
-                    "data_type": "int64",
-                    "validations": [
-                        {"name": "has_no_null_values", "apply": True, "options": {}},
-                        {
-                            "name": "is_greater_than",
-                            "apply": True,
-                            "options": {"threshold": 1000},
-                        },
-                        {
-                            "name": "is_lower_than",
-                            "apply": True,
-                            "options": {"threshold": 2000},
-                        },
-                    ],
-                    "metrics": ["Min", "Max", "Mean", "Std", "Variance"],
-                },
-            },
-        },
-    }
 
 
 @pytest.fixture

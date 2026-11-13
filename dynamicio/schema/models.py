@@ -1,8 +1,11 @@
 """Spike: compile a Pandera ``DataFrameModel`` into dynamicio's existing ``DataframeSchema``.
 
 Pandera is the declaration (what developers click through); dynamicio's validators and metrics stay the execution engine, so
-messages, payloads and log lines are unchanged. Anything Pandera cannot express natively lives in
-``Field(metadata={"dynamicio": {"validations": {...}, "metrics": [...]}})``.
+messages, payloads and log lines are unchanged. Anything Pandera cannot express natively is declared with the typed helpers of
+``dynamicio.schema.metadata`` (``Field(metrics=[Metric.MIN], max_null_fraction=0.2)``).
+
+A model names its dataset (the label of logs and ``METRIC`` lines) with ``__dataset_name__``, which is mandatory, and the Postgres table it maps to
+with ``__table_name__``. ``DataModel`` sets them from class keywords (see ``dynamicio.schema.model_settings``).
 
 Nothing in a model is dropped silently. Column checks that dynamicio has no validator for (``str_matches``, a custom ``@pa.check``) run as Pandera
 checks, and the dataframe-level parts (``@pa.dataframe_check``, ``Config.unique``, ``Config.ordered``, an index) run as a residual Pandera schema.
@@ -16,12 +19,12 @@ import pandas as pd
 import pandera.pandas as pa
 
 from dynamicio.config.pydantic.table_schema import DataframeSchema
+from dynamicio.schema.metadata import METADATA_KEY, DynamicioMetadata
+from dynamicio.schema.model_settings import ModelSettings
 
 
 class ModelCompiler:
     """Compiles a Pandera ``DataFrameModel`` into the ``DataframeSchema`` contract and the residual Pandera validator that runs what the contract cannot."""
-
-    METADATA_KEY = "dynamicio"
 
     # pandera check name -> (dynamicio validator, mapping of pandera statistics -> validator options)
     CHECKS = {
@@ -87,9 +90,22 @@ class ModelCompiler:
                 validations[validator] = {"apply": True, "options": options(check.statistics)}
             else:  # `str_matches`, a custom `@pa.check`, ...: Pandera runs it
                 validations[check.name or "pandera_check"] = {"apply": True, "options": {"pandera_check": check}}
-        for validator, options in (column.metadata or {}).get(cls.METADATA_KEY, {}).get("validations", {}).items():
-            validations[validator] = {"apply": True, "options": options}
+        for spec in cls.declared(column).validations:
+            validations[spec.name] = {"apply": True, "options": dict(spec.options)}
         return validations
+
+    @staticmethod
+    def declared(column: Any) -> DynamicioMetadata:
+        """What a Pandera column declares for dynamicio through ``metadata``; anything but the typed helpers of ``dynamicio.schema`` is refused."""
+        declared = (column.metadata or {}).get(METADATA_KEY)
+        if declared is None:
+            return DynamicioMetadata()
+        if not isinstance(declared, DynamicioMetadata):
+            raise ValueError(
+                f"{column.name}: metadata={{'{METADATA_KEY}': ...}} is not supported any more. "
+                "Declare metrics and validations with dynamicio.schema.Field: Field(nullable=True, metrics=[Metric.MIN], max_null_fraction=0.2)"
+            )
+        return declared
 
     @classmethod
     def to_dataframe_schema(cls, model: type) -> DataframeSchema:
@@ -103,11 +119,11 @@ class ModelCompiler:
             name: {
                 "type": cls.dtype(column),
                 "validations": cls.validations_of(column),
-                "metrics": list((column.metadata or {}).get(cls.METADATA_KEY, {}).get("metrics", [])),
+                "metrics": [metric.value for metric in cls.declared(column).metrics],
             }
             for name, column in schema.columns.items()
         }
-        return DataframeSchema(name=schema.name or model.__name__, columns=columns)
+        return DataframeSchema(name=ModelSettings.dataset_name(model), table_name=ModelSettings.table_name(model), columns=columns)
 
 
 # The names the rest of dynamicio imports.

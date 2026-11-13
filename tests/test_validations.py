@@ -4,6 +4,7 @@ import os
 import pytest
 
 # Application Imports
+from dynamicio import UnifiedIO
 from dynamicio.config import IOConfig
 from dynamicio.schema.validations import (
     has_acceptable_percentage_of_nulls,
@@ -17,7 +18,7 @@ from dynamicio.schema.validations import (
     is_lower_than_or_equal,
 )
 from tests import constants
-from tests.mocking.io import ReadS3CsvIO
+from tests.mocking.models import Products
 
 
 class TestHasUniqueValues:
@@ -456,6 +457,10 @@ class TestIsBetween:
         assert validation.valid is True and validation.value == 0 and validation.message == "All values of TEST[weight_b] is between 4 and 10 thresholds"
 
 
+class ProductsIO(UnifiedIO):
+    schema = Products
+
+
 class TestRegressions:
     """Tests for regressions discovered in v4.3.0 release."""
 
@@ -468,7 +473,7 @@ class TestRegressions:
             env_identifier="LOCAL",
             dynamic_vars=constants,
         ).get(source_key="PRODUCTS")
-        io_instance = ReadS3CsvIO(source_config=input_config, apply_schema_validations=True, log_schema_metrics=True)
+        io_instance = ProductsIO(source_config=input_config, apply_schema_validations=True, log_schema_metrics=True)
 
         # When
         data = io_instance.read()

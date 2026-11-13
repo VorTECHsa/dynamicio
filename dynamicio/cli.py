@@ -3,16 +3,15 @@
 import argparse
 import glob
 import os
-import pprint
 import sys
-from typing import Mapping, MutableMapping, Optional, Sequence
+from typing import Optional, Sequence
 
 import pandas as pd  # type: ignore
-import yaml
 
 # Application Imports
+from dynamicio.config.pydantic import DataframeSchema
 from dynamicio.errors import InvalidDatasetTypeError
-from dynamicio.schema.migrate import migrate
+from dynamicio.schema.migrate import ModelRenderer, migrate
 
 
 def parse_args(args: Optional[Sequence] = None) -> argparse.Namespace:
@@ -25,7 +24,7 @@ def parse_args(args: Optional[Sequence] = None) -> argparse.Namespace:
     Returns:
         An instance of ArgumentParser populated with the provided args.
     """
-    parser = argparse.ArgumentParser(prog="dynamicio", description="Generate dataset schemas")
+    parser = argparse.ArgumentParser(prog="dynamicio", description="Generate a Pandera model (a .py module) for each dataset")
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument(
         "-b",
@@ -40,18 +39,18 @@ def parse_args(args: Optional[Sequence] = None) -> argparse.Namespace:
         help="flag, used to generate a schema provided a single dataset.",
     )
     parser.add_argument("-p", "--path", required=True, help="the path to the dataset/datasets-directory.", type=str)
-    parser.add_argument("-o", "--output", required=True, help="the path to the schemas output directory.", type=str)
+    parser.add_argument("-o", "--output", required=True, help="the path to the output directory for the generated models.", type=str)
     return parser.parse_args(args)
 
 
-def generate_schema_for(dataset: str) -> Mapping:
+def generate_schema_for(dataset: str) -> DataframeSchema:
     """Generate a schema for a dataset.
 
     Args:
         dataset: The path to the dataset for which we want to generate a schema
 
     Returns:
-        A dictionary containing the schema for the dataset, or None if the dataset is not valid.
+        The schema of the dataset: its name (the file name without extension) and each column with the dtype pandas read.
 
     Raises:
         InvalidDatasetTypeError: If the dataset type is not supported by dynamicio.
@@ -70,12 +69,18 @@ def generate_schema_for(dataset: str) -> Mapping:
         raise InvalidDatasetTypeError(dataset)
 
     print(f"Generating schema for: {dataset}")
-    json_schema: MutableMapping = {"name": dataset_name, "columns": {}}
-    for column, d_type in zip(list(df.columns), list(df.dtypes)):
-        json_schema["columns"][column] = {"type": "", "validations": {}, "metrics": []}
-        json_schema["columns"][column]["type"] = d_type.name
+    columns = {str(column): {"type": d_type.name, "validations": {}, "metrics": []} for column, d_type in zip(df.columns, df.dtypes)}
+    return DataframeSchema(name=dataset_name, columns=columns)
 
-    return json_schema
+
+def write_model_for(schema: DataframeSchema, output: str) -> str:
+    """Write the Pandera model of ``schema`` to ``<output>/<schema name>.py`` and return its source."""
+    source = ModelRenderer.render_module({ModelRenderer.class_name(schema.name): schema}).replace(
+        f"Migrated from the dynamicio schema {schema.name!r}.", f"The dtypes of the dataset {schema.name!r}: declare nullability and validations by hand."
+    )
+    with open(os.path.join(output, f"{schema.name}.py"), "w", encoding="utf-8") as file:
+        file.write(source)
+    return source
 
 
 def main(args: argparse.Namespace):
@@ -88,24 +93,18 @@ def main(args: argparse.Namespace):
         dataset_files = glob.glob(os.path.join(args.path, "*.*"))
         for dataset in dataset_files:
             try:
-                json_schema = generate_schema_for(dataset)
+                schema = generate_schema_for(dataset)
             except InvalidDatasetTypeError as exception:
                 print(f"Skipping {exception.message}! You may want to remove this file from the datasets directory")
             else:
-                with open(os.path.join(args.output, f"{json_schema['name']}.yaml"), "w") as file:  # pylint: disable=unspecified-encoding]
-                    file.write("---\n")
-                    yaml.safe_dump(json_schema, file)
+                write_model_for(schema, args.output)
 
     if args.single:
-        json_schema = generate_schema_for(str(args.path))
-        with open(os.path.join(args.output, f"{json_schema['name']}.yaml"), "w") as file:  # pylint: disable=unspecified-encoding]
-            file.write("---\n")
-            yaml.safe_dump(json_schema, file)
-        pprint.pprint(json_schema)
+        print(write_model_for(generate_schema_for(str(args.path)), args.output))
 
 
 def run_migrate(argv: Sequence[str]) -> None:
-    """The ``dynamicio migrate`` subcommand: YAML schemas to Pandera models, plus an LLM prompt for the call sites."""
+    """The ``dynamicio migrate`` subcommand: YAML schemas (dynamicio 8 and earlier) to the Pandera models of dynamicio 11, plus an LLM prompt for the call sites."""
     parser = argparse.ArgumentParser(prog="dynamicio migrate", description="Convert YAML schemas into Pandera models")
     parser.add_argument("path", help="directory searched for YAML schema files")
     parser.add_argument(

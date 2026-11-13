@@ -1,12 +1,14 @@
 """Behaviour contract: how schemas are declared and how dtypes are enforced.
 
-Covers the two declaration styles that exist today (YAML schema file, in-code ``schema`` dict plus ``schema_validations`` /
-``schema_metrics``), and the dtype-casting behaviour that read() and write() apply.
+Covers the shape of the compiled schema (what a Pandera model compiles to), what a class may declare as ``schema``, and the dtype-casting
+behaviour that read() and write() apply.
 """
 
 # pylint: disable=missing-class-docstring, missing-function-docstring
 import pandas as pd
+import pandera.pandas as pa
 import pytest
+from pandera.typing import Series
 from pydantic import ValidationError
 
 from dynamicio import UnifiedIO
@@ -14,7 +16,15 @@ from dynamicio.config.pydantic.table_schema import DataframeSchema, SchemaColumn
 from dynamicio.errors import ColumnsDataTypeError
 
 
-class TestYamlSchemaShape:
+class BareModel(pa.DataFrameModel):
+    __dataset_name__ = "bare_model"
+
+    a: Series[int] = pa.Field(nullable=True)
+    b: Series[object] = pa.Field(nullable=True)
+    c: Series[float] = pa.Field(nullable=True)
+
+
+class TestCompiledSchemaShape:
     @pytest.mark.unit
     def test_column_order_is_preserved(self):
         schema = DataframeSchema(name="s", columns={"z": {"type": "int64"}, "a": {"type": "object"}, "m": {"type": "float64"}})
@@ -63,7 +73,7 @@ class TestYamlSchemaShape:
         assert column.validations[0].name == "no_such_validator"
 
 
-class TestInCodeSchemaDeclaration:
+class TestSchemaDeclaration:
     @pytest.mark.unit
     def test_subclass_without_schema_attribute_is_rejected(self):
         with pytest.raises(AssertionError):
@@ -72,16 +82,31 @@ class TestInCodeSchemaDeclaration:
                 pass
 
     @pytest.mark.unit
-    def test_empty_schema_is_rejected(self):
-        with pytest.raises(ValueError):
+    @pytest.mark.parametrize("removed", [{}, {"id": "int64"}, "SCHEMA_FROM_FILE"])
+    def test_dict_and_yaml_schemas_are_rejected_at_class_definition(self, removed):
+        with pytest.raises(TypeError, match="removed in dynamicio 11"):
 
-            class _EmptySchema(UnifiedIO):  # pylint: disable=unused-variable
-                schema = {}
+            class _Removed(UnifiedIO):  # pylint: disable=unused-variable
+                schema = removed
+
+    @pytest.mark.unit
+    def test_the_rejection_points_to_the_migration(self):
+        with pytest.raises(TypeError, match="dynamicio migrate"):
+
+            class _Removed(UnifiedIO):  # pylint: disable=unused-variable
+                schema = {"id": "int64"}
+
+    @pytest.mark.unit
+    def test_schema_validations_and_schema_metrics_dicts_alone_do_not_declare_a_schema(self):
+        with pytest.raises(AssertionError):
+
+            class _OnlyValidations(UnifiedIO):  # pylint: disable=unused-variable
+                schema_validations = {"a": {}}
 
     @pytest.mark.unit
     def test_validations_and_metrics_are_optional(self, make_io, valid_df, metric_records):
         class Bare(UnifiedIO):
-            schema = {"a": "int64", "b": "object", "c": "float64"}
+            schema = BareModel
 
         out = make_io(valid_df, io_class=Bare, apply_schema_validations=True, log_schema_metrics=True).read()
 

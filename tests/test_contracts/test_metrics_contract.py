@@ -5,6 +5,7 @@ the lifecycle (when metrics are and are not emitted) are all pinned here.
 """
 
 # pylint: disable=missing-class-docstring, missing-function-docstring, redefined-outer-name
+import importlib
 import json
 import logging
 from unittest.mock import patch
@@ -16,7 +17,8 @@ import dynamicio
 from dynamicio.config.pydantic.table_schema import MetricsName
 from dynamicio.core import DynamicDataIO
 from dynamicio.errors import SchemaValidationError
-from dynamicio.schema import metrics
+
+metrics = importlib.import_module("dynamicio.schema.metrics")  # `dynamicio.schema.metrics` the attribute is the typed helper
 
 
 def _line(dataset, column, metric, value):
@@ -67,9 +69,8 @@ def test_records_come_from_the_dynamicio_metrics_logger_at_info(make_io, valid_d
 
 
 @pytest.mark.unit
-def test_dataset_name_is_the_schema_name_uppercased_for_yaml_and_the_snake_cased_class_name_for_dict(make_io):
-    assert make_io().name == make_io.dataset_name
-    assert make_io.dataset_name == ("CONTRACT_DICT_IO" if make_io.style == "dict_schema" else "CONTRACT_DATASET")
+def test_dataset_name_is_the_dunder_dataset_name_of_the_model_uppercased(make_io):
+    assert make_io().name == make_io.dataset_name == "CONTRACT_DATASET"
 
 
 @pytest.mark.unit
@@ -164,3 +165,18 @@ def test_nothing_is_derived_from_the_dataframe_index(make_io, metric_records):
     make_io(log_schema_metrics=True).log_metrics_from_schema(df)
 
     assert len(metric_records()) == 9
+
+
+@pytest.mark.unit
+def test_metrics_names_both_the_typed_helper_and_the_module_that_computes_them():
+    from dynamicio.schema import Metric, metrics as helper  # pylint: disable=import-outside-toplevel
+    from dynamicio.schema.metrics import get_metric  # pylint: disable=import-outside-toplevel
+
+    # the package attribute is the helper that declares metrics ...
+    assert callable(helper) and helper(Metric.MIN).payload.metrics == (Metric.MIN,)
+    # ... and the module that computes them stays importable by path
+    assert importlib.import_module("dynamicio.schema.metrics") is metrics
+    assert callable(get_metric) and get_metric("Min") is metrics.get_metric("Min")
+    import dynamicio.metrics  # pylint: disable=import-outside-toplevel,reimported
+
+    assert dynamicio.metrics is not None

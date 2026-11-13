@@ -54,11 +54,11 @@ class StagedBar(WithLocal, WithPostgres, DynamicDataIO):
 
 Instances of the `DynamicDataIO` class can either inherit directly from `UnifiedIO` (e.g. `InputIO` inherits from `UnifiedIO`) or user can choose the mixins they want to use 
 (e.g. `StagedFoo` inherits from `WithS3File` and `WithLocal` mixins and needs to inherit from `DynamicDataIO`; note that Python's method resolution order (MRO) kicks in to address polymorphic conflicts--i.e. order matters). 
-Also, all instances of the `DynamicDataIO` **must** define a class `schema`. The schema is a Pandera model, either fixed on the class (`schema = StagedFooModel`, see `StagedFoo`), supplied per instance (`schema = SCHEMA_FROM_ARGUMENT`, see `InputIO` and Step 4.1), or read from the YAML resource definition (`schema = SCHEMA_FROM_FILE`, Step 4.1b).
+Also, all instances of the `DynamicDataIO` **must** define a class `schema`. The schema is a Pandera model, either fixed on the class (`schema = StagedFooModel`, see `StagedFoo`), supplied per instance (`schema = SCHEMA_FROM_ARGUMENT`, see `InputIO` and Step 4.1), and nothing else: dict schemas, YAML schemas and `SCHEMA_FROM_FILE` were removed in version 11 (see [Upgrading](schemas-and-validation.md#upgrading)).
 
 **N.B.** For convenience's sake and to reduce the need of boilerplate code, using a single class definition like `InputIO` is recommended (this way all your datasets can be loaded with instances of the same class). 
 However, if you need to use different mixins for different datasets, you can do so by defining a class for each dataset (e.g. `StagedFoo` and `StagedBar`). For such a shared class, set `schema = SCHEMA_FROM_ARGUMENT` and pass the model per instance, `InputIO(source_config=..., schema=Foo)`.
-You only need your own class per dataset when the schema is fixed on the class, as in `StagedFoo`. The dataset's name always comes from the model's `Config.name` (upper-cased, e.g. `staged_foo` becomes `STAGED_FOO`).
+You only need your own class per dataset when the schema is fixed on the class, as in `StagedFoo`. The dataset's name comes from the model (`dataset=`, which every model must set), upper-cased: `staged_foo` becomes `STAGED_FOO` ([declaring the dataset](schemas-and-validation.md#declaring-the-dataset)).
 
 
 ## Step 4.3a: Loading from `S3`
@@ -66,7 +66,7 @@ You only need your own class per dataset when the schema is fixed on the class, 
 To then load from `S3` you simply do:
 
 ```python
-    foo_df = InputIO(source_config=staging_input_config.get(source_key="FOO"), schema=Foo, apply_schema_validations=True, log_schema_metrics=True).read()
+    foo_df = InputIO(source_config=staging_input_config.get(source_key="FOO"), schema=Foo).read()
 ```
 
 which will load the `FOO` dataset from the `DEV` definition (here an `S3` object) as a dataframe. With the environment set to `LOCAL` the same call reads the local sample file instead.
@@ -75,13 +75,14 @@ which will load the `FOO` dataset from the `DEV` definition (here an `S3` object
 
 Likewise to `S3` resources, `postgres` resources need the same number of options to be defined for their loading.
 
-When the dataset has a schema (a Pandera model or a YAML/dict schema), dynamicio infers a SQL data model from it rather than requiring you to define one.
-This data model defines the table, the columns and their respective SQL types.
+dynamicio infers a SQL data model from the Pandera model rather than requiring you to define one.
+This data model defines the table, the columns and their respective SQL types. The model names the table with `table=`, the exact name of the table in the database
+(see [Declaring the dataset](schemas-and-validation.md#declaring-the-dataset)); without it, creating the IO object raises `TableNameNotFoundError`.
 
 To, then, load from `postgres` you simply do:
 
 ```python
-    bar_df = InputIO(source_config=staging_input_config.get(source_key="BAR"), schema=Bar, apply_schema_validations=True, log_schema_metrics=True).read()
+    bar_df = InputIO(source_config=staging_input_config.get(source_key="BAR"), schema=Bar).read()
 ```
 
 which will load the table defined for `BAR` as a dataframe.
