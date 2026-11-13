@@ -66,7 +66,7 @@ You only need your own class per dataset when the schema is fixed on the class, 
 To then load from `S3` you simply do:
 
 ```python
-    foo_df = InputIO(source_config=staging_input_config.get(source_key="FOO"), schema=Foo, apply_schema_validations=True, log_schema_metrics=True).read()
+    foo_df = InputIO(source_config=staging_input_config.get(source_key="FOO"), schema=Foo).read()
 ```
 
 which will load the `FOO` dataset from the `DEV` definition (here an `S3` object) as a dataframe. With the environment set to `LOCAL` the same call reads the local sample file instead.
@@ -82,7 +82,7 @@ This data model defines the table, the columns and their respective SQL types. T
 To, then, load from `postgres` you simply do:
 
 ```python
-    bar_df = InputIO(source_config=staging_input_config.get(source_key="BAR"), schema=Bar, apply_schema_validations=True, log_schema_metrics=True).read()
+    bar_df = InputIO(source_config=staging_input_config.get(source_key="BAR"), schema=Bar).read()
 ```
 
 which will load the table defined for `BAR` as a dataframe.

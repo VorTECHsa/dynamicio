@@ -68,7 +68,7 @@ orders = OrdersIO(
 ```
 
 `apply_schema_validations` and `log_schema_metrics` are off by default; without them the schema only selects and casts
-columns.
+columns. A model can turn them on for every call with `__io__ = Behaviour(validate=True, log_metrics=True)` (see [Schemas and validation](../guides/schemas-and-validation.md)); an argument of the call overrides it.
 
 ## 4. Write and read
 

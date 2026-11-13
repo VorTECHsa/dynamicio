@@ -3,11 +3,13 @@
 import pandera.pandas as pa
 from pandera.typing import Series
 
-from dynamicio.schema import Metric, metrics
+from dynamicio.schema import Behaviour, Metric, metrics
 
 
 class Bar(pa.DataFrameModel):
     """The `bar` dataset."""
+
+    __io__ = Behaviour(validate=True, log_metrics=True)
 
     column_a: Series[str] = pa.Field(nullable=True, unique=True, metadata=metrics(Metric.COUNTS))
     column_b: Series[str] = pa.Field(nullable=False, metadata=metrics(Metric.COUNTS_PER_LABEL))
@@ -25,6 +27,8 @@ class Orders(pa.DataFrameModel):
 
 class Foo(pa.DataFrameModel):
     """The `foo` dataset."""
+
+    __io__ = Behaviour(validate=True, log_metrics=True)
 
     column_a: Series[str] = pa.Field(nullable=True, unique=True, metadata=metrics(Metric.COUNTS))
     column_b: Series[str] = pa.Field(nullable=False, metadata=metrics(Metric.COUNTS_PER_LABEL))

@@ -13,10 +13,12 @@ import pandera.pandas as pa
 from pandera.typing import Series
 
 from demo.src.config.environment import LOWER_THAN_LIMIT
-from dynamicio.schema import Metric, metrics
+from dynamicio.schema import Behaviour, Metric, metrics
 
 
 class Foo(pa.DataFrameModel):
+    __io__ = Behaviour(validate=True, log_metrics=True)
+
     column_a: Series[str] = pa.Field(nullable=True, unique=True, metadata=metrics(Metric.COUNTS))
     column_b: Series[str] = pa.Field(nullable=False, metadata=metrics(Metric.COUNTS_PER_LABEL))
     column_c: Series[float] = pa.Field(nullable=True, gt=1000)
@@ -34,7 +36,7 @@ class InputIO(UnifiedIO):
     schema = SCHEMA_FROM_ARGUMENT
 
 
-foo_df = InputIO(source_config=staging_input_config.get(source_key="FOO"), schema=Foo, apply_schema_validations=True, log_schema_metrics=True).read()
+foo_df = InputIO(source_config=staging_input_config.get(source_key="FOO"), schema=Foo).read()
 ```
 
 The `schema=` argument takes precedence over the class attribute; omitting it with `SCHEMA_FROM_ARGUMENT` raises `SchemaNotFoundError`.
