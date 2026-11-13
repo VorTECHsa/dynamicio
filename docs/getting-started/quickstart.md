@@ -45,9 +45,6 @@ from pandera.typing import Series
 class Orders(pa.DataFrameModel):
     order_id: Series[int] = pa.Field(nullable=False, unique=True)
     amount: Series[float] = pa.Field(nullable=False, ge=0)
-
-    class Config:
-        name = "orders"
 ```
 
 ## 3. Bind them in an IO class

@@ -4,25 +4,23 @@
 
 [![Pandera](../images/pandera-banner.png){ width="240" }](https://pandera.readthedocs.io)
 
-Schemas are declared in Python as [Pandera](https://pandera.readthedocs.io) `DataFrameModel` classes. Resource definitions
-stay in YAML; only the schema moves into code. Pandera is the *declaration* layer: dynamicio still runs the validations and
-emits the metrics, so error payloads and `METRIC` log lines are identical to the YAML schemas'.
+A schema is a [Pandera](https://pandera.readthedocs.io) `DataFrameModel` class, and that is the only way to declare one.
+Resource definitions stay in YAML; only the schema lives in code. Pandera is the *declaration* layer: dynamicio still runs
+the validations and emits the metrics.
 
 ```python
 import pandera.pandas as pa
 from pandera.typing import Series
 
 from demo.src.config.environment import LOWER_THAN_LIMIT
+from dynamicio.schema import Metric, metrics
 
 
 class Foo(pa.DataFrameModel):
-    column_a: Series[str] = pa.Field(nullable=True, unique=True, metadata={"dynamicio": {"metrics": ["Counts"]}})
-    column_b: Series[str] = pa.Field(nullable=False, metadata={"dynamicio": {"metrics": ["CountsPerLabel"]}})
+    column_a: Series[str] = pa.Field(nullable=True, unique=True, metadata=metrics(Metric.COUNTS))
+    column_b: Series[str] = pa.Field(nullable=False, metadata=metrics(Metric.COUNTS_PER_LABEL))
     column_c: Series[float] = pa.Field(nullable=True, gt=1000)
-    column_d: Series[float] = pa.Field(nullable=True, lt=LOWER_THAN_LIMIT, metadata={"dynamicio": {"metrics": ["Min", "Max", "Mean", "Std", "Variance"]}})
-
-    class Config:
-        name = "foo"  # the dataset name in metric lines is Config.name upper-cased; without it, the class name is used
+    column_d: Series[float] = pa.Field(nullable=True, lt=LOWER_THAN_LIMIT, metadata=metrics(Metric.MIN, Metric.MAX, Metric.MEAN, Metric.STD, Metric.VARIANCE))
 ```
 
 Use the model as a class attribute when the IO class serves one dataset (`schema = Foo`), or let one class serve many by
@@ -40,6 +38,39 @@ foo_df = InputIO(source_config=staging_input_config.get(source_key="FOO"), schem
 ```
 
 The `schema=` argument takes precedence over the class attribute; omitting it with `SCHEMA_FROM_ARGUMENT` raises `SchemaNotFoundError`.
+Any other value of `schema` (a dict, `SCHEMA_FROM_FILE`) raises a `TypeError` when the class is defined.
+
+### Naming the dataset
+
+The dataset name is the label dynamicio puts in its logs and `METRIC` lines (upper-cased: `FOO`). It is resolved in this order:
+
+1. `__dataset_name__ = "foo"` on the model;
+2. `Config.name`, if the model sets one (Pandera's own option, still honoured; a name equal to the class name counts as unset);
+3. the class name in snake case: `FinalBar` is logged as `FINAL_BAR`.
+
+Most models need nothing. The attribute is a dunder, because Pandera reserves public attributes for columns:
+
+```python
+class StagedFooModel(pa.DataFrameModel):
+    __dataset_name__ = "staged_foo"  # otherwise the label would be STAGED_FOO_MODEL
+```
+
+### Naming the Postgres table
+
+A model used with a Postgres resource must say which table it is, with `__table_name__`. It is the **exact name of the
+table in the database**, and dynamicio never guesses it from the dataset name:
+
+```python
+class Orders(pa.DataFrameModel):
+    __table_name__ = "orders_v2"  # the table in the database; the dataset name (ORDERS) is only a label
+
+    order_id: Series[int] = pa.Field(nullable=False, unique=True)
+```
+
+A Postgres resource whose model has no `__table_name__` raises `TableNameNotFoundError` when the IO object is created, and a read of a
+table that does not exist logs which `__table_name__` to correct. Other backends ignore the attribute: their location is in the resource definition.
+
+### Validations
 
 How `pa.Field` arguments map onto dynamicio's validations:
 
@@ -49,243 +80,87 @@ How `pa.Field` arguments map onto dynamicio's validations:
 | `unique=True` | `has_unique_values` |
 | `gt` / `ge` / `lt` / `le` | `is_greater_than` / `..._or_equal` / `is_lower_than` / `..._or_equal` |
 | `in_range={"min_value", "max_value", "include_min", "include_max"}` | `is_between` |
-| `isin=[...]` | `is_in` |
-| `metadata={"dynamicio": {"validations": {...}, "metrics": [...]}}` | anything else, e.g. `has_acceptable_percentage_of_nulls`, and all metrics |
+| `isin=[...]` | `is_in` (the column values must be a subset of the list) |
 
 Two traps when writing models by hand:
 
-- **Always set `nullable=` explicitly.** Pandera's default is `nullable=False`, which adds `has_no_null_values`; the YAML schemas allowed nulls unless the validation was declared.
+- **Always set `nullable=` explicitly.** Pandera's default is `nullable=False`, which adds `has_no_null_values`; dynamicio allowed nulls unless the validation was declared.
 - **Always set `include_min` / `include_max` on `in_range`.** Pandera includes the bounds by default; dynamicio's `is_between` excludes them.
 
-YAML schemas (`SCHEMA_FROM_FILE`) and dict schemas keep working.
+### Metrics and the remaining validations: typed metadata
 
-## Step 4.1b. `SCHEMA_FROM_FILE`
+Pandera gives each field one free-form `metadata` dict. dynamicio's part of it is declared with typed helpers, so an editor completes
+the names and a typo fails when the module is imported. They combine with `|`:
 
-`from dynamicio.core import SCHEMA_FROM_FILE` is a unique dynamic(i/o) object used as a placeholder.
-It is used to indicate that a schema is provided as part of a _resource definition_.
+```python
+from dynamicio.schema import Metric, exactly_values, metrics, null_fraction_below, strictly_between
 
-For example:
-
-```yaml
----
-FOO:
-  LOCAL:
-  ...
-  DEV:
-  ...
-  schema:
-    file_path: "[[ RESOURCES ]]/schemas/input/foo.yaml"
+column_d: Series[float] = pa.Field(nullable=True, lt=1000, metadata=metrics(Metric.MIN, Metric.MAX) | null_fraction_below(0.2))
 ```
 
-`foo.yaml` is effectively a schema definition and looks like this:
+| Helper | Effect |
+|---|---|
+| `metrics(Metric.MIN, ...)` | logs these metrics for the column when `log_schema_metrics=True`: `MIN`, `MAX`, `MEAN`, `STD`, `VARIANCE`, `COUNTS`, `UNIQUE_COUNTS`, `COUNTS_PER_LABEL` |
+| `null_fraction_below(0.2)` | fails if 20% or more of the column is null (a fraction strictly between 0 and 1; the validation is named `has_acceptable_percentage_of_nulls`) |
+| `exactly_values([...])` | the column holds exactly these values: no others, none missing (`isin=` only forbids others) |
+| `strictly_between(lower, upper)` | `is_between` with bounds that are not compared on definition, for limits known at import time (`include_lower=` / `include_upper=` include a bound) |
 
-```yaml
----
-name: foo
-columns:
-  column_a:
-    type: "object"
-    validations:
-      has_unique_values:
-        apply: true
-        options: {}
-    metrics:
-      - Counts
-  column_b:
-    type: "object"
-    validations:
-      has_no_null_values:
-        apply: true
-        options: {}
-    metrics:
-      - CountsPerLabel
-  column_c:
-    type: float64
-    validations:
-      is_greater_than:
-        apply: true
-        options:
-          threshold: 1000
-    metrics: []
-  column_d:
-    type: float64
-    validations:
-      is_lower_than:
-        apply: true
-        options:
-          threshold: 1000
-    metrics:
-      - Min
-      - Max
-      - Mean
-      - Std
-      - Variance
-```
+A raw `metadata={"dynamicio": {...}}` dict is rejected with an error that names the helpers.
 
-The file is quite self-explanatory. The format is:
-
-`DataSet`:
-
-- `Column`
-  - `type`
-  - `validations`
-  - `metrics`
-
-For a dataset, each of the desired columns are dictated here, along with their
-designated `dtypes`. The `columns` are used to filter out undesired columns in an optimal manner.
-This means that it will happen on loading for `*.csv` and `*.parquet` files as well as when
-interacting with a database, but will happen post-loading in the case of `*.h5` or `*.json`.
-
-`dtypes` are then used to validate the types of the columns. If types don't match, `dynamic(i/o)`
-will attempt to cast them and will issue a `WARNING`. If casting does not work either, it will
-raise a `ColumnsDataTypeError`.
-
-`validations` and `metrics` are there to document the user's expectations of the quality of the dataset.
-They can be automatically applied on loading or on writing out.
-
-Specifically, you can use the following **validations**:
-
-- `has_unique_values`  # no options
-- `has_no_null_values`  # no options
-- `has_acceptable_percentage_of_nulls`
-- `is_in`:
-  ```yaml
-    validations:
-      is_in:
-        apply: true
-        options:
-          categorical_values:
-            - class_a
-            - class_b
-            - class_c
-          match_all: false # true by default, if false, then the column unique categoricals must be equal to the acceptable ones, else they must be a subset
-  ```
-- `is_greater_than`
-  ```yaml
-    validations:
-      is_greater_than:
-        apply: true
-        options:
-          threshold: 1000
-  ```
-- `is_greater_than_or_equal`  # same as `is_greater_than`
-- `is_lower_than`  # same as `is_greater_than`
-- `is_lower_than_or_equal`  # same as `is_greater_than`
-- `is_between`  # same as `is_greater_than`
-  ```yaml
-    validations:
-      is_between:
-        apply: true
-        options:
-          lower: 0
-          upper: 1000
-          include_left: false
-          include_right: true # false by default, so bounds are excluded unless you ask
-  ```
-
-and **metrics**:
-
-- `Min`
-- `Max`
-- `Mean`
-- `Std`
-- `Variance`
-- `Counts`
-- `UniqueCounts`
-- `CountsPerLabel`
-
-imposed as per below:
-```shell
-  column_c:
-    type: float64
-    validations: {}
-    metrics:
-      - Min
-      - Max
-      - Mean
-      - Std
-      - ...
-```
-
-Note that you can also use dynamic fields to define validations, e.g. see `LOWER_THAN_LIMIT` in the file below: 
-```yaml
----
-name: bar
-columns:
-  column_a:
-    type: "object"
-    validations:
-      has_unique_values:
-        apply: true
-        options: {}
-    metrics:
-      - Counts
-  column_b:
-    type: "object"
-    validations:
-      has_no_null_values:
-        apply: true
-        options: {}
-    metrics:
-      - CountsPerLabel
-  column_c:
-    type: float64
-    validations:
-      is_greater_than:
-        apply: true
-        options:
-          threshold: 1000
-    metrics: []
-  column_d:
-    type: float64
-    validations:
-      is_lower_than:
-        apply: true
-        options:
-          threshold: "[[ LOWER_THAN_LIMIT ]]"
-    metrics:
-      - Min
-      - Max
-      - Mean
-      - Std
-      - Variance
-```
-Similar to resource definitions, this value needs to be defined in `config/environment.py`
+The `columns` of a model are used to filter out undesired columns in an optimal manner. This happens on loading for `*.csv` and `*.parquet` files as well
+as when interacting with a database, and after loading for `*.h5` and `*.json`. Their dtypes are then validated: if types do not match, `dynamic(i/o)`
+attempts to cast them and issues a `WARNING`. If casting does not work either, it raises a `ColumnsDataTypeError`. Validations and metrics can be applied on loading or on writing out.
 
 ## Step 4.2. Use the dynamicio cli
-The `dynamicio` cli can be used to automatically generate schema definitions for you, provided either a path to
-a dataset (`json`, `parquet`, `hdf`, `csv`) or to a directory. Here is how you can use it:
+
+The `dynamicio` cli generates a model module for you from a dataset (`json`, `parquet`, `hdf`, `csv`) or a directory of them:
 
 ```shell
-usage: dynamicio [-h] (--batch | --single) -p PATH -o OUTPUT
+usage: dynamicio [-h] (-b | -s) -p PATH -o OUTPUT
 
-Generate dataset schemas
+Generate a Pandera model (a .py module) for each dataset
 
-optional arguments:
-  -h, --help            show this help message and exit
-  --batch               used to generate multiple schemas provided a datasets directory.
-  --single              used to generate a schema provided a single dataset.
+  -b, --batch           generate multiple models provided a datasets directory.
+  -s, --single          generate a model provided a single dataset.
   -p PATH, --path PATH  the path to the dataset/datasets-directory.
   -o OUTPUT, --output OUTPUT
-                        the path to the schemas output directory.
+                        the path to the output directory for the generated models.
 ```
 
-The generated schema definitions will not have any validations or metrics automatically selected for you.
+The generated models carry the dtypes only: add validations, metrics and `__table_name__` yourself.
 
-### Migrating YAML schemas to Pandera models
+## Upgrading
+
+### From dynamicio 8 (YAML schemas) to 11
+
+Up to version 8, schemas were YAML files (`SCHEMA_FROM_FILE`, `schema:` blocks in resource definitions) or dicts. Version 11 reads neither,
+and `dynamicio migrate` takes a project from there in one step:
 
 ```shell
 dynamicio migrate src/resources/schemas -o src/resources/schemas --scan src
 ```
 
-This converts every YAML schema under the path into Pandera models, one module per sub-directory of the YAML schemas (so
-`schemas/stage/*.yaml` becomes `schemas/stage.py`: the grouping you already had, by runner and input or output, carries over; this is the
-recommended layout, with one models module per runner stage or definitions file rather than a single catch-all module). Pass `-o schemas.py` instead to get one module. Class names come from the file names, `Config.name` keeps the
-schema's `name`, so metric lines do not change, and checks that each generated model compiles back to a schema equivalent to its source.
+It converts every YAML schema under the path into Pandera models, one module per sub-directory of the YAML schemas (so `schemas/stage/*.yaml`
+becomes `schemas/stage.py`); pass `-o schemas.py` for a single module. For each model it:
+
+- takes the class name from the file name, and sets `__dataset_name__` to the schema's `name`, so the labels in your logs and metric lines do not change;
+- also sets `__table_name__` to that name for every schema that a resource definition under `--scan` binds to a Postgres environment (the old schema name was the table name). Check it is the exact table name;
+- writes the typed helpers for metrics and metadata-only validations, and always sets `nullable=` and the range bounds explicitly;
+- checks that the model compiles back to a schema equivalent to its source.
+
 It also writes `MIGRATION_PROMPT.md` next to the module, listing the models and every remaining call site (`SCHEMA_FROM_FILE`,
-dict schemas, `schema:` blocks in resource definitions) with file and line. Hand that prompt to an LLM, or follow it yourself:
-set `schema = <Model>` or `schema = SCHEMA_FROM_ARGUMENT` with `schema=<Model>` on construction, and delete the `schema:` blocks from the
-definitions. Dynamic variables (`[[ NAME ]]`) in the YAML become plain names marked `# TODO` in the module, to be replaced by imports.
-A YAML `object` column becomes `Series[object]`, because `object` meant "any values" (strings, lists, mixed) and dynamicio never looked inside.
-Where you know a column only holds strings, change it to `Series[str]` by hand (or `string[pyarrow]` for a smaller column, which gives `pd.NA`
-instead of `NaN` for missing values). Dict-style schemas are not converted automatically. The `demo/` project was migrated this way.
+dict schemas, `schema:` blocks in resource definitions, raw metadata dicts) with file and line. Hand it to an LLM, or follow it yourself:
+set `schema = <Model>` or `schema = SCHEMA_FROM_ARGUMENT` with `schema=<Model>` on construction, and delete the `schema:` blocks from the definitions.
+Dynamic variables (`[[ NAME ]]`) in the YAML become plain names marked `# TODO` in the module, to be replaced by imports.
+A YAML `object` column becomes `Series[object]`, because `object` meant "any values" (strings, lists, mixed) and dynamicio never looked inside. Where you know a column only
+holds strings, change it to `Series[str]` by hand. Dict-style schemas are not converted automatically.
+
+### From dynamicio 9 or 10
+
+Version 11 removes dict schemas, `SCHEMA_FROM_FILE` and YAML schemas, which 9 and 10 still accepted next to Pandera models, and changes three things in models.
+These are small enough to apply by hand, or to ask a coding assistant to apply (give it this page and the [changelog](https://github.com/VorTECHsa/dynamicio/blob/master/CHANGELOG.md)):
+
+1. Replace `metadata={"dynamicio": {"metrics": [...], "validations": {...}}}` with the helpers above.
+2. Replace `class Config: name = "x"` with `__dataset_name__ = "x"`, or delete it if `x` is the snake-case class name.
+3. Add `__table_name__ = "<exact table name>"` to every model used with a Postgres resource.
+4. Convert any remaining dict schema to a model, and delete `schema:` blocks from resource definitions.

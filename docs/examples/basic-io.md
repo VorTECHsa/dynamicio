@@ -44,9 +44,6 @@ class Events(pa.DataFrameModel):
     event_id: Series[int] = pa.Field(nullable=False, unique=True)
     label: Series[str] = pa.Field(nullable=False)
 
-    class Config:
-        name = "events"
-
 
 class EventsIO(UnifiedIO):
     schema = Events

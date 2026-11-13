@@ -54,11 +54,11 @@ class StagedBar(WithLocal, WithPostgres, DynamicDataIO):
 
 Instances of the `DynamicDataIO` class can either inherit directly from `UnifiedIO` (e.g. `InputIO` inherits from `UnifiedIO`) or user can choose the mixins they want to use 
 (e.g. `StagedFoo` inherits from `WithS3File` and `WithLocal` mixins and needs to inherit from `DynamicDataIO`; note that Python's method resolution order (MRO) kicks in to address polymorphic conflicts--i.e. order matters). 
-Also, all instances of the `DynamicDataIO` **must** define a class `schema`. The schema is a Pandera model, either fixed on the class (`schema = StagedFooModel`, see `StagedFoo`), supplied per instance (`schema = SCHEMA_FROM_ARGUMENT`, see `InputIO` and Step 4.1), or read from the YAML resource definition (`schema = SCHEMA_FROM_FILE`, Step 4.1b).
+Also, all instances of the `DynamicDataIO` **must** define a class `schema`. The schema is a Pandera model, either fixed on the class (`schema = StagedFooModel`, see `StagedFoo`), supplied per instance (`schema = SCHEMA_FROM_ARGUMENT`, see `InputIO` and Step 4.1), and nothing else: dict schemas, YAML schemas and `SCHEMA_FROM_FILE` were removed in version 11 (see [Upgrading](schemas-and-validation.md#upgrading)).
 
 **N.B.** For convenience's sake and to reduce the need of boilerplate code, using a single class definition like `InputIO` is recommended (this way all your datasets can be loaded with instances of the same class). 
 However, if you need to use different mixins for different datasets, you can do so by defining a class for each dataset (e.g. `StagedFoo` and `StagedBar`). For such a shared class, set `schema = SCHEMA_FROM_ARGUMENT` and pass the model per instance, `InputIO(source_config=..., schema=Foo)`.
-You only need your own class per dataset when the schema is fixed on the class, as in `StagedFoo`. The dataset's name always comes from the model's `Config.name` (upper-cased, e.g. `staged_foo` becomes `STAGED_FOO`).
+You only need your own class per dataset when the schema is fixed on the class, as in `StagedFoo`. The dataset's name comes from the model (`__dataset_name__`, else the snake-case class name), upper-cased: `staged_foo` becomes `STAGED_FOO` ([naming](schemas-and-validation.md#naming-the-dataset)).
 
 
 ## Step 4.3a: Loading from `S3`
@@ -75,8 +75,9 @@ which will load the `FOO` dataset from the `DEV` definition (here an `S3` object
 
 Likewise to `S3` resources, `postgres` resources need the same number of options to be defined for their loading.
 
-When the dataset has a schema (a Pandera model or a YAML/dict schema), dynamicio infers a SQL data model from it rather than requiring you to define one.
-This data model defines the table, the columns and their respective SQL types.
+dynamicio infers a SQL data model from the Pandera model rather than requiring you to define one.
+This data model defines the table, the columns and their respective SQL types. The model names the table with `__table_name__`, the exact name of the table in the database
+(see [Naming the Postgres table](schemas-and-validation.md#naming-the-postgres-table)); without it, creating the IO object raises `TableNameNotFoundError`.
 
 To, then, load from `postgres` you simply do:
 
