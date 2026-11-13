@@ -66,20 +66,20 @@ Bind it to a schema, then read and write:
 
 ```python
 import pandas as pd
-import pandera.pandas as pa
 from pandera.typing import Series
 
 from dynamicio import UnifiedIO
 from dynamicio.config import IOConfig
+from dynamicio.schema import DataModel, Field
 
 
 class Settings:
     DATA_DIR = "."
 
 
-class Orders(pa.DataFrameModel):
-    order_id: Series[int] = pa.Field(nullable=False, unique=True)
-    amount: Series[float] = pa.Field(nullable=False, ge=0)
+class Orders(DataModel, dataset="orders"):
+    order_id: Series[int] = Field(nullable=False, unique=True)
+    amount: Series[float] = Field(nullable=False, ge=0)
 
 
 class OrdersIO(UnifiedIO):

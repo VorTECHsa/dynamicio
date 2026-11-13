@@ -17,6 +17,8 @@ from dynamicio.errors import ColumnsDataTypeError
 
 
 class BareModel(pa.DataFrameModel):
+    __dataset_name__ = "bare_model"
+
     a: Series[int] = pa.Field(nullable=True)
     b: Series[object] = pa.Field(nullable=True)
     c: Series[float] = pa.Field(nullable=True)

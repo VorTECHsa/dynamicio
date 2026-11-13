@@ -44,15 +44,14 @@ SCHEMA_SPEC = {
         },
     },
 }
-PRELUDE = (
-    "import pandas as pd\nimport pandera.pandas as pa\nfrom pandera.typing import Series\n\n"
-    "from dynamicio.schema import Metric, exactly_values, metrics, null_fraction_below, strictly_between\n\n\n"
-)
+PRELUDE = "import pandas as pd\nfrom pandera.typing import Series\n\nfrom dynamicio.schema import DataModel, Field, Metric\n\n\n"
 
 
 @pytest.mark.unit
 def test_pandera_default_nullable_false_adds_a_not_null_validation_the_yaml_never_had():
     class Defaults(pa.DataFrameModel):  # pylint: disable=missing-class-docstring
+        __dataset_name__ = "defaults"
+
         a: Series[int]
 
     assert [v.name for v in to_dataframe_schema(Defaults).columns["a"].validations] == ["has_no_null_values"]
@@ -243,11 +242,11 @@ def test_migrated_models_use_the_typed_helpers_and_name_their_dataset(project):
     migrate("resources/schemas", "schemas.py")
 
     source = (project / "schemas.py").read_text()
-    assert "__dataset_name__ = 'contract_dataset'" in source
-    assert "metadata=metrics(Metric.MIN, Metric.COUNTS, Metric.UNIQUE_COUNTS)" in source
-    assert "metrics(Metric.MEAN, Metric.MAX, Metric.STD, Metric.VARIANCE) | null_fraction_below(0.3)" in source
-    assert "from dynamicio.schema import Metric, metrics, null_fraction_below" in source
-    assert "metadata={" not in source and "name = " not in source.split("class Config")[1]  # Config only keeps the column filter
+    assert "class Contract(DataModel, dataset='contract_dataset'):" in source
+    assert "metrics=[Metric.MIN, Metric.COUNTS, Metric.UNIQUE_COUNTS]" in source
+    assert "max_null_fraction=0.3" in source and "metrics=[Metric.MEAN, Metric.MAX, Metric.STD, Metric.VARIANCE]" in source
+    assert "from dynamicio.schema import DataModel, Field, Metric" in source
+    assert "metadata" not in source and "pa." not in source and "name = " not in source.split("class Config")[1]  # Config only keeps the column filter
     assert 'strict = "filter"' in source
 
 
@@ -292,4 +291,4 @@ def test_the_prompt_tells_how_to_name_datasets_and_tables(project):
     migrate("resources/schemas", "schemas.py")
 
     prompt = (project / "MIGRATION_PROMPT.md").read_text()
-    assert "__dataset_name__" in prompt and "__table_name__" in prompt and "exactly_values" in prompt
+    assert "dataset=" in prompt and "table=" in prompt and "exactly" in prompt and "DataModel" in prompt

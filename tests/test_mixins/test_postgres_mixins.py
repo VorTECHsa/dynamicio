@@ -574,6 +574,8 @@ class TestCreateTable:
 
 
 class _PgPanderaModel(pa.DataFrameModel):
+    __dataset_name__ = "pg_pandera_model"
+
     __table_name__ = "pg_pandera_table"
 
     id: Series[str]

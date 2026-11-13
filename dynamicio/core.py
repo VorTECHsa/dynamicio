@@ -17,8 +17,8 @@ from pandera.pandas import DataFrameModel
 from dynamicio.config.pydantic import DataframeSchema, IOEnvironment, SchemaColumn
 from dynamicio.errors import CASTING_WARNING_MSG, NOTICE_MSG, ColumnsDataTypeError, SchemaNotFoundError, SchemaValidationError, TableNameNotFoundError
 from dynamicio.schema import validations
-from dynamicio.schema.behaviour import Behaviour
 from dynamicio.schema.metrics import get_metric
+from dynamicio.schema.model_settings import ModelSettings
 from dynamicio.schema.models import dataframe_validator, to_dataframe_schema
 
 logger = logging.getLogger(__name__)
@@ -72,11 +72,11 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
 
         Args:
             source_config: Configuration to use when reading/writing data from/to a source
-            apply_schema_validations: Applies schema validations on either read() or write(). Default: what the model's `__io__` declares, else False
-            log_schema_metrics: Logs schema metrics on either read() or write(). Default: what the model's `__io__` declares, else False
-            show_casting_warnings: Logs casting warnings on either read() or write() if set to True. Default: what the model's `__io__` declares, else False
+            apply_schema_validations: Applies schema validations on either read() or write(). Default: what the model declares (`validate=` of `DataModel`), else False
+            log_schema_metrics: Logs schema metrics on either read() or write(). Default: what the model declares, else False
+            show_casting_warnings: Logs casting warnings on either read() or write() if set to True. Default: what the model declares, else False
             strict_dtype_check: Applies strict dtype check on either read() or write(), confirming the correct type for all rows per column, if set to True.
-                Default: what the model's `__io__` declares, else False
+                Default: what the model declares, else False
             schema: A Pandera `DataFrameModel` for this instance. Takes precedence over the class attribute; required when the class sets `schema = SCHEMA_FROM_ARGUMENT`
             missing_ok: If True, `read()` returns None when the source does not exist, instead of raising `FileNotFoundError`
             options: Any additional kwargs that may be used throughout the lifecycle of the object
@@ -104,11 +104,11 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
             active_schema = to_dataframe_schema(self.schema)
             self._dataframe_validator = dataframe_validator(self.schema)
 
-        declared = Behaviour.of(model) if model is not None else Behaviour()
-        self.apply_schema_validations = Behaviour.resolve(apply_schema_validations, declared.validate)
-        self.log_schema_metrics = Behaviour.resolve(log_schema_metrics, declared.log_metrics)
-        self.show_casting_warnings = Behaviour.resolve(show_casting_warnings, declared.show_casting_warnings)
-        self.strict_dtype_check = Behaviour.resolve(strict_dtype_check, declared.strict_dtype_check)
+        declared = ModelSettings.flags(model) if model is not None else {}
+        self.apply_schema_validations = ModelSettings.resolve(apply_schema_validations, declared.get("validate", False))
+        self.log_schema_metrics = ModelSettings.resolve(log_schema_metrics, declared.get("log_metrics", False))
+        self.show_casting_warnings = ModelSettings.resolve(show_casting_warnings, declared.get("show_casting_warnings", False))
+        self.strict_dtype_check = ModelSettings.resolve(strict_dtype_check, declared.get("strict_dtype_check", False))
 
         if not active_schema:
             raise SchemaNotFoundError()

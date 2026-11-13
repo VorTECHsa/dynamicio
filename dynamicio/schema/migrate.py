@@ -84,44 +84,33 @@ class ModelRenderer:
 
     @classmethod
     def render_field(cls, column: SchemaColumn) -> str:
-        """The ``pa.Field(...)`` call that declares ``column``."""
+        """The ``Field(...)`` call that declares ``column``."""
         kwargs: List[str] = []
-        helpers: List[str] = []
         applied = [v for v in column.validations if v.apply]
         by_name = {v.name: dict(v.options) for v in applied}
 
-        # Pandera's default is nullable=False; dynamicio's is "nulls allowed unless has_no_null_values". Always be explicit.
+        # Pandera's default is nullable=False; dynamicio's is "nulls allowed unless has_no_null_values". `Field` requires the decision.
         kwargs.append(f"nullable={'has_no_null_values' not in by_name}")
         if "has_unique_values" in by_name:
             kwargs.append("unique=True")
         for name, options in by_name.items():
             if name in cls.SIMPLE_CHECKS:
                 kwargs.append(f"{cls.SIMPLE_CHECKS[name]}={options['threshold']!r}")
-            # A string bound is a `[[ VARIABLE ]]` placeholder; Pandera's `in_range` compares the bounds on definition, so those use `strictly_between`.
-            elif name == "is_between" and not isinstance(options["lower"], str) and not isinstance(options["upper"], str):
-                kwargs.append(
-                    f"in_range={{'min_value': {options['lower']!r}, 'max_value': {options['upper']!r}, "
-                    f"'include_min': {options.get('include_left', False)!r}, 'include_max': {options.get('include_right', False)!r}}}"
-                )
             elif name == "is_between":
-                helpers.append(
-                    f"strictly_between({options['lower']!r}, {options['upper']!r}, "
-                    f"include_lower={options.get('include_left', False)!r}, include_upper={options.get('include_right', False)!r})"
-                )
+                kwargs.append(f"between=({options['lower']!r}, {options['upper']!r})")
+                kwargs += [f"{flag}=True" for flag, key in (("include_lower", "include_left"), ("include_upper", "include_right")) if options.get(key, False)]
             elif name == "is_in" and options.get("match_all", True):
                 kwargs.append(f"isin={sorted(options['categorical_values'], key=SchemaComparison.value_order)!r}")
             elif name == "is_in":
-                helpers.append(f"exactly_values({sorted(options['categorical_values'], key=SchemaComparison.value_order)!r})")
+                kwargs.append(f"exactly={sorted(options['categorical_values'], key=SchemaComparison.value_order)!r}")
             elif name == "has_acceptable_percentage_of_nulls":
-                helpers.append(f"null_fraction_below({options['threshold']!r})")
+                kwargs.append(f"max_null_fraction={options['threshold']!r}")
             elif name not in ("has_no_null_values", "has_unique_values"):
                 raise ValueError(f"Column {column.name!r}: no model equivalent for the validation {name!r}")
         if column.metrics:
             members = ", ".join(f"Metric.{Metric(getattr(m, 'value', m)).name}" for m in column.metrics)
-            helpers.insert(0, f"metrics({members})")
-        if helpers:
-            kwargs.append(f"metadata={' | '.join(helpers)}")
-        return f"pa.Field({', '.join(kwargs)})"
+            kwargs.append(f"metrics=[{members}]")
+        return f"Field({', '.join(kwargs)})"
 
     @classmethod
     def dtype_source(cls, dtype: str) -> str:
@@ -136,11 +125,8 @@ class ModelRenderer:
 
     @classmethod
     def _class_source(cls, schema: DataframeSchema, class_name: str = "", table: bool = False) -> str:
-        lines = [f"class {class_name or cls.class_name(schema.name)}(pa.DataFrameModel):", f'    """Migrated from the dynamicio schema {schema.name!r}."""', ""]
-        lines.append(f"    __dataset_name__ = {schema.name!r}")
-        if table:  # the old schema name was the table name of the Postgres resources that used it
-            lines.append(f"    __table_name__ = {schema.name!r}  # the exact name of the table in the database")
-        lines.append("")
+        keywords = f"dataset={schema.name!r}" + (f", table={schema.name!r}" if table else "")  # the old schema name was the table name of the Postgres resources that used it
+        lines = [f"class {class_name or cls.class_name(schema.name)}(DataModel, {keywords}):", f'    """Migrated from the dynamicio schema {schema.name!r}."""', ""]
         for name, column in schema.columns.items():
             attribute = name if name.isidentifier() and not keyword.iskeyword(name) else f"column_{re.sub(r'[^0-9a-zA-Z_]', '_', name)}"
             field = cls.render_field(column)
@@ -153,9 +139,9 @@ class ModelRenderer:
 
     @classmethod
     def render_model(cls, schema: DataframeSchema, class_name: str = "", table: bool = False) -> str:
-        """Return Python source for a ``pa.DataFrameModel`` equivalent to ``schema``; the class is named after the schema unless ``class_name`` is given.
+        """Return Python source for a ``DataModel`` equivalent to ``schema``; the class is named after the schema unless ``class_name`` is given.
 
-        With ``table`` the model also names its Postgres table, which the YAML schemas did through their name.
+        With ``table`` the model also names its Postgres table (``table=``), which the YAML schemas did through their name.
         """
         return cls._use_names(cls._class_source(schema, class_name, table))
 
@@ -164,7 +150,6 @@ class ModelRenderer:
         """Return a module defining one model per schema; the models named in ``tables`` also name their Postgres table."""
         body = "\n\n".join(cls._class_source(s, name, name in tables) for name, s in schemas.items())
         header = [
-            "import pandera.pandas as pa",
             "from pandera.typing import Series",
             "",
             "# `object` is what the YAML schemas declared: any Python values, including lists. Where you know a column only holds strings, declare it",
@@ -177,10 +162,9 @@ class ModelRenderer:
             header.insert(0, "import pandas as pd")
         if re.search(r"\bnp\.", body):
             header.insert(0, "import numpy as np")
-        helpers = [name for name in ("Metric", "exactly_values", "metrics", "null_fraction_below", "strictly_between") if re.search(rf"\b{name}\b", body)]
-        if helpers:
-            position = header.index("from pandera.typing import Series") + 1
-            header[position:position] = ["", f"from dynamicio.schema import {', '.join(helpers)}"]
+        helpers = ["DataModel", "Field"] + (["Metric"] if re.search(r"\bMetric\b", body) else [])
+        position = header.index("from pandera.typing import Series") + 1
+        header[position:position] = ["", f"from dynamicio.schema import {', '.join(helpers)}"]
         names = sorted({match.group(2) for match in cls.PLACEHOLDER.finditer(body)})
         for name in names:
             header.insert(-1, f'{name} = "[[ {name} ]]"  # TODO: dynamic variable in the old YAML schema; import its real value')
@@ -273,7 +257,7 @@ class MigrationPrompt:
 # dynamicio 11 migration: update the call sites
 
 `dynamicio migrate` converted the YAML schemas into Pandera models in `{module}`. dynamicio 11 declares every schema as a
-Pandera `DataFrameModel` and refuses dict schemas, `SCHEMA_FROM_FILE` and `schema:` blocks in resource definitions. Finish the
+Pandera model (`DataModel`) and refuses dict schemas, `SCHEMA_FROM_FILE` and `schema:` blocks in resource definitions. Finish the
 migration by editing the call sites below. Do not change validation or metric behaviour: dataset names, metric log lines and
 validation messages must stay identical.
 
@@ -290,13 +274,11 @@ validation messages must stay identical.
 3. Names marked `# TODO` at the top of the models module stood for dynamic variables (`[[ NAME ]]`) in the old YAML. Replace
    each placeholder with an import of the real value, e.g. `from my_project.environment import LOWER_THAN_LIMIT`.
 4. Dict-style schemas (`schema = {{...}}`, `schema_validations`, `schema_metrics`) were not converted. Translate them into
-   `pa.DataFrameModel` classes following the generated ones: always pass `nullable=` explicitly (Pandera defaults to
-   `False`, dynamicio allows nulls unless `has_no_null_values` is declared). Declare metrics and the validations that have no
-   `pa.Field` argument with the helpers of `dynamicio.schema` (`metrics(Metric.MIN)`, `null_fraction_below(0.2)`,
-   `exactly_values([...])`, `strictly_between(lower, upper)`, combined with `|`), never with a `metadata` dict. Name the dataset
-   with `__dataset_name__ = "<the old schema name>"` in the model, and set `__table_name__ = "<exact table name>"` on every
-   model used with a Postgres resource.
-5. A model whose `Config` only sets `name` should use `__dataset_name__` instead, and `Config` can go.
+   `dynamicio.schema.DataModel` classes following the generated ones: declare each column with `dynamicio.schema.Field`, which
+   takes `nullable=` (required), `unique`, `gt`/`ge`/`lt`/`le`, `isin`, `exactly`, `between`, `max_null_fraction` and
+   `metrics=[Metric.MIN, ...]`, never a `metadata` dict. Name the dataset with `dataset="<the old schema name>"` in the class
+   keywords, and add `table="<exact table name>"` to every model used with a Postgres resource.
+5. A model whose `Config` only sets `name` should use `dataset=` instead, and `Config` can go. Every model must name its dataset.
 6. Run the tests; metric and validation tests must pass unchanged.
 
 ## Call sites to review

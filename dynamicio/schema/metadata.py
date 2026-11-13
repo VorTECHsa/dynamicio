@@ -16,7 +16,7 @@ METADATA_KEY = "dynamicio"
 
 
 @enum.unique
-class Metric(str, enum.Enum):
+class Metric(enum.Enum):
     """The metrics dynamicio can log for a column, as ``METRIC`` lines; the value is the name the log line reports."""
 
     MIN = "Min"

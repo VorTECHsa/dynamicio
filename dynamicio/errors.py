@@ -11,6 +11,7 @@ __all__ = [
     "NotExpectedCategoricalValue",
     "MissingSchemaDefinition",
     "SchemaNotFoundError",
+    "DatasetNameNotFoundError",
     "TableNameNotFoundError",
     "SchemaValidationError",
     "InvalidDatasetTypeError",
@@ -51,6 +52,13 @@ class DynamicIOError(Exception):
             return self.ERROR_STR
 
         return self.ERROR_STR_DETAILED.format(message)
+
+
+class DatasetNameNotFoundError(DynamicIOError):
+    """Error raised when a model does not name its dataset."""
+
+    ERROR_STR = "A model must name its dataset"
+    ERROR_STR_DETAILED = 'The model {0!r} has no dataset name: declare it with `class {0}(DataModel, dataset="...")` (or `__dataset_name__ = "..."` on a plain Pandera model)'
 
 
 class TableNameNotFoundError(DynamicIOError):

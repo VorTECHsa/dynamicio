@@ -613,6 +613,8 @@ class TestCoreIO:
 
         # When
         class Anonymous(pa.DataFrameModel):
+            __dataset_name__ = "anonymous"
+
             id: Series[int] = pa.Field(nullable=True)
 
         class AnonymousIO(UnifiedIO):

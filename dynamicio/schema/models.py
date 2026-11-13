@@ -2,10 +2,10 @@
 
 Pandera is the declaration (what developers click through); dynamicio's validators and metrics stay the execution engine, so
 messages, payloads and log lines are unchanged. Anything Pandera cannot express natively is declared with the typed helpers of
-``dynamicio.schema.metadata`` (``pa.Field(metadata=metrics(Metric.MIN) | null_fraction_below(0.2))``).
+``dynamicio.schema.metadata`` (``Field(metrics=[Metric.MIN], max_null_fraction=0.2)``).
 
-A model names its dataset (the label of logs and ``METRIC`` lines) with ``__dataset_name__``, and the Postgres table it maps to with
-``__table_name__``. Pandera refuses public class attributes that are not fields, hence the underscores.
+A model names its dataset (the label of logs and ``METRIC`` lines) with ``__dataset_name__``, which is mandatory, and the Postgres table it maps to
+with ``__table_name__``. ``DataModel`` sets them from class keywords (see ``dynamicio.schema.model_settings``).
 
 Nothing in a model is dropped silently. Column checks that dynamicio has no validator for (``str_matches``, a custom ``@pa.check``) run as Pandera
 checks, and the dataframe-level parts (``@pa.dataframe_check``, ``Config.unique``, ``Config.ordered``, an index) run as a residual Pandera schema.
@@ -13,14 +13,14 @@ Constructs that cannot be honoured raise ``ValueError`` naming them. The compile
 reads pandas models, so a polars model is refused and gets its own compiler when the polars backend lands.
 """
 
-import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import pandas as pd
 import pandera.pandas as pa
 
 from dynamicio.config.pydantic.table_schema import DataframeSchema
 from dynamicio.schema.metadata import METADATA_KEY, DynamicioMetadata
+from dynamicio.schema.model_settings import ModelSettings
 
 
 class ModelCompiler:
@@ -103,33 +103,9 @@ class ModelCompiler:
         if not isinstance(declared, DynamicioMetadata):
             raise ValueError(
                 f"{column.name}: metadata={{'{METADATA_KEY}': ...}} is not supported any more. "
-                "Declare metrics and validations with dynamicio.schema: metadata=metrics(Metric.MIN) | null_fraction_below(0.2)"
+                "Declare metrics and validations with dynamicio.schema.Field: Field(nullable=True, metrics=[Metric.MIN], max_null_fraction=0.2)"
             )
         return declared
-
-    @staticmethod
-    def dataset_name(model: type) -> str:
-        """The label of the dataset in logs: ``__dataset_name__`` of the model, else Pandera's ``Config.name``, else the class name in snake case."""
-        declared = vars(model).get("__dataset_name__")
-        if declared is not None and not (isinstance(declared, str) and declared.strip()):
-            raise ValueError(f"{model.__name__}.__dataset_name__ must be a non-empty string, got {declared!r}")
-        # Pandera reports the class name when `Config.name` is unset, so a `Config.name` equal to the class name counts as unset.
-        configured = model.__config__.name  # type: ignore[attr-defined]
-        return declared or (configured if configured != model.__name__ else None) or ModelCompiler.snake_case(model.__name__)
-
-    @staticmethod
-    def table_name(model: type) -> Optional[str]:
-        """The Postgres table of the model (``__table_name__``), exactly as the database spells it; None for a model without one."""
-        declared = vars(model).get("__table_name__")
-        if declared is not None and not (isinstance(declared, str) and declared.strip()):
-            raise ValueError(f"{model.__name__}.__table_name__ must be a non-empty string, got {declared!r}")
-        return declared
-
-    @staticmethod
-    def snake_case(name: str) -> str:
-        """``FinalBar`` is ``final_bar`` and ``ThisNameABC`` is ``this_name_abc``."""
-        words = re.findall(r"\d[A-Z]+|[A-Z]?[a-z\d]+|[A-Z]{2,}(?=[A-Z][a-z]|\d|\W|$)|\d+|[A-Z]{2,}|[A-Z]", name)
-        return "_".join(word.lower() for word in words)
 
     @classmethod
     def to_dataframe_schema(cls, model: type) -> DataframeSchema:
@@ -147,7 +123,7 @@ class ModelCompiler:
             }
             for name, column in schema.columns.items()
         }
-        return DataframeSchema(name=cls.dataset_name(model), table_name=cls.table_name(model), columns=columns)
+        return DataframeSchema(name=ModelSettings.dataset_name(model), table_name=ModelSettings.table_name(model), columns=columns)
 
 
 # The names the rest of dynamicio imports.

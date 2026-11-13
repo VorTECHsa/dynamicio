@@ -11,11 +11,11 @@ The same schema and IO class serve any format; only `file_type` and its options 
 import pathlib
 
 import pandas as pd
-import pandera.pandas as pa
 from pandera.typing import Series
 
 from dynamicio import UnifiedIO
 from dynamicio.config import IOConfig
+from dynamicio.schema import DataModel, Field
 
 pathlib.Path("events.yaml").write_text(
     """
@@ -40,9 +40,9 @@ class Settings:
     DATA_DIR = "."
 
 
-class Events(pa.DataFrameModel):
-    event_id: Series[int] = pa.Field(nullable=False, unique=True)
-    label: Series[str] = pa.Field(nullable=False)
+class Events(DataModel, dataset="events"):
+    event_id: Series[int] = Field(nullable=False, unique=True)
+    label: Series[str] = Field(nullable=False)
 
 
 class EventsIO(UnifiedIO):

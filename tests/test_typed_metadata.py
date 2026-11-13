@@ -16,6 +16,8 @@ def _validators(metadata, column="x"):
     """The compiled validations of one column declared with ``metadata``, by validator name."""
 
     class Model(pa.DataFrameModel):
+        __dataset_name__ = "model"
+
         x: Series[float] = pa.Field(nullable=True, metadata=metadata)
 
     return {v.name: v for v in to_dataframe_schema(Model).columns[column].validations}
@@ -28,14 +30,16 @@ class TestMetric:
             assert get_metric(member.value) is not None
 
     @pytest.mark.unit
-    def test_members_are_strings_equal_to_the_names_the_log_reports(self):
-        assert Metric.UNIQUE_COUNTS == "UniqueCounts" and isinstance(Metric.MIN, str)
+    def test_members_carry_the_names_the_log_reports_and_are_not_strings(self):
+        assert Metric.UNIQUE_COUNTS.value == "UniqueCounts" and not isinstance(Metric.MIN, str)  # a str mixin would put every str method in the editor's menu
 
 
 class TestMetrics:
     @pytest.mark.unit
     def test_metrics_compile_to_their_log_names_in_declaration_order(self):
         class Model(pa.DataFrameModel):
+            __dataset_name__ = "model"
+
             x: Series[float] = pa.Field(nullable=True, metadata=metrics(Metric.MAX, Metric.MIN))
 
         assert to_dataframe_schema(Model).columns["x"].metrics == ["Max", "Min"]
@@ -80,9 +84,11 @@ class TestCombining:
         mixed = metrics(Metric.MIN) | {"dynamicio": {"metrics": ["Max"]}}  # dict's own `|` wins: a plain dict, which compilation refuses
 
         class Model(pa.DataFrameModel):
+            __dataset_name__ = "model"
+
             x: Series[float] = pa.Field(nullable=True, metadata=mixed)
 
-        with pytest.raises(ValueError, match="metadata=metrics"):
+        with pytest.raises(ValueError, match="dynamicio.schema.Field"):
             to_dataframe_schema(Model)
 
     @pytest.mark.unit
@@ -97,14 +103,18 @@ class TestRawDictsAreRefused:
     @pytest.mark.parametrize("raw", [{"dynamicio": {"metrics": ["Min"]}}, {"dynamicio": {"validations": {}}}, {"dynamicio": "x"}])
     def test_a_raw_dynamicio_metadata_dict_is_a_value_error(self, raw):
         class Model(pa.DataFrameModel):
+            __dataset_name__ = "model"
+
             x: Series[float] = pa.Field(nullable=True, metadata=raw)
 
-        with pytest.raises(ValueError, match="metadata=metrics"):
+        with pytest.raises(ValueError, match="dynamicio.schema.Field"):
             to_dataframe_schema(Model)
 
     @pytest.mark.unit
     def test_metadata_of_other_tools_passes_through(self):
         class Model(pa.DataFrameModel):
+            __dataset_name__ = "model"
+
             x: Series[float] = pa.Field(nullable=True, metadata={"owner": "team"})
 
         assert to_dataframe_schema(Model).columns["x"].metrics == []

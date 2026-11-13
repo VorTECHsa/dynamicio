@@ -6,8 +6,9 @@
 """
 
 import dynamicio.schema.metrics  # noqa: F401  # pylint: disable=unused-import
-from dynamicio.schema.behaviour import Behaviour  # isort: skip
+from dynamicio.schema.data_model import DataModel  # isort: skip
+from dynamicio.schema.field import Field  # isort: skip
 from dynamicio.schema.metadata import Metric, exactly_values, metrics, null_fraction_below, strictly_between  # isort: skip
 from dynamicio.schema.models import to_dataframe_schema  # isort: skip
 
-__all__ = ["Behaviour", "Metric", "exactly_values", "metrics", "null_fraction_below", "strictly_between", "to_dataframe_schema"]
+__all__ = ["DataModel", "Field", "Metric", "exactly_values", "metrics", "null_fraction_below", "strictly_between", "to_dataframe_schema"]
