@@ -1,5 +1,9 @@
 # Changelog
 
+## v10.5.0
+
+- feat: `IOConfig.get()` for an environment that the resource does not define raises `UnknownEnvironmentError` instead of a bare `KeyError: 'LOCAL'`. The message names the source, the resource definition file and the environments the source defines, and suggests the closest name, e.g. `Source 'ORDERS' in orders.yaml has no environment 'LOCL'. Defined: LOCAL, CLOUD. Did you mean 'LOCAL'?`. `UnknownEnvironmentError` is a `KeyError`, so code that catches `KeyError` keeps working, and an unknown source key still raises the plain `KeyError`
+
 ## v10.4.1
 
 - docs: the `Documentation` project link of the package, and the README, point to the documentation on Read the Docs (https://dynamicio.readthedocs.io/en/latest/), and the documentation home page shows the panda mascot next to the logo

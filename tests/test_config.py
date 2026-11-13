@@ -6,6 +6,7 @@ import pytest
 import yaml
 
 from dynamicio.config.io_config import IOConfig, SafeDynamicResourceLoader, SafeDynamicSchemaLoader
+from dynamicio.errors import UnknownEnvironmentError
 from tests import constants
 
 
@@ -109,6 +110,66 @@ class TestIOConfig:
 
         # Then
         assert postgres_cloud_mapping == expected_postgres_cloud_mapping
+
+    @pytest.mark.unit
+    def test_get_for_an_unknown_environment_with_a_close_match_names_the_source_the_file_and_the_closest_environment(self):
+        # Given
+        path = os.path.join(constants.TEST_RESOURCES, "definitions/test_input.yaml")
+        input_config = IOConfig(path_to_source_yaml=path, env_identifier="LOCL", dynamic_vars=constants)
+
+        # When
+        with pytest.raises(UnknownEnvironmentError) as error:
+            input_config.get(source_key="READ_FROM_S3_CSV")
+
+        # Then
+        assert isinstance(error.value, KeyError)
+        assert (error.value.source_key, error.value.environment, error.value.defined) == ("READ_FROM_S3_CSV", "LOCL", ["LOCAL", "CLOUD"])
+        assert str(error.value) == f"Source 'READ_FROM_S3_CSV' in {path} has no environment 'LOCL'. Defined: LOCAL, CLOUD. Did you mean 'LOCAL'?"
+
+    @pytest.mark.unit
+    def test_get_for_an_unknown_environment_without_a_close_match_lists_the_defined_environments(self):
+        # Given
+        path = os.path.join(constants.TEST_RESOURCES, "definitions/test_input.yaml")
+        input_config = IOConfig(path_to_source_yaml=path, env_identifier="PROD", dynamic_vars=constants)
+
+        # When
+        with pytest.raises(KeyError) as error:
+            input_config.get(source_key="READ_FROM_S3_CSV")
+
+        # Then
+        assert isinstance(error.value, UnknownEnvironmentError)
+        assert error.value.suggestion is None
+        assert str(error.value) == f"Source 'READ_FROM_S3_CSV' in {path} has no environment 'PROD'. Defined: LOCAL, CLOUD."
+
+    @pytest.mark.unit
+    def test_get_for_an_environment_that_differs_only_in_case_suggests_the_defined_spelling(self):
+        # Given
+        input_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/test_input.yaml")),
+            env_identifier="cloud",
+            dynamic_vars=constants,
+        )
+
+        # When
+        with pytest.raises(UnknownEnvironmentError) as error:
+            input_config.get(source_key="READ_FROM_S3_CSV")
+
+        # Then
+        assert error.value.suggestion == "CLOUD"
+
+    @pytest.mark.unit
+    def test_get_for_an_unknown_source_still_raises_a_key_error(self):
+        # Given
+        input_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/test_input.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        )
+
+        # When/Then
+        with pytest.raises(KeyError) as error:
+            input_config.get(source_key="NOT_A_SOURCE")
+        assert not isinstance(error.value, UnknownEnvironmentError)
 
     @pytest.mark.unit
     def test__get_schema_definition_dynamically_replaces_numerical_values_in_schemas(self):
