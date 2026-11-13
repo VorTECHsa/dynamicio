@@ -65,7 +65,9 @@ class ModelRenderer:
     """Renders ``DataframeSchema`` objects as the Python source of equivalent Pandera ``DataFrameModel`` classes."""
 
     # YAML `object` meant "anything" (strings, lists, mixed values) and dynamicio never looked inside, so it stays `object`: faithful and byte-compatible.
-    DTYPES = {"int64": "int", "float64": "float", "object": "object", "bool": "bool", "datetime64[ns]": "pd.Timestamp"}
+    DTYPES = {"int64": "int", "float64": "float", "object": "object", "bool": "bool", "datetime64[ns]": "pd.Timestamp", "boolean": "pd.BooleanDtype", "string": "pd.StringDtype"}
+    NUMPY_DTYPE = re.compile(r"u?int(8|16|32)|uint64|float(16|32)")
+    NULLABLE_DTYPE = re.compile(r"(U?Int(8|16|32|64)|Float(32|64))")
     SIMPLE_CHECKS = {"is_greater_than": "gt", "is_greater_than_or_equal": "ge", "is_lower_than": "lt", "is_lower_than_or_equal": "le"}
 
     # YAML schemas may reference dynamic variables ("[[ NAME ]]"); in Python that is simply a name the module has to provide.
@@ -122,6 +124,17 @@ class ModelRenderer:
         return f"pa.Field({', '.join(kwargs)})"
 
     @classmethod
+    def dtype_source(cls, dtype: str) -> str:
+        """The annotation argument that declares ``dtype``: a type, never a call, so editors and type checkers accept it."""
+        if dtype in cls.DTYPES:
+            return cls.DTYPES[dtype]
+        if cls.NUMPY_DTYPE.fullmatch(dtype):
+            return f"np.{dtype}"
+        if cls.NULLABLE_DTYPE.fullmatch(dtype):
+            return f"pd.{dtype}Dtype"
+        return f"pd.api.types.pandas_dtype({dtype!r})"
+
+    @classmethod
     def _class_source(cls, schema: DataframeSchema, class_name: str = "", table: bool = False) -> str:
         lines = [f"class {class_name or cls.class_name(schema.name)}(pa.DataFrameModel):", f'    """Migrated from the dynamicio schema {schema.name!r}."""', ""]
         lines.append(f"    __dataset_name__ = {schema.name!r}")
@@ -134,8 +147,7 @@ class ModelRenderer:
             if attribute != name:
                 field = field[:-1] + f", alias={name!r})"
             canonical = SchemaComparison.canonical_dtype(column.data_type)
-            dtype = cls.DTYPES.get(canonical, f"pd.api.types.pandas_dtype({canonical!r})")
-            lines.append(f"    {attribute}: Series[{dtype}] = {field}")
+            lines.append(f"    {attribute}: Series[{cls.dtype_source(canonical)}] = {field}")
         lines += ["", "    class Config:", '        strict = "filter"  # dynamicio dropped the columns the schema does not list', ""]
         return "\n".join(lines)
 
@@ -163,6 +175,8 @@ class ModelRenderer:
         ]
         if "pd." in body:
             header.insert(0, "import pandas as pd")
+        if re.search(r"\bnp\.", body):
+            header.insert(0, "import numpy as np")
         helpers = [name for name in ("Metric", "exactly_values", "metrics", "null_fraction_below", "strictly_between") if re.search(rf"\b{name}\b", body)]
         if helpers:
             position = header.index("from pandera.typing import Series") + 1

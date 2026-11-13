@@ -191,6 +191,29 @@ def test_dtype_aliases_migrate_to_their_pandas_names():
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(
+    "dtype, declared",
+    [
+        ("uint32", "np.uint32"),
+        ("uint64", "np.uint64"),
+        ("int32", "np.int32"),
+        ("float32", "np.float32"),
+        ("UInt32", "pd.UInt32Dtype"),
+        ("Int64", "pd.Int64Dtype"),
+        ("Float64", "pd.Float64Dtype"),
+        ("boolean", "pd.BooleanDtype"),
+    ],
+)
+def test_other_dtypes_migrate_to_types_not_calls(dtype, declared):
+    original = DataframeSchema(name="d", columns={"a": {"type": dtype, "validations": {}, "metrics": []}})
+    source = render_module({"D": original})
+    model = compile_module(source)["D"]
+
+    assert f"a: Series[{declared}]" in source and "pandas_dtype" not in source
+    assert schemas_equivalent(to_dataframe_schema(model), original)
+
+
+@pytest.mark.unit
 def test_migrate_to_a_package_groups_models_by_source_directory(project):
     (project / "resources" / "schemas" / "stage").mkdir()
     (project / "resources" / "schemas" / "stage" / "staged.yaml").write_text(yaml.safe_dump({**SCHEMA_SPEC, "name": "staged"}, sort_keys=False))
