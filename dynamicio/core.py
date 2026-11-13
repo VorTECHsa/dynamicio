@@ -1,7 +1,7 @@
 """Implements the DynamicDataIO class which provides functionality for data: loading; sinking, and; schema validation."""
 
 # pylint: disable=no-member
-__all__ = ["DynamicDataIO", "SCHEMA_FROM_FILE", "SCHEMA_FROM_ARGUMENT", "CASTING_WARNING_MSG"]
+__all__ = ["DynamicDataIO", "SCHEMA_FROM_ARGUMENT", "CASTING_WARNING_MSG"]
 
 import asyncio
 import inspect
@@ -11,20 +11,26 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, List, Mapping, MutableMapping, Optional, Tuple, Type
 
 import pandas as pd
-import pydantic
 from pandera.pandas import DataFrameModel
 
 # Application Imports
 from dynamicio.config.pydantic import DataframeSchema, IOEnvironment, SchemaColumn
-from dynamicio.errors import CASTING_WARNING_MSG, NOTICE_MSG, ColumnsDataTypeError, SchemaNotFoundError, SchemaValidationError
+from dynamicio.errors import CASTING_WARNING_MSG, NOTICE_MSG, ColumnsDataTypeError, SchemaNotFoundError, SchemaValidationError, TableNameNotFoundError
 from dynamicio.schema import validations
 from dynamicio.schema.metrics import get_metric
 from dynamicio.schema.models import dataframe_validator, to_dataframe_schema
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_FROM_FILE = {"schema": object()}
-SCHEMA_FROM_ARGUMENT = {"schema": object()}
+
+class _SchemaFromArgument:
+    """The type of `SCHEMA_FROM_ARGUMENT`."""
+
+    def __repr__(self) -> str:
+        return "SCHEMA_FROM_ARGUMENT"
+
+
+SCHEMA_FROM_ARGUMENT = _SchemaFromArgument()  # `schema = SCHEMA_FROM_ARGUMENT` on an IO class: each instance gets its model from the `schema=` argument
 
 pool = ThreadPoolExecutor()
 
@@ -93,18 +99,16 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
             self._dataframe_validator = dataframe_validator(schema)
         elif self.schema is SCHEMA_FROM_ARGUMENT:
             active_schema = None
-        elif self.schema is SCHEMA_FROM_FILE:
-            active_schema = self.sources_config.dynamicio_schema
-        elif inspect.isclass(self.schema) and issubclass(self.schema, DataFrameModel):
+        else:  # `__init_subclass__` has checked that the class attribute is a model
             active_schema = to_dataframe_schema(self.schema)
             self._dataframe_validator = dataframe_validator(self.schema)
-        else:
-            active_schema = self._schema_from_obj(self)
 
         if not active_schema:
             raise SchemaNotFoundError()
 
         assert isinstance(active_schema, DataframeSchema)
+        if source_name == "postgres" and not active_schema.table_name:
+            raise TableNameNotFoundError(active_schema.name)
         self.schema = active_schema
         self.name = self.schema.name.upper()
         self.schema_validations = self.schema.validations
@@ -114,38 +118,6 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
             self, f"_write_to_{source_name}"
         ), f"No method '_read_from_{source_name}' or '_write_to_{source_name}'. Have you registered a mixin for {source_name}?"
 
-    @staticmethod
-    def _schema_from_obj(target) -> DataframeSchema:
-        """Construct `DataframeSchema` from an object.
-
-        The object:
-            - MUST have `schema` attribute that is a dictionary specifying columns and datatypes
-            - CAN have `schema_validations` and `schema_metrics` attributes
-        """
-        col_info = {}
-        for col_name, dtype in target.schema.items():
-            col_validations = {}
-            col_metrics = []
-            try:
-                col_validations = target.schema_validations[col_name]
-            except (KeyError, AttributeError):
-                pass
-            try:
-                col_metrics = target.schema_metrics[col_name]
-            except (KeyError, AttributeError):
-                pass
-            col_info[col_name] = {
-                "type": dtype,
-                "validations": col_validations,
-                "metrics": col_metrics,
-            }
-        try:
-            out = DataframeSchema(name=target.name, columns=col_info)
-        except pydantic.ValidationError:
-            logger.exception(f"Error parsing {target.name=!r} {col_info=!r}")
-            raise
-        return out
-
     def __init_subclass__(cls):
         """Ensure that all subclasses have a `schema` attribute and a `validate` method.
 
@@ -153,12 +125,15 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
             AssertionError: If either of the attributes is not implemented
         """
         if not inspect.getmodule(cls).__name__.startswith("dynamicio"):
-            assert "schema" in cls.__dict__
+            assert "schema" in cls.__dict__, f"{cls.__name__} must define `schema`: a pandera DataFrameModel, or SCHEMA_FROM_ARGUMENT"
 
-            if inspect.isclass(cls.schema) and issubclass(cls.schema, DataFrameModel):
+            if cls.schema is SCHEMA_FROM_ARGUMENT or (inspect.isclass(cls.schema) and issubclass(cls.schema, DataFrameModel)):
                 return
-            if cls.schema is None or (cls.schema not in (SCHEMA_FROM_FILE, SCHEMA_FROM_ARGUMENT) and len(cls.schema) == 0):
-                raise ValueError(f"schema for class {cls} cannot be None or empty...")
+            raise TypeError(
+                f"{cls.__name__}.schema must be a pandera DataFrameModel (or SCHEMA_FROM_ARGUMENT), got {cls.schema!r}. "
+                "Dict schemas (`schema = {...}`, `schema_validations`, `schema_metrics`) and YAML schemas (`SCHEMA_FROM_FILE`) were removed in dynamicio 11: "
+                "declare the columns as a model, see https://dynamicio.readthedocs.io/en/latest/guides/schemas-and-validation/ (`dynamicio migrate` converts YAML schemas)."
+            )
 
     async def async_read(self):
         """Allows the use of asyncio to concurrently read files in memory.

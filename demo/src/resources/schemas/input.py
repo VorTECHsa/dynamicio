@@ -3,37 +3,30 @@
 import pandera.pandas as pa
 from pandera.typing import Series
 
+from dynamicio.schema import Metric, metrics
+
 
 class Bar(pa.DataFrameModel):
-    """Migrated from the dynamicio schema 'bar'."""
+    """The `bar` dataset."""
 
-    column_a: Series[str] = pa.Field(nullable=True, unique=True, metadata={"dynamicio": {"metrics": ["Counts"]}})
-    column_b: Series[str] = pa.Field(nullable=False, metadata={"dynamicio": {"metrics": ["CountsPerLabel"]}})
+    column_a: Series[str] = pa.Field(nullable=True, unique=True, metadata=metrics(Metric.COUNTS))
+    column_b: Series[str] = pa.Field(nullable=False, metadata=metrics(Metric.COUNTS_PER_LABEL))
     column_c: Series[float] = pa.Field(nullable=True, gt=1000)
-    column_d: Series[float] = pa.Field(nullable=True, lt=1000, metadata={"dynamicio": {"metrics": ["Min", "Max", "Mean", "Std", "Variance"]}})
-
-    class Config:
-        name = "bar"
+    column_d: Series[float] = pa.Field(nullable=True, lt=1000, metadata=metrics(Metric.MIN, Metric.MAX, Metric.MEAN, Metric.STD, Metric.VARIANCE))
 
 
 class Orders(pa.DataFrameModel):
-    """Migrated from the dynamicio schema 'orders'."""
+    """The `orders` dataset."""
 
-    order_id: Series[int] = pa.Field(nullable=True, unique=True, metadata={"dynamicio": {"metrics": ["Counts"]}})
+    order_id: Series[int] = pa.Field(nullable=True, unique=True, metadata=metrics(Metric.COUNTS))
     customer: Series[str] = pa.Field(nullable=False)
     status: Series[str] = pa.Field(nullable=True)
 
-    class Config:
-        name = "orders"
-
 
 class Foo(pa.DataFrameModel):
-    """Migrated from the dynamicio schema 'foo'."""
+    """The `foo` dataset."""
 
-    column_a: Series[str] = pa.Field(nullable=True, unique=True, metadata={"dynamicio": {"metrics": ["Counts"]}})
-    column_b: Series[str] = pa.Field(nullable=False, metadata={"dynamicio": {"metrics": ["CountsPerLabel"]}})
+    column_a: Series[str] = pa.Field(nullable=True, unique=True, metadata=metrics(Metric.COUNTS))
+    column_b: Series[str] = pa.Field(nullable=False, metadata=metrics(Metric.COUNTS_PER_LABEL))
     column_c: Series[float] = pa.Field(nullable=True, gt=1000)
-    column_d: Series[float] = pa.Field(nullable=True, lt=1000, metadata={"dynamicio": {"metrics": ["Min", "Max", "Mean", "Std", "Variance"]}})
-
-    class Config:
-        name = "foo"
+    column_d: Series[float] = pa.Field(nullable=True, lt=1000, metadata=metrics(Metric.MIN, Metric.MAX, Metric.MEAN, Metric.STD, Metric.VARIANCE))

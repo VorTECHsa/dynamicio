@@ -1,10 +1,13 @@
 """A module for defining sql_alchemy models."""
 
 # pylint: disable=too-few-public-methods, R0801, C0104
-__all__ = ["ERModel", "PgModel"]
-
+# pylint: disable=missing-class-docstring
+import pandera.pandas as pa
+from pandera.typing import Series
 from sqlalchemy import Column, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
+
+from dynamicio.schema import Metric, metrics
 
 Base = declarative_base()
 
@@ -32,3 +35,174 @@ clsdict = {
     "baz": Column(String(64)),
 }
 PgModel = type(clsdict["clsname"], (Base,), clsdict)
+
+
+# Pandera models for the IO classes in `tests.mocking.io`. Columns are declared `nullable=True`: the validations a test exercises are
+# declared explicitly, the rest only fix the dtype dynamicio casts to.
+class IdOnly(pa.DataFrameModel):
+    id: Series[int] = pa.Field(nullable=True)
+
+
+class JsonData(pa.DataFrameModel):
+    data: Series[object] = pa.Field(nullable=True)
+
+
+class ReleaseTimestamp(pa.DataFrameModel):
+    release: Series[object] = pa.Field(nullable=True)
+    timestamp: Series[int] = pa.Field(nullable=True)
+
+
+class IdFooNameBar(pa.DataFrameModel):
+    id: Series[int] = pa.Field(nullable=True)
+    foo_name: Series[object] = pa.Field(nullable=True)
+    bar: Series[int] = pa.Field(nullable=True)
+
+
+class ReadS3ParquetIO(IdFooNameBar):
+    __dataset_name__ = "read_s3_parquet_io"
+
+
+class IdFooNameFloatBar(pa.DataFrameModel):
+    id: Series[int] = pa.Field(nullable=True)
+    foo_name: Series[object] = pa.Field(nullable=True)
+    bar: Series[float] = pa.Field(nullable=True)
+
+
+class IdFooName(pa.DataFrameModel):
+    id: Series[int] = pa.Field(nullable=True)
+    foo_name: Series[object] = pa.Field(nullable=True)
+
+
+class ReadS3DataWithFalseTypes(pa.DataFrameModel):
+    id: Series[float] = pa.Field(nullable=True)
+    foo_name: Series[object] = pa.Field(nullable=True)
+
+    __dataset_name__ = "read_s3_data_with_false_types"
+
+
+class MessedOrderOfColumns(pa.DataFrameModel):
+    bar: Series[int] = pa.Field(nullable=True)
+    foo_name: Series[object] = pa.Field(nullable=True)
+    a_number: Series[int] = pa.Field(nullable=True)
+    b_number: Series[int] = pa.Field(nullable=True)
+    bar_type: Series[object] = pa.Field(nullable=True)
+
+
+class IdFooNameStatus(pa.DataFrameModel):
+    id: Series[int] = pa.Field(nullable=True)
+    foo_name: Series[object] = pa.Field(nullable=True)
+    status: Series[object] = pa.Field(nullable=True)
+
+
+class ObjectIdBar(pa.DataFrameModel):
+    id: Series[object] = pa.Field(nullable=True)
+    bar: Series[int] = pa.Field(nullable=True)
+
+
+class Col1Col2(pa.DataFrameModel):
+    col_1: Series[int] = pa.Field(nullable=True)
+    col_2: Series[object] = pa.Field(nullable=True)
+
+
+class ExternalEvents(pa.DataFrameModel):
+    bar: Series[int] = pa.Field(nullable=True)
+    event_type: Series[object] = pa.Field(nullable=True)
+    id: Series[int] = pa.Field(nullable=True)
+    end_odometer: Series[int] = pa.Field(nullable=True)
+    foo_name: Series[object] = pa.Field(nullable=True)
+
+
+class PgRows(pa.DataFrameModel):
+    """The `pg` table: the Postgres counterpart of the old `pg.yaml` schema."""
+
+    id: Series[object] = pa.Field(nullable=True)
+    foo: Series[object] = pa.Field(nullable=True)
+    bar: Series[int] = pa.Field(nullable=True)
+    baz: Series[object] = pa.Field(nullable=True)
+
+    __table_name__ = "pg"
+
+
+class ExtendedPgRows(pa.DataFrameModel):
+    id: Series[object] = pa.Field(nullable=True)
+    foo: Series[object] = pa.Field(nullable=True)
+    bar: Series[int] = pa.Field(nullable=True)
+    start_date: Series[pa.DateTime] = pa.Field(nullable=True)
+    active: Series[bool] = pa.Field(nullable=True)
+    net: Series[float] = pa.Field(nullable=True)
+
+    __table_name__ = "extended_pg"
+
+
+class KafkaMessages(pa.DataFrameModel):
+    id: Series[object] = pa.Field(nullable=True)
+    foo: Series[object] = pa.Field(nullable=True)
+    bar: Series[int] = pa.Field(nullable=True)
+    baz: Series[object] = pa.Field(nullable=True)
+
+
+class KeyedKafkaMessages(pa.DataFrameModel):
+    key: Series[object] = pa.Field(nullable=True)
+    id: Series[object] = pa.Field(nullable=True)
+    foo: Series[object] = pa.Field(nullable=True)
+    bar: Series[int] = pa.Field(nullable=True)
+    baz: Series[object] = pa.Field(nullable=True)
+
+
+class IdFooNameInt(pa.DataFrameModel):
+    id: Series[int] = pa.Field(nullable=True)
+    foo_name: Series[int] = pa.Field(nullable=True)
+    bar: Series[int] = pa.Field(nullable=True)
+
+
+class WithSomeBool(pa.DataFrameModel):
+    id: Series[int] = pa.Field(nullable=True)
+    foo_name: Series[object] = pa.Field(nullable=True)
+    bar: Series[int] = pa.Field(nullable=True)
+    bool_col: Series[bool] = pa.Field(nullable=True)
+
+
+class AthenaRows(pa.DataFrameModel):
+    id: Series[object] = pa.Field(nullable=True)
+    foo: Series[object] = pa.Field(nullable=True)
+    bar: Series[int] = pa.Field(nullable=True)
+
+
+class ReadFromS3Csv(pa.DataFrameModel):
+    """The `read_from_s3_csv` schema: unique ids, a category, bounded integers, and the metrics that go with them."""
+
+    id: Series[int] = pa.Field(nullable=False, unique=True, metadata=metrics(Metric.UNIQUE_COUNTS, Metric.COUNTS))
+    foo_name: Series[object] = pa.Field(nullable=False, isin=["class_a", "class_b", "class_c"], metadata=metrics(Metric.COUNTS_PER_LABEL))
+    bar: Series[int] = pa.Field(nullable=False, gt=1000, lt=2000, metadata=metrics(Metric.MIN, Metric.MAX, Metric.MEAN, Metric.STD, Metric.VARIANCE))
+
+    __dataset_name__ = "read_from_s3_csv"
+
+
+class Products(pa.DataFrameModel):
+    """A schema that declares no validations and no metrics."""
+
+    id: Series[object] = pa.Field(nullable=True)
+
+
+class OptionalParquet(pa.DataFrameModel):
+    id: Series[int] = pa.Field(nullable=True)
+
+
+class NameableFile(pa.DataFrameModel):
+    id: Series[int] = pa.Field(nullable=True)
+    name: Series[object] = pa.Field(nullable=True)
+
+
+class Partitioned(pa.DataFrameModel):
+    grp: Series[object] = pa.Field(nullable=True)
+    val: Series[int] = pa.Field(nullable=True)
+
+
+class MixedCaseAthena(pa.DataFrameModel):
+    """Dtypes for mixed-case Athena columns, as a consumer's model would declare them."""
+
+    Id: Series[int] = pa.Field(nullable=True)
+    Name: Series[object] = pa.Field(nullable=True)
+    IsActive: Series[bool] = pa.Field(nullable=True)
+    Amount: Series[float] = pa.Field(nullable=True)
+    CreatedOn: Series[pa.DateTime] = pa.Field(nullable=True)

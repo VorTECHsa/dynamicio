@@ -12,6 +12,7 @@ from typing import Any, Dict, Generator, MutableMapping, Union
 import pandas as pd
 from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, Float, Integer, MetaData, String, Table, create_engine, text
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Query
 from sqlalchemy.orm.decl_api import DeclarativeMeta
@@ -126,34 +127,44 @@ class WithPostgres:
         query = Query(self._get_table_columns(model))
         if sql_query:
             query = sql_query
-        logger.info(f"[postgres] Started downloading table: {table_schema.name} from: {db_host}:{db_name}")
+        logger.info(f"[postgres] Started downloading table: {table_schema.table_name} from: {db_host}:{db_name}")
         with session_for(connection_string) as session:
-            return self._read_database(session, query, **options)
+            try:
+                return self._read_database(session, query, **options)
+            except ProgrammingError as error:
+                self._explain_missing_table(error, table_schema)
+                raise
+
+    @staticmethod
+    def _explain_missing_table(error: ProgrammingError, table_schema: DataframeSchema) -> None:
+        """Log which attribute named a table that does not exist, since a wrong `__table_name__` is the usual cause."""
+        if getattr(error.orig, "pgcode", None) == "42P01":  # undefined_table
+            logger.error(
+                f"[postgres] Table {table_schema.table_name!r} does not exist: it is the `__table_name__` of the model of dataset {table_schema.name!r}, "
+                "which must be the exact name in the database"
+            )
 
     def _table_schema(self) -> DataframeSchema:
-        """Returns the schema describing the SQL table: the resource YAML's, else the one compiled from the Pandera model."""
-        table_schema = self.sources_config.dynamicio_schema
-        if table_schema is None and isinstance(self.schema, DataframeSchema):
-            table_schema = self.schema
-        assert table_schema is not None, "The schema must be specified for SQL tables"
-        return table_schema
+        """Returns the schema describing the SQL table: the one compiled from the Pandera model, which names the table in `__table_name__`."""
+        assert isinstance(self.schema, DataframeSchema) and self.schema.table_name, "The model must set __table_name__ for a Postgres resource"
+        return self.schema
 
     @staticmethod
     def _generate_model_from_schema(schema: DataframeSchema) -> DeclarativeMeta:
-        json_cls_schema: Dict[str, Any] = {"tablename": schema.name, "columns": []}
+        json_cls_schema: Dict[str, Any] = {"tablename": schema.table_name, "columns": []}
 
         for col in schema.columns.values():
             sql_type = _type_lookup.get(col.data_type)
             if not sql_type:
-                raise ValueError(f"Unsupported data_type '{col.data_type}' for column '{col.name}' in schema '{schema.name}'")
+                raise ValueError(f"Unsupported data_type '{col.data_type}' for column '{col.name}' in schema '{schema.name}' (table '{schema.table_name}')")
             json_cls_schema["columns"].append({"name": col.name, "type": sql_type})
 
-        key = (schema.name, tuple((column["name"], column["type"]) for column in json_cls_schema["columns"]))
+        key = (schema.table_name, tuple((column["name"], column["type"]) for column in json_cls_schema["columns"]))
         with _models_lock:
             if key not in _models:
-                class_name = "".join(word.capitalize() or "_" for word in schema.name.split("_")) + "Model"
+                class_name = "".join(word.capitalize() or "_" for word in schema.table_name.split("_")) + "Model"
 
-                class_dict = {"clsname": class_name, "__tablename__": schema.name, "__table_args__": {"extend_existing": True}}
+                class_dict = {"clsname": class_name, "__tablename__": schema.table_name, "__table_args__": {"extend_existing": True}}
                 class_dict.update(
                     {column["name"]: Column(column["type"], primary_key=True) if idx == 0 else Column(column["type"]) for idx, column in enumerate(json_cls_schema["columns"])}
                 )
@@ -208,7 +219,7 @@ class WithPostgres:
         table_schema = self._table_schema()
         model = self._generate_model_from_schema(table_schema)
 
-        logger.info(f"[postgres] Started uploading table: {table_schema.name} from: {db_host}:{db_name}")
+        logger.info(f"[postgres] Started uploading table: {table_schema.table_name} from: {db_host}:{db_name}")
         self._write_model(connection_string, model, df, **self.options)
 
     @staticmethod

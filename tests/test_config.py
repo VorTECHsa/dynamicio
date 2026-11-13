@@ -5,7 +5,7 @@ import os
 import pytest
 import yaml
 
-from dynamicio.config.io_config import IOConfig, SafeDynamicResourceLoader, SafeDynamicSchemaLoader
+from dynamicio.config.io_config import IOConfig, SafeDynamicResourceLoader
 from tests import constants
 
 
@@ -23,21 +23,6 @@ class TestIOConfig:
         yaml_dict = input_config.config.dict()
         # Then
         assert yaml_dict == expected_input_yaml_dict
-
-    @pytest.mark.unit
-    def test_config_io_get_schema_definition_returns_a_schema_definition_from_a_source_config(self, expected_schema_definition):
-        # Given
-        input_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/test_input.yaml")),
-            env_identifier="LOCAL",
-            dynamic_vars=constants,
-        )
-
-        # When
-        schema_definition = input_config.config.bindings["READ_FROM_S3_CSV"].dict()
-
-        # Then
-        assert schema_definition == expected_schema_definition
 
     @pytest.mark.unit
     def test_config_io_sources_returns_all_available_sources(self):
@@ -81,21 +66,6 @@ class TestIOConfig:
         assert s3_csv_local_mapping == expected_s3_csv_local_mapping
 
     @pytest.mark.unit
-    def test_get_for_config_io_set_for_a_cloud_env_returns_a_cloud_mapping_for_an_s3_csv_key(self, expected_s3_csv_cloud_mapping):
-        # Given
-        input_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/test_input.yaml")),
-            env_identifier="CLOUD",
-            dynamic_vars=constants,
-        )
-
-        # When
-        s3_csv_cloud_mapping = input_config.get(source_key="READ_FROM_S3_CSV").dynamicio_schema.dict()
-
-        # Then
-        assert s3_csv_cloud_mapping == expected_s3_csv_cloud_mapping
-
-    @pytest.mark.unit
     def test_get_for_config_io_set_for_a_cloud_env_returns_a_cloud_mapping_for_an_postgres_key(self, expected_postgres_cloud_mapping):
         # Given
         input_config = IOConfig(
@@ -109,51 +79,6 @@ class TestIOConfig:
 
         # Then
         assert postgres_cloud_mapping == expected_postgres_cloud_mapping
-
-    @pytest.mark.unit
-    def test__get_schema_definition_dynamically_replaces_numerical_values_in_schemas(self):
-        # Given
-        input_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/test_input.yaml")),
-            env_identifier="LOCAL",
-            dynamic_vars=constants,
-        )
-
-        # When
-        my_config = input_config.get(source_key="REPLACE_SCHEMA_WITH_DYN_VARS")
-
-        # Then
-        assert my_config._parent.dynamicio_schema.columns["column_c"].validations[0].dict() == {  # pylint: disable=protected-access
-            "apply": True,
-            "name": "is_greater_than",
-            "options": {"threshold": 1000},
-        }
-
-    @pytest.mark.unit
-    def test__get_schema_definition_returns_float_only_in_case_of_replacements(self):
-        # Given
-        input_config = IOConfig(
-            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/test_input.yaml")),
-            env_identifier="LOCAL",
-            dynamic_vars=constants,
-        )
-
-        # When
-        my_config = input_config.get(source_key="REPLACE_SCHEMA_WITH_DYN_VARS")
-        schema_dict = {}
-        for col in my_config._parent.dynamicio_schema.columns.values():  # pylint: disable=protected-access
-            schema_dict[col.name] = str(col.data_type)
-
-        # Then
-
-        assert schema_dict == {
-            "column_a": "object",
-            "column_b": "object",
-            "column_c": "float64",
-            "column_d": "float64",
-            "0": "object",
-            "1": "object",
-        }
 
 
 class TestSafeDynamicLoader:  # pylint: disable=R0903
@@ -169,13 +94,23 @@ class TestSafeDynamicLoader:  # pylint: disable=R0903
 
         assert result == {"abc": "abc/def"}
 
+
+class TestSchemaBlockInResourceDefinition:
     @pytest.mark.unit
-    def test_replaces_all_schema_template_instances(self):
-        file_contents = 'abc: "[[ VALUE_A ]]"'
+    def test_a_schema_block_is_rejected_with_a_pointer_to_the_migration(self, tmp_path):
+        # Given
+        definitions = tmp_path / "definitions.yaml"
+        definitions.write_text('ORDERS:\n  LOCAL:\n    type: "local"\n    local:\n      file_path: "x.csv"\n      file_type: "csv"\n  schema:\n    file_path: "orders.yaml"\n')
 
-        class MockEnvironmentModule:  # pylint: disable=R0903
-            VALUE_A = 100
+        # When / Then
+        with pytest.raises(Exception, match="dynamicio migrate") as error:
+            IOConfig(str(definitions), env_identifier="LOCAL", dynamic_vars=constants)
+        assert "DataFrameModel" in str(error.value)
 
-        result = yaml.load(io.StringIO(file_contents), SafeDynamicSchemaLoader.with_module(MockEnvironmentModule))
+    @pytest.mark.unit
+    def test_a_resource_definition_without_a_schema_block_loads(self):
+        # When
+        config = IOConfig(os.path.join(constants.TEST_RESOURCES, "definitions/test_input.yaml"), env_identifier="LOCAL", dynamic_vars=constants)
 
-        assert result == {"abc": 100}
+        # Then
+        assert "READ_FROM_S3_CSV" in config.config.bindings

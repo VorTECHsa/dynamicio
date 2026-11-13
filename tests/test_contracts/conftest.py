@@ -1,8 +1,7 @@
 """Shared builders for the behaviour-contract tests.
 
-Every contract is exercised through BOTH ways of declaring a schema that exist today (a YAML schema file and an in-code
-``schema`` dict with ``schema_validations`` / ``schema_metrics``), so that a future schema API can be held to the same
-assertions.
+Every contract is exercised through the one way to declare a schema: a Pandera ``DataFrameModel`` (``ContractModel``), so that a
+change of the schema API is held to the same assertions.
 """
 
 # pylint: disable=missing-class-docstring, missing-function-docstring
@@ -12,96 +11,42 @@ import textwrap
 import pandas as pd
 import pandera.pandas as pa
 import pytest
-import yaml
 from pandera.typing import Series
 
 from dynamicio import UnifiedIO
 from dynamicio.config import IOConfig
-from dynamicio.core import SCHEMA_FROM_FILE
-
-# One schema exercising every validator and metric, with one non-applied validation.
-SCHEMA_SPEC = {
-    "name": "contract_dataset",
-    "columns": {
-        "a": {
-            "type": "int64",
-            "validations": {
-                "has_unique_values": {"apply": True, "options": {}},
-                "is_greater_than": {"apply": True, "options": {"threshold": 1}},
-                "is_between": {"apply": True, "options": {"lower": 0, "upper": 5}},
-            },
-            "metrics": ["Min", "Counts", "UniqueCounts"],
-        },
-        "b": {
-            "type": "object",
-            "validations": {
-                "has_no_null_values": {"apply": True, "options": {}},
-                "is_in": {"apply": True, "options": {"categorical_values": ["x", "y"]}},
-            },
-            "metrics": ["CountsPerLabel"],
-        },
-        "c": {
-            "type": "float64",
-            "validations": {
-                "has_no_null_values": {"apply": True, "options": {}},
-                "has_acceptable_percentage_of_nulls": {"apply": True, "options": {"threshold": 0.3}},
-                "is_lower_than_or_equal": {"apply": False, "options": {"threshold": 1}},
-            },
-            "metrics": ["Mean", "Max", "Std", "Variance"],
-        },
-    },
-}
-
-
-def _dict_schema_io():
-    columns = SCHEMA_SPEC["columns"]
-
-    class ContractDictIO(UnifiedIO):
-        schema = {name: col["type"] for name, col in columns.items()}
-        schema_validations = {name: col["validations"] for name, col in columns.items()}
-        schema_metrics = {name: col["metrics"] for name, col in columns.items()}
-
-    return ContractDictIO
+from dynamicio.schema import Metric, metrics, null_fraction_below
 
 
 class ContractModel(pa.DataFrameModel):
     """The SCHEMA_SPEC schema, declared as a Pandera model (``apply: false`` validations are simply omitted)."""
+
+    __dataset_name__ = "contract_dataset"
 
     a: Series[int] = pa.Field(
         nullable=True,
         unique=True,
         gt=1,
         in_range={"min_value": 0, "max_value": 5, "include_min": False, "include_max": False},
-        metadata={"dynamicio": {"metrics": ["Min", "Counts", "UniqueCounts"]}},
+        metadata=metrics(Metric.MIN, Metric.COUNTS, Metric.UNIQUE_COUNTS),
     )
-    b: Series[str] = pa.Field(nullable=False, isin=["x", "y"], metadata={"dynamicio": {"metrics": ["CountsPerLabel"]}})
+    b: Series[str] = pa.Field(nullable=False, isin=["x", "y"], metadata=metrics(Metric.COUNTS_PER_LABEL))
     c: Series[float] = pa.Field(
         nullable=False,
-        metadata={"dynamicio": {"validations": {"has_acceptable_percentage_of_nulls": {"threshold": 0.3}}, "metrics": ["Mean", "Max", "Std", "Variance"]}},
+        metadata=metrics(Metric.MEAN, Metric.MAX, Metric.STD, Metric.VARIANCE) | null_fraction_below(0.3),
     )
-
-    class Config:
-        name = "contract_dataset"
-        strict = "filter"
 
 
 class ContractPanderaIO(UnifiedIO):
     schema = ContractModel
 
 
-class ContractYamlIO(UnifiedIO):
-    schema = SCHEMA_FROM_FILE
+@pytest.fixture
+def make_io(tmp_path):
+    """Returns ``make_io(df_to_read=None, io_class=None, **io_kwargs)`` for a LOCAL csv resource.
 
-
-@pytest.fixture(params=["yaml_schema", "dict_schema", "pandera_schema"])
-def make_io(request, tmp_path):
-    """Returns ``make_io(df_to_read=None, io_class=None, **io_kwargs)`` for a LOCAL csv resource, for both schema declaration styles.
-
-    The dataset name that metrics are logged under is ``contract_dataset`` upper-cased for the YAML style (taken from the
-    schema's ``name``) and the snake-cased class name for the dict style, so tests that check it use ``dataset_name``.
+    The dataset name that metrics are logged under is the ``__dataset_name__`` of ``ContractModel``, upper-cased: ``dataset_name``.
     """
-    schema_file = tmp_path / "schema.yaml"
-    schema_file.write_text(yaml.safe_dump(SCHEMA_SPEC, sort_keys=False))
     csv_file = tmp_path / "data.csv"
 
     definitions = tmp_path / "definitions.yaml"
@@ -115,8 +60,6 @@ def make_io(request, tmp_path):
                   file_type: "csv"
                 options:
                   index: false
-              schema:
-                file_path: "{schema_file}"
             """))
 
     class _NoVars:  # IOConfig only needs an object to look dynamic variables up on
@@ -126,12 +69,11 @@ def make_io(request, tmp_path):
         if df_to_read is not None:
             df_to_read.to_csv(csv_file, index=False)
         resource = IOConfig(str(definitions), env_identifier="LOCAL", dynamic_vars=_NoVars).get(source_key="CONTRACT")
-        io_class = io_class or {"yaml_schema": ContractYamlIO, "pandera_schema": ContractPanderaIO}.get(request.param) or _dict_schema_io()
+        io_class = io_class or ContractPanderaIO
         return io_class(source_config=resource, **io_kwargs)
 
     _make.csv_file = csv_file
-    _make.style = request.param
-    _make.dataset_name = "CONTRACT_DICT_IO" if request.param == "dict_schema" else "CONTRACT_DATASET"
+    _make.dataset_name = "CONTRACT_DATASET"
     return _make
 
 

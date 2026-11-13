@@ -9,10 +9,11 @@ from dynamicio import UnifiedIO
 from dynamicio.config import IOConfig
 from dynamicio.errors import NoObjectsFoundError, ObjectNotFoundError
 from tests import constants
+from tests.mocking.models import OptionalParquet
 
 
 class ReadOptionalParquetIO(UnifiedIO):
-    schema = {"id": "int64"}
+    schema = OptionalParquet
 
 
 BINDING = """

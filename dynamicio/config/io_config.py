@@ -53,13 +53,13 @@ would return:
         }
 """
 
-__all__ = ["IOConfig", "SafeDynamicResourceLoader", "SafeDynamicSchemaLoader"]
+__all__ = ["IOConfig", "SafeDynamicResourceLoader"]
 
 import logging
 import re
 import weakref
 from types import ModuleType
-from typing import Any, List, MutableMapping
+from typing import List
 
 import pydantic
 import yaml
@@ -112,54 +112,6 @@ class SafeDynamicResourceLoader(yaml.SafeLoader):
         return value
 
 
-class SafeDynamicSchemaLoader(yaml.SafeLoader):
-    """Implements a dynamic yaml loader that parses yaml files and replaces strings that map to [[ DYNAMIC_VAR ]].
-
-    Dynamic variables defined in a provided module object.
-    """
-
-    module = None
-    dynamic_data_matcher = re.compile(r"(.*)(\[\[\s*(\S+)\s*]])(.*)")
-
-    @classmethod
-    def with_module(cls, module: ModuleType):
-        """Creates a dynamic subclass of SafeDynamicLoader with the `data_module` attribute set to `module`.
-
-        Args:
-            module: A global vars module with all the dynamic values defined in it.
-
-        Returns:
-            type: The new loader subclass.
-        """
-        return type(f"{cls.__name__}_{module.__name__}", (cls,), {"module": module})
-
-    def dyn_value_constructor(self, node: yaml.nodes.ScalarNode) -> Any:
-        """Responsible for the switching of one or more "[[ DYNAMIC_VAR ]]" strings with the respective attributes value in a given module.
-
-        Args:
-            node: Parsed item whose dynamic values that map to the "[[ DYNAMIC_VAR ]]" convention
-                are replaced with the respective attributes in te provided module.
-
-        Returns:
-            Constructed `str` or numerical.
-        """
-        value = node.value
-
-        while result := self.dynamic_data_matcher.match(value):
-            ref = result.group(3)
-            replacement = getattr(self.module, ref)
-
-            value = self.dynamic_data_matcher.sub(f"\\g<1>{replacement}\\g<4>", value)
-
-            try:
-                value = float(value)
-                return value
-            except ValueError:
-                pass
-
-        return value
-
-
 class IOConfig:
     """Generates an object that returns a sub-dictionary of the elements of that yaml file.
 
@@ -176,7 +128,6 @@ class IOConfig:
 
     YAML_TAG = "tag:yaml.org,2002:str"
     SafeDynamicResourceLoader.add_constructor(YAML_TAG, SafeDynamicResourceLoader.dyn_str_constructor)
-    SafeDynamicSchemaLoader.add_constructor(YAML_TAG, SafeDynamicSchemaLoader.dyn_value_constructor)
 
     path_to_source_yaml: str
     env_identifier: str
@@ -219,25 +170,15 @@ class IOConfig:
             A dictionary with the list of all file paths pointing to various input sources as those
             are defined in their respective data/*.yaml files.
         """
-        used_file_inputs = [self.path_to_source_yaml]
         with open(self.path_to_source_yaml, "r") as stream:  # pylint: disable=unspecified-encoding]
             logger.debug(f"Parsing {self.path_to_source_yaml}...")
             data = yaml.load(stream, SafeDynamicResourceLoader.with_module(self.dynamic_vars))
-
-        # Load any file_path's found in schema definitions
-        for io_binding in data.values():
-            if isinstance(io_binding, MutableMapping) and io_binding.get("schema", {}).get("file_path"):
-                file_path = io_binding["schema"]["file_path"]
-                used_file_inputs.append(file_path)
-                # schema has `file_path`` in it
-                with open(file_path, "r", encoding="utf8") as stream:
-                    io_binding["schema"] = yaml.load(stream, SafeDynamicSchemaLoader.with_module(self.dynamic_vars))
 
         try:
             config = BindingsYaml(bindings=data)
             config.update_config_refs()
         except pydantic.ValidationError:
-            logger.exception(f"Error loading {data=!r}, {used_file_inputs=!r}")
+            logger.exception(f"Error loading {data=!r} from {self.path_to_source_yaml!r}")
             raise
         return config
 

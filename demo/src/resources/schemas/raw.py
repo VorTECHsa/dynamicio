@@ -7,22 +7,20 @@ from pandera.typing import Series
 class StagedFooModel(pa.DataFrameModel):
     """Staged foos: dtypes only, no validations or metrics."""
 
+    __dataset_name__ = "staged_foo"
+
     column_a: Series[object] = pa.Field(nullable=True)
     column_b: Series[object] = pa.Field(nullable=True)
     column_c: Series[int] = pa.Field(nullable=True)
     column_d: Series[int] = pa.Field(nullable=True)
-
-    class Config:
-        name = "staged_foo"
 
 
 class StagedBarModel(pa.DataFrameModel):
     """Staged bars: dtypes only, no validations or metrics."""
 
+    __dataset_name__ = "staged_bar"
+
     column_a: Series[object] = pa.Field(nullable=True)
     column_b: Series[object] = pa.Field(nullable=True)
     column_c: Series[int] = pa.Field(nullable=True)
     column_d: Series[int] = pa.Field(nullable=True)
-
-    class Config:
-        name = "staged_bar"
