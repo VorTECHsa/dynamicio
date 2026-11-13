@@ -75,7 +75,8 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
             apply_schema_validations: Applies schema validations on either read() or write(). Default: what the model's `__io__` declares, else False
             log_schema_metrics: Logs schema metrics on either read() or write(). Default: what the model's `__io__` declares, else False
             show_casting_warnings: Logs casting warnings on either read() or write() if set to True. Default: what the model's `__io__` declares, else False
-            strict_dtype_check: Applies strict dtype check on either read() or write(), confirming the correct type for all rows per column, if set to True. Default: what the model's `__io__` declares, else False
+            strict_dtype_check: Applies strict dtype check on either read() or write(), confirming the correct type for all rows per column, if set to True.
+                Default: what the model's `__io__` declares, else False
             schema: A Pandera `DataFrameModel` for this instance. Takes precedence over the class attribute; required when the class sets `schema = SCHEMA_FROM_ARGUMENT`
             missing_ok: If True, `read()` returns None when the source does not exist, instead of raising `FileNotFoundError`
             options: Any additional kwargs that may be used throughout the lifecycle of the object
