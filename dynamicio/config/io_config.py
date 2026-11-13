@@ -56,6 +56,7 @@ would return:
 __all__ = ["IOConfig", "SafeDynamicResourceLoader", "SafeDynamicSchemaLoader"]
 
 import logging
+import os
 import re
 import weakref
 from types import ModuleType
@@ -66,6 +67,7 @@ import yaml
 
 # Application Imports
 from dynamicio.config.pydantic import BindingsYaml, IOEnvironment
+from dynamicio.errors import UnknownEnvironmentError
 
 logger = logging.getLogger(__name__)
 
@@ -291,4 +293,7 @@ class IOConfig:
                     "KAFKA_TOPIC": "mock-kafka-topic"
                 }
         """
-        return self.config.bindings[source_key].get_binding_for_environment(self.env_identifier)
+        binding = self.config.bindings[source_key]
+        if self.env_identifier not in binding.environments:
+            raise UnknownEnvironmentError(source_key, self.env_identifier, binding.environments, file_path=os.path.basename(self.path_to_source_yaml))
+        return binding.get_binding_for_environment(self.env_identifier)

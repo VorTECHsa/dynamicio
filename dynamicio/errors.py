@@ -15,11 +15,13 @@ __all__ = [
     "InvalidDatasetTypeError",
     "NoObjectsFoundError",
     "ObjectNotFoundError",
+    "UnknownEnvironmentError",
     "CASTING_WARNING_MSG",
     "NOTICE_MSG",
 ]
 
-from typing import Any, Optional
+import difflib
+from typing import Any, Iterable, Optional
 
 from awswrangler.exceptions import NoFilesFound
 
@@ -112,6 +114,28 @@ class ObjectNotFoundError(FileNotFoundError, NoFilesFound):
     `NoFilesFound` for a missing key, and callers that catch `NoFilesFound` must not change.
     """
 
+class UnknownEnvironmentError(KeyError):
+    """Error raised when a resource has no definition for the requested environment.
+
+    It is a `KeyError`, so callers that catch `KeyError` keep working.
+    """
+
+    def __init__(self, source_key: str, environment: str, defined_environments: Iterable[str], file_path: str = "") -> None:
+        self.source_key = source_key
+        self.environment = environment
+        self.defined_environments = list(defined_environments)
+        self.file_path = file_path
+
+        where = f" in {file_path}" if file_path else ""
+        message = f"Source '{source_key}'{where} has no environment '{environment}'. Defined: {', '.join(self.defined_environments)}."
+        suggestions = difflib.get_close_matches(environment, self.defined_environments, n=1)
+        if suggestions:
+            message += f" Did you mean '{suggestions[0]}'?"
+        super().__init__(message)
+
+    def __str__(self) -> str:
+        # KeyError.__str__ wraps the message in quotes (repr). Return the plain message instead.
+        return str(self.args[0])
 
 # Warning messages
 CASTING_WARNING_MSG = "Applying casting column: '{0}' to: 'type:{1}' from 'type:{2}' though not advised, as `dtypes`>1 for {0}, which may lead to data corruption!"

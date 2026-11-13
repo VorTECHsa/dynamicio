@@ -7,6 +7,7 @@ import yaml
 
 from dynamicio.config.io_config import IOConfig, SafeDynamicResourceLoader, SafeDynamicSchemaLoader
 from tests import constants
+from dynamicio.errors import UnknownEnvironmentError
 
 
 class TestIOConfig:
@@ -154,6 +155,39 @@ class TestIOConfig:
             "0": "object",
             "1": "object",
         }
+    @pytest.mark.unit
+    def test_get_raises_an_error_naming_source_file_and_defined_environments_and_suggests_a_close_match_for_an_unknown_environment(self):
+        # Given
+        input_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/test_input.yaml")),
+            env_identifier="LOCL",
+            dynamic_vars=constants,
+        )
+
+        # When
+        with pytest.raises(UnknownEnvironmentError) as error:
+            input_config.get(source_key="READ_FROM_S3_CSV")
+
+        # Then
+        assert isinstance(error.value, KeyError)
+        assert str(error.value) == "Source 'READ_FROM_S3_CSV' in test_input.yaml has no environment 'LOCL'. Defined: LOCAL, CLOUD. Did you mean 'LOCAL'?"
+
+    @pytest.mark.unit
+    def test_get_raises_an_error_without_a_suggestion_when_no_defined_environment_is_close(self):
+        # Given
+        input_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/test_input.yaml")),
+            env_identifier="STAGING",
+            dynamic_vars=constants,
+        )
+
+        # When
+        with pytest.raises(UnknownEnvironmentError) as error:
+            input_config.get(source_key="READ_FROM_S3_CSV")
+
+        # Then
+        assert str(error.value) == "Source 'READ_FROM_S3_CSV' in test_input.yaml has no environment 'STAGING'. Defined: LOCAL, CLOUD."
+        assert "Did you mean" not in str(error.value)
 
 
 class TestSafeDynamicLoader:  # pylint: disable=R0903
