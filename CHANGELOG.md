@@ -1,5 +1,9 @@
 # Changelog
 
+## v10.4.2
+
+- fix: `IOConfig.get()` raises `dynamicio.errors.UnknownEnvironmentError` when the resource has no definition for the environment of the `IOConfig`. Before, it raised a bare `KeyError: 'LOCAL'`. The message names the source key and the yaml file, lists the defined environments and suggests the closest name. `UnknownEnvironmentError` is a `KeyError` subclass, so code that catches `KeyError` works as before. An unknown source key still raises the plain `KeyError`.
+
 ## v10.4.1
 
 - docs: the `Documentation` project link of the package, and the README, point to the documentation on Read the Docs (https://dynamicio.readthedocs.io/en/latest/), and the documentation home page shows the panda mascot next to the logo
