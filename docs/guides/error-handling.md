@@ -12,6 +12,7 @@ first argument the error was raised with (`None` if there was none).
 | `InvalidDatasetTypeError` | `file_type` is not one of `parquet`, `json`, `csv`, `h5` |
 | `NoObjectsFoundError` | An S3 prefix (or a parquet `file_path` ending in `/`) holds no objects. It is both a `FileNotFoundError` and a `ValueError` |
 | `ObjectNotFoundError` | The S3 key of a `csv` or `json` `file_path` does not exist. It is both a `FileNotFoundError` and an awswrangler `NoFilesFound` |
+| `UnknownEnvironmentError` | `IOConfig.get()` is asked for an environment the resource does not define. The message lists the defined environments and suggests the closest one. It is a `KeyError` |
 
 The full list, with docstrings, is in the [API reference](../reference/index.md#errors).
 

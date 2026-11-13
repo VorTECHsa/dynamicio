@@ -66,6 +66,7 @@ import yaml
 
 # Application Imports
 from dynamicio.config.pydantic import BindingsYaml, IOEnvironment
+from dynamicio.errors import UnknownEnvironmentError
 
 logger = logging.getLogger(__name__)
 
@@ -259,6 +260,11 @@ class IOConfig:
         Returns:
             A dictionary with the necessary fields for loading the data from a source.
 
+        Raises:
+            KeyError: If no resource is named `source_key`.
+            UnknownEnvironmentError: If the resource does not define the `env_identifier` environment. It is a `KeyError` whose message lists
+                the environments the resource defines and suggests the closest one.
+
         Example:
 
             Given:
@@ -291,4 +297,7 @@ class IOConfig:
                     "KAFKA_TOPIC": "mock-kafka-topic"
                 }
         """
-        return self.config.bindings[source_key].get_binding_for_environment(self.env_identifier)
+        binding = self.config.bindings[source_key]
+        if self.env_identifier not in binding.environments:
+            raise UnknownEnvironmentError(source_key, self.env_identifier, binding.environments, self.path_to_source_yaml)
+        return binding.get_binding_for_environment(self.env_identifier)

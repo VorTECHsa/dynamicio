@@ -15,11 +15,13 @@ __all__ = [
     "InvalidDatasetTypeError",
     "NoObjectsFoundError",
     "ObjectNotFoundError",
+    "UnknownEnvironmentError",
     "CASTING_WARNING_MSG",
     "NOTICE_MSG",
 ]
 
-from typing import Any, Optional
+import difflib
+from typing import Any, Iterable, Optional
 
 from awswrangler.exceptions import NoFilesFound
 
@@ -111,6 +113,37 @@ class ObjectNotFoundError(FileNotFoundError, NoFilesFound):
     It is a `FileNotFoundError`, so a caller can treat it as a missing source. It is also an awswrangler `NoFilesFound`: earlier releases raised
     `NoFilesFound` for a missing key, and callers that catch `NoFilesFound` must not change.
     """
+
+
+class UnknownEnvironmentError(KeyError):
+    """Error raised when a resource definition does not define the environment it is asked for.
+
+    It is a `KeyError`, so a caller that catches the bare `KeyError` that earlier releases raised does not change. The message names the
+    source, the file, the environments the source defines and, when there is one, the closest defined name.
+    """
+
+    def __init__(self, source_key: str, environment: str, defined: Iterable[str], path: Optional[str] = None):
+        self.source_key = source_key
+        self.environment = environment
+        self.defined = list(defined)
+        self.path = path
+        super().__init__(environment)
+
+    @property
+    def suggestion(self) -> Optional[str]:
+        """The defined environment closest to the requested one (ignoring case), or `None`."""
+        by_folded_name = {name.casefold(): name for name in self.defined}
+        matches = difflib.get_close_matches(self.environment.casefold(), list(by_folded_name), n=1)
+        return by_folded_name[matches[0]] if matches else None
+
+    def __str__(self):
+        """Explain which environment is missing where, instead of the repr of the key that `KeyError` prints."""
+        where = f" in {self.path}" if self.path else ""
+        defined = ", ".join(self.defined) if self.defined else "none"
+        message = f"Source '{self.source_key}'{where} has no environment '{self.environment}'. Defined: {defined}."
+        if self.suggestion is not None:
+            message += f" Did you mean '{self.suggestion}'?"
+        return message
 
 
 # Warning messages
