@@ -292,3 +292,33 @@ def test_the_prompt_tells_how_to_name_datasets_and_tables(project):
 
     prompt = (project / "MIGRATION_PROMPT.md").read_text()
     assert "dataset=" in prompt and "table=" in prompt and "exactly" in prompt and "DataModel" in prompt
+
+
+def _bounds(validations):
+    schema = DataframeSchema(name="b", columns={"x": {"type": "float64", "validations": {k: {"apply": True, "options": v} for k, v in validations.items()}, "metrics": []}})
+    return schema
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "validations, declared",
+    [
+        ({"is_between": {"lower": 0, "upper": 5}}, "Field(nullable=True, gt=0, lt=5)"),
+        ({"is_between": {"lower": 0, "upper": 5, "include_left": True, "include_right": True}}, "Field(nullable=True, ge=0, le=5)"),
+        ({"is_between": {"lower": 0, "upper": 5}, "is_greater_than": {"threshold": 1}}, "Field(nullable=True, gt=1, lt=5)"),  # gt=1 implies gt=0
+        ({"is_between": {"lower": 1, "upper": 5, "include_left": True}, "is_greater_than": {"threshold": 1}}, "Field(nullable=True, gt=1, lt=5)"),  # at a tie, exclusion is tighter
+        ({"is_between": {"lower": 0, "upper": 5, "include_right": True}, "is_lower_than": {"threshold": 9}}, "Field(nullable=True, gt=0, le=5)"),
+    ],
+)
+def test_is_between_becomes_the_tightest_lower_and_upper_bound(validations, declared):
+    original = _bounds(validations)
+    source = render_model(original)
+
+    assert declared in source
+    assert schemas_equivalent(to_dataframe_schema(compile_module(PRELUDE + source)["B"]), original)
+
+
+@pytest.mark.unit
+def test_bounds_that_cannot_be_compared_are_reported_by_column():
+    with pytest.raises(ValueError, match="Column 'x'.*cannot be compared"):
+        render_model(_bounds({"is_between": {"lower": "[[ LOW ]]", "upper": 5}, "is_greater_than": {"threshold": 1}}))

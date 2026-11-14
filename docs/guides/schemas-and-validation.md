@@ -71,10 +71,9 @@ A plain `pa.DataFrameModel` works too: declare `__dataset_name__` and `__table_n
 |---|---|
 | `nullable=` | **Required.** `False` is `has_no_null_values`. Pandera's own default is `False`, dynamicio allowed nulls, so the decision is always written down |
 | `unique=True` | `has_unique_values` |
-| `gt` / `ge` / `lt` / `le` | `is_greater_than` / `..._or_equal` / `is_lower_than` / `..._or_equal` |
+| `gt` / `ge` / `lt` / `le` | `is_greater_than` / `..._or_equal` / `is_lower_than` / `..._or_equal`. A range is one of each: `ge=1941, le=NEXT_YEAR`. The bounds are not compared on definition, so they may come from settings |
 | `isin=[...]` | `is_in`: the values must be a subset of the list |
 | `exactly=[...]` | `is_in` with `match_all=False`: the values are exactly these, none other and none missing |
-| `between=(lower, upper)` | `is_between`. The bounds are excluded unless `include_lower=True` / `include_upper=True`; they are not compared on definition, so they may come from settings |
 | `max_null_fraction=0.2` | fails if 20% or more of the column is null (`has_acceptable_percentage_of_nulls`) |
 | `metrics=[Metric.MIN, ...]` | logs these metrics for the column when metrics are logged: `MIN`, `MAX`, `MEAN`, `STD`, `VARIANCE`, `COUNTS`, `UNIQUE_COUNTS`, `COUNTS_PER_LABEL` |
 
@@ -125,7 +124,8 @@ becomes `schemas/stage.py`); pass `-o schemas.py` for a single module. For each 
 
 - takes the class name from the file name, and sets `dataset=` to the schema's `name`, so the labels in your logs and metric lines do not change;
 - also sets `table=` to that name for every schema that a resource definition under `--scan` binds to a Postgres environment (the old schema name was the table name). Check it is the exact table name;
-- declares each column with `Field`, always with `nullable=` and, for a range, `between=` with its bounds;
+- declares each column with `Field`, always with `nullable=`. A YAML `is_between` becomes its two bounds (`gt`/`ge` and `lt`/`le`, after `include_left` / `include_right`), merged with any
+  other bound of the column into the tightest one per side, so such a column reports two validations instead of one `is_between`;
 - checks that the model compiles back to a schema equivalent to its source.
 
 It also writes `MIGRATION_PROMPT.md` next to the module, listing the models and every remaining call site (`SCHEMA_FROM_FILE`,
@@ -140,7 +140,7 @@ holds strings, change it to `Series[str]` by hand. Dict-style schemas are not co
 Version 11 removes dict schemas, `SCHEMA_FROM_FILE` and YAML schemas, which 9 and 10 still accepted next to Pandera models, and changes how models are declared.
 These are small enough to apply by hand, or to ask a coding assistant to apply (give it this page and the [changelog](https://github.com/VorTECHsa/dynamicio/blob/master/CHANGELOG.md)):
 
-1. Base the model on `DataModel` (`from dynamicio.schema import DataModel, Field, Metric`) and declare its columns with `Field`: `metadata={"dynamicio": {...}}` becomes `metrics=[...]`, `max_null_fraction=`, `exactly=` and `between=`.
+1. Base the model on `DataModel` (`from dynamicio.schema import DataModel, Field, Metric`) and declare its columns with `Field`: `metadata={"dynamicio": {...}}` becomes `metrics=[...]`, `max_null_fraction=` and `exactly=`, and `is_between` becomes `gt`/`ge` plus `lt`/`le`.
 2. Name every dataset with `dataset="x"` in the class keywords (`class Config: name = "x"` is no longer read, and the class name is no longer a fallback).
 3. Add `table="<exact table name>"` to every model used with a Postgres resource.
 4. Convert any remaining dict schema to a model, and delete `schema:` blocks from resource definitions.

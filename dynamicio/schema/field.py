@@ -31,29 +31,14 @@ class FieldDeclaration:
         """Validate that the column holds exactly these values: none other, and none missing (``isin`` only forbids others)."""
         return ValidationSpec("is_in", {"categorical_values": set(expected), "match_all": False})
 
-    @staticmethod
-    def between(lower: Any, upper: Any, include_lower: bool, include_upper: bool) -> ValidationSpec:
-        """Validate that the column lies between two bounds, which are not compared on definition (``pa.Field(in_range=...)`` does)."""
-        return ValidationSpec("is_between", {"lower": lower, "upper": upper, "include_left": include_lower, "include_right": include_upper})
-
     @classmethod
-    def metadata(  # pylint: disable=too-many-positional-arguments
-        cls,
-        metric_names: Iterable[Metric],
-        max_null_fraction: Optional[float],
-        exactly: Optional[Iterable[Any]],
-        between: Optional[Tuple[Any, Any]],
-        include_lower: bool,
-        include_upper: bool,
-    ) -> Optional[Dict[str, DynamicioMetadata]]:
+    def metadata(cls, metric_names: Iterable[Metric], max_null_fraction: Optional[float], exactly: Optional[Iterable[Any]]) -> Optional[Dict[str, DynamicioMetadata]]:
         """The ``metadata`` of the field, or None when the column declares nothing for dynamicio."""
         validations: List[ValidationSpec] = []
         if max_null_fraction is not None:
             validations.append(cls.null_fraction_below(max_null_fraction))
         if exactly is not None:
             validations.append(cls.exactly(exactly))
-        if between is not None:
-            validations.append(cls.between(*between, include_lower, include_upper))
         declared = DynamicioMetadata(metrics=cls.metrics(metric_names), validations=tuple(validations))
         return {METADATA_KEY: declared} if declared.metrics or declared.validations else None
 
@@ -68,9 +53,6 @@ def Field(  # pylint: disable=invalid-name,too-many-arguments,too-many-locals
     le: Any = None,
     isin: Optional[Iterable[Any]] = None,
     exactly: Optional[Iterable[Any]] = None,
-    between: Optional[Tuple[Any, Any]] = None,
-    include_lower: bool = False,
-    include_upper: bool = False,
     max_null_fraction: Optional[float] = None,
     metrics: Iterable[Metric] = (),
     **pandera_options: Any,
@@ -80,25 +62,25 @@ def Field(  # pylint: disable=invalid-name,too-many-arguments,too-many-locals
     Args:
         nullable: Whether the column may hold nulls. Required, so that it is always a decision (Pandera's own default is False).
         unique: The values must be unique.
-        gt: Every value must be greater than this.
+        gt: Every value must be greater than this. Bounds are not compared on definition, so they may come from settings.
         ge: Every value must be greater than or equal to this.
         lt: Every value must be lower than this.
-        le: Every value must be lower than or equal to this.
+        le: Every value must be lower than or equal to this. A range is a lower and an upper bound: ``ge=1941, le=NEXT_YEAR``.
         isin: Every value must be one of these (it may use only some of them).
         exactly: The values must be exactly these: none other, and none missing.
-        between: ``(lower, upper)``: every value must lie between them. The bounds are not compared on definition, so they may come from settings.
-        include_lower: Whether a value equal to the lower bound of ``between`` is valid. Default: no.
-        include_upper: Whether a value equal to the upper bound of ``between`` is valid. Default: no.
         max_null_fraction: A fraction between 0 and 1: the validation fails when this share or more of the column is null (0.2 allows up to, not including, 20%).
         metrics: ``Metric`` members to log for the column on reads and writes that log metrics: ``Metric.MIN``, ``MAX``, ``MEAN``, ``STD``, ``VARIANCE``,
             ``COUNTS``, ``UNIQUE_COUNTS``, ``COUNTS_PER_LABEL``.
         pandera_options: Any other ``pa.Field`` argument (``alias``, ``coerce``, ``str_matches``, ``description`` ...).
     """
+    removed = sorted({"between", "include_lower", "include_upper"} & set(pandera_options))
+    if removed:  # dynamicio 11.0.0 release candidates had them
+        raise TypeError(f"Field() takes no {', '.join(removed)}: declare a range as its two bounds, gt= or ge= and lt= or le= (between=(1, 9), include_lower=True is ge=1, lt=9)")
     if "metadata" in pandera_options:
-        raise TypeError("Field() declares dynamicio's metadata itself: use metrics=, exactly=, between= and max_null_fraction= instead of metadata=")
+        raise TypeError("Field() declares dynamicio's metadata itself: use metrics=, exactly= and max_null_fraction= instead of metadata=")
     if exactly is not None and isin is not None:
         raise TypeError("Field() takes either isin= (values may be missing) or exactly= (none may be missing), not both")
-    metadata = FieldDeclaration.metadata(metrics, max_null_fraction, exactly, between, include_lower, include_upper)
+    metadata = FieldDeclaration.metadata(metrics, max_null_fraction, exactly)
     if metadata is not None:
         pandera_options["metadata"] = metadata
     named = {"gt": gt, "ge": ge, "lt": lt, "le": le, "isin": None if isin is None else list(isin)}

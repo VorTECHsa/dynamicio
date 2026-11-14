@@ -41,14 +41,18 @@ class TestField:
         assert validations(column)["is_greater_than"] == {"threshold": 0}  # a bound of 0 is a bound
 
     @pytest.mark.unit
-    def test_between_excludes_its_bounds_unless_included(self):
-        assert validations(compiled(Field(nullable=True, between=(0, 5))))["is_between"] == {"lower": 0, "upper": 5, "include_left": False, "include_right": False}
-        included = validations(compiled(Field(nullable=True, between=(0, 5), include_lower=True)))["is_between"]
-        assert (included["include_left"], included["include_right"]) == (True, False)
+    def test_a_range_is_a_lower_and_an_upper_bound(self):
+        assert validations(compiled(Field(nullable=True, ge=0, lt=5))) == {"is_greater_than_or_equal": {"threshold": 0}, "is_lower_than": {"threshold": 5}}
 
     @pytest.mark.unit
-    def test_between_does_not_compare_its_bounds_on_definition(self):
-        Field(nullable=True, between=("[[ LATER ]]", 5))  # a pa.Field(in_range=...) would raise on a string bound
+    def test_bounds_are_not_compared_on_definition(self):
+        Field(nullable=True, ge="[[ LATER ]]", le=5)  # a pa.Field(in_range=...) would raise on a string bound
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("removed", ["between", "include_lower", "include_upper"])
+    def test_between_is_gone(self, removed):
+        with pytest.raises(TypeError, match=removed):
+            Field(nullable=True, **{removed: (0, 1)})
 
     @pytest.mark.unit
     def test_exactly_and_max_null_fraction_and_metrics(self):

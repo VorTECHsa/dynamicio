@@ -33,20 +33,52 @@ class SchemaComparison:
         """Sort key that orders mixed-type values (including ``None``) deterministically."""
         return (value is None, str(value))
 
+    # The bound validators, and whether each includes its threshold.
+    LOWER_BOUNDS = {"is_greater_than": False, "is_greater_than_or_equal": True}
+    UPPER_BOUNDS = {"is_lower_than": False, "is_lower_than_or_equal": True}
+
     @classmethod
-    def _options(cls, validation) -> list:
-        defaults = {"is_between": {"include_left": False, "include_right": False}, "is_in": {"match_all": True}}.get(validation.name, {})
-        options = {**defaults, **validation.options}
+    def single_bounds(cls, column: str, validations: Mapping[str, Mapping[str, Any]]) -> Dict[str, Dict[str, Any]]:
+        """``validations`` (options by validator name) as ``Field`` declares them: ``is_between`` split into its two bounds, and each side reduced to its tightest bound.
+
+        ``Field`` has one ``gt``/``ge`` and one ``lt``/``le``, so ``is_greater_than: 1`` next to ``is_between: {lower: 0, ...}`` becomes ``gt=1``, which implies both.
+
+        Raises:
+            ValueError: If two bounds of one side cannot be compared (a ``[[ VARIABLE ]]`` and a number, say), so the tighter one is unknown.
+        """
+        bounds = {name: dict(options) for name, options in validations.items() if name != "is_between" and name not in {**cls.LOWER_BOUNDS, **cls.UPPER_BOUNDS}}
+        lower = [(name, options["threshold"]) for name, options in validations.items() if name in cls.LOWER_BOUNDS]
+        upper = [(name, options["threshold"]) for name, options in validations.items() if name in cls.UPPER_BOUNDS]
+        if "is_between" in validations:
+            between = validations["is_between"]
+            lower.append(("is_greater_than_or_equal" if between.get("include_left", False) else "is_greater_than", between["lower"]))
+            upper.append(("is_lower_than_or_equal" if between.get("include_right", False) else "is_lower_than", between["upper"]))
+        try:
+            if lower:  # the highest bound; at a tie, the one that excludes it
+                name, threshold = max(lower, key=lambda bound: (bound[1], not cls.LOWER_BOUNDS[bound[0]]))
+                bounds[name] = {"threshold": threshold}
+            if upper:  # the lowest bound; at a tie, the one that excludes it
+                name, threshold = min(upper, key=lambda bound: (bound[1], cls.UPPER_BOUNDS[bound[0]]))
+                bounds[name] = {"threshold": threshold}
+        except TypeError as error:
+            raise ValueError(f"Column {column!r}: the bounds {lower + upper} cannot be compared to keep the tightest of each side; declare the column by hand") from error
+        return bounds
+
+    @classmethod
+    def _options(cls, name: str, options: Mapping[str, Any]) -> list:
+        options = {**{"is_in": {"match_all": True}}.get(name, {}), **options}
         if "categorical_values" in options:  # a set semantically: order is irrelevant
             options["categorical_values"] = sorted(options["categorical_values"], key=cls.value_order)
         return sorted(options.items(), key=str)
 
     @classmethod
     def _comparable(cls, schema: DataframeSchema) -> dict:
-        return {
-            name: (cls.canonical_dtype(col.data_type), sorted((v.name, cls._options(v)) for v in col.validations if v.apply), [getattr(m, "value", m) for m in col.metrics])
-            for name, col in schema.columns.items()
-        }
+        comparable = {}
+        for name, col in schema.columns.items():
+            validations = cls.single_bounds(name, {v.name: v.options for v in col.validations if v.apply})
+            options = sorted((validator, cls._options(validator, given)) for validator, given in validations.items())
+            comparable[name] = (cls.canonical_dtype(col.data_type), options, [getattr(m, "value", m) for m in col.metrics])
+        return comparable
 
     @classmethod
     def differences(cls, left: DataframeSchema, right: DataframeSchema) -> List[str]:
@@ -86,8 +118,7 @@ class ModelRenderer:
     def render_field(cls, column: SchemaColumn) -> str:
         """The ``Field(...)`` call that declares ``column``."""
         kwargs: List[str] = []
-        applied = [v for v in column.validations if v.apply]
-        by_name = {v.name: dict(v.options) for v in applied}
+        by_name = SchemaComparison.single_bounds(column.name, {v.name: v.options for v in column.validations if v.apply})
 
         # Pandera's default is nullable=False; dynamicio's is "nulls allowed unless has_no_null_values". `Field` requires the decision.
         kwargs.append(f"nullable={'has_no_null_values' not in by_name}")
@@ -96,9 +127,6 @@ class ModelRenderer:
         for name, options in by_name.items():
             if name in cls.SIMPLE_CHECKS:
                 kwargs.append(f"{cls.SIMPLE_CHECKS[name]}={options['threshold']!r}")
-            elif name == "is_between":
-                kwargs.append(f"between=({options['lower']!r}, {options['upper']!r})")
-                kwargs += [f"{flag}=True" for flag, key in (("include_lower", "include_left"), ("include_upper", "include_right")) if options.get(key, False)]
             elif name == "is_in" and options.get("match_all", True):
                 kwargs.append(f"isin={sorted(options['categorical_values'], key=SchemaComparison.value_order)!r}")
             elif name == "is_in":
@@ -275,7 +303,7 @@ validation messages must stay identical.
    each placeholder with an import of the real value, e.g. `from my_project.environment import LOWER_THAN_LIMIT`.
 4. Dict-style schemas (`schema = {{...}}`, `schema_validations`, `schema_metrics`) were not converted. Translate them into
    `dynamicio.schema.DataModel` classes following the generated ones: declare each column with `dynamicio.schema.Field`, which
-   takes `nullable=` (required), `unique`, `gt`/`ge`/`lt`/`le`, `isin`, `exactly`, `between`, `max_null_fraction` and
+   takes `nullable=` (required), `unique`, `gt`/`ge`/`lt`/`le`, `isin`, `exactly`, `max_null_fraction` and
    `metrics=[Metric.MIN, ...]`, never a `metadata` dict. Name the dataset with `dataset="<the old schema name>"` in the class
    keywords, and add `table="<exact table name>"` to every model used with a Postgres resource.
 5. A model whose `Config` only sets `name` should use `dataset=` instead, and `Config` can go. Every model must name its dataset.
