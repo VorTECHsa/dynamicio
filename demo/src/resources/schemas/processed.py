@@ -6,7 +6,7 @@ from demo.src.config.environment import LOWER_THAN_LIMIT
 from dynamicio.schema import DataModel, Field, Metric
 
 
-class FinalBar(DataModel, dataset="final_bar", validate=True, log_metrics=True):
+class FinalBar(DataModel, dataset="final_bar"):
     """The `final_bar` dataset."""
 
     column_a: Series[str] = Field(nullable=True, unique=True, metrics=[Metric.COUNTS])
@@ -15,7 +15,7 @@ class FinalBar(DataModel, dataset="final_bar", validate=True, log_metrics=True):
     column_d: Series[float] = Field(nullable=True, lt=LOWER_THAN_LIMIT, metrics=[Metric.MIN, Metric.MAX, Metric.MEAN, Metric.STD, Metric.VARIANCE])
 
 
-class FinalFoo(DataModel, dataset="final_foo", validate=True, log_metrics=True):
+class FinalFoo(DataModel, dataset="final_foo"):
     """The `final_foo` dataset."""
 
     column_a: Series[str] = Field(nullable=True, unique=True, metrics=[Metric.COUNTS])

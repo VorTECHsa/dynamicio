@@ -15,7 +15,7 @@ from demo.src.config.environment import LOWER_THAN_LIMIT
 from dynamicio.schema import DataModel, Field, Metric
 
 
-class Foo(DataModel, dataset="foo", validate=True, log_metrics=True):
+class Foo(DataModel, dataset="foo"):
     column_a: Series[str] = Field(nullable=True, unique=True, metrics=[Metric.COUNTS])
     column_b: Series[str] = Field(nullable=False, metrics=[Metric.COUNTS_PER_LABEL])
     column_c: Series[float] = Field(nullable=True, gt=1000)
@@ -33,7 +33,7 @@ class InputIO(UnifiedIO):
     schema = SCHEMA_FROM_ARGUMENT
 
 
-foo_df = InputIO(source_config=staging_input_config.get(source_key="FOO"), schema=Foo).read()
+foo_df = InputIO(source_config=staging_input_config.get(source_key="FOO"), schema=Foo, apply_schema_validations=True, log_schema_metrics=True).read()
 ```
 
 The `schema=` argument takes precedence over the class attribute; omitting it with `SCHEMA_FROM_ARGUMENT` raises `SchemaNotFoundError`.
@@ -41,16 +41,12 @@ Any other value of `schema` (a dict, `SCHEMA_FROM_FILE`) raises a `TypeError` wh
 
 ### Declaring the dataset
 
-The class keywords of a `DataModel` are the whole declaration of the dataset, so the body holds only columns. `cmd+P` on the class shows them:
+The class keywords of a `DataModel` name the dataset, so the body holds only columns. `cmd+P` on the class shows them:
 
 | Keyword | Meaning |
 |---|---|
 | `dataset="foo"` | **Required.** The label of the dataset in logs and `METRIC` lines (upper-cased: `FOO`). It is never guessed from the class name |
-| `table="foo_v2"` | The **exact name of the table in the database**. Required for a model used with a Postgres resource, ignored by other backends |
-| `validate=True` | Run the validations of the model on every read and write: the default of `apply_schema_validations` |
-| `log_metrics=True` | Log the metrics of the model: the default of `log_schema_metrics` |
-| `show_casting_warnings=True` | Log each column whose dtype had to be cast: the default of `show_casting_warnings` |
-| `strict_dtype_check=True` | Inspect every row for mixed Python types in a column being cast (expensive): the default of `strict_dtype_check` |
+| `table="foo_v2"` | The **exact name of the table in the database**, `schema.table` for one outside the default schema. Required for a model used with a Postgres resource (unless every read passes `sql_query`), ignored by other backends |
 
 ```python
 class Orders(DataModel, dataset="orders", table="orders_v2"):
@@ -58,15 +54,14 @@ class Orders(DataModel, dataset="orders", table="orders_v2"):
 ```
 
 - A model with no `dataset` raises `DatasetNameNotFoundError` when the IO object is created. A base model that only shares columns may leave it out; every model you
-  read or write must name it. Names are never inherited, the switches are.
+  read or write must name it. Names are never inherited: a subclass is another dataset and names its own.
 - A Postgres resource whose model has no `table` raises `TableNameNotFoundError`, and a read of a table that does not exist logs which `table` to correct.
-- A switch is only a default. An argument of the IO call overrides it in either direction: `IO(config, schema=Orders, apply_schema_validations=False)`.
-  Where neither says, the switch is off. A model used both ways keeps the switches off and the call sites pass them.
+- Whether a read or write validates and logs metrics is an argument of the IO call (`apply_schema_validations=True`, `log_schema_metrics=True`, both off by default),
+  never part of the model, so the call site always shows it.
 
 `missing_ok` and the reader and writer options (`orient`, `filters`, ...) stay on the resource definition and the IO call: they depend on the backend and the environment, not on the dataset.
 
-A plain `pa.DataFrameModel` works too: declare `__dataset_name__`, `__table_name__`, `__validate__`, `__log_metrics__`, `__show_casting_warnings__` and `__strict_dtype_check__`
-as class attributes. The dunders are what the class keywords set, because Pandera reserves public attributes for columns.
+A plain `pa.DataFrameModel` works too: declare `__dataset_name__` and `__table_name__` as class attributes. The dunders are what the class keywords set, because Pandera reserves public attributes for columns.
 
 ### Declaring columns
 
@@ -148,5 +143,4 @@ These are small enough to apply by hand, or to ask a coding assistant to apply (
 1. Base the model on `DataModel` (`from dynamicio.schema import DataModel, Field, Metric`) and declare its columns with `Field`: `metadata={"dynamicio": {...}}` becomes `metrics=[...]`, `max_null_fraction=`, `exactly=` and `between=`.
 2. Name every dataset with `dataset="x"` in the class keywords (`class Config: name = "x"` is no longer read, and the class name is no longer a fallback).
 3. Add `table="<exact table name>"` to every model used with a Postgres resource.
-4. Move `apply_schema_validations=True, log_schema_metrics=True` from the call sites to the model with `validate=True, log_metrics=True` where every use of the model wants them.
-5. Convert any remaining dict schema to a model, and delete `schema:` blocks from resource definitions.
+4. Convert any remaining dict schema to a model, and delete `schema:` blocks from resource definitions.

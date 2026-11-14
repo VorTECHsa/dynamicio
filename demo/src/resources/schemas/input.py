@@ -5,7 +5,7 @@ from pandera.typing import Series
 from dynamicio.schema import DataModel, Field, Metric
 
 
-class Bar(DataModel, dataset="bar", validate=True, log_metrics=True):
+class Bar(DataModel, dataset="bar"):
     """The `bar` dataset."""
 
     column_a: Series[str] = Field(nullable=True, unique=True, metrics=[Metric.COUNTS])
@@ -22,7 +22,7 @@ class Orders(DataModel, dataset="orders"):
     status: Series[str] = Field(nullable=True)
 
 
-class Foo(DataModel, dataset="foo", validate=True, log_metrics=True):
+class Foo(DataModel, dataset="foo"):
     """The `foo` dataset."""
 
     column_a: Series[str] = Field(nullable=True, unique=True, metrics=[Metric.COUNTS])

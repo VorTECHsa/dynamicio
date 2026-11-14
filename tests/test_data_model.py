@@ -1,4 +1,4 @@
-"""`DataModel` declares the dataset in class keywords: its names, and the defaults of the IO switches that an argument of the call overrides."""
+"""`DataModel` names the dataset and its table in class keywords; whether a read or write validates stays an argument of the IO call."""
 
 # pylint: disable=missing-class-docstring, missing-function-docstring, redefined-outer-name
 import pandas as pd
@@ -15,14 +15,6 @@ from dynamicio.schema import DataModel, Field, to_dataframe_schema
 
 class Plain(DataModel, dataset="plain"):
     size: Series[int] = Field(nullable=False, gt=0)
-
-
-class Validated(DataModel, dataset="validated", validate=True, log_metrics=True, show_casting_warnings=True, strict_dtype_check=True):
-    size: Series[int] = Field(nullable=False, gt=0)
-
-
-class ValidatedChild(Validated, dataset="validated_child"):
-    """Inherits the switches of its base, never its names."""
 
 
 @pytest.fixture
@@ -76,9 +68,21 @@ class TestNames:
             type("Bad", (DataModel,), {"__annotations__": {}}, **{keyword: bad})
 
     @pytest.mark.unit
-    def test_a_switch_that_is_not_a_bool_is_refused_at_definition(self):
-        with pytest.raises(TypeError, match="validate must be True or False"):
-            type("Bad", (DataModel,), {"__annotations__": {}}, dataset="bad", validate="yes")
+    @pytest.mark.parametrize("keyword", ["validate", "log_metrics", "strict"])
+    def test_any_other_class_keyword_is_refused_by_name(self, keyword):
+        with pytest.raises(TypeError, match=keyword):
+            type("Bad", (DataModel,), {"__annotations__": {}}, dataset="bad", **{keyword: True})
+
+    @pytest.mark.unit
+    def test_a_subclass_names_its_own_dataset(self):
+        class Orders(DataModel, dataset="orders"):
+            id: Series[int] = Field(nullable=True)
+
+        class OpenOrders(Orders):
+            pass
+
+        with pytest.raises(DatasetNameNotFoundError, match="OpenOrders"):
+            to_dataframe_schema(OpenOrders)
 
     @pytest.mark.unit
     def test_class_keywords_leave_pandera_options_working(self):
@@ -93,47 +97,27 @@ class TestNames:
         assert list(out.columns) == ["id"]
 
     @pytest.mark.unit
-    def test_a_plain_pandera_model_declares_the_same_with_dunders(self, resource):
+    def test_a_plain_pandera_model_declares_the_same_with_dunders(self):
         class Dunders(pa.DataFrameModel):
             __dataset_name__ = "dunders"
-            __validate__ = True
+            __table_name__ = "Dunders"
 
             size: Series[int] = pa.Field(nullable=False, gt=0)
 
-        assert to_dataframe_schema(Dunders).name == "dunders"
-        assert UnifiedIO(resource, schema=Dunders).apply_schema_validations is True
+        schema = to_dataframe_schema(Dunders)
+
+        assert (schema.name, schema.table_name) == ("dunders", "Dunders")
 
 
 class TestSwitches:
     @pytest.mark.unit
-    def test_a_model_that_declares_nothing_has_every_switch_off(self, resource):
+    def test_the_model_never_switches_validation_on(self, resource):
         io = UnifiedIO(resource, schema=Plain)
 
         assert switches(io) == (False, False, False, False)
         assert io.read()["size"].tolist() == [-1]  # nothing validated
 
     @pytest.mark.unit
-    @pytest.mark.parametrize("model", [Validated, ValidatedChild])
-    def test_the_declaration_of_the_model_is_the_default_of_every_argument(self, resource, model):
-        io = UnifiedIO(resource, schema=model)
-
-        assert switches(io) == (True, True, True, True)
+    def test_the_call_site_switches_validation_on(self, resource):
         with pytest.raises(SchemaValidationError):
-            io.read()
-
-    @pytest.mark.unit
-    def test_an_argument_of_the_call_overrides_the_model_in_either_direction(self, resource):
-        off = UnifiedIO(resource, schema=Validated, apply_schema_validations=False, log_schema_metrics=False)
-        on = UnifiedIO(resource, schema=Plain, apply_schema_validations=True)
-
-        assert switches(off) == (False, False, True, True)
-        assert off.read()["size"].tolist() == [-1]
-        with pytest.raises(SchemaValidationError):
-            on.read()
-
-    @pytest.mark.unit
-    def test_the_class_attribute_schema_of_an_io_class_is_honoured_too(self, resource):
-        class IO(UnifiedIO):
-            schema = Validated
-
-        assert IO(resource).apply_schema_validations is True
+            UnifiedIO(resource, schema=Plain, apply_schema_validations=True).read()

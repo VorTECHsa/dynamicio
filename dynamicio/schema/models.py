@@ -5,7 +5,7 @@ messages, payloads and log lines are unchanged. Anything Pandera cannot express 
 ``dynamicio.schema.metadata`` (``Field(metrics=[Metric.MIN], max_null_fraction=0.2)``).
 
 A model names its dataset (the label of logs and ``METRIC`` lines) with ``__dataset_name__``, which is mandatory, and the Postgres table it maps to
-with ``__table_name__``. ``DataModel`` sets them from class keywords (see ``dynamicio.schema.model_settings``).
+with ``__table_name__``; the dunders, because Pandera reserves public attributes for columns. ``DataModel`` sets them from its class keywords.
 
 Nothing in a model is dropped silently. Column checks that dynamicio has no validator for (``str_matches``, a custom ``@pa.check``) run as Pandera
 checks, and the dataframe-level parts (``@pa.dataframe_check``, ``Config.unique``, ``Config.ordered``, an index) run as a residual Pandera schema.
@@ -13,14 +13,14 @@ Constructs that cannot be honoured raise ``ValueError`` naming them. The compile
 reads pandas models, so a polars model is refused and gets its own compiler when the polars backend lands.
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
 import pandera.pandas as pa
 
 from dynamicio.config.pydantic.table_schema import DataframeSchema
+from dynamicio.errors import DatasetNameNotFoundError
 from dynamicio.schema.metadata import METADATA_KEY, DynamicioMetadata
-from dynamicio.schema.model_settings import ModelSettings
 
 
 class ModelCompiler:
@@ -39,6 +39,32 @@ class ModelCompiler:
     # Schema- and column-level options with no dynamicio behaviour: (attribute, value that means "not used")
     SCHEMA_UNSUPPORTED = (("parsers", None), ("dtype", None), ("add_missing_columns", False), ("on_missing_columns", None), ("drop_invalid_rows", False), ("unique_column_names", False))
     COLUMN_UNSUPPORTED = (("parsers", None), ("regex", False), ("required", True), ("default", None), ("drop_invalid_rows", False), ("on_missing", None))
+
+    DATASET_NAME = "__dataset_name__"
+    TABLE_NAME = "__table_name__"
+
+    @staticmethod
+    def check_name(model: type, attribute: str, value: Any) -> None:
+        """Refuse a dataset or table name that is not a non-empty string."""
+        if not (isinstance(value, str) and value.strip()):
+            raise ValueError(f"{model.__name__}.{attribute} must be a non-empty string, got {value!r}")
+
+    @classmethod
+    def dataset_name(cls, model: type) -> str:
+        """The label of the dataset in logs and ``METRIC`` lines, as the model declares it. It is not inherited and never guessed from the class name."""
+        declared = vars(model).get(cls.DATASET_NAME)
+        if declared is None:
+            raise DatasetNameNotFoundError(model.__name__)
+        cls.check_name(model, cls.DATASET_NAME, declared)
+        return declared
+
+    @classmethod
+    def table_name(cls, model: type) -> Optional[str]:
+        """The Postgres table of the model, exactly as the database spells it (``schema.table`` for one outside the default schema); None for a model without one."""
+        declared = vars(model).get(cls.TABLE_NAME)
+        if declared is not None:
+            cls.check_name(model, cls.TABLE_NAME, declared)
+        return declared
 
     @staticmethod
     def dtype(column: Any) -> str:
@@ -123,7 +149,7 @@ class ModelCompiler:
             }
             for name, column in schema.columns.items()
         }
-        return DataframeSchema(name=ModelSettings.dataset_name(model), table_name=ModelSettings.table_name(model), columns=columns)
+        return DataframeSchema(name=cls.dataset_name(model), table_name=cls.table_name(model), columns=columns)
 
 
 # The names the rest of dynamicio imports.
