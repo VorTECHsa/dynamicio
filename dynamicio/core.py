@@ -114,7 +114,7 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
             raise SchemaNotFoundError()
 
         assert isinstance(active_schema, DataframeSchema)
-        if source_name == "postgres" and not active_schema.table_name:
+        if source_name == "postgres" and not active_schema.table_name and not self.options.get("sql_query"):  # a `sql_query` read names its own tables
             raise TableNameNotFoundError(active_schema.name)
         self.schema = active_schema
         self.name = self.schema.name.upper()

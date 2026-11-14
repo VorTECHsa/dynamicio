@@ -4,13 +4,15 @@
 
 import csv
 import logging
+import re
 import tempfile
 import threading
 from contextlib import contextmanager
-from typing import Any, Dict, Generator, MutableMapping, Union
+from typing import Any, Dict, Generator, MutableMapping, Optional, Tuple, Union
 
 import pandas as pd
 from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, Float, Integer, MetaData, String, Table, create_engine, text
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.ext.declarative import declarative_base
@@ -21,6 +23,7 @@ from sqlalchemy.orm.session import sessionmaker
 
 # Application Imports
 from dynamicio.config.pydantic import DataframeSchema, PostgresDataEnvironment
+from dynamicio.errors import TableNameNotFoundError
 from dynamicio.mixins import utils
 
 logger = logging.getLogger(__name__)
@@ -121,12 +124,12 @@ class WithPostgres:
         options = dict(self.options)
         sql_query = options.pop("sql_query", None)
 
-        table_schema = self._table_schema()
-        model = self._generate_model_from_schema(table_schema)
-
-        query = Query(self._get_table_columns(model))
-        if sql_query:
+        if sql_query:  # the query names its own tables, so the model needs none
+            table_schema = self.schema
             query = sql_query
+        else:
+            table_schema = self._table_schema()
+            query = Query(self._get_table_columns(self._generate_model_from_schema(table_schema)))
         logger.info(f"[postgres] Started downloading table: {table_schema.table_name} from: {db_host}:{db_name}")
         with session_for(connection_string) as session:
             try:
@@ -138,7 +141,7 @@ class WithPostgres:
     @staticmethod
     def _explain_missing_table(error: ProgrammingError, table_schema: DataframeSchema) -> None:
         """Log which attribute named a table that does not exist, since a wrong `__table_name__` is the usual cause."""
-        if getattr(error.orig, "pgcode", None) == "42P01":  # undefined_table
+        if table_schema.table_name and getattr(error.orig, "pgcode", None) == "42P01":  # undefined_table
             logger.error(
                 f"[postgres] Table {table_schema.table_name!r} does not exist: it is the `__table_name__` of the model of dataset {table_schema.name!r}, "
                 "which must be the exact name in the database"
@@ -146,8 +149,16 @@ class WithPostgres:
 
     def _table_schema(self) -> DataframeSchema:
         """Returns the schema describing the SQL table: the one compiled from the Pandera model, which names the table in `__table_name__`."""
-        assert isinstance(self.schema, DataframeSchema) and self.schema.table_name, "The model must set __table_name__ for a Postgres resource"
+        assert isinstance(self.schema, DataframeSchema), "The model must set __table_name__ for a Postgres resource"
+        if not self.schema.table_name:  # only a `sql_query` read gets this far without one
+            raise TableNameNotFoundError(self.schema.name)
         return self.schema
+
+    @staticmethod
+    def split_table_name(table_name: str) -> Tuple[Optional[str], str]:
+        """The Postgres schema (None for the default one) and the table of a `__table_name__`: `sales.orders` is table `orders` of schema `sales`."""
+        schema, _, table = table_name.rpartition(".")
+        return schema or None, table
 
     @staticmethod
     def _generate_model_from_schema(schema: DataframeSchema) -> DeclarativeMeta:
@@ -162,9 +173,10 @@ class WithPostgres:
         key = (schema.table_name, tuple((column["name"], column["type"]) for column in json_cls_schema["columns"]))
         with _models_lock:
             if key not in _models:
-                class_name = "".join(word.capitalize() or "_" for word in schema.table_name.split("_")) + "Model"
+                db_schema, table = WithPostgres.split_table_name(schema.table_name)
+                class_name = "".join(word.capitalize() or "_" for word in re.split(r"[_.]", schema.table_name)) + "Model"
 
-                class_dict = {"clsname": class_name, "__tablename__": schema.table_name, "__table_args__": {"extend_existing": True}}
+                class_dict = {"clsname": class_name, "__tablename__": table, "__table_args__": {"extend_existing": True, "schema": db_schema}}
                 class_dict.update(
                     {column["name"]: Column(column["type"], primary_key=True) if idx == 0 else Column(column["type"]) for idx, column in enumerate(json_cls_schema["columns"])}
                 )
@@ -230,7 +242,7 @@ class WithPostgres:
         with session_for(connection_string) as session:
             if create_table:
                 WithPostgres._create_table(session, model)
-            WithPostgres._write_to_database(session, model.__tablename__, df, truncate_and_append)  # type: ignore
+            WithPostgres._write_to_database(session, model.__table__, df, truncate_and_append)  # type: ignore
 
     @staticmethod
     def _create_table(session: SqlAlchemySession, model: DeclarativeMeta):
@@ -243,21 +255,23 @@ class WithPostgres:
         failed write also rolls back the new table.
         """
         columns = [Column(column.name, String() if isinstance(column.type, String) else column.type) for column in model.__table__.columns]  # type: ignore
-        table = Table(model.__tablename__, MetaData(), *columns)  # type: ignore
+        table = Table(model.__tablename__, MetaData(), *columns, schema=model.__table__.schema)  # type: ignore
         table.create(session.connection(), checkfirst=True)
 
     @staticmethod
-    def _write_to_database(session: SqlAlchemySession, table_name: str, df: pd.DataFrame, is_truncate_and_append: bool):
+    def _write_to_database(session: SqlAlchemySession, table: Table, df: pd.DataFrame, is_truncate_and_append: bool):
         """Write a dataframe to any database provided a session with a data model and a table name.
 
         Args:
             session: Generated from a data model and a table name
-            table_name: The name of the table to write to
+            table: The table to write to (its name and schema are quoted as Postgres needs, so `Orders` stays `Orders`)
             df: The dataframe to be written out
             is_truncate_and_append: If True, truncates the table with CASCADE and appends new rows (faster but destructive).
                                     If False (default), safely deletes all existing rows and then appends new rows.
                                     Use truncate only if you are certain views and FK constraints can be dropped or tolerated.
         """
+        preparer = postgresql.dialect().identifier_preparer
+        table_name = preparer.format_table(table)
         if is_truncate_and_append:
             session.execute(text(f"TRUNCATE TABLE {table_name} CASCADE;"))
         else:
@@ -270,6 +284,8 @@ class WithPostgres:
             temp_file.seek(0)
 
             cur = session.connection().connection.cursor()
-            cur.copy_from(temp_file, table_name, columns=df.columns, null="")
+            # `copy_from` quotes its table argument whole, so it cannot target `schema.table`: COPY names the table itself.
+            columns = ", ".join(preparer.quote(str(column)) for column in df.columns)
+            cur.copy_expert(f"COPY {table_name} ({columns}) FROM STDIN WITH (FORMAT text, NULL '')", temp_file)
 
         session.commit()

@@ -11,7 +11,7 @@ import pandas as pd
 import pandera.pandas as pa
 import pytest
 from pandera.typing import Series
-from sqlalchemy import Column, Table, create_engine, inspect, text
+from sqlalchemy import Column, MetaData, Table, create_engine, inspect, text
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session
@@ -39,14 +39,35 @@ class TestPostgresIO:
         df = pd.DataFrame({"id": [1], "val": ["a"]})
 
         # When
-        WithPostgres._write_to_database(session, "dummy_table", df, is_truncate_and_append=False)
+        WithPostgres._write_to_database(session, Table("dummy_table", MetaData()), df, is_truncate_and_append=False)
 
         # Then
         assert session.execute.call_count == 1
         executed_sql = str(session.execute.call_args[0][0])
         assert "DELETE FROM dummy_table" in executed_sql
-        cursor.copy_from.assert_called_once()
+        assert cursor.copy_expert.call_args.args[0] == "COPY dummy_table (id, val) FROM STDIN WITH (FORMAT text, NULL '')"
         session.commit.assert_called_once()
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "table, truncate, statement, copy",
+        [
+            (Table("Orders", MetaData()), True, 'TRUNCATE TABLE "Orders" CASCADE;', 'COPY "Orders" (id, "Val")'),
+            (Table("Orders", MetaData()), False, 'DELETE FROM "Orders";', 'COPY "Orders" (id, "Val")'),
+            (Table("orders", MetaData(), schema="sales"), False, "DELETE FROM sales.orders;", "COPY sales.orders"),
+        ],
+    )
+    def test_the_cleanup_and_copy_statements_quote_the_table_as_postgres_spells_it(self, table, truncate, statement, copy):
+        # Given
+        session = MagicMock()
+        cursor = session.connection.return_value.connection.cursor.return_value
+
+        # When
+        WithPostgres._write_to_database(session, table, pd.DataFrame({"id": [1], "Val": ["a"]}), is_truncate_and_append=truncate)
+
+        # Then
+        assert str(session.execute.call_args.args[0]) == statement
+        assert cursor.copy_expert.call_args.args[0].startswith(copy)
 
     @pytest.mark.unit
     def test_when_reading_from_postgres_with_env_as_cloud_get_table_columns_returns_valid_list_of_columns_for_a_model(self, expected_columns):
@@ -526,7 +547,7 @@ class TestCreateTable:
         session = mock_session_for.return_value.__enter__.return_value
         assert [name for name, _, _ in calls.mock_calls] == ["create", "write"]
         assert calls.create.call_args.args[0] is session
-        assert calls.create.call_args.args[1].__tablename__ == calls.write.call_args.args[1]
+        assert calls.create.call_args.args[1].__table__ is calls.write.call_args.args[1]
 
     @pytest.mark.unit
     def test_write_drops_options_that_the_postgres_writer_does_not_list(self):
@@ -629,7 +650,7 @@ class TestPostgresWithPanderaSchema:
         PanderaPostgresIO(source_config=postgres_resource_without_schema, schema=_PgPanderaModel).write(df)
 
         # Then
-        assert mock__write_to_database.call_args.args[1] == "pg_pandera_table"
+        assert mock__write_to_database.call_args.args[1].name == "pg_pandera_table"
 
     @pytest.mark.unit
     def test_read_without_any_schema_still_fails_clearly(self, postgres_resource_without_schema):
@@ -655,6 +676,13 @@ class _NamedApartFromTable(pa.DataFrameModel):
 
     __dataset_name__ = "orders_label"
     __table_name__ = "Orders_v2"  # the exact spelling in the database, case included
+
+
+class _InPostgresSchema(pa.DataFrameModel):
+    id: Series[str] = pa.Field(nullable=True)
+
+    __dataset_name__ = "orders"
+    __table_name__ = "sales.orders"
 
 
 class TestTableName:
@@ -701,7 +729,45 @@ class TestTableName:
         PanderaPostgresIO(source_config=postgres_resource_without_schema, schema=_NamedApartFromTable).write(pd.DataFrame({"id": ["a"]}))
 
         # Then
-        assert mock__write_to_database.call_args.args[1] == "Orders_v2"
+        assert mock__write_to_database.call_args.args[1].name == "Orders_v2"
+
+    @pytest.mark.unit
+    @patch.object(WithPostgres, "_read_database")
+    def test_a_dotted_table_name_is_a_table_of_a_postgres_schema(self, mock__read_database, postgres_resource_without_schema):
+        # When
+        PanderaPostgresIO(source_config=postgres_resource_without_schema, schema=_InPostgresSchema).read()
+
+        # Then
+        statement = str(mock__read_database.call_args.args[1].statement)
+        assert "FROM sales.orders" in statement and '"sales.orders"' not in statement
+
+    @pytest.mark.unit
+    @patch.object(WithPostgres, "_write_to_database")
+    def test_a_write_to_a_dotted_table_name_targets_the_table_of_that_schema(self, mock__write_to_database, postgres_resource_without_schema):
+        # When
+        PanderaPostgresIO(source_config=postgres_resource_without_schema, schema=_InPostgresSchema).write(pd.DataFrame({"id": ["a"]}))
+
+        # Then
+        table = mock__write_to_database.call_args.args[1]
+        assert (table.schema, table.name) == ("sales", "orders")
+
+    @pytest.mark.unit
+    @patch.object(WithPostgres, "_read_database")
+    def test_a_sql_query_read_needs_no_table_name(self, mock__read_database, postgres_resource_without_schema):
+        # When
+        PanderaPostgresIO(source_config=postgres_resource_without_schema, schema=_NoTable, sql_query="SELECT id FROM a JOIN b USING (id)").read()
+
+        # Then
+        assert mock__read_database.call_args.args[1] == "SELECT id FROM a JOIN b USING (id)"
+
+    @pytest.mark.unit
+    def test_a_write_without_a_table_name_fails_even_with_a_sql_query(self, postgres_resource_without_schema):
+        # Given
+        io_instance = PanderaPostgresIO(source_config=postgres_resource_without_schema, schema=_NoTable, sql_query="SELECT id FROM a")
+
+        # When / Then
+        with pytest.raises(TableNameNotFoundError, match="no_table"):
+            io_instance.write(pd.DataFrame({"id": ["a"]}))
 
     @pytest.mark.unit
     @patch.object(WithPostgres, "_read_from_postgres")

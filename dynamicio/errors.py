@@ -65,7 +65,9 @@ class TableNameNotFoundError(DynamicIOError):
     """Error raised when a model used with a Postgres resource does not name its table."""
 
     ERROR_STR = "A model used with a Postgres resource must name its table"
-    ERROR_STR_DETAILED = "The model of dataset {0!r} is used with a Postgres resource but has no `__table_name__`: set it to the exact name of the table in the database"
+    ERROR_STR_DETAILED = (
+        "The model of dataset {0!r} is used with a Postgres resource but names no table: declare `table=` (or `__table_name__`) with the exact name of the table in the database"
+    )
 
 
 class SchemaNotFoundError(DynamicIOError):
