@@ -1,14 +1,12 @@
-"""Schema declaration and execution: Pandera model compilation, the typed metadata helpers, validations, metrics and the YAML-to-model migration.
+"""Schema declaration and execution: Pandera model compilation, validations, metrics and the YAML-to-model migration.
 
-``dynamicio.schema.metrics`` is both the module that computes the metrics and the helper that declares them
-(``from dynamicio.schema import metrics``). The helper is bound last, so it is what the package attribute names; the module stays importable by path
-(``from dynamicio.schema.metrics import get_metric``, ``importlib.import_module("dynamicio.schema.metrics")``).
+A model is a `DataModel` (a Pandera ``DataFrameModel`` that names its dataset and table) whose columns are declared with `Field`, which carries
+dynamicio's validations and `Metric` members. `to_dataframe_schema` compiles it into the ``DataframeSchema`` that `validations` and `metrics` run.
 """
 
-import dynamicio.schema.metrics  # noqa: F401  # pylint: disable=unused-import
-from dynamicio.schema.data_model import DataModel  # isort: skip
-from dynamicio.schema.field import Field  # isort: skip
-from dynamicio.schema.metadata import Metric, exactly_values, metrics, null_fraction_below, strictly_between  # isort: skip
-from dynamicio.schema.models import to_dataframe_schema  # isort: skip
+from dynamicio.schema.data_model import DataModel
+from dynamicio.schema.field import Field
+from dynamicio.schema.metadata import Metric
+from dynamicio.schema.models import to_dataframe_schema
 
-__all__ = ["DataModel", "Field", "Metric", "exactly_values", "metrics", "null_fraction_below", "strictly_between", "to_dataframe_schema"]
+__all__ = ["DataModel", "Field", "Metric", "to_dataframe_schema"]

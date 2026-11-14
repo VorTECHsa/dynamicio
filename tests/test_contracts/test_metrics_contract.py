@@ -17,8 +17,7 @@ import dynamicio
 from dynamicio.config.pydantic.table_schema import MetricsName
 from dynamicio.core import DynamicDataIO
 from dynamicio.errors import SchemaValidationError
-
-metrics = importlib.import_module("dynamicio.schema.metrics")  # `dynamicio.schema.metrics` the attribute is the typed helper
+from dynamicio.schema import metrics
 
 
 def _line(dataset, column, metric, value):
@@ -168,15 +167,11 @@ def test_nothing_is_derived_from_the_dataframe_index(make_io, metric_records):
 
 
 @pytest.mark.unit
-def test_metrics_names_both_the_typed_helper_and_the_module_that_computes_them():
-    from dynamicio.schema import Metric, metrics as helper  # pylint: disable=import-outside-toplevel
-    from dynamicio.schema.metrics import get_metric  # pylint: disable=import-outside-toplevel
+def test_every_path_to_the_metrics_module_names_the_same_module():
+    from dynamicio.schema import metrics as attribute  # pylint: disable=import-outside-toplevel,reimported
+    import dynamicio.metrics as alias  # pylint: disable=import-outside-toplevel
+    import dynamicio.schema.metrics as by_path  # pylint: disable=import-outside-toplevel,reimported
 
-    # the package attribute is the helper that declares metrics ...
-    assert callable(helper) and helper(Metric.MIN).payload.metrics == (Metric.MIN,)
-    # ... and the module that computes them stays importable by path
-    assert importlib.import_module("dynamicio.schema.metrics") is metrics
-    assert callable(get_metric) and get_metric("Min") is metrics.get_metric("Min")
-    import dynamicio.metrics  # pylint: disable=import-outside-toplevel,reimported
-
-    assert dynamicio.metrics is not None
+    assert attribute is by_path is alias is importlib.import_module("dynamicio.schema.metrics") is metrics
+    with patch("dynamicio.schema.metrics.get_metric") as patched:
+        assert metrics.get_metric is patched

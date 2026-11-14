@@ -1,12 +1,11 @@
-"""`Field` declares a column with dynamicio's metrics and validations as named arguments, and compiles to the same schema as the helpers."""
+"""`Field` declares a column with dynamicio's metrics and validations as named arguments."""
 
 # pylint: disable=missing-class-docstring, missing-function-docstring
 import pandas as pd
-import pandera.pandas as pa
 import pytest
 from pandera.typing import Series
 
-from dynamicio.schema import DataModel, Field, Metric, metrics, null_fraction_below, strictly_between, to_dataframe_schema
+from dynamicio.schema import DataModel, Field, Metric, to_dataframe_schema
 from dynamicio.schema.validations import ALL_VALIDATORS
 
 
@@ -58,15 +57,6 @@ class TestField:
         assert validations(column)["is_in"]["match_all"] is False
         assert validations(column)["has_acceptable_percentage_of_nulls"] == {"threshold": 0.2}
         assert column.metrics == ["CountsPerLabel", "Min"]
-
-    @pytest.mark.unit
-    def test_it_compiles_to_what_the_helpers_compile_to(self):
-        declared = compiled(Field(nullable=True, lt=9, between=(1, 8), max_null_fraction=0.3, metrics=[Metric.MIN, Metric.MAX]))
-
-        class Model(DataModel, dataset="model"):
-            x: Series[float] = pa.Field(nullable=True, lt=9, metadata=metrics(Metric.MIN, Metric.MAX) | null_fraction_below(0.3) | strictly_between(1, 8))
-
-        assert declared == to_dataframe_schema(Model).columns["x"]
 
     @pytest.mark.unit
     def test_the_validations_are_the_ones_dynamicio_runs(self):

@@ -15,7 +15,7 @@ from pandera.typing import Series
 
 from dynamicio import UnifiedIO
 from dynamicio.config import IOConfig
-from dynamicio.schema import Metric, metrics, null_fraction_below
+from dynamicio.schema import Field, Metric
 
 
 class ContractModel(pa.DataFrameModel):
@@ -23,18 +23,15 @@ class ContractModel(pa.DataFrameModel):
 
     __dataset_name__ = "contract_dataset"
 
-    a: Series[int] = pa.Field(
+    a: Series[int] = Field(
         nullable=True,
         unique=True,
         gt=1,
         in_range={"min_value": 0, "max_value": 5, "include_min": False, "include_max": False},
-        metadata=metrics(Metric.MIN, Metric.COUNTS, Metric.UNIQUE_COUNTS),
+        metrics=[Metric.MIN, Metric.COUNTS, Metric.UNIQUE_COUNTS],
     )
-    b: Series[str] = pa.Field(nullable=False, isin=["x", "y"], metadata=metrics(Metric.COUNTS_PER_LABEL))
-    c: Series[float] = pa.Field(
-        nullable=False,
-        metadata=metrics(Metric.MEAN, Metric.MAX, Metric.STD, Metric.VARIANCE) | null_fraction_below(0.3),
-    )
+    b: Series[str] = Field(nullable=False, isin=["x", "y"], metrics=[Metric.COUNTS_PER_LABEL])
+    c: Series[float] = Field(nullable=False, max_null_fraction=0.3, metrics=[Metric.MEAN, Metric.MAX, Metric.STD, Metric.VARIANCE])
 
 
 class ContractPanderaIO(UnifiedIO):

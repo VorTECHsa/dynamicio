@@ -7,7 +7,7 @@ from pandera.typing import Series
 from sqlalchemy import Column, Integer, String
 from sqlalchemy.ext.declarative import declarative_base
 
-from dynamicio.schema import Metric, metrics
+from dynamicio.schema import Field, Metric
 
 Base = declarative_base()
 
@@ -207,9 +207,9 @@ class AthenaRows(pa.DataFrameModel):
 class ReadFromS3Csv(pa.DataFrameModel):
     """The `read_from_s3_csv` schema: unique ids, a category, bounded integers, and the metrics that go with them."""
 
-    id: Series[int] = pa.Field(nullable=False, unique=True, metadata=metrics(Metric.UNIQUE_COUNTS, Metric.COUNTS))
-    foo_name: Series[object] = pa.Field(nullable=False, isin=["class_a", "class_b", "class_c"], metadata=metrics(Metric.COUNTS_PER_LABEL))
-    bar: Series[int] = pa.Field(nullable=False, gt=1000, lt=2000, metadata=metrics(Metric.MIN, Metric.MAX, Metric.MEAN, Metric.STD, Metric.VARIANCE))
+    id: Series[int] = Field(nullable=False, unique=True, metrics=[Metric.UNIQUE_COUNTS, Metric.COUNTS])
+    foo_name: Series[object] = Field(nullable=False, isin=["class_a", "class_b", "class_c"], metrics=[Metric.COUNTS_PER_LABEL])
+    bar: Series[int] = Field(nullable=False, gt=1000, lt=2000, metrics=[Metric.MIN, Metric.MAX, Metric.MEAN, Metric.STD, Metric.VARIANCE])
 
     __dataset_name__ = "read_from_s3_csv"
 
