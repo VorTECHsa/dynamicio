@@ -5,6 +5,9 @@ behaviour that read() and write() apply.
 """
 
 # pylint: disable=missing-class-docstring, missing-function-docstring
+import sys
+import types
+
 import pandas as pd
 import pandera.pandas as pa
 import pytest
@@ -13,6 +16,7 @@ from pydantic import ValidationError
 
 from dynamicio import UnifiedIO
 from dynamicio.config.pydantic.table_schema import DataframeSchema, SchemaColumn
+from dynamicio.core import SCHEMA_FROM_ARGUMENT
 from dynamicio.errors import ColumnsDataTypeError
 
 
@@ -144,3 +148,30 @@ class TestDtypeEnforcement:
     def test_write_raises_columns_data_type_error_when_a_column_cannot_be_cast(self, make_io, valid_df):
         with pytest.raises(ColumnsDataTypeError):
             make_io().write(valid_df.assign(a=["x", "y", "z"]))
+
+
+class TestLeftoverDeclarations:
+    """What dynamicio 11 removed fails loudly, naming the replacement, instead of being ignored."""
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("attribute", ["schema_validations", "schema_metrics"])
+    @pytest.mark.parametrize("schema", [BareModel, SCHEMA_FROM_ARGUMENT])
+    def test_a_leftover_dict_next_to_a_model_is_rejected(self, attribute, schema):
+        with pytest.raises(TypeError, match=f"sets {attribute}, which the model replaces.*dynamicio migrate"):
+            type("_HalfMigrated", (UnifiedIO,), {"schema": schema, attribute: {"id": {}}})
+
+    @pytest.mark.unit
+    def test_a_user_package_named_like_dynamicio_is_still_checked(self):
+        namespace = {"__module__": "dynamicio_jobs.io", "schema": {"id": "int64"}}
+        sys.modules["dynamicio_jobs.io"] = types.ModuleType("dynamicio_jobs.io")
+        try:
+            with pytest.raises(TypeError, match="removed in dynamicio 11"):
+                type("_JobIO", (UnifiedIO,), namespace)
+        finally:
+            del sys.modules["dynamicio_jobs.io"]
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("module, name", [("dynamicio.core", "SCHEMA_FROM_FILE"), ("dynamicio.config.io_config", "SafeDynamicSchemaLoader")])
+    def test_importing_a_removed_name_says_what_replaces_it(self, module, name):
+        with pytest.raises(ImportError, match="removed in dynamicio 11.*dynamicio migrate"):
+            exec(f"from {module} import {name}")  # pylint: disable=exec-used

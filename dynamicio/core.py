@@ -36,6 +36,13 @@ SCHEMA_FROM_ARGUMENT = _SchemaFromArgument()  # `schema = SCHEMA_FROM_ARGUMENT` 
 pool = ThreadPoolExecutor()
 
 
+def __getattr__(name: str) -> Any:
+    """Name the replacement of what dynamicio 11 removed, for the `from dynamicio.core import SCHEMA_FROM_FILE` that every older IO module starts with."""
+    if name == "SCHEMA_FROM_FILE":
+        raise ImportError(f"dynamicio.core.SCHEMA_FROM_FILE: {DynamicDataIO.REMOVED_DECLARATIONS}")
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
     """Given a `src.utils.dynamicio.config.IOConfig` object, it generates an object with access to a series of methods for cloud I/O operations and data validations.
 
@@ -125,22 +132,28 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
             self, f"_write_to_{source_name}"
         ), f"No method '_read_from_{source_name}' or '_write_to_{source_name}'. Have you registered a mixin for {source_name}?"
 
+    REMOVED_DECLARATIONS = (
+        "Dict schemas (`schema = {...}`, `schema_validations`, `schema_metrics`) and YAML schemas (`SCHEMA_FROM_FILE`) were removed in dynamicio 11: "
+        "declare the columns as a model, see https://dynamicio.readthedocs.io/en/latest/guides/schemas-and-validation/ (`dynamicio migrate` converts YAML schemas)."
+    )
+
     def __init_subclass__(cls):
-        """Ensure that all subclasses have a `schema` attribute and a `validate` method.
+        """Ensure that every IO class outside dynamicio declares its schema as a Pandera model.
 
         Raises:
-            AssertionError: If either of the attributes is not implemented
+            AssertionError: If the class does not set `schema`
+            TypeError: If `schema` is not a model (or SCHEMA_FROM_ARGUMENT), or the class still sets `schema_validations` or `schema_metrics`
         """
-        if not inspect.getmodule(cls).__name__.startswith("dynamicio"):
-            assert "schema" in cls.__dict__, f"{cls.__name__} must define `schema`: a pandera DataFrameModel, or SCHEMA_FROM_ARGUMENT"
-
-            if cls.schema is SCHEMA_FROM_ARGUMENT or (inspect.isclass(cls.schema) and issubclass(cls.schema, DataFrameModel)):
-                return
-            raise TypeError(
-                f"{cls.__name__}.schema must be a pandera DataFrameModel (or SCHEMA_FROM_ARGUMENT), got {cls.schema!r}. "
-                "Dict schemas (`schema = {...}`, `schema_validations`, `schema_metrics`) and YAML schemas (`SCHEMA_FROM_FILE`) were removed in dynamicio 11: "
-                "declare the columns as a model, see https://dynamicio.readthedocs.io/en/latest/guides/schemas-and-validation/ (`dynamicio migrate` converts YAML schemas)."
-            )
+        module = inspect.getmodule(cls).__name__
+        if module == "dynamicio" or module.startswith("dynamicio."):
+            return
+        assert "schema" in cls.__dict__, f"{cls.__name__} must define `schema`: a pandera DataFrameModel, or SCHEMA_FROM_ARGUMENT"
+        leftovers = [name for name in ("schema_validations", "schema_metrics") if name in cls.__dict__]
+        if leftovers:  # the model's own validations and metrics would replace them without a word
+            raise TypeError(f"{cls.__name__} sets {' and '.join(leftovers)}, which the model replaces. {cls.REMOVED_DECLARATIONS}")
+        if cls.schema is SCHEMA_FROM_ARGUMENT or (inspect.isclass(cls.schema) and issubclass(cls.schema, DataFrameModel)):
+            return
+        raise TypeError(f"{cls.__name__}.schema must be a pandera DataFrameModel (or SCHEMA_FROM_ARGUMENT), got {cls.schema!r}. {cls.REMOVED_DECLARATIONS}")
 
     async def async_read(self):
         """Allows the use of asyncio to concurrently read files in memory.

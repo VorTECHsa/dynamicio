@@ -59,7 +59,7 @@ import logging
 import re
 import weakref
 from types import ModuleType
-from typing import List
+from typing import Any, List
 
 import pydantic
 import yaml
@@ -68,6 +68,16 @@ import yaml
 from dynamicio.config.pydantic import BindingsYaml, IOEnvironment
 
 logger = logging.getLogger(__name__)
+
+
+def __getattr__(name: str) -> Any:
+    """Name the replacement of the YAML schema loader that dynamicio 11 removed, instead of a bare ImportError."""
+    if name == "SafeDynamicSchemaLoader":
+        raise ImportError(
+            "dynamicio.config.io_config.SafeDynamicSchemaLoader was removed in dynamicio 11 with YAML schemas: declare the columns as a pandera model "
+            "(`dynamicio migrate` converts YAML schemas), see https://dynamicio.readthedocs.io/en/latest/guides/schemas-and-validation/"
+        )
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 class SafeDynamicResourceLoader(yaml.SafeLoader):
