@@ -5,7 +5,7 @@ from pandera.typing import Series
 from dynamicio.schema import DataModel, Field, Metric
 
 
-class Bar(DataModel, dataset="bar"):
+class Bar(DataModel, dataset="bar", table="bar"):
     """The `bar` dataset."""
 
     column_a: Series[str] = Field(nullable=True, unique=True, metrics=[Metric.COUNTS])
