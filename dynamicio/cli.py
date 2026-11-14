@@ -74,11 +74,9 @@ def generate_schema_for(dataset: str) -> DataframeSchema:
 
 
 def write_model_for(schema: DataframeSchema, output: str) -> str:
-    """Write the Pandera model of ``schema`` to ``<output>/<schema name>.py`` and return its source."""
-    source = ModelRenderer.render_module({ModelRenderer.class_name(schema.name): schema}).replace(
-        f"Migrated from the dynamicio schema {schema.name!r}.", f"The dtypes of the dataset {schema.name!r}: declare nullability and validations by hand."
-    )
-    with open(os.path.join(output, f"{schema.name}.py"), "w", encoding="utf-8") as file:
+    """Write the Pandera model of ``schema`` to ``<output>/<module>.py`` and return its source; the module is named after the dataset, made importable."""
+    source = ModelRenderer.render_module({ModelRenderer.class_name(schema.name): schema}, docstring="The dtypes of the dataset {name!r}: declare nullability and validations by hand.")
+    with open(os.path.join(output, f"{ModelRenderer.module_name(schema.name)}.py"), "w", encoding="utf-8") as file:
         file.write(source)
     return source
 

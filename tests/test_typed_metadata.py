@@ -84,6 +84,16 @@ class TestMaxNullFraction:
             Field(nullable=True, max_null_fraction=bad)
 
     @pytest.mark.unit
+    def test_an_unresolved_dynamic_variable_is_kept_as_any_other_bound_is(self):
+        assert _validators(Field(nullable=True, max_null_fraction="[[ NULL_LIMIT ]]"))["has_acceptable_percentage_of_nulls"].options == {"threshold": "[[ NULL_LIMIT ]]"}
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("bad", ["0.2", True, [0.2]])
+    def test_anything_else_but_a_number_is_a_type_error(self, bad):
+        with pytest.raises(TypeError, match="a number between 0 and 1"):
+            Field(nullable=True, max_null_fraction=bad)
+
+    @pytest.mark.unit
     def test_it_compiles_to_the_threshold_validator(self):
         assert _validators(Field(nullable=True, max_null_fraction=0.2))["has_acceptable_percentage_of_nulls"].options == {"threshold": 0.2}
 

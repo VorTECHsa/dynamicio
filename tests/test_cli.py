@@ -10,6 +10,7 @@ import pytest
 import dynamicio
 from dynamicio import cli
 from dynamicio.cli import parse_args
+from dynamicio.config.pydantic import DataframeSchema
 from dynamicio.errors import InvalidDatasetTypeError
 from dynamicio.schema import to_dataframe_schema
 from dynamicio.schema.migrate import ModelRenderer
@@ -216,8 +217,21 @@ class TestCli:
         assert (tmp_path / "the_matrix.py").read_text(encoding="utf-8") == source
         model = ModelRenderer.compile_module(source)["TheMatrix"]
         compiled = to_dataframe_schema(model)
+        assert "declare nullability and validations by hand" in source and "Migrated" not in source
         assert compiled.name == "the_matrix"
         assert {name: column.data_type for name, column in compiled.columns.items()} == {"agents": "int64", "zioners": "object", "red_pill": "bool", "value": "float64"}
+
+    @pytest.mark.unit
+    def test_write_model_for__a_dataset_named_like_a_date_gives_an_importable_module(self, tmp_path):
+        # Given
+        schema = DataframeSchema(name="2026-11-13", columns={"x": {"type": "int64", "validations": {}, "metrics": []}})
+
+        # When
+        source = cli.write_model_for(schema, str(tmp_path))
+
+        # Then
+        assert (tmp_path / "dataset_2026_11_13.py").read_text(encoding="utf-8") == source
+        assert ModelRenderer.compile_module(source)["Dataset20261113"].__dataset_name__ == "2026-11-13"
 
     @pytest.mark.unit
     def test_cli_runner_raises_invalid_dataset_type_error_exception_message_when_invoked_with_single_flag_and_invalid_path(

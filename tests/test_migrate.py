@@ -9,7 +9,7 @@ from pandera.typing import Series
 
 from dynamicio import cli
 from dynamicio.config.pydantic.table_schema import DataframeSchema
-from dynamicio.schema.migrate import compile_module, migrate, render_model, render_module, schemas_equivalent
+from dynamicio.schema.migrate import ModelRenderer, compile_module, migrate, render_model, render_module, schemas_equivalent
 from dynamicio.schema.models import to_dataframe_schema
 
 # A v8 YAML schema exercising every validator and metric, with one non-applied validation.
@@ -334,3 +334,74 @@ def test_is_between_becomes_the_tightest_lower_and_upper_bound(validations, decl
 def test_bounds_that_cannot_be_compared_are_reported_by_column():
     with pytest.raises(ValueError, match="Column 'x'.*cannot be compared"):
         render_model(_bounds({"is_between": {"lower": "[[ LOW ]]", "upper": 5}, "is_greater_than": {"threshold": 1}}))
+
+
+@pytest.mark.unit
+def test_a_dynamic_variable_null_threshold_migrates(project):
+    spec = {
+        "name": "nulls",
+        "columns": {"x": {"type": "float64", "validations": {"has_acceptable_percentage_of_nulls": {"apply": True, "options": {"threshold": "[[ NULL_LIMIT ]]"}}}, "metrics": []}},
+    }
+    (project / "resources" / "schemas" / "nulls.yaml").write_text(yaml.safe_dump(spec, sort_keys=False))
+
+    report = migrate("resources/schemas", "schemas.py")
+
+    assert report["todos"] == ["NULL_LIMIT"]
+    assert "max_null_fraction=NULL_LIMIT" in (project / "schemas.py").read_text()
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("column", ["Field", "Metric", "Series", "DataModel", "pd", "LIMIT"])
+def test_a_column_named_like_a_name_of_the_module_is_aliased(column):
+    spec = {
+        "name": "clash",
+        "columns": {
+            column: {"type": "float64", "validations": {}, "metrics": ["Min"]},
+            "y": {"type": "float64", "validations": {"is_lower_than": {"apply": True, "options": {"threshold": "[[ LIMIT ]]"}}}, "metrics": ["Max"]},
+        },
+    }
+    original = DataframeSchema(**spec)
+    source = render_module({"Clash": original})
+
+    assert f"column_{column}: Series[float] = Field(nullable=True, metrics=[Metric.MIN], alias={column!r})" in source
+    assert schemas_equivalent(to_dataframe_schema(compile_module(source)["Clash"]), original)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "name, class_name, module_name",
+    [
+        ("20261113", "Dataset20261113", "dataset_20261113"),
+        ("2026-11-13", "Dataset20261113", "dataset_2026_11_13"),
+        ("field", "DatasetField", "field"),
+        ("class", "Class", "dataset_class"),
+    ],
+)
+def test_names_from_files_are_valid_python(name, class_name, module_name):
+    assert ModelRenderer.class_name(name) == class_name and ModelRenderer.module_name(name) == module_name
+
+
+@pytest.mark.unit
+def test_the_prompt_lists_config_names_but_not_other_config_blocks(project):
+    (project / "models.py").write_text(
+        "class Orders(pa.DataFrameModel):\n    id: int\n\n    class Config:\n        strict = 'filter'\n\n\n"
+        "class Legacy(pa.DataFrameModel):\n    class Config:\n        coerce = True\n        name = 'legacy'\n\n    name: int\n"
+    )
+
+    migrate("resources/schemas", "schemas.py", scan=".")
+
+    prompt = (project / "MIGRATION_PROMPT.md").read_text()
+    assert "models.py:11" in prompt  # `name = 'legacy'` inside Config
+    assert "models.py:4" not in prompt and "models.py:13" not in prompt  # a Config without `name`, and a column called `name`
+    assert "schemas.py:" not in prompt  # the generated module is not a call site, even with a relative --scan
+
+
+@pytest.mark.unit
+def test_hidden_and_installed_directories_are_not_searched(project):
+    for skipped in (".venv/lib", "site-packages/x", "node_modules"):
+        (project / skipped).mkdir(parents=True)
+        (project / skipped / "planted.yaml").write_text("X:\n  schema:\n    file_path: planted.yaml\n")
+
+    migrate("resources/schemas", "schemas.py", scan=".")
+
+    assert "planted.yaml" not in (project / "MIGRATION_PROMPT.md").read_text()

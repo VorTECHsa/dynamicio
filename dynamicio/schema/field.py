@@ -1,5 +1,7 @@
 """The column declaration of a dynamicio model: ``pa.Field`` with dynamicio's metrics and validations as named, documented arguments."""
 
+import numbers
+import re
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import pandera.pandas as pa
@@ -19,9 +21,19 @@ class FieldDeclaration:
                 raise TypeError(f"Field(metrics=...) takes members of dynamicio.schema.Metric (for example Metric.MIN), got {name!r}")
         return tuple(dict.fromkeys(names))
 
-    @staticmethod
-    def null_fraction_below(threshold: Any) -> ValidationSpec:
-        """Validate that the fraction of nulls in the column is below ``threshold`` (0.2 allows up to, not including, 20% nulls)."""
+    # A dynamic variable that `dynamicio migrate` could not resolve: the generated module binds its name to the "[[ NAME ]]" string until it is imported.
+    PLACEHOLDER = re.compile(r"\[\[\s*\w+\s*\]\]")
+
+    @classmethod
+    def null_fraction_below(cls, threshold: Any) -> ValidationSpec:
+        """Validate that the fraction of nulls in the column is below ``threshold`` (0.2 allows up to, not including, 20% nulls).
+
+        A number is checked on definition; a ``"[[ NAME ]]"`` placeholder is kept as it is, as for every other bound.
+        """
+        if isinstance(threshold, str) and cls.PLACEHOLDER.fullmatch(threshold):
+            return ValidationSpec("has_acceptable_percentage_of_nulls", {"threshold": threshold})
+        if not isinstance(threshold, numbers.Real) or isinstance(threshold, bool):
+            raise TypeError(f"Field(max_null_fraction=...) takes a number between 0 and 1, got {threshold!r}")
         if not 0 < threshold < 1:
             raise ValueError(f"Field(max_null_fraction=...) takes a fraction between 0 and 1, exclusive, got {threshold!r}")
         return ValidationSpec("has_acceptable_percentage_of_nulls", {"threshold": threshold})

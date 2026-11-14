@@ -112,10 +112,35 @@ class ModelRenderer:
     # YAML schemas may reference dynamic variables ("[[ NAME ]]"); in Python that is simply a name the module has to provide.
     PLACEHOLDER = re.compile(r"""(['"])\[\[\s*(\w+)\s*\]\]\1""")
 
+    MIGRATED = "Migrated from the dynamicio schema {name!r}."  # the docstring of a generated model; `{name}` is the schema name
+
+    @classmethod
+    def placeholder_names(cls, schema: DataframeSchema) -> Set[str]:
+        """The names of the dynamic variables a schema uses, which the generated module binds at its top."""
+        return {match.group(2) for column in schema.columns.values() for v in column.validations for match in cls.PLACEHOLDER.finditer(repr(dict(v.options)))}
+
+    # What the class body of a generated model refers to; a column or class of the same name would shadow it.
+    MODULE_NAMES = frozenset({"DataModel", "Field", "Metric", "Series", "np", "pd"})
+
+    @classmethod
+    def class_name(cls, name: str) -> str:
+        """A class name for a schema or file name: a valid identifier that does not shadow a name of the generated module (``20261113`` is ``Dataset20261113``)."""
+        candidate = "".join(part.capitalize() for part in re.split(r"[^0-9a-zA-Z]+", name) if part) or "Schema"
+        return f"Dataset{candidate}" if candidate[0].isdigit() or candidate in cls.MODULE_NAMES else candidate
+
     @staticmethod
-    def class_name(name: str) -> str:
-        """A class name for a schema or file name."""
-        return "".join(part.capitalize() for part in re.split(r"[^0-9a-zA-Z]+", name) if part) or "Schema"
+    def module_name(name: str) -> str:
+        """An importable module name for a dataset name (``2026-11-13`` is ``dataset_2026_11_13``)."""
+        candidate = re.sub(r"\W+", "_", name).strip("_") or "schema"
+        return f"dataset_{candidate}" if candidate[0].isdigit() or keyword.iskeyword(candidate) else candidate
+
+    @classmethod
+    def attribute_name(cls, name: str, columns: Collection[str], reserved: Collection[str]) -> str:
+        """The class attribute of column ``name``: the name itself where Python allows it and it shadows nothing, else a ``column_`` name (with an ``alias``)."""
+        attribute = name if name.isidentifier() and not keyword.iskeyword(name) else f"column_{re.sub(r'[^0-9a-zA-Z_]', '_', name)}"
+        while attribute in reserved or (attribute != name and attribute in columns):
+            attribute = f"column_{attribute}"
+        return attribute
 
     @classmethod
     def _use_names(cls, source: str) -> str:
@@ -158,11 +183,12 @@ class ModelRenderer:
         return f"pd.api.types.pandas_dtype({dtype!r})"
 
     @classmethod
-    def _class_source(cls, schema: DataframeSchema, class_name: str = "", table: bool = False) -> str:
+    def _class_source(cls, schema: DataframeSchema, class_name: str = "", table: bool = False, docstring: str = MIGRATED) -> str:
         keywords = f"dataset={schema.name!r}" + (f", table={schema.name!r}" if table else "")  # the old schema name was the table name of the Postgres resources that used it
-        lines = [f"class {class_name or cls.class_name(schema.name)}(DataModel, {keywords}):", f'    """Migrated from the dynamicio schema {schema.name!r}."""', ""]
+        lines = [f"class {class_name or cls.class_name(schema.name)}(DataModel, {keywords}):", f'    """{docstring.format(name=schema.name)}"""', ""]
+        reserved = cls.MODULE_NAMES | cls.placeholder_names(schema)
         for name, column in schema.columns.items():
-            attribute = name if name.isidentifier() and not keyword.iskeyword(name) else f"column_{re.sub(r'[^0-9a-zA-Z_]', '_', name)}"
+            attribute = cls.attribute_name(name, schema.columns, reserved)
             field = cls.render_field(column)
             if attribute != name:
                 field = field[:-1] + f", alias={name!r})"
@@ -180,9 +206,12 @@ class ModelRenderer:
         return cls._use_names(cls._class_source(schema, class_name, table))
 
     @classmethod
-    def render_module(cls, schemas: Mapping[str, DataframeSchema], tables: Collection[str] = ()) -> str:
-        """Return a module defining one model per schema; the models named in ``tables`` also name their Postgres table."""
-        body = "\n\n".join(cls._class_source(s, name, name in tables) for name, s in schemas.items())
+    def render_module(cls, schemas: Mapping[str, DataframeSchema], tables: Collection[str] = (), docstring: str = MIGRATED) -> str:
+        """Return a module defining one model per schema; the models named in ``tables`` also name their Postgres table.
+
+        Each model's docstring is ``docstring`` with ``{name}`` replaced by its schema name.
+        """
+        body = "\n\n".join(cls._class_source(s, name, name in tables, docstring) for name, s in schemas.items())
         header = [
             "from pandera.typing import Series",
             "",
@@ -217,8 +246,9 @@ class ModelRenderer:
 class LegacyDeclarations:
     """Finds what still declares schemas the old way: YAML schema files and the code and resource definitions that point at them."""
 
+    SKIPPED_DIRECTORIES = frozenset({"node_modules", "__pycache__", "venv", "site-packages"})
     CALL_SITE_PATTERNS = (
-        (".py", re.compile(r"SCHEMA_FROM_FILE|SafeDynamicSchemaLoader|dynamicio_schema|^\s*schema(_validations|_metrics)?\s*=|metadata=\{\s*[\"']dynamicio[\"']|^\s*class Config\b")),
+        (".py", re.compile(r"SCHEMA_FROM_FILE|SafeDynamicSchemaLoader|dynamicio_schema|^\s*schema(_validations|_metrics)?\s*=|metadata=\{\s*[\"']dynamicio[\"']")),
         (".yaml", re.compile(r"^\s*schema:\s*$|^\s*file_path:.*schema")),
         (".yml", re.compile(r"^\s*schema:\s*$|^\s*file_path:.*schema")),
     )
@@ -227,7 +257,8 @@ class LegacyDeclarations:
     def find_yaml_schemas(path: str) -> Dict[str, DataframeSchema]:
         """Load every YAML file under ``path`` that looks like a dynamicio schema (top-level ``name`` and ``columns``)."""
         found: Dict[str, DataframeSchema] = {}
-        for root, _, files in sorted(os.walk(path)):
+        for root, dirs, files in os.walk(path):
+            dirs[:] = sorted(d for d in dirs if d not in LegacyDeclarations.SKIPPED_DIRECTORIES and not d.startswith("."))
             for file_name in sorted(files):
                 if not file_name.endswith((".yaml", ".yml")):
                     continue
@@ -248,8 +279,8 @@ class LegacyDeclarations:
     def find_postgres_schema_files(root: str) -> Set[str]:
         """File names of the YAML schemas that a resource definition under ``root`` binds to a Postgres environment (they need a ``__table_name__``)."""
         found: Set[str] = set()
-        for current, dirs, files in sorted(os.walk(root)):
-            dirs[:] = sorted(d for d in dirs if not d.startswith(".") and d not in ("node_modules", "__pycache__", "venv"))
+        for current, dirs, files in os.walk(root):  # pruning `dirs` works only while walking, so the walk itself is not sorted
+            dirs[:] = sorted(d for d in dirs if d not in LegacyDeclarations.SKIPPED_DIRECTORIES and not d.startswith("."))
             for file_name in sorted(files):
                 if not file_name.endswith((".yaml", ".yml")):
                     continue
@@ -271,17 +302,36 @@ class LegacyDeclarations:
     def find_call_sites(cls, root: str, exclude: Sequence[str] = ()) -> List[Tuple[str, int, str]]:
         """Locate code and resource-definition lines that still declare schemas the old way: (file, line number, text)."""
         sites: List[Tuple[str, int, str]] = []
-        for current, dirs, files in sorted(os.walk(root)):
-            dirs[:] = sorted(d for d in dirs if not d.startswith(".") and d not in ("node_modules", "__pycache__", "venv"))
+        excluded = {os.path.abspath(path) for path in exclude}
+        for current, dirs, files in os.walk(root):
+            dirs[:] = sorted(d for d in dirs if d not in cls.SKIPPED_DIRECTORIES and not d.startswith("."))
             for file_name in sorted(files):
                 file_path = os.path.join(current, file_name)
-                if file_path in exclude:
+                if os.path.abspath(file_path) in excluded:
                     continue
                 for extension, pattern in cls.CALL_SITE_PATTERNS:
                     if file_name.endswith(extension):
                         with open(file_path, encoding="utf-8", errors="replace") as handle:
-                            sites.extend((file_path, number, line.rstrip()) for number, line in enumerate(handle, 1) if pattern.search(line))
-        return sites
+                            lines = list(enumerate(handle, 1))
+                        sites.extend((file_path, number, line.rstrip()) for number, line in lines if pattern.search(line))
+                        if extension == ".py":
+                            sites.extend((file_path, number, line.rstrip()) for number, line in cls.config_names(lines))
+        return sorted(sites)
+
+    @staticmethod
+    def config_names(lines: Sequence[Tuple[int, str]]) -> List[Tuple[int, str]]:
+        """The ``name = ...`` lines inside a ``class Config:`` block, which dynamicio 11 no longer reads (``dataset=`` replaces them)."""
+        found: List[Tuple[int, str]] = []
+        config_indent = None
+        for number, line in lines:
+            indent = len(line) - len(line.lstrip())
+            if config_indent is not None and line.strip() and indent <= config_indent:
+                config_indent = None
+            if re.match(r"\s*class Config\b", line):
+                config_indent = indent
+            elif config_indent is not None and re.match(r"\s*name\s*=", line):
+                found.append((number, line))
+        return found
 
 
 class MigrationPrompt:
@@ -343,7 +393,7 @@ class Migration:
     def _module_name(self, file_path: str) -> str:
         """Name of the module a schema file goes to in package mode: its directory below ``path`` (``common`` for files directly in ``path``)."""
         relative = os.path.relpath(os.path.dirname(file_path), self.path)
-        return "common" if relative == "." else re.sub(r"\W+", "_", relative).strip("_").lower()
+        return "common" if relative == "." else ModelRenderer.module_name(relative.lower())
 
     def _group(self, schemas: Mapping[str, DataframeSchema]) -> None:
         postgres_files = LegacyDeclarations.find_postgres_schema_files(self.scan or os.getcwd())
