@@ -87,8 +87,8 @@ attempts to cast them and issues a `WARNING`. If casting does not work either, i
 ### Plain Pandera models
 
 A plain `pa.DataFrameModel` with `pa.Field(...)` keeps working. Declare the columns that need dynamicio's metrics or validations with `dynamicio.schema.Field`,
-which returns a `pa.Field` and so works in any model: it is the one way to declare them. Two traps apply when writing such models by hand: always set `nullable=` explicitly, and
-always set `include_min` / `include_max` on `in_range` (Pandera includes the bounds, dynamicio's `is_between` excludes them).
+which returns a `pa.Field` and so works in any model: it is the one way to declare them. Two traps apply when writing such models with `pa.Field`: always set `nullable=`
+explicitly (Pandera's default is `False`), and prefer `gt`/`ge`/`lt`/`le` to `in_range`, whose bounds Pandera includes by default and compares on definition.
 
 ## Step 4.2. Use the dynamicio cli
 
