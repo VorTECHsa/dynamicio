@@ -58,7 +58,7 @@ class TestField:
     def test_exactly_and_max_null_fraction_and_metrics(self):
         column = compiled(Field(nullable=True, exactly=["a", "b"], max_null_fraction=0.2, metrics=[Metric.COUNTS_PER_LABEL, Metric.MIN]), dtype=str)
 
-        assert validations(column)["is_in"]["match_all"] is False
+        assert validations(column)["is_in"]["exact"] is True
         assert validations(column)["has_acceptable_percentage_of_nulls"] == {"threshold": 0.2}
         assert column.metrics == ["CountsPerLabel", "Min"]
 

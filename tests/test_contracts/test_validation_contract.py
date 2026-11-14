@@ -18,7 +18,7 @@ PUBLIC_VALIDATORS = {
     "has_unique_values": ["dataset", "df", "column"],
     "has_no_null_values": ["dataset", "df", "column"],
     "has_acceptable_percentage_of_nulls": ["dataset", "df", "column", "threshold"],
-    "is_in": ["dataset", "df", "column", "categorical_values", "match_all"],
+    "is_in": ["dataset", "df", "column", "categorical_values", "exact"],
     "is_greater_than": ["dataset", "df", "column", "threshold"],
     "is_greater_than_or_equal": ["dataset", "df", "column", "threshold"],
     "is_lower_than": ["dataset", "df", "column", "threshold"],

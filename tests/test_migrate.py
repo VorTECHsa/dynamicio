@@ -182,6 +182,18 @@ def test_an_explicit_default_option_is_equivalent_to_omitting_it():
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize("match_all, declared", [(True, "isin=['a', 'b']"), (False, "exactly=['a', 'b']")])
+def test_the_yaml_match_all_option_becomes_isin_or_exactly(match_all, declared):
+    original = DataframeSchema(
+        name="m", columns={"c": {"type": "object", "validations": {"is_in": {"apply": True, "options": {"categorical_values": ["b", "a"], "match_all": match_all}}}, "metrics": []}}
+    )
+    source = render_model(original)
+
+    assert declared in source
+    assert schemas_equivalent(to_dataframe_schema(compile_module(PRELUDE + source)["M"]), original)
+
+
+@pytest.mark.unit
 def test_dtype_aliases_migrate_to_their_pandas_names():
     original = DataframeSchema(name="al", columns={"a": {"type": "double", "validations": {}, "metrics": []}, "b": {"type": "int", "validations": {}, "metrics": []}})
     model = compile_module(PRELUDE + render_model(original))["Al"]

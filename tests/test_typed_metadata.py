@@ -101,7 +101,7 @@ class TestExactly:
     def test_it_compiles_to_is_in_requiring_every_value(self):
         options = _validators(Field(nullable=True, exactly=["a", "b", "a"]), dtype=str)["is_in"].options
 
-        assert options == {"categorical_values": {"a", "b"}, "match_all": False}
+        assert options == {"categorical_values": {"a", "b"}, "exact": True}
 
     @pytest.mark.unit
     def test_values_must_all_be_present_and_no_other_allowed(self):

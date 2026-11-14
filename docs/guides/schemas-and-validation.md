@@ -73,7 +73,7 @@ A plain `pa.DataFrameModel` works too: declare `__dataset_name__` and `__table_n
 | `unique=True` | `has_unique_values` |
 | `gt` / `ge` / `lt` / `le` | `is_greater_than` / `..._or_equal` / `is_lower_than` / `..._or_equal`. A range is one of each: `ge=1941, le=NEXT_YEAR`. The bounds are not compared on definition, so they may come from settings |
 | `isin=[...]` | `is_in`: the values must be a subset of the list |
-| `exactly=[...]` | `is_in` with `match_all=False`: the values are exactly these, none other and none missing |
+| `exactly=[...]` | `is_in` with `exact=True`: the values are exactly these, none other and none missing |
 | `max_null_fraction=0.2` | fails if 20% or more of the column is null (`has_acceptable_percentage_of_nulls`) |
 | `metrics=[Metric.MIN, ...]` | logs these metrics for the column when metrics are logged: `MIN`, `MAX`, `MEAN`, `STD`, `VARIANCE`, `COUNTS`, `UNIQUE_COUNTS`, `COUNTS_PER_LABEL` |
 

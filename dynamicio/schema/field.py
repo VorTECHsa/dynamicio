@@ -29,7 +29,7 @@ class FieldDeclaration:
     @staticmethod
     def exactly(expected: Iterable[Any]) -> ValidationSpec:
         """Validate that the column holds exactly these values: none other, and none missing (``isin`` only forbids others)."""
-        return ValidationSpec("is_in", {"categorical_values": set(expected), "match_all": False})
+        return ValidationSpec("is_in", {"categorical_values": set(expected), "exact": True})
 
     @classmethod
     def metadata(cls, metric_names: Iterable[Metric], max_null_fraction: Optional[float], exactly: Optional[Iterable[Any]]) -> Optional[Dict[str, DynamicioMetadata]]:

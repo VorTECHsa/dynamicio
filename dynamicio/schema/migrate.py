@@ -64,9 +64,16 @@ class SchemaComparison:
             raise ValueError(f"Column {column!r}: the bounds {lower + upper} cannot be compared to keep the tightest of each side; declare the column by hand") from error
         return bounds
 
+    @staticmethod
+    def is_in_options(options: Mapping[str, Any]) -> Dict[str, Any]:
+        """The options of ``is_in`` as dynamicio 11 spells them: ``exact`` (default False) instead of the YAML ``match_all`` (default True), its negation."""
+        options = dict(options)
+        exact = not options.pop("match_all", True)
+        return {**options, "exact": options.get("exact", exact)}
+
     @classmethod
     def _options(cls, name: str, options: Mapping[str, Any]) -> list:
-        options = {**{"is_in": {"match_all": True}}.get(name, {}), **options}
+        options = cls.is_in_options(options) if name == "is_in" else dict(options)
         if "categorical_values" in options:  # a set semantically: order is irrelevant
             options["categorical_values"] = sorted(options["categorical_values"], key=cls.value_order)
         return sorted(options.items(), key=str)
@@ -127,10 +134,9 @@ class ModelRenderer:
         for name, options in by_name.items():
             if name in cls.SIMPLE_CHECKS:
                 kwargs.append(f"{cls.SIMPLE_CHECKS[name]}={options['threshold']!r}")
-            elif name == "is_in" and options.get("match_all", True):
-                kwargs.append(f"isin={sorted(options['categorical_values'], key=SchemaComparison.value_order)!r}")
             elif name == "is_in":
-                kwargs.append(f"exactly={sorted(options['categorical_values'], key=SchemaComparison.value_order)!r}")
+                argument = "exactly" if SchemaComparison.is_in_options(options)["exact"] else "isin"
+                kwargs.append(f"{argument}={sorted(options['categorical_values'], key=SchemaComparison.value_order)!r}")
             elif name == "has_acceptable_percentage_of_nulls":
                 kwargs.append(f"max_null_fraction={options['threshold']!r}")
             elif name not in ("has_no_null_values", "has_unique_values"):

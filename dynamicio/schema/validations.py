@@ -108,7 +108,7 @@ def has_acceptable_percentage_of_nulls(
 
 
 @validator
-def is_in(dataset: str, df: pd.DataFrame, column: str, categorical_values: Set[str], match_all: bool = True) -> ValidationResult:
+def is_in(dataset: str, df: pd.DataFrame, column: str, categorical_values: Set[str], exact: bool = False) -> ValidationResult:
     """Checks if the column only has allowed categorical values as per the set provided.
 
     Note:
@@ -119,7 +119,7 @@ def is_in(dataset: str, df: pd.DataFrame, column: str, categorical_values: Set[s
         df: A DataFrame
         column: The DataFrame column to be validated
         categorical_values: The allowed set of categorical values
-        match_all: If True, the categorical values must be a subset of the allowed set, otherwise they must be equal
+        exact: If True, the values must be exactly the allowed set: none other, and none missing. Otherwise they must only be a subset of it
 
     Returns:
         An instance of ValidationResult where `Validation.Result.valid` is a bool indicate the success of the validation,
@@ -127,9 +127,9 @@ def is_in(dataset: str, df: pd.DataFrame, column: str, categorical_values: Set[s
     """
     unique_values = set(df[column][df[column].notna()].unique())
 
-    if match_all:
-        return _validate_categoricals_are_a_subset_of_the_acceptable(categorical_values, unique_values, column, dataset, df)
-    return _validate_all_acceptable_categoricals_are_present(categorical_values, unique_values, column, dataset, df)
+    if exact:
+        return _validate_all_acceptable_categoricals_are_present(categorical_values, unique_values, column, dataset, df)
+    return _validate_categoricals_are_a_subset_of_the_acceptable(categorical_values, unique_values, column, dataset, df)
 
 
 @validator
