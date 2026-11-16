@@ -24,8 +24,6 @@ READ_FROM_S3_CSV:
       bucket: "[[ MOCK_BUCKET ]]"
       file_path: "[[ MOCK_KEY ]]"
       file_type: "csv"
-  schema:
-    file_path: "[[ TEST_RESOURCES ]]/schemas/read_from_s3_csv.yaml"
 
 READ_FROM_S3_JSON:
   LOCAL:
@@ -125,5 +123,3 @@ REPLACE_SCHEMA_WITH_DYN_VARS:
     local:
       file_path: "[[ TEST_RESOURCES ]]/data/input/{file_name_to_replace}.parquet"
       file_type: "parquet"
-  schema:
-    file_path: "[[ TEST_RESOURCES ]]/schemas/bar.yaml"

@@ -9,12 +9,15 @@ from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
+import pandera.pandas as pa
 import pytest
+from pandera.typing import Series
 
 # Application Imports
 import dynamicio
+from dynamicio import UnifiedIO
 from dynamicio.config import IOConfig
-from dynamicio.core import CASTING_WARNING_MSG, DynamicDataIO
+from dynamicio.core import CASTING_WARNING_MSG, SCHEMA_FROM_ARGUMENT, DynamicDataIO
 from dynamicio.errors import ColumnsDataTypeError, SchemaNotFoundError, SchemaValidationError
 from dynamicio.mixins import WithS3File
 from tests import constants
@@ -24,7 +27,6 @@ from tests.mocking.io import (
     JsonWithSomeBool,
     ParquetWithCustomValidate,
     ParquetWithSomeBool,
-    ReadMockS3CsvIO,
     ReadS3CsvIO,
     ReadS3CsvWithWrongSchemaIO,
     ReadS3DataWithFalseTypes,
@@ -37,6 +39,7 @@ from tests.mocking.io import (
     WriteS3IO,
     WriteS3ParquetExternalIO,
 )
+from tests.mocking.models import IdOnly
 
 
 @pytest.fixture(autouse=True, scope="module")
@@ -81,7 +84,7 @@ class TestCoreIO:
             AbsentSchemaIO(source_config=s3_csv_local_config)
 
     @pytest.mark.unit
-    def test_objects_of_s3io_subclasses_cant_be_instantiated_in_the_presence_of_a_empty_dict_schema(
+    def test_s3io_subclasses_cant_be_defined_with_an_empty_dict_schema(
         self,
     ):
         # Given
@@ -92,7 +95,7 @@ class TestCoreIO:
         ).get(source_key="READ_FROM_S3_CSV")
 
         # Given/When/Then
-        with pytest.raises(ValueError):
+        with pytest.raises(TypeError, match="removed in dynamicio 11"):
 
             class EmptySchemaIO(WithS3File, DynamicDataIO):
                 dataset_name = "EmptySchema"
@@ -101,7 +104,7 @@ class TestCoreIO:
             EmptySchemaIO(source_config=s3_csv_local_config)
 
     @pytest.mark.unit
-    def test_objects_of_dynamic_data_io_subclasses_cant_be_instantiated_in_the_presence_of_a_schema_eq_to_none(
+    def test_dynamic_data_io_subclasses_cant_be_defined_with_a_schema_eq_to_none(
         self,
     ):
         # Given
@@ -112,7 +115,7 @@ class TestCoreIO:
         ).get(source_key="READ_FROM_S3_CSV")
 
         # When/Then
-        with pytest.raises(ValueError):
+        with pytest.raises(TypeError, match="pandera DataFrameModel"):
 
             class NoneSchemaIO(WithS3File, DynamicDataIO):
                 dataset_name = "NoneSchema"
@@ -156,7 +159,7 @@ class TestCoreIO:
         with pytest.raises(AssertionError):
 
             class CMVolumesIONoValidationFunction(DynamicDataIO):
-                schema = {"foo": "int64"}
+                schema = IdOnly
 
             CMVolumesIONoValidationFunction(source_config=s3_csv_local_config)
 
@@ -176,9 +179,7 @@ class TestCoreIO:
             SubclassMissingMixin(source_config=athena_cloud_config)
 
     @pytest.mark.unit
-    def test_key_error_is_thrown_for_missing_schema_if_unified_io_subclass_assigns_schema_from_file_but_file_is_missing(
-        self,
-    ):
+    def test_schema_not_found_error_is_thrown_if_unified_io_subclass_takes_its_schema_from_the_argument_but_none_is_given(self):
         # Given
         read_mock_s3_cloud_config = IOConfig(
             path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/external.yaml")),
@@ -186,9 +187,12 @@ class TestCoreIO:
             dynamic_vars=constants,
         ).get(source_key="READ_MOCK_S3_CSV")
 
+        class FromArgumentIO(UnifiedIO):
+            schema = SCHEMA_FROM_ARGUMENT
+
         # When
         with pytest.raises(SchemaNotFoundError):
-            ReadMockS3CsvIO(source_config=read_mock_s3_cloud_config)
+            FromArgumentIO(source_config=read_mock_s3_cloud_config)
 
     @pytest.mark.unit
     def test_schema_validations_are_applied_for_an_io_class_with_a_schema_definition(self, valid_dataframe):
@@ -582,7 +586,7 @@ class TestCoreIO:
         assert config_io.options == {}
 
     @pytest.mark.unit
-    def test_dataset_name_is_defined_by_io_class_if_schema_from_file_is_not_provided(self):
+    def test_dataset_name_is_the_dunder_dataset_name_of_the_model_uppercased(self):
 
         # Given
         s3_parquet_local_config = IOConfig(
@@ -598,7 +602,7 @@ class TestCoreIO:
         assert config_io.name == "READ_S3_PARQUET_IO"
 
     @pytest.mark.unit
-    def test_dataset_name_is_inferred_from_schema_if_schema_from_file_is_provided(self):
+    def test_dataset_name_is_the_snake_cased_class_name_of_the_model_when_it_declares_none(self):
 
         # Given
         s3_read_from_csv_config = IOConfig(
@@ -608,10 +612,18 @@ class TestCoreIO:
         ).get(source_key="READ_FROM_S3_CSV")
 
         # When
-        config_io = ReadS3CsvIO(source_config=s3_read_from_csv_config)
+        class Anonymous(pa.DataFrameModel):
+            __dataset_name__ = "anonymous"
+
+            id: Series[int] = pa.Field(nullable=True)
+
+        class AnonymousIO(UnifiedIO):
+            schema = Anonymous
+
+        config_io = AnonymousIO(source_config=s3_read_from_csv_config)
 
         # Then
-        assert config_io.name == "READ_FROM_S3_CSV"
+        assert config_io.name == "ANONYMOUS"
 
 
 class TestTypeCastingAndValidation:

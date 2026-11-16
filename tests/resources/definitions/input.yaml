@@ -24,8 +24,6 @@ READ_FROM_S3_CSV:
       bucket: "[[ MOCK_BUCKET ]]"
       file_path: "[[ MOCK_KEY ]]"
       file_type: "csv"
-  schema:
-    file_path: "[[ TEST_RESOURCES ]]/schemas/read_from_s3_csv.yaml"
 
 READ_FROM_S3_JSON:
   LOCAL:
@@ -93,8 +91,6 @@ READ_FROM_S3_PATH_PREFIX_CSV:
       bucket: "[[ MOCK_BUCKET ]]"
       path_prefix: "[[ MOCK_PREFIX ]]"
       file_type: "csv"
-  schema:
-    file_path: "[[ TEST_RESOURCES ]]/schemas/read_from_s3_csv.yaml"
 
 READ_FROM_S3_PATH_PREFIX_PARQUET:
   CLOUD:
@@ -134,8 +130,6 @@ READ_FROM_POSTGRES:
       db_name: "[[ DB_NAME ]]"
       db_user: "[[ DB_USER ]]"
       db_password: "[[ DB_PASS ]]"
-  schema:
-    file_path: "[[ TEST_RESOURCES ]]/schemas/pg.yaml"
 
 READ_FROM_POSTGRES_WITH_QUERY_IN_OPTIONS:
   CLOUD:
@@ -148,8 +142,6 @@ READ_FROM_POSTGRES_WITH_QUERY_IN_OPTIONS:
       db_password: "[[ DB_PASS ]]"
     options:
       sql_query: "SELECT * FROM table_name_from_yaml_options"
-  schema:
-    file_path: "[[ TEST_RESOURCES ]]/schemas/pg.yaml"
 
 READ_FROM_KAFKA:
   LOCAL:
@@ -320,13 +312,6 @@ PRODUCTS:
     local:
       file_path: "[[ TEST_RESOURCES ]]/data/input/some_csv_to_read.csv"
       file_type: "csv"
-  schema:
-    name: products
-    columns:
-      id:
-        type: "object"
-        validations: {}
-        metrics: []
 
 READ_FROM_ATHENA:
   LOCAL:

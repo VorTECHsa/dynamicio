@@ -9,9 +9,6 @@ from typing import Mapping, Optional, Union
 import pydantic
 from pydantic import BaseModel
 
-# Application Imports
-import dynamicio.config.pydantic.table_schema as table_spec
-
 
 @enum.unique
 class DataBackendType(str, enum.Enum):
@@ -55,7 +52,6 @@ class IOBinding(BaseModel):
         str,
         Union["IOEnvironment", "LocalDataEnvironment", "LocalBatchDataEnvironment", "S3DataEnvironment", "S3PathPrefixEnvironment", "KafkaDataEnvironment", "PostgresDataEnvironment"],
     ]
-    dynamicio_schema: Union[table_spec.DataframeSchema, None] = pydantic.Field(default=None, alias="schema")
 
     def get_binding_for_environment(self, environment: str) -> "IOEnvironment":
         """Fetch the IOEnvironment spec for the name provided."""
@@ -93,7 +89,12 @@ class IOBinding(BaseModel):
             raise ValueError(f"IOBinding must be a dict at the top level. (got {values!r} instead)")
         remapped_value = {"environments": {}}
         for key, value in values.items():
-            if key in ("__binding_name__", "schema"):
+            if key == "schema":
+                raise ValueError(
+                    "Schemas are no longer declared in resource definitions (removed in dynamicio 11): remove the `schema:` block, declare the columns as a pandera "
+                    "DataFrameModel and pass it to the IO class. `dynamicio migrate` converts YAML schemas."
+                )
+            if key == "__binding_name__":
                 # Passthrough params
                 remapped_value[key] = value
             else:
@@ -117,13 +118,6 @@ class IOEnvironment(BaseModel):
             """Additional pydantic configuration for the model."""
 
             underscore_attrs_are_private = True
-
-    @property
-    def dynamicio_schema(self) -> Union[table_spec.DataframeSchema, None]:
-        """Returns tabular data structure definition for the data source (if available)."""
-        if not self._parent:
-            raise Exception("Parent field is not set.")
-        return self._parent.dynamicio_schema
 
     def set_parent(self, parent: IOBinding):  # noqa: F821
         """Helper method to set parent config object."""

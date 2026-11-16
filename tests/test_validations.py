@@ -4,6 +4,7 @@ import os
 import pytest
 
 # Application Imports
+from dynamicio import UnifiedIO
 from dynamicio.config import IOConfig
 from dynamicio.schema.validations import (
     has_acceptable_percentage_of_nulls,
@@ -17,7 +18,7 @@ from dynamicio.schema.validations import (
     is_lower_than_or_equal,
 )
 from tests import constants
-from tests.mocking.io import ReadS3CsvIO
+from tests.mocking.models import Products
 
 
 class TestHasUniqueValues:
@@ -161,34 +162,34 @@ class TestHasAcceptableCategoricalValues:
         assert validation.valid is True and validation.value == 0 and validation.message == "Categorical values for TEST[activity] are acceptable"
 
     @pytest.mark.unit
-    def test_returns_true_only_if_columns_unique_vals_are_an_exact_match_of_the_input_set_when_match_all_is_set_to_false(self, input_df):
+    def test_returns_true_only_if_columns_unique_vals_are_an_exact_match_of_the_input_set_when_exact_is_set(self, input_df):
         # Given
         df = input_df
 
         # When
-        validation = is_in("TEST", df, column="activity", categorical_values={"load", "discharge", "pass_through"}, match_all=False)
+        validation = is_in("TEST", df, column="activity", categorical_values={"load", "discharge", "pass_through"}, exact=True)
 
         # Then
         assert validation.valid is True and validation.value == 0 and validation.message == "All acceptable categorical values for TEST[activity] are present"
 
     @pytest.mark.unit
-    def test_returns_false_if_columns_unique_vals_are_less_than_the_acceptable_categoricals_when_match_all_is_set_to_false(self, input_df):
+    def test_returns_false_if_columns_unique_vals_are_less_than_the_acceptable_categoricals_when_exact_is_set(self, input_df):
         # Given
         df = input_df
 
         # When
-        validation = is_in("TEST", df, column="activity", categorical_values={"load", "discharge", "pass_through", "one_more"}, match_all=False)
+        validation = is_in("TEST", df, column="activity", categorical_values={"load", "discharge", "pass_through", "one_more"}, exact=True)
 
         # Then
         assert validation.valid is False and validation.value == 1 and validation.message == "Missing categorical values for TEST[activity]: {'one_more'}"
 
     @pytest.mark.unit
-    def test_returns_false_if_columns_unique_vals_are_more_than_the_acceptable_categoricals_when_match_all_is_set_to_false(self, input_df):
+    def test_returns_false_if_columns_unique_vals_are_more_than_the_acceptable_categoricals_when_exact_is_set(self, input_df):
         # Given
         df = input_df
 
         # When
-        validation = is_in("TEST", df, column="activity", categorical_values={"load", "discharge"}, match_all=False)
+        validation = is_in("TEST", df, column="activity", categorical_values={"load", "discharge"}, exact=True)
 
         # Then
         assert validation.valid is False and validation.value == 3 and validation.message == "Values {'pass_through'} for TEST[activity] are not acceptable for 3 cells"
@@ -456,6 +457,10 @@ class TestIsBetween:
         assert validation.valid is True and validation.value == 0 and validation.message == "All values of TEST[weight_b] is between 4 and 10 thresholds"
 
 
+class ProductsIO(UnifiedIO):
+    schema = Products
+
+
 class TestRegressions:
     """Tests for regressions discovered in v4.3.0 release."""
 
@@ -468,7 +473,7 @@ class TestRegressions:
             env_identifier="LOCAL",
             dynamic_vars=constants,
         ).get(source_key="PRODUCTS")
-        io_instance = ReadS3CsvIO(source_config=input_config, apply_schema_validations=True, log_schema_metrics=True)
+        io_instance = ProductsIO(source_config=input_config, apply_schema_validations=True, log_schema_metrics=True)
 
         # When
         data = io_instance.read()

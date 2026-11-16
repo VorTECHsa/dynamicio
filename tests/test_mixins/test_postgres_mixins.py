@@ -11,8 +11,9 @@ import pandas as pd
 import pandera.pandas as pa
 import pytest
 from pandera.typing import Series
-from sqlalchemy import Column, Table, create_engine, inspect, text
+from sqlalchemy import Column, MetaData, Table, create_engine, inspect, text
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session
 from sqlalchemy.schema import CreateTable
 from sqlalchemy.sql.base import ColumnCollection
@@ -21,9 +22,10 @@ from sqlalchemy.sql.base import ColumnCollection
 from dynamicio import UnifiedIO, WithPostgres
 from dynamicio.config import IOConfig
 from dynamicio.core import SCHEMA_FROM_ARGUMENT
+from dynamicio.errors import TableNameNotFoundError
 from tests import constants
 from tests.mocking.io import ReadPostgresIO, WriteExtendedPostgresIO, WritePostgresIO
-from tests.mocking.models import ERModel, PgModel
+from tests.mocking.models import ERModel, PgModel, PgRows
 
 
 class TestPostgresIO:
@@ -37,14 +39,35 @@ class TestPostgresIO:
         df = pd.DataFrame({"id": [1], "val": ["a"]})
 
         # When
-        WithPostgres._write_to_database(session, "dummy_table", df, is_truncate_and_append=False)
+        WithPostgres._write_to_database(session, Table("dummy_table", MetaData()), df, is_truncate_and_append=False)
 
         # Then
         assert session.execute.call_count == 1
         executed_sql = str(session.execute.call_args[0][0])
         assert "DELETE FROM dummy_table" in executed_sql
-        cursor.copy_from.assert_called_once()
+        assert cursor.copy_expert.call_args.args[0] == "COPY dummy_table (id, val) FROM STDIN WITH (FORMAT text, NULL '')"
         session.commit.assert_called_once()
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "table, truncate, statement, copy",
+        [
+            (Table("Orders", MetaData()), True, 'TRUNCATE TABLE "Orders" CASCADE;', 'COPY "Orders" (id, "Val")'),
+            (Table("Orders", MetaData()), False, 'DELETE FROM "Orders";', 'COPY "Orders" (id, "Val")'),
+            (Table("orders", MetaData(), schema="sales"), False, "DELETE FROM sales.orders;", "COPY sales.orders"),
+        ],
+    )
+    def test_the_cleanup_and_copy_statements_quote_the_table_as_postgres_spells_it(self, table, truncate, statement, copy):
+        # Given
+        session = MagicMock()
+        cursor = session.connection.return_value.connection.cursor.return_value
+
+        # When
+        WithPostgres._write_to_database(session, table, pd.DataFrame({"id": [1], "Val": ["a"]}), is_truncate_and_append=truncate)
+
+        # Then
+        assert str(session.execute.call_args.args[0]) == statement
+        assert cursor.copy_expert.call_args.args[0].startswith(copy)
 
     @pytest.mark.unit
     def test_when_reading_from_postgres_with_env_as_cloud_get_table_columns_returns_valid_list_of_columns_for_a_model(self, expected_columns):
@@ -232,12 +255,11 @@ class TestPostgresIO:
         ).get(source_key="READ_FROM_POSTGRES")
 
         # When
-        schema = postgres_cloud_config.dynamicio_schema
-        schema_name = postgres_cloud_config.dynamicio_schema.name
+        schema = ReadPostgresIO(source_config=postgres_cloud_config).schema
         model = ReadPostgresIO(source_config=postgres_cloud_config)._generate_model_from_schema(schema)
 
         # Then
-        assert len(model.__table__.columns) == len(schema.columns) and model.__tablename__ == schema_name
+        assert len(model.__table__.columns) == len(schema.columns) and model.__tablename__ == "pg" == PgRows.__table_name__
 
     @pytest.mark.unit
     def test_the_same_schema_generates_one_model_and_a_changed_schema_generates_another(self):
@@ -247,7 +269,7 @@ class TestPostgresIO:
             env_identifier="CLOUD",
             dynamic_vars=constants,
         ).get(source_key="READ_FROM_POSTGRES")
-        schema = postgres_cloud_config.dynamicio_schema
+        schema = ReadPostgresIO(source_config=postgres_cloud_config).schema
         changed = copy.deepcopy(schema)
         changed.columns.pop(next(iter(changed.columns)))
 
@@ -268,7 +290,7 @@ class TestPostgresIO:
             env_identifier="CLOUD",
             dynamic_vars=constants,
         ).get(source_key="READ_FROM_POSTGRES")
-        full = postgres_cloud_config.dynamicio_schema
+        full = ReadPostgresIO(source_config=postgres_cloud_config).schema
         reduced = copy.deepcopy(full)
         for name in list(reduced.columns)[1:]:
             reduced.columns.pop(name)
@@ -291,8 +313,8 @@ class TestPostgresIO:
             env_identifier="CLOUD",
             dynamic_vars=constants,
         ).get(source_key="READ_FROM_POSTGRES")
-        schema = copy.deepcopy(postgres_cloud_config.dynamicio_schema)
-        schema.name = "concurrent_first_calls"
+        schema = copy.deepcopy(ReadPostgresIO(source_config=postgres_cloud_config).schema)
+        schema.table_name = "concurrent_first_calls"
         barrier = threading.Barrier(8)
 
         def generate(_):
@@ -320,7 +342,7 @@ class TestPostgresIO:
         ).get(source_key="READ_FROM_POSTGRES")
 
         # When
-        schema = pg_cloud_config.dynamicio_schema
+        schema = ReadPostgresIO(source_config=pg_cloud_config).schema
         model = ReadPostgresIO(source_config=pg_cloud_config)._generate_model_from_schema(schema)  # pylint: disable=protected-access
         columns = ReadPostgresIO(source_config=pg_cloud_config)._get_table_columns(model)  # pylint: disable=protected-access
 
@@ -340,6 +362,7 @@ class TestPostgresIO:
 
         schema = types.SimpleNamespace(
             name="bad_schema",
+            table_name="bad_schema",
             columns={
                 "bad_col": types.SimpleNamespace(name="bad_col", data_type="not_a_real_type"),
             },
@@ -360,6 +383,7 @@ class TestPostgresIO:
 
         schema = types.SimpleNamespace(
             name="simple",
+            table_name="simple",
             columns={
                 "id": types.SimpleNamespace(name="id", data_type="int64"),
                 "value": types.SimpleNamespace(name="value", data_type="float64"),
@@ -385,6 +409,7 @@ class TestPostgresIO:
 
         schema = types.SimpleNamespace(
             name="ugly_table_name",
+            table_name="ugly_table_name",
             columns={
                 "id": types.SimpleNamespace(name="id", data_type="int64"),
             },
@@ -426,6 +451,7 @@ class TestCreateTable:
     def _model():
         schema = types.SimpleNamespace(
             name="create_if_missing_table",
+            table_name="create_if_missing_table",
             columns={
                 "item_id": types.SimpleNamespace(name="item_id", data_type="object"),
                 "quantity": types.SimpleNamespace(name="quantity", data_type="int64"),
@@ -488,6 +514,7 @@ class TestCreateTable:
         # Given
         schema = types.SimpleNamespace(
             name="create_table_ddl",
+            table_name="create_table_ddl",
             columns={
                 "item_id": types.SimpleNamespace(name="item_id", data_type="object"),
                 "payload": types.SimpleNamespace(name="payload", data_type="json"),
@@ -520,7 +547,7 @@ class TestCreateTable:
         session = mock_session_for.return_value.__enter__.return_value
         assert [name for name, _, _ in calls.mock_calls] == ["create", "write"]
         assert calls.create.call_args.args[0] is session
-        assert calls.create.call_args.args[1].__tablename__ == calls.write.call_args.args[1]
+        assert calls.create.call_args.args[1].__table__ is calls.write.call_args.args[1]
 
     @pytest.mark.unit
     def test_write_drops_options_that_the_postgres_writer_does_not_list(self):
@@ -568,12 +595,13 @@ class TestCreateTable:
 
 
 class _PgPanderaModel(pa.DataFrameModel):
+    __dataset_name__ = "pg_pandera_model"
+
+    __table_name__ = "pg_pandera_table"
+
     id: Series[str]
     amount: Series[int]
     seen_at: Series[pd.Timestamp] = pa.Field(nullable=True)
-
-    class Config:
-        name = "pg_pandera_table"
 
 
 class PanderaPostgresIO(UnifiedIO):
@@ -582,7 +610,7 @@ class PanderaPostgresIO(UnifiedIO):
 
 @pytest.fixture
 def postgres_resource_without_schema(tmp_path):
-    """A CLOUD postgres resource whose YAML declares no schema: the Pandera model is the only source of the table definition."""
+    """A CLOUD postgres resource: the Pandera model is the only source of the table definition."""
     resource = tmp_path / "pg_no_schema.yaml"
     resource.write_text(
         "READ_FROM_POSTGRES:\n"
@@ -599,7 +627,7 @@ def postgres_resource_without_schema(tmp_path):
 
 
 class TestPostgresWithPanderaSchema:
-    """A Pandera model supplies the table definition when the resource YAML has no schema."""
+    """A Pandera model supplies the table definition: its columns, and the table in `__table_name__`."""
 
     @pytest.mark.unit
     @patch.object(WithPostgres, "_read_database")
@@ -622,7 +650,7 @@ class TestPostgresWithPanderaSchema:
         PanderaPostgresIO(source_config=postgres_resource_without_schema, schema=_PgPanderaModel).write(df)
 
         # Then
-        assert mock__write_to_database.call_args.args[1] == "pg_pandera_table"
+        assert mock__write_to_database.call_args.args[1].name == "pg_pandera_table"
 
     @pytest.mark.unit
     def test_read_without_any_schema_still_fails_clearly(self, postgres_resource_without_schema):
@@ -631,5 +659,153 @@ class TestPostgresWithPanderaSchema:
         io_instance.schema = None
 
         # When / Then
-        with pytest.raises(AssertionError, match="The schema must be specified for SQL tables"):
+        with pytest.raises(AssertionError, match="The model must set __table_name__ for a Postgres resource"):
             io_instance._table_schema()  # pylint: disable=protected-access
+
+
+class _NoTable(pa.DataFrameModel):
+    id: Series[str] = pa.Field(nullable=True)
+
+    __dataset_name__ = "no_table"
+
+
+class _NamedApartFromTable(pa.DataFrameModel):
+    """The label of the dataset in logs and the table in the database are independent attributes."""
+
+    id: Series[str] = pa.Field(nullable=True)
+
+    __dataset_name__ = "orders_label"
+    __table_name__ = "Orders_v2"  # the exact spelling in the database, case included
+
+
+class _InPostgresSchema(pa.DataFrameModel):
+    id: Series[str] = pa.Field(nullable=True)
+
+    __dataset_name__ = "orders"
+    __table_name__ = "sales.orders"
+
+
+class TestTableName:
+    @pytest.mark.unit
+    def test_a_postgres_resource_with_a_model_that_has_no_table_name_fails_at_construction(self, postgres_resource_without_schema):
+        # When / Then
+        with pytest.raises(TableNameNotFoundError, match="__table_name__") as error:
+            PanderaPostgresIO(source_config=postgres_resource_without_schema, schema=_NoTable)
+        assert "no_table" in str(error.value)
+
+    @pytest.mark.unit
+    def test_the_dataset_name_is_never_guessed_as_the_table(self, postgres_resource_without_schema):
+        class NoTableClassNameIO(UnifiedIO):
+            schema = _NoTable
+
+        with pytest.raises(TableNameNotFoundError):
+            NoTableClassNameIO(source_config=postgres_resource_without_schema)
+
+    @pytest.mark.unit
+    def test_a_model_without_table_name_is_fine_for_other_backends(self, tmp_path):
+        # Given
+        resource = tmp_path / "local.yaml"
+        resource.write_text('ORDERS:\n  LOCAL:\n    type: "local"\n    local:\n      file_path: "x.csv"\n      file_type: "csv"\n')
+        config = IOConfig(str(resource), env_identifier="LOCAL", dynamic_vars=constants).get(source_key="ORDERS")
+
+        # When / Then
+        assert PanderaPostgresIO(source_config=config, schema=_NoTable).name == "NO_TABLE"
+
+    @pytest.mark.unit
+    @patch.object(WithPostgres, "_read_database")
+    def test_read_queries_the_exact_table_name_and_logs_the_dataset_name_apart(self, mock__read_database, postgres_resource_without_schema):
+        # When
+        io_instance = PanderaPostgresIO(source_config=postgres_resource_without_schema, schema=_NamedApartFromTable)
+        io_instance.read()
+
+        # Then
+        assert io_instance.name == "ORDERS_LABEL"
+        assert "Orders_v2" in str(mock__read_database.call_args.args[1].statement)
+
+    @pytest.mark.unit
+    @patch.object(WithPostgres, "_write_to_database")
+    def test_write_targets_the_exact_table_name(self, mock__write_to_database, postgres_resource_without_schema):
+        # When
+        PanderaPostgresIO(source_config=postgres_resource_without_schema, schema=_NamedApartFromTable).write(pd.DataFrame({"id": ["a"]}))
+
+        # Then
+        assert mock__write_to_database.call_args.args[1].name == "Orders_v2"
+
+    @pytest.mark.unit
+    @patch.object(WithPostgres, "_read_database")
+    def test_a_dotted_table_name_is_a_table_of_a_postgres_schema(self, mock__read_database, postgres_resource_without_schema):
+        # When
+        PanderaPostgresIO(source_config=postgres_resource_without_schema, schema=_InPostgresSchema).read()
+
+        # Then
+        statement = str(mock__read_database.call_args.args[1].statement)
+        assert "FROM sales.orders" in statement and '"sales.orders"' not in statement
+
+    @pytest.mark.unit
+    @patch.object(WithPostgres, "_write_to_database")
+    def test_a_write_to_a_dotted_table_name_targets_the_table_of_that_schema(self, mock__write_to_database, postgres_resource_without_schema):
+        # When
+        PanderaPostgresIO(source_config=postgres_resource_without_schema, schema=_InPostgresSchema).write(pd.DataFrame({"id": ["a"]}))
+
+        # Then
+        table = mock__write_to_database.call_args.args[1]
+        assert (table.schema, table.name) == ("sales", "orders")
+
+    @pytest.mark.unit
+    @patch.object(WithPostgres, "_read_database")
+    def test_a_sql_query_read_needs_no_table_name(self, mock__read_database, postgres_resource_without_schema):
+        # When
+        PanderaPostgresIO(source_config=postgres_resource_without_schema, schema=_NoTable, sql_query="SELECT id FROM a JOIN b USING (id)").read()
+
+        # Then
+        assert mock__read_database.call_args.args[1] == "SELECT id FROM a JOIN b USING (id)"
+
+    @pytest.mark.unit
+    def test_a_write_without_a_table_name_fails_even_with_a_sql_query(self, postgres_resource_without_schema):
+        # Given
+        io_instance = PanderaPostgresIO(source_config=postgres_resource_without_schema, schema=_NoTable, sql_query="SELECT id FROM a")
+
+        # When / Then
+        with pytest.raises(TableNameNotFoundError, match="no_table"):
+            io_instance.write(pd.DataFrame({"id": ["a"]}))
+
+    @pytest.mark.unit
+    @patch.object(WithPostgres, "_read_from_postgres")
+    def test_the_io_class_model_of_a_postgres_dataset_declares_the_table(self, mock__read_from_postgres, test_df, postgres_resource_without_schema):
+        # Given
+        mock__read_from_postgres.return_value = test_df
+
+        # When
+        io_instance = ReadPostgresIO(source_config=postgres_resource_without_schema)
+
+        # Then
+        assert io_instance.schema.table_name == "pg" and io_instance.schema.name == "pg_rows"
+
+    @pytest.mark.unit
+    @patch("dynamicio.mixins.with_postgres.logger")
+    @patch.object(WithPostgres, "_read_database")
+    def test_a_missing_table_is_reported_with_the_attribute_that_names_it(self, mock__read_database, mock__logger, postgres_resource_without_schema):
+        # Given Postgres' `undefined_table` error
+        mock__read_database.side_effect = ProgrammingError("SELECT", {}, types.SimpleNamespace(pgcode="42P01"))
+
+        # When
+        with pytest.raises(ProgrammingError):
+            PanderaPostgresIO(source_config=postgres_resource_without_schema, schema=_NamedApartFromTable).read()
+
+        # Then
+        message = mock__logger.error.call_args.args[0]
+        assert "'Orders_v2'" in message and "__table_name__" in message and "orders_label" in message
+
+    @pytest.mark.unit
+    @patch("dynamicio.mixins.with_postgres.logger")
+    @patch.object(WithPostgres, "_read_database")
+    def test_other_database_errors_are_not_blamed_on_the_table_name(self, mock__read_database, mock__logger, postgres_resource_without_schema):
+        # Given
+        mock__read_database.side_effect = ProgrammingError("SELECT", {}, types.SimpleNamespace(pgcode="42703"))
+
+        # When
+        with pytest.raises(ProgrammingError):
+            PanderaPostgresIO(source_config=postgres_resource_without_schema, schema=_NamedApartFromTable).read()
+
+        # Then
+        mock__logger.error.assert_not_called()

@@ -5,6 +5,7 @@ the lifecycle (when metrics are and are not emitted) are all pinned here.
 """
 
 # pylint: disable=missing-class-docstring, missing-function-docstring, redefined-outer-name
+import importlib
 import json
 import logging
 from unittest.mock import patch
@@ -67,9 +68,8 @@ def test_records_come_from_the_dynamicio_metrics_logger_at_info(make_io, valid_d
 
 
 @pytest.mark.unit
-def test_dataset_name_is_the_schema_name_uppercased_for_yaml_and_the_snake_cased_class_name_for_dict(make_io):
-    assert make_io().name == make_io.dataset_name
-    assert make_io.dataset_name == ("CONTRACT_DICT_IO" if make_io.style == "dict_schema" else "CONTRACT_DATASET")
+def test_dataset_name_is_the_dunder_dataset_name_of_the_model_uppercased(make_io):
+    assert make_io().name == make_io.dataset_name == "CONTRACT_DATASET"
 
 
 @pytest.mark.unit
@@ -164,3 +164,14 @@ def test_nothing_is_derived_from_the_dataframe_index(make_io, metric_records):
     make_io(log_schema_metrics=True).log_metrics_from_schema(df)
 
     assert len(metric_records()) == 9
+
+
+@pytest.mark.unit
+def test_every_path_to_the_metrics_module_names_the_same_module():
+    from dynamicio.schema import metrics as attribute  # pylint: disable=import-outside-toplevel,reimported
+    import dynamicio.metrics as alias  # pylint: disable=import-outside-toplevel
+    import dynamicio.schema.metrics as by_path  # pylint: disable=import-outside-toplevel,reimported
+
+    assert attribute is by_path is alias is importlib.import_module("dynamicio.schema.metrics") is metrics
+    with patch("dynamicio.schema.metrics.get_metric") as patched:
+        assert metrics.get_metric is patched

@@ -15,6 +15,7 @@ from dynamicio.config.pydantic.io_resources import AthenaDataSubSection
 from dynamicio.mixins.with_s3 import _shared_boto3_session
 from tests import constants
 from tests.mocking.io import ReadAthenaIO
+from tests.mocking.models import MixedCaseAthena
 
 
 @pytest.mark.unit
@@ -203,7 +204,7 @@ class TestAthenaWranglerArguments:
 class ReadAthenaDecodedIO(ReadAthenaIO):
     """Declares dtypes for mixed-case Athena columns, as a consumer's resource schema would."""
 
-    schema = {"Id": "int64", "Name": "object", "IsActive": "bool", "Amount": "float64", "CreatedOn": "datetime64[ns]"}
+    schema = MixedCaseAthena
 
 
 _ATHENA_COLUMNS = [("Id", "bigint"), ("Name", "varchar"), ("IsActive", "boolean"), ("Amount", "double"), ("CreatedOn", "date")]

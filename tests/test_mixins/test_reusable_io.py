@@ -19,6 +19,7 @@ import dynamicio.mixins.with_s3
 from dynamicio import UnifiedIO
 from dynamicio.config import IOConfig
 from tests import constants
+from tests.mocking.models import NameableFile, Partitioned
 
 BUCKET = "reuse-bucket"
 REGION = "us-east-1"
@@ -27,11 +28,11 @@ SEQUENCES = [pytest.param(sequence, id="-".join(sequence)) for sequence in itert
 
 
 class FileIO(UnifiedIO):
-    schema = {"id": "int64", "name": "object"}
+    schema = NameableFile
 
 
 class PartitionedIO(UnifiedIO):
-    schema = {"grp": "object", "val": "int64"}
+    schema = Partitioned
 
 
 FRAME = pd.DataFrame({"id": [1, 2, 3], "name": ["a", "b", "c"]})

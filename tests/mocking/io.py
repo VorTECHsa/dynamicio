@@ -4,143 +4,132 @@ from unittest.mock import MagicMock
 
 # Application Imports
 from dynamicio import UnifiedIO, WithLocal
-from dynamicio.core import SCHEMA_FROM_FILE, DynamicDataIO
+from dynamicio.core import DynamicDataIO
+from tests.mocking import models
 
 
 class SubclassMissingMixin(WithLocal, DynamicDataIO):
-    schema = {"id": "int64"}
+    schema = models.IdOnly
 
 
 class ReadS3IO(UnifiedIO):
-    schema = {"id": "int64"}
+    schema = models.IdOnly
 
 
 class ReadS3JsonOrientRecordsIO(UnifiedIO):
-    schema = {"data": "object"}
+    schema = models.JsonData
 
 
 class ReadS3JsonOrientRecordsAltIO(UnifiedIO):
-    schema = {"release": "object", "timestamp": "int64"}
+    schema = models.ReleaseTimestamp
 
 
 class ReadMockS3CsvIO(UnifiedIO):
-    schema = SCHEMA_FROM_FILE
+    schema = models.ReadFromS3Csv
 
 
 class TemplatedFile(UnifiedIO):
-    schema = {"id": "int64", "foo_name": "object", "bar": "int64"}
+    schema = models.IdFooNameBar
 
 
 class ReadLocalParquetTemplated(UnifiedIO):
-    schema = {"id": "int64", "foo_name": "object", "bar": "int64"}
+    schema = models.IdFooNameBar
 
 
 class ReadS3CsvIO(UnifiedIO):
-    schema = SCHEMA_FROM_FILE
+    schema = models.ReadFromS3Csv
 
 
 class ReadS3CsvWithWrongSchemaIO(UnifiedIO):
-    schema = {"id": "int64", "foo_name": "object", "bar": "float64"}
+    schema = models.IdFooNameFloatBar
 
 
 class ReadS3DataWithLessColumnsIO(UnifiedIO):
-    schema = {"id": "int64", "foo_name": "object"}
+    schema = models.IdFooName
 
 
 class ReadS3DataWithFalseTypes(UnifiedIO):
-    schema = {"id": "float64", "foo_name": "object"}
+    schema = models.ReadS3DataWithFalseTypes
 
 
 class ReadS3DataWithLessColumnsAndMessedOrderOfColumnsIO(UnifiedIO):
-    schema = {
-        "bar": "int64",
-        "foo_name": "object",
-        "a_number": "int64",
-        "b_number": "int64",
-        "bar_type": "object",
-    }
+    schema = models.MessedOrderOfColumns
 
 
 class ReadS3ParquetIO(UnifiedIO):
-    schema = {"id": "int64", "foo_name": "object", "bar": "int64"}
+    schema = models.ReadS3ParquetIO
 
 
 class ReadS3ParquetWithLateColumnIO(UnifiedIO):
-    schema = {"id": "int64", "foo_name": "object", "status": "object"}
+    schema = models.IdFooNameStatus
 
 
 class ReadS3ParquetWEmptyFilesIO(UnifiedIO):
-    schema = {"id": "object", "bar": "int64"}
+    schema = models.ObjectIdBar
 
 
 class ReadS3ParquetWithLessColumnsIO(UnifiedIO):
-    schema = {"id": "int64", "foo_name": "object"}
+    schema = models.IdFooName
 
 
 class ReadS3HdfIO(UnifiedIO):
-    schema = {"id": "int64", "foo_name": "object", "bar": "int64"}
+    schema = models.IdFooNameBar
 
 
 class AsyncReadS3HdfIO(UnifiedIO):
-    schema = {"col_1": "int64", "col_2": "object"}
+    schema = models.Col1Col2
 
 
 class ReadS3JsonIO(UnifiedIO):
-    schema = {"id": "int64", "foo_name": "object", "bar": "int64"}
+    schema = models.IdFooNameBar
 
 
 class WriteS3IO(UnifiedIO):
-    schema = {"col_1": "int64", "col_2": "object"}
+    schema = models.Col1Col2
 
 
 class WriteS3JsonOrientRecordsIO(UnifiedIO):
-    schema = {"release": "object", "timestamp": "int64"}
+    schema = models.ReleaseTimestamp
 
 
 class WriteS3ParquetExternalIO(UnifiedIO):
-    schema = {
-        "bar": "int64",
-        "event_type": "object",
-        "id": "int64",
-        "end_odometer": "int64",
-        "foo_name": "object",
-    }
+    schema = models.ExternalEvents
 
 
 class WriteS3CsvIO(UnifiedIO):
-    schema = {"id": "int64", "foo_name": "object", "bar": "int64"}
+    schema = models.IdFooNameBar
 
 
 class WriteS3CsvWithSchema(UnifiedIO):
-    schema = SCHEMA_FROM_FILE
+    schema = models.ReadFromS3Csv
 
 
 class WriteS3HdfIO(UnifiedIO):
-    schema = {"col_1": "int64", "col_2": "object"}
+    schema = models.Col1Col2
 
 
 class WriteS3JsonIO(UnifiedIO):
-    schema = {"col_1": "int64", "col_2": "object"}
+    schema = models.Col1Col2
 
 
 class ReadPostgresIO(UnifiedIO):
-    schema = {"id": "object", "foo": "object", "bar": "int64", "baz": "object"}
+    schema = models.PgRows
 
 
 class WritePostgresIO(UnifiedIO):
-    schema = {"id": "object", "foo": "object", "bar": "int64", "baz": "object"}
+    schema = models.PgRows
 
 
 class WriteExtendedPostgresIO(UnifiedIO):
-    schema = {"id": "object", "foo": "object", "bar": "int64", "start_date": "datetime64[ns]", "active": "bool", "net": "float64"}
+    schema = models.ExtendedPgRows
 
 
 class WriteKafkaIO(UnifiedIO):
-    schema = {"id": "object", "foo": "object", "bar": "int64", "baz": "object"}
+    schema = models.KafkaMessages
 
 
 class WriteKeyedKafkaIO(UnifiedIO):
-    schema = {"key": "object", "id": "object", "foo": "object", "bar": "int64", "baz": "object"}
+    schema = models.KeyedKafkaMessages
 
 
 class MockKafkaProducer:
@@ -162,7 +151,7 @@ class MockKafkaProducer:
 
 
 class ReadS3ParquetWithDifferentCastableDTypeIO(UnifiedIO):
-    schema = {"id": "int64", "foo_name": "object", "bar": "int64"}
+    schema = models.IdFooNameBar
 
     # Input format of some_parquet_to_read.parquet is:
     # id,foo_name,bar
@@ -173,7 +162,7 @@ class ReadS3ParquetWithDifferentCastableDTypeIO(UnifiedIO):
 
 
 class ReadS3ParquetWithDifferentNonCastableDTypeIO(UnifiedIO):
-    schema = {"id": "int64", "foo_name": "int64", "bar": "int64"}
+    schema = models.IdFooNameInt
 
     # Input format of some_parquet_to_read.parquet is:
     # id,foo_name,bar
@@ -184,31 +173,31 @@ class ReadS3ParquetWithDifferentNonCastableDTypeIO(UnifiedIO):
 
 
 class ReadFromBatchLocalParquet(UnifiedIO):
-    schema = {"id": "int64", "foo_name": "object", "bar": "int64"}
+    schema = models.IdFooNameBar
 
 
 class ReadFromBatchLocalHdf(UnifiedIO):
-    schema = {"id": "int64", "foo_name": "object", "bar": "int64"}
+    schema = models.IdFooNameBar
 
 
 class ParquetWithSomeBool(UnifiedIO):
-    schema = {"id": "int64", "foo_name": "object", "bar": "int64", "bool_col": "bool"}
+    schema = models.WithSomeBool
 
 
 class CsvWithSomeBool(UnifiedIO):
-    schema = {"id": "int64", "foo_name": "object", "bar": "int64", "bool_col": "bool"}
+    schema = models.WithSomeBool
 
 
 class HdfWithSomeBool(UnifiedIO):
-    schema = {"id": "int64", "foo_name": "object", "bar": "int64", "bool_col": "bool"}
+    schema = models.WithSomeBool
 
 
 class JsonWithSomeBool(UnifiedIO):
-    schema = {"id": "int64", "foo_name": "object", "bar": "int64", "bool_col": "bool"}
+    schema = models.WithSomeBool
 
 
 class ParquetWithCustomValidate(UnifiedIO):
-    schema = {"id": "int64", "foo_name": "object", "bar": "int64", "bool_col": "bool"}
+    schema = models.WithSomeBool
 
     @staticmethod
     def validate(df):
@@ -220,8 +209,8 @@ class ParquetWithCustomValidate(UnifiedIO):
 
 
 class ReadAthenaIO(UnifiedIO):
-    schema = {"id": "object", "foo": "object", "bar": "int64"}
+    schema = models.AthenaRows
 
 
 class GenericIO(UnifiedIO):
-    schema = SCHEMA_FROM_FILE
+    schema = models.ReadFromS3Csv

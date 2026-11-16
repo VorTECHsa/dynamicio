@@ -33,21 +33,19 @@ class Settings:
 
 ## 2. Describe what the data looks like
 
-The schema is a Pandera `DataFrameModel`. Set `nullable=` explicitly (see
-[Schemas and validation](../guides/schemas-and-validation.md)):
+The schema is a `DataModel`, a Pandera `DataFrameModel` that names its dataset. `Field` declares the columns, and `nullable=` is required
+(see [Schemas and validation](../guides/schemas-and-validation.md)):
 
 <!-- doctest -->
 ```python
-import pandera.pandas as pa
 from pandera.typing import Series
 
+from dynamicio.schema import DataModel, Field
 
-class Orders(pa.DataFrameModel):
-    order_id: Series[int] = pa.Field(nullable=False, unique=True)
-    amount: Series[float] = pa.Field(nullable=False, ge=0)
 
-    class Config:
-        name = "orders"
+class Orders(DataModel, dataset="orders"):
+    order_id: Series[int] = Field(nullable=False, unique=True)
+    amount: Series[float] = Field(nullable=False, ge=0)
 ```
 
 ## 3. Bind them in an IO class
@@ -71,7 +69,7 @@ orders = OrdersIO(
 ```
 
 `apply_schema_validations` and `log_schema_metrics` are off by default; without them the schema only selects and casts
-columns.
+columns. They are arguments of the call and never part of the model, so every call site shows whether it validates (see [Schemas and validation](../guides/schemas-and-validation.md)).
 
 ## 4. Write and read
 

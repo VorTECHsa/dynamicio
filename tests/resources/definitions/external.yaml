@@ -22,7 +22,6 @@ READ_MOCK_S3_CSV:
       bucket: "[[ MOCK_BUCKET ]]"
       file_path: "[[ MOCK_KEY ]]"
       file_type: "csv"
-  # Missing SCHEMA
 
 READ_FROM_S3_JSON:
   LOCAL:
@@ -75,5 +74,3 @@ WRITE_TO_S3_CSV:
       bucket: "[[ MOCK_BUCKET ]]"
       file_path: "test/write_some_csv.csv"
       file_type: "csv"
-  schema:
-    file_path: "[[ TEST_RESOURCES ]]/schemas/write_to_s3_csv.yaml"

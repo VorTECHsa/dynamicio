@@ -1,6 +1,6 @@
 # 0005. Declare schemas as Pandera models; dynamicio keeps validation and metrics
 
-- Status: Accepted (PR #107)
+- Status: Accepted (PR #107); partly superseded by [0009](0009-pandera-models-as-the-only-schema-declaration.md): dict and YAML schemas, `Config.name` naming and the raw `metadata` dict are gone
 - Date: 2026-10-21
 
 ## Context

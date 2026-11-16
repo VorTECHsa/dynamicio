@@ -7,6 +7,7 @@ import pytest
 from dynamicio import UnifiedIO
 from dynamicio.core import SCHEMA_FROM_ARGUMENT
 from dynamicio.errors import SchemaNotFoundError, SchemaValidationError
+from tests.mocking.models import IdOnly
 from tests.test_contracts.conftest import ContractModel
 
 
@@ -15,7 +16,6 @@ class ArgumentIO(UnifiedIO):
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("make_io", ["pandera_schema"], indirect=True)
 class TestSchemaArgument:
     def test_schema_argument_is_used(self, make_io, valid_df):
         io = make_io(valid_df, io_class=ArgumentIO, schema=ContractModel)
@@ -35,7 +35,7 @@ class TestSchemaArgument:
         class Other(UnifiedIO):
             """Class attribute that the argument must override."""
 
-            schema = {"zzz": "int64"}
+            schema = IdOnly
 
         io = make_io(valid_df, io_class=Other, schema=ContractModel)
         assert io.name == "CONTRACT_DATASET"

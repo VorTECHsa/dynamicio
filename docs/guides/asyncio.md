@@ -40,8 +40,8 @@ async def main() -> None:
     # SINK DATA
     logger.info("Begin sinking data to the processed area:")
     await asyncio.gather(
-        InputIO(source_config=transform_output_config.get(source_key="FINAL_FOO"), schema=FinalFoo, apply_schema_validations=True, log_schema_metrics=True).async_write(foo_df),
-        InputIO(source_config=transform_output_config.get(source_key="FINAL_BAR"), schema=FinalBar, apply_schema_validations=True, log_schema_metrics=True).async_write(bar_df),
+        InputIO(source_config=transform_output_config.get(source_key="FINAL_FOO"), schema=FinalFoo).async_write(foo_df),
+        InputIO(source_config=transform_output_config.get(source_key="FINAL_BAR"), schema=FinalBar).async_write(bar_df),
     )
     logger.info("Data staging is complete...")
 

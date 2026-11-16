@@ -4,7 +4,7 @@
 
 
 import enum
-from typing import Mapping, Sequence
+from typing import Mapping, Optional, Sequence
 
 import pydantic
 from pandas.core.dtypes.common import pandas_dtype
@@ -76,6 +76,7 @@ class DataframeSchema(pydantic.BaseModel):
     """Pydantic model describing the tabular data provided by the data source."""
 
     name: str
+    table_name: Optional[str] = None  # the Postgres table of a model (`__table_name__`); the YAML schemas that `dynamicio migrate` reads have none
     columns: Mapping[str, SchemaColumn]
 
     @pydantic.validator("columns", pre=True)
