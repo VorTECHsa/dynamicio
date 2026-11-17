@@ -353,7 +353,7 @@ def _upload_file(local_path: str, bucket: str, key: str, acl: str):
     _retry_transient(attempt, f"s3://{bucket}/{key}")
 
 
-def s3_sync_up(source_dir: str, dest_url: str, acl: str = "bucket-owner-full-control", max_concurrency: int = _SYNC_MAX_CONCURRENCY):
+def s3_sync_up(source_dir: str, dest_url: str, acl: str = "bucket-owner-full-control", max_concurrency: int = _SYNC_MAX_CONCURRENCY) -> List[str]:
     """Upload every file under `source_dir` to an S3 prefix, preserving the relative layout.
 
     Args:
@@ -361,19 +361,54 @@ def s3_sync_up(source_dir: str, dest_url: str, acl: str = "bucket-owner-full-con
         dest_url: `s3://bucket/prefix` to upload into.
         acl: Canned ACL applied to every uploaded object.
         max_concurrency: Number of concurrent upload threads.
+
+    Returns:
+        The keys of the uploaded objects.
     """
     bucket, key_prefix = _split_s3_url(dest_url)
     key_prefix = f"{key_prefix.rstrip('/')}/" if key_prefix else ""
 
     with ThreadPoolExecutor(max_workers=max_concurrency) as pool:
-        futures = []
+        futures, keys = [], []
         for root, _, files in os.walk(source_dir):
             for name in files:
                 local_path = os.path.join(root, name)
-                relative_key = os.path.relpath(local_path, source_dir).replace(os.sep, "/")
-                futures.append(pool.submit(_upload_file, local_path, bucket, f"{key_prefix}{relative_key}", acl))
+                key = f"{key_prefix}{os.path.relpath(local_path, source_dir).replace(os.sep, '/')}"
+                keys.append(key)
+                futures.append(pool.submit(_upload_file, local_path, bucket, key, acl))
         for future in futures:
             future.result()
+    return keys
+
+
+def s3_list_keys(source_url: str) -> List[str]:
+    """Return the keys of every object under an S3 prefix, in listing (lexicographic key) order."""
+    bucket, key_prefix = _split_s3_url(source_url)
+    key_prefix = f"{key_prefix.rstrip('/')}/" if key_prefix else ""
+    pages = _shared_s3_client().get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=key_prefix)
+    return [obj["Key"] for page in pages for obj in page.get("Contents", [])]
+
+
+_DELETE_BATCH_SIZE = 1000  # the most keys one DeleteObjects request accepts
+
+
+def _delete_batch(bucket: str, keys: List[str]):
+    def attempt():
+        return _shared_s3_client().delete_objects(Bucket=bucket, Delete={"Objects": [{"Key": key} for key in keys], "Quiet": True})
+
+    errors = _retry_transient(attempt, f"delete of {len(keys)} objects in s3://{bucket}").get("Errors", [])
+    if errors:  # DeleteObjects answers 200 and lists the keys it could not delete
+        raise RuntimeError(f"Could not delete {len(errors)} objects in s3://{bucket}, for example {[(error['Key'], error['Code']) for error in errors[:5]]}")
+
+
+def s3_delete_keys(bucket: str, keys: List[str]):
+    """Delete objects of a bucket, at most 1000 to a request.
+
+    Raises:
+        RuntimeError: If S3 could not delete some of the objects.
+    """
+    for start in range(0, len(keys), _DELETE_BATCH_SIZE):
+        _delete_batch(bucket, keys[start : start + _DELETE_BATCH_SIZE])
 
 
 _DIRECT_TRANSFER_MAX_BYTES = 16 * 1024**2  # larger objects use the multipart transfer manager
@@ -485,6 +520,8 @@ class WithS3PathPrefix(with_local.WithLocal):
         """Per-process shared S3 client."""
         return _shared_s3_client()
 
+    WRITE_MODES = ("append", "overwrite", "overwrite_partitions")  # the values of the awswrangler `mode` option of `wr.s3.to_parquet`, with the same meaning
+
     def _write_to_s3_path_prefix(self, df: pd.DataFrame):
         """Write a DataFrame to an S3 path prefix.
 
@@ -493,12 +530,20 @@ class WithS3PathPrefix(with_local.WithLocal):
             - `path_prefix`
             - `file_type`
 
+        The `mode` option sets what happens to the objects that are under the prefix before the write:
+            - `append` (the default): they stay, so a second write of the same rows adds them again.
+            - `overwrite`: they are deleted.
+            - `overwrite_partitions`: those of the partitions that the write writes to are deleted, the others stay.
+        S3 cannot restore a deleted object. The old objects are deleted only after every new object is uploaded, and an object
+        that the write replaces is not deleted. An object that another writer puts under the prefix during the write stays.
+
         Args:
             df (pd.DataFrame): the DataFrame to be written to S3
 
         Raises:
             ValueError: In case `path_prefix` is missing from config
-            ValueError: In case the `partition_cols` arg is missing while trying to write a parquet file
+            ValueError: In case the `partition_cols` arg is missing while trying to write a parquet file, or `mode` is not one of `WRITE_MODES`
+            RuntimeError: If S3 could not delete some of the old objects
         """
         s3_config = self.sources_config.s3
         file_type = get_file_type_value(s3_config.file_type)
@@ -507,14 +552,26 @@ class WithS3PathPrefix(with_local.WithLocal):
         options = dict(self.options)
         if "partition_cols" not in options:
             raise ValueError("`partition_cols` is required as an option to write partitioned parquet files to S3")
+        mode = options.pop("mode", "append")
+        if mode not in self.WRITE_MODES:
+            raise ValueError(f"`mode` must be one of {self.WRITE_MODES}, got {mode!r}")
 
         bucket = s3_config.bucket
         path_prefix = s3_config.path_prefix
         full_path_prefix = utils.resolve_template(f"s3://{bucket}/{path_prefix}", options)
 
+        old_keys = [] if mode == "append" else s3_list_keys(full_path_prefix)
         with tempfile.TemporaryDirectory() as temp_dir:
             self._write_parquet_file(df, temp_dir, **options)
-            s3_sync_up(temp_dir, full_path_prefix)
+            written = set(s3_sync_up(temp_dir, full_path_prefix))
+
+        stale = [key for key in old_keys if key not in written]
+        if mode == "overwrite_partitions":
+            partitions = {key.rsplit("/", 1)[0] for key in written}
+            stale = [key for key in stale if any("/".join(key.split("/")[:depth]) in partitions for depth in range(1, key.count("/") + 1))]
+        if stale:
+            logger.info(f"[s3] mode={mode!r}: deleting {len(stale)} old objects under {full_path_prefix}")
+            s3_delete_keys(_split_s3_url(full_path_prefix)[0], stale)
 
     def _read_from_s3_path_prefix(self) -> pd.DataFrame:  # pylint: disable=too-many-locals,too-many-branches
         """Read files from an S3 bucket based on a path_prefix/dynamic_file_path and return a concatenated DataFrame.

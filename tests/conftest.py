@@ -5,10 +5,12 @@ import pickletools
 import tempfile
 from unittest.mock import Mock, patch
 
+import boto3
 import numpy as np
 import pandas as pd
 import pytest
 
+# Application Imports
 from dynamicio import WithS3PathPrefix
 from dynamicio.config import IOConfig
 from tests import constants
@@ -624,3 +626,18 @@ def s3_parquet_local_config():
         env_identifier="LOCAL",
         dynamic_vars=constants,
     ).get(source_key="S3_PARQUET_WITH_OPTIONS_IN_CODE")
+
+
+@pytest.fixture
+def moto_s3_bucket(monkeypatch):
+    """An S3 client to moto's in-memory S3, with the bucket `constants.MOCK_BUCKET`, that dynamicio uses as its shared client."""
+    moto = pytest.importorskip("moto")  # dev dependency only; the dependency-ranges CI jobs do not install it
+    for name, value in {"AWS_ACCESS_KEY_ID": "testing", "AWS_SECRET_ACCESS_KEY": "testing", "AWS_DEFAULT_REGION": "us-east-1"}.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.delenv("AWS_PROFILE", raising=False)
+    with moto.mock_aws():
+        client = boto3.client("s3")
+        client.create_bucket(Bucket=constants.MOCK_BUCKET)
+        # A cached shared client may predate the mock and then call AWS, and building a new one rewrites `_CLIENT_CONFIG.retries` in place
+        with patch("dynamicio.mixins.with_s3._shared_s3_client", return_value=client):
+            yield client

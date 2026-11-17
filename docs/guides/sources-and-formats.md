@@ -44,6 +44,24 @@ schema column typed as a non-nullable dtype (e.g. `int64`) still fails, because 
 reads and `local_batch` are strict. Watch the warning if the missing data would indicate a real upstream problem rather
 than an old schema ([design decision](https://github.com/VorTECHsa/dynamicio/blob/master/docs/adr/0002-tolerate-missing-columns-in-parquet-prefix-reads.md)).
 
+### Writes to a parquet prefix
+
+A write to an `s3_path_prefix` needs the `partition_cols` option. Each write gives its files new names, so the
+`mode` option sets what happens to the objects that are already under the prefix:
+
+| `mode` | The objects under the prefix before the write |
+|---|---|
+| `append` (default) | Stay. A second write of the same rows adds them again. |
+| `overwrite` | dynamicio deletes them. |
+| `overwrite_partitions` | dynamicio deletes them in the partitions that the write writes to. The other partitions stay. |
+
+The values and their meaning are those of `mode` in `awswrangler.s3.to_parquet`. dynamicio deletes the old objects only
+after it uploads all new objects, so a failed upload deletes nothing. An object that another writer puts under the
+prefix during the write stays.
+
+Caution: S3 cannot restore a deleted object unless the bucket has versioning. Make sure that the prefix holds only
+the data of this resource before you set `overwrite`.
+
 ## Athena I/O
 
 `type: athena` resources run a SQL query on AWS Athena and return the result as a dataframe, through
