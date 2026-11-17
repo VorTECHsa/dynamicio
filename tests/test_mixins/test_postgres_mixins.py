@@ -832,6 +832,20 @@ class TestSessionFor:
         mock_dispose.assert_called_once_with(engines[0])
 
     @pytest.mark.unit
+    def test_session_for_disposes_the_engine_when_the_session_close_fails(self):
+        # Given a session whose close raises, as when the connection drops during the rollback
+        with patch.object(Engine, "dispose", autospec=True) as mock_dispose, patch("dynamicio.mixins.with_postgres.Session") as mock_session:
+            mock_session.return_value.close.side_effect = RuntimeError("connection dropped")
+
+            # When
+            with pytest.raises(RuntimeError, match="connection dropped"):
+                with session_for("sqlite://"):
+                    pass
+
+        # Then
+        mock_dispose.assert_called_once()
+
+    @pytest.mark.unit
     def test_session_for_disposes_the_engine_when_the_session_fails(self):
         # Given
         with patch.object(Engine, "dispose", autospec=True) as mock_dispose:

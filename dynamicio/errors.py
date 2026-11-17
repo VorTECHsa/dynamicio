@@ -148,7 +148,12 @@ class S3KeyNotFoundError(FileNotFoundError, ClientError):
     def __init__(self, s3_path: str, error: ClientError):
         """Wrap the `ClientError` of a missing key, keeping its `response` and `operation_name`."""
         ClientError.__init__(self, error.response, error.operation_name)
+        self.s3_path = s3_path
         self.args = (f"No object found at {s3_path}: {error}",)
+
+    def __reduce__(self):
+        """Rebuild from the arguments of `__init__`, so the error survives `pickle` (a process pool worker) and `copy`."""
+        return type(self), (self.s3_path, ClientError(self.response, self.operation_name))
 
     def __str__(self) -> str:
         """The message, not the `OSError` format (which expects errno and strerror)."""

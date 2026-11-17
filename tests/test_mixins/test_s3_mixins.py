@@ -1,7 +1,10 @@
 # pylint: disable=no-member, too-many-positional-arguments, missing-module-docstring, missing-class-docstring, missing-function-docstring, too-many-public-methods, too-few-public-methods, protected-access, C0103, C0302, R0801
 import collections
+import copy
 import io
+import logging
 import os
+import pickle
 import shutil
 import socket
 import struct
@@ -1602,9 +1605,9 @@ class TestS3PathPrefixWriteModes:
         return {obj["Key"]: client.get_object(Bucket=constants.MOCK_BUCKET, Key=obj["Key"])["Body"].read() for obj in objects}
 
     @staticmethod
-    def write(**options):
+    def write(config=None, **options):
         input_df = pd.DataFrame({"col_1": [1, 2], "col_2": ["a", "b"]})
-        WriteS3IO(source_config=TestS3PathPrefixWriteModes.config(), partition_cols=["col_2"], **options).write(input_df)
+        WriteS3IO(source_config=config or TestS3PathPrefixWriteModes.config(), partition_cols=["col_2"], **options).write(input_df)
 
     @staticmethod
     def new_keys(keys: Dict[str, bytes]) -> Dict[str, int]:
@@ -1626,7 +1629,7 @@ class TestS3PathPrefixWriteModes:
     @pytest.mark.unit
     def test_overwrite_deletes_the_old_objects_under_the_prefix_only(self, bucket):
         # When
-        self.write(mode="overwrite")
+        self.write(mode="overwrite", allow_delete=True)
 
         # Then
         keys = self.keys(bucket)
@@ -1637,7 +1640,7 @@ class TestS3PathPrefixWriteModes:
     @pytest.mark.unit
     def test_overwrite_partitions_deletes_the_old_objects_of_the_written_partitions_only(self, bucket):
         # When
-        self.write(mode="overwrite_partitions")
+        self.write(mode="overwrite_partitions", allow_delete=True)
 
         # Then
         keys = self.keys(bucket)
@@ -1650,7 +1653,7 @@ class TestS3PathPrefixWriteModes:
         # Given fastparquet, which also writes `_metadata` and `_common_metadata` at the root of the dataset
 
         # When
-        self.write(mode="overwrite_partitions", engine="fastparquet")
+        self.write(mode="overwrite_partitions", allow_delete=True, engine="fastparquet")
 
         # Then
         keys = self.keys(bucket)
@@ -1669,7 +1672,7 @@ class TestS3PathPrefixWriteModes:
 
         # When
         with patch.object(WriteS3IO, "_write_parquet_file", side_effect=write_parquet_file):
-            self.write(mode=mode)
+            self.write(mode=mode, allow_delete=True)
 
         # Then
         assert self.keys(bucket)["data/some_dir/col_2=a/old.parquet"] == b"new"
@@ -1679,7 +1682,7 @@ class TestS3PathPrefixWriteModes:
     def test_a_failed_upload_deletes_nothing(self, bucket, mode):
         # When
         with patch.object(dynamicio.mixins.with_s3, "_upload_file", side_effect=RuntimeError("upload failed")), pytest.raises(RuntimeError, match="upload failed"):
-            self.write(mode=mode)
+            self.write(mode=mode, allow_delete=True)
 
         # Then
         assert self.keys(bucket).keys() == set(self.OLD_KEYS + self.OTHER_KEYS)
@@ -1692,7 +1695,7 @@ class TestS3PathPrefixWriteModes:
 
         # When
         with patch("dynamicio.mixins.with_s3._shared_s3_client", return_value=client):
-            dynamicio.mixins.with_s3.s3_delete_keys(constants.MOCK_BUCKET, [f"k{i}" for i in range(2500)])
+            dynamicio.mixins.with_s3.S3Keys.delete(constants.MOCK_BUCKET, [f"k{i}" for i in range(2500)])
 
         # Then
         assert [len(call.kwargs["Delete"]["Objects"]) for call in client.delete_objects.call_args_list] == [1000, 1000, 500]
@@ -1705,7 +1708,65 @@ class TestS3PathPrefixWriteModes:
 
         # When / Then
         with patch("dynamicio.mixins.with_s3._shared_s3_client", return_value=client), pytest.raises(RuntimeError, match="AccessDenied"):
-            dynamicio.mixins.with_s3.s3_delete_keys(constants.MOCK_BUCKET, ["k0", "k1"])
+            dynamicio.mixins.with_s3.S3Keys.delete(constants.MOCK_BUCKET, ["k0", "k1"])
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("mode", ["overwrite", "overwrite_partitions"])
+    def test_a_delete_mode_without_allow_delete_appends_and_warns_as_in_11_0_0(self, bucket, mode, caplog):
+        # When
+        with caplog.at_level(logging.WARNING):
+            self.write(mode=mode)
+
+        # Then
+        keys = self.keys(bucket)
+        assert set(self.OLD_KEYS + self.OTHER_KEYS) <= keys.keys()
+        assert self.new_keys(keys) == {"data/some_dir/col_2=a": 1, "data/some_dir/col_2=b": 1}
+        assert "allow_delete: true" in caplog.text
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("mode", ["overwrite", "overwrite_partitions"])
+    def test_a_delete_mode_on_the_whole_bucket_raises_a_value_error_and_writes_nothing(self, bucket, mode):
+        # Given a resource whose key prefix is empty
+        config = self.config()
+        config.s3.path_prefix = ""
+
+        # When / Then
+        with pytest.raises(ValueError, match="whole bucket"):
+            self.write(config=config, mode=mode, allow_delete=True)
+        assert self.keys(bucket).keys() == set(self.OLD_KEYS + self.OTHER_KEYS)
+
+    @pytest.mark.unit
+    def test_overwrite_partitions_with_a_data_file_at_the_root_keeps_the_partitions_that_the_write_does_not_write(self, bucket):
+        # Given a writer that puts a data file directly under the prefix, next to one partition
+        def write_parquet_file(_df, temp_dir, **_options):
+            os.makedirs(os.path.join(temp_dir, "col_2=a"))
+            for path in [os.path.join(temp_dir, "col_2=a", "new.parquet"), os.path.join(temp_dir, "root.parquet")]:
+                with open(path, "wb") as fobj:
+                    fobj.write(b"new")
+
+        # When
+        with patch.object(WriteS3IO, "_write_parquet_file", side_effect=write_parquet_file):
+            self.write(mode="overwrite_partitions", allow_delete=True)
+
+        # Then
+        keys = self.keys(bucket)
+        assert "data/some_dir/col_2=a/old.parquet" not in keys
+        assert {"data/some_dir/col_2=z/old.parquet", "data/some_dir/root.parquet", *self.OTHER_KEYS} <= keys.keys()
+
+    @pytest.mark.unit
+    def test_a_broken_connection_during_the_listing_repeats_the_listing(self):
+        # Given a listing whose first attempt breaks
+        client = MagicMock()
+        page = {"Contents": [{"Key": "data/some_dir/a.parquet"}]}
+        client.get_paginator.return_value.paginate.side_effect = [ConnectionClosedError(endpoint_url="https://s3.amazonaws.com"), [page]]
+
+        # When
+        with patch("dynamicio.mixins.with_s3._shared_s3_client", return_value=client), patch("dynamicio.mixins.with_s3.time.sleep"):
+            keys = dynamicio.mixins.with_s3.S3Keys.list(f"s3://{constants.MOCK_BUCKET}/data/some_dir")
+
+        # Then
+        assert keys == ["data/some_dir/a.parquet"]
+        assert client.get_paginator.return_value.paginate.call_count == 2
 
     @pytest.mark.unit
     def test_an_unknown_mode_raises_a_value_error_and_writes_nothing(self, bucket):
@@ -1844,6 +1905,35 @@ class TestS3FileWithMissingKey:
                 ReadS3ParquetIO(source_config=config, missing_ok=True).read()
 
         assert not isinstance(raised.value, FileNotFoundError)
+
+    @pytest.mark.unit
+    def test_a_missing_bucket_for_hdf_raises_the_bucket_error_and_not_a_missing_key(self):
+        # Given a bucket that does not exist: HeadObject answers the same bare 404 as for a missing key
+        config = self._config("READ_FROM_S3_HDF")
+        client = MagicMock()
+        client.download_fileobj.side_effect = ClientError({"Error": {"Code": "404", "Message": "Not Found"}}, "HeadObject")
+        client.head_bucket.side_effect = ClientError({"Error": {"Code": "404", "Message": "Not Found"}}, "HeadBucket")
+
+        # When / Then
+        with patch("dynamicio.mixins.with_s3.boto3.client", return_value=client):
+            with pytest.raises(ClientError) as raised:
+                ReadS3HdfIO(source_config=config, missing_ok=True).read()
+
+        assert raised.value.operation_name == "HeadBucket"
+        assert not isinstance(raised.value, FileNotFoundError)
+
+    @pytest.mark.unit
+    def test_s3_key_not_found_error_survives_pickle_and_copy(self):
+        # Given
+        error = dynamicio.errors.S3KeyNotFoundError("s3://bucket/key", ClientError({"Error": {"Code": "NoSuchKey", "Message": "Not Found"}}, "GetObject"))
+
+        # When
+        copies = [pickle.loads(pickle.dumps(error)), copy.copy(error)]
+
+        # Then
+        for copied in copies:
+            assert type(copied) is dynamicio.errors.S3KeyNotFoundError
+            assert (str(copied), copied.response, copied.operation_name, copied.s3_path) == (str(error), error.response, error.operation_name, error.s3_path)
 
     @pytest.mark.unit
     def test_a_client_error_other_than_a_missing_key_is_raised_unchanged_for_hdf(self):

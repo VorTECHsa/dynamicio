@@ -134,6 +134,9 @@ _PICKLE_PROTOCOL_LOCK = threading.RLock()
 def pickle_protocol(protocol: Optional[int]):
     """Downgrade to the provided pickle protocol within the context manager.
 
+    The lock serializes the callers of this context manager only. `pickle.HIGHEST_PROTOCOL` is process-wide, so another thread that pickles while the
+    context is open also gets the downgraded protocol. Lock order: take this lock before `with_local.hdf_lock`, never the other way, or two writers deadlock.
+
     Args:
         protocol: The number of the protocol HIGHEST_PROTOCOL to downgrade to. Defaults to 4, which covers python 3.4 and higher.
     """

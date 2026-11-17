@@ -3,6 +3,7 @@
 # pylint: disable=no-member, protected-access, too-few-public-methods, broad-exception-raised
 
 import logging
+import time
 from typing import Any, Callable, Mapping, MutableMapping, Optional
 
 import pandas as pd  # type: ignore
@@ -32,9 +33,9 @@ class WithKafka:
       `Mapping` as its only argument and returning a `Mapping`, invoked prior to serializing each document. This can be used, for example, to add metadata to each
       document that will be written to the target Kafka topic.
     - `value_serializer: Callable[Mapping, bytes]`: Custom value serialiser; if not provided, a default value-serializer will be used, applied on a Mapping.
-    - `flush_timeout: float`: The most seconds that the final `flush()` of a write waits for the delivery of its messages. A write raises `TimeoutError` if
-      messages are not delivered in that time. If not provided, a write waits until every message is delivered. It is not a deadline for the whole write:
-      the time that a send waits for room in a full local queue comes before the flush and is not part of the timeout.
+    - `flush_timeout: float`: The most seconds that a write waits for Kafka with no progress. A write raises `TimeoutError` if a full local queue has no room
+      for a message in that time, or if the final `flush()` does not deliver every message in that time. If not provided, a write waits until every message
+      is delivered. It is not a deadline for the whole write: a write that keeps delivering messages can take longer.
 
     Example:
         >>> # Given
@@ -279,13 +280,17 @@ class WithKafka:
         The options stay in `self.options`: `_write_to_kafka` keeps them out of the producer configuration.
         """
         if self.__key_generator is None:
-            self.__key_generator = self.options.get("key_generator") or (lambda idx, __: idx)  # default key generator uses the dataframe's index
+            key_generator = self.options.get("key_generator")
+            self.__key_generator = (lambda idx, __: idx) if key_generator is None else key_generator  # default key generator uses the dataframe's index
         if self.__document_transformer is None:
-            self.__document_transformer = self.options.get("document_transformer") or (lambda value: value)
+            document_transformer = self.options.get("document_transformer")
+            self.__document_transformer = (lambda value: value) if document_transformer is None else document_transformer
         if self.__key_serializer is None:
-            self.__key_serializer = self.options.get("key_serializer") or self._default_key_serializer
+            key_serializer = self.options.get("key_serializer")
+            self.__key_serializer = self._default_key_serializer if key_serializer is None else key_serializer
         if self.__value_serializer is None:
-            self.__value_serializer = self.options.get("value_serializer") or self._default_value_serializer
+            value_serializer = self.options.get("value_serializer")
+            self.__value_serializer = self._default_value_serializer if value_serializer is None else value_serializer
 
     @utils.allow_options(VALID_CONFIG_KEYS)
     def _get_producer(self, server: str, **options: MutableMapping[str, Any]) -> Producer:
@@ -316,6 +321,7 @@ class WithKafka:
     def _send_messages(self, df: pd.DataFrame, topic: str) -> None:
         logger.debug(f"Sending {len(df)} messages to Kafka topic: {topic}.")
         messages = df.reset_index(drop=True).to_dict("records")
+        flush_timeout = self.options.get("flush_timeout")
 
         for idx, message in zip(df.index.values, messages):
             key = self.__key_generator(idx, message)
@@ -323,6 +329,7 @@ class WithKafka:
             serialized_key = self.__key_serializer(key)
             serialized_value = self.__value_serializer(transformed_message)
 
+            waiting_since = None
             while True:
                 try:
                     self.__producer.produce(topic=topic, key=serialized_key, value=serialized_value, on_delivery=self._on_delivery)
@@ -332,10 +339,12 @@ class WithKafka:
                         raise BufferError(
                             f"The message with key {key!r} does not fit in the empty local queue of the producer: increase `queue.buffering.max.kbytes` or make the message smaller"
                         ) from error
+                    waiting_since = time.monotonic() if waiting_since is None else waiting_since
+                    if flush_timeout is not None and time.monotonic() - waiting_since >= flush_timeout:
+                        raise TimeoutError(f"The local queue of the producer for Kafka topic {topic} had no room for {flush_timeout}s: no message was delivered") from error
                     self.__producer.poll(1)
             self.__producer.poll(0)  # serve the delivery callbacks, so a failed delivery raises during the write and not only at the flush
 
-        flush_timeout = self.options.get("flush_timeout")
         undelivered = self.__producer.flush() if flush_timeout is None else self.__producer.flush(flush_timeout)
         if undelivered:
             raise TimeoutError(f"{undelivered} messages to Kafka topic {topic} were not delivered within flush_timeout={flush_timeout}s")

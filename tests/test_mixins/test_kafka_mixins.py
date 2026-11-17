@@ -1,4 +1,5 @@
 # pylint: disable=no-member, missing-module-docstring, missing-class-docstring, missing-function-docstring, too-many-public-methods, too-few-public-methods, protected-access, C0103, C0302, R0801, broad-exception-raised
+import itertools
 import os
 from unittest.mock import patch
 
@@ -6,6 +7,7 @@ import pandas as pd
 import pytest
 import simplejson
 
+# Application Imports
 from dynamicio.config import IOConfig
 from dynamicio.mixins import WithKafka
 from tests import constants
@@ -501,6 +503,34 @@ class TestKafkaDelivery:
         with pytest.raises(TimeoutError, match="2 messages"):
             self.write(producer, test_df, flush_timeout=30)
         assert producer.flushes == [(30,)]
+
+    @pytest.mark.unit
+    def test_a_queue_with_no_room_for_flush_timeout_seconds_raises_a_timeout_error(self, test_df):
+        # Given a queue that stays full, and a clock that moves 10 s on each reading
+        producer = self.Producer(full=10**6)
+
+        # When / Then
+        with patch("dynamicio.mixins.with_kafka.time.monotonic", side_effect=itertools.count(0, 10)), pytest.raises(TimeoutError, match="no room for 30s"):
+            self.write(producer, test_df, flush_timeout=30)
+        assert producer.polls == [1, 1]
+
+    @pytest.mark.unit
+    def test_a_falsy_callable_option_is_kept(self, test_df):
+        # Given a serializer that is falsy, as a wrapper over an empty registry can be
+        class FalsySerializer:
+            def __bool__(self):
+                return False
+
+            def __call__(self, value):
+                return b"falsy"
+
+        producer = self.Producer()
+
+        # When
+        self.write(producer, test_df, value_serializer=FalsySerializer())
+
+        # Then
+        assert [message["value"] for message in producer.my_stream] == [b"falsy"] * 3
 
     @pytest.mark.unit
     def test_the_write_keeps_the_dynamicio_options_and_does_not_give_them_to_the_producer(self, test_df):
