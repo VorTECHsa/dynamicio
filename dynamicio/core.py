@@ -196,7 +196,9 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
             df: The data to be written
         """
         source_name = self.sources_config.data_backend_type.value
-        if set(df.columns) != self.schema.column_names:  # pylint: disable=E1101
+        if set(df.columns) == set(self.schema.column_names):  # pylint: disable=E1101
+            df = df.copy(deep=False)  # `_apply_schema` casts columns in place: cast on a new frame, not on the caller's, without copying the data
+        else:
             columns = [column for column in df.columns.to_list() if column in self.schema.column_names]
             df = df[columns]
 
