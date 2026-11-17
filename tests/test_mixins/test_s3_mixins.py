@@ -1932,7 +1932,7 @@ class TestS3FileWithMissingKey:
 
         # Then
         for copied in copies:
-            assert type(copied) is dynamicio.errors.S3KeyNotFoundError
+            assert type(copied) is dynamicio.errors.S3KeyNotFoundError  # pylint: disable=unidiomatic-typecheck  # the exact class, not a parent such as ClientError
             assert (str(copied), copied.response, copied.operation_name, copied.s3_path) == (str(error), error.response, error.operation_name, error.s3_path)
 
     @pytest.mark.unit
