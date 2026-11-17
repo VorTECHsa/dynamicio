@@ -1,5 +1,7 @@
 # pylint: disable=no-member, missing-module-docstring, missing-class-docstring, missing-function-docstring, too-many-public-methods, too-few-public-methods, protected-access, C0103, C0302, R0801
 import os
+import pickle
+import threading
 from enum import Enum
 from typing import Any
 
@@ -7,7 +9,7 @@ import pytest
 
 # Application Imports
 from dynamicio.config import IOConfig
-from dynamicio.mixins.utils import allow_options, args_of, get_file_type_value, get_string_template_field_names, resolve_template
+from dynamicio.mixins.utils import allow_options, args_of, get_file_type_value, get_string_template_field_names, pickle_protocol, resolve_template
 from tests import constants
 from tests.mocking.io import ReadS3CsvIO
 
@@ -201,3 +203,44 @@ class TestGetFileTypeValue:
     )
     def test_returns_correct_string_value(self, file_type, expected):
         assert get_file_type_value(file_type) == expected
+
+
+class TestPickleProtocol:
+    @pytest.mark.unit
+    def test_pickle_protocol_sets_and_restores_the_highest_protocol(self):
+        # Given
+        original = pickle.HIGHEST_PROTOCOL
+
+        # When
+        with pickle_protocol(protocol=3):
+            inside = pickle.HIGHEST_PROTOCOL
+
+        # Then
+        assert inside == 3
+        assert pickle.HIGHEST_PROTOCOL == original
+
+    @pytest.mark.unit
+    def test_pickle_protocol_makes_a_second_thread_wait_until_the_first_exits(self):
+        # Given
+        original = pickle.HIGHEST_PROTOCOL
+        entered = threading.Event()
+        seen = []
+
+        def second_writer():
+            with pickle_protocol(protocol=2):
+                entered.set()
+                seen.append(pickle.HIGHEST_PROTOCOL)
+
+        # When
+        with pickle_protocol(protocol=3):
+            thread = threading.Thread(target=second_writer)
+            thread.start()
+            entered_while_first_held = entered.wait(timeout=0.5)
+            protocol_of_first = pickle.HIGHEST_PROTOCOL
+        thread.join(timeout=5)
+
+        # Then
+        assert not entered_while_first_held
+        assert protocol_of_first == 3
+        assert seen == [2]
+        assert pickle.HIGHEST_PROTOCOL == original

@@ -18,6 +18,9 @@ __all__ = [
     "NoObjectsFoundError",
     "ObjectNotFoundError",
     "S3KeyNotFoundError",
+    "SchemaNotDeclaredError",
+    "MissingMixinError",
+    "InvalidS3UrlError",
     "CASTING_WARNING_MSG",
     "NOTICE_MSG",
 ]
@@ -155,6 +158,29 @@ class S3KeyNotFoundError(FileNotFoundError, ClientError):
     def is_missing_key(cls, error: ClientError) -> bool:
         """Whether `error` is the S3 reply for a key that does not exist."""
         return error.response.get("Error", {}).get("Code") in cls.MISSING_KEY_CODES
+
+
+class SchemaNotDeclaredError(DynamicIOError, TypeError, AssertionError):
+    """Error raised when an IO class does not set `schema`.
+
+    It is a `TypeError`, as the other errors of a wrong IO class declaration are. It is also an `AssertionError`: earlier releases checked this with
+    `assert`, and callers that catch `AssertionError` must not change.
+    """
+
+
+class MissingMixinError(DynamicIOError, TypeError, AssertionError):
+    """Error raised when an IO class has no mixin that reads or writes the type of its resource.
+
+    It is a `TypeError`, as the other errors of a wrong IO class declaration are. It is also an `AssertionError`: earlier releases checked this with
+    `assert`, and callers that catch `AssertionError` must not change.
+    """
+
+
+class InvalidS3UrlError(DynamicIOError, ValueError, AssertionError):
+    """Error raised when an S3 operation gets a URL that does not start with `s3://`.
+
+    It is a `ValueError`. It is also an `AssertionError`: earlier releases checked this with `assert`, and callers that catch `AssertionError` must not change.
+    """
 
 
 # Warning messages

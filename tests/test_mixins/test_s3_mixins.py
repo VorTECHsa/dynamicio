@@ -2716,3 +2716,22 @@ class TestS3LargeDownloadWithBrokenBody:
         # Then
         assert downloaded.getvalue() == breaking_s3.state.data
         assert any("RetriesExceededError" in call.args[0] for call in logger.warning.call_args_list)
+
+
+class TestS3UrlCheck:
+    """A URL that is not an `s3://` URL raises `InvalidS3UrlError`, which `python -O` keeps, and stays an `AssertionError` for the callers that catch that."""
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("url", ["file:///tmp/data/", "/tmp/data/", "gs://bucket/data/"])
+    def test_split_s3_url_rejects_other_schemes(self, url):
+        # When/Then
+        with pytest.raises(dynamicio.errors.InvalidS3UrlError, match="should be an s3 url") as error:
+            dynamicio.mixins.with_s3._split_s3_url(url)  # pylint: disable=protected-access
+
+        assert isinstance(error.value, ValueError) and isinstance(error.value, AssertionError)
+
+    @pytest.mark.unit
+    def test_iter_s3_files_rejects_other_schemes(self):
+        # When/Then
+        with pytest.raises(dynamicio.errors.InvalidS3UrlError, match="should be an s3 url"):
+            next(dynamicio.mixins.with_s3.WithS3PathPrefix._iter_s3_files(None, "file:///tmp/data/"))  # pylint: disable=protected-access

@@ -13,6 +13,9 @@ first argument the error was raised with (`None` if there was none).
 | `NoObjectsFoundError` | An S3 prefix (or a parquet `file_path` ending in `/`) holds no objects, or no file matches a `local_batch` source. It is both a `FileNotFoundError` and a `ValueError` |
 | `ObjectNotFoundError` | The S3 key of a `csv` or `json` `file_path` does not exist. It is both a `FileNotFoundError` and an awswrangler `NoFilesFound` |
 | `S3KeyNotFoundError` | The S3 key of a `parquet` or `hdf` `file_path` does not exist. It is both a `FileNotFoundError` and the botocore `ClientError` that S3 returned |
+| `SchemaNotDeclaredError` | An IO class does not set `schema`. It is both a `TypeError` and an `AssertionError` |
+| `MissingMixinError` | An IO class has no mixin that reads or writes the type of its resource. It is both a `TypeError` and an `AssertionError` |
+| `InvalidS3UrlError` | An S3 operation gets a URL that does not start with `s3://`. It is both a `ValueError` and an `AssertionError` |
 
 The full list, with docstrings, is in the [API reference](../reference/index.md#errors).
 

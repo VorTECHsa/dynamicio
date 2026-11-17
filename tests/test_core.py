@@ -3,6 +3,8 @@ import asyncio
 import io
 import logging
 import os
+import subprocess
+import sys
 import time
 from typing import Mapping, Tuple
 from unittest.mock import patch
@@ -18,7 +20,7 @@ import dynamicio
 from dynamicio import UnifiedIO
 from dynamicio.config import IOConfig
 from dynamicio.core import CASTING_WARNING_MSG, SCHEMA_FROM_ARGUMENT, DynamicDataIO
-from dynamicio.errors import ColumnsDataTypeError, SchemaNotFoundError, SchemaValidationError
+from dynamicio.errors import ColumnsDataTypeError, MissingMixinError, SchemaNotDeclaredError, SchemaNotFoundError, SchemaValidationError
 from dynamicio.mixins import WithS3File
 from dynamicio.schema import DataModel, Field
 from tests import constants
@@ -1227,3 +1229,44 @@ class TestWriteColumnSelection:
         # Then
         assert written["id"].dtype == "int64"
         assert df["id"].dtype == "float64"
+
+
+class TestChecksWithoutAssert:
+    """The checks on an IO class raise typed errors, which `python -O` keeps, and stay `AssertionError`s for the callers that catch that."""
+
+    @pytest.mark.unit
+    def test_class_without_schema_raises_schema_not_declared_error(self):
+        # When/Then
+        with pytest.raises(SchemaNotDeclaredError) as error:
+
+            class NoSchemaIO(DynamicDataIO):  # pylint: disable=unused-variable
+                pass
+
+        assert isinstance(error.value, TypeError) and isinstance(error.value, AssertionError)
+
+    @pytest.mark.unit
+    def test_class_without_mixin_for_its_source_raises_missing_mixin_error(self):
+        # Given
+        athena_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/external.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_ATHENA")
+
+        # When/Then
+        with pytest.raises(MissingMixinError, match="athena") as error:
+            SubclassMissingMixin(source_config=athena_cloud_config)
+
+        assert isinstance(error.value, TypeError) and isinstance(error.value, AssertionError)
+
+    @pytest.mark.unit
+    def test_class_without_schema_still_raises_under_python_optimize(self):
+        # Given
+        source = "from dynamicio.core import DynamicDataIO\nclass NoSchemaIO(DynamicDataIO):\n    pass\n"
+
+        # When
+        result = subprocess.run([sys.executable, "-O", "-c", source], capture_output=True, text=True, check=False)
+
+        # Then
+        assert result.returncode != 0
+        assert "SchemaNotDeclaredError" in result.stderr

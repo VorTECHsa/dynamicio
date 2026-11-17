@@ -81,6 +81,7 @@ def session_for(connection_string: str) -> Generator[SqlAlchemySession, None, No
         yield session
     finally:
         session.close()  # pylint: disable=no-member
+        engine.dispose()  # a new engine on each use: without this, its pool keeps the connection open until garbage collection
 
 
 class WithPostgres:

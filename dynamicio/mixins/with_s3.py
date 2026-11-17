@@ -37,7 +37,7 @@ from pandas import DataFrame, Series
 
 # Application Imports
 from dynamicio.config.pydantic import DataframeSchema, S3DataEnvironment, S3PathPrefixEnvironment
-from dynamicio.errors import NoObjectsFoundError, ObjectNotFoundError, S3KeyNotFoundError
+from dynamicio.errors import InvalidS3UrlError, NoObjectsFoundError, ObjectNotFoundError, S3KeyNotFoundError
 from dynamicio.mixins import utils, with_local
 from dynamicio.mixins.utils import get_file_type_value
 
@@ -243,7 +243,8 @@ def _s3_filesystem(bucket: str) -> pafs.S3FileSystem:
 
 def _split_s3_url(url: str):
     parsed = urlparse(url)
-    assert parsed.scheme == "s3", f"{url!r} should be an s3 url"
+    if parsed.scheme != "s3":
+        raise InvalidS3UrlError(f"{url!r} should be an s3 url")
     return parsed.netloc, parsed.path.lstrip("/")
 
 
@@ -691,7 +692,8 @@ class WithS3PathPrefix(with_local.WithLocal):
             max_memory_use: The approximate number of bytes to allocate on each yield of Generator
         """
         parsed_url = urllib.parse.urlparse(s3_prefix)
-        assert parsed_url.scheme == "s3", f"{s3_prefix!r} should be an s3 url"
+        if parsed_url.scheme != "s3":
+            raise InvalidS3UrlError(f"{s3_prefix!r} should be an s3 url")
         bucket_name = parsed_url.netloc
         file_prefix = f"{parsed_url.path.strip('/')}/"
         s3_objects_to_fetch = []

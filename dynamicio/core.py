@@ -15,7 +15,16 @@ from pandera.pandas import DataFrameModel
 
 # Application Imports
 from dynamicio.config.pydantic import DataframeSchema, IOEnvironment, SchemaColumn
-from dynamicio.errors import CASTING_WARNING_MSG, NOTICE_MSG, ColumnsDataTypeError, SchemaNotFoundError, SchemaValidationError, TableNameNotFoundError
+from dynamicio.errors import (
+    CASTING_WARNING_MSG,
+    NOTICE_MSG,
+    ColumnsDataTypeError,
+    MissingMixinError,
+    SchemaNotDeclaredError,
+    SchemaNotFoundError,
+    SchemaValidationError,
+    TableNameNotFoundError,
+)
 from dynamicio.schema import validations
 from dynamicio.schema.metrics import get_metric
 from dynamicio.schema.models import dataframe_validator, to_dataframe_schema
@@ -121,9 +130,8 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
         self.schema_validations = self.schema.validations
         self.schema_metrics = self.schema.metrics
 
-        assert hasattr(self, f"_read_from_{source_name}") or hasattr(
-            self, f"_write_to_{source_name}"
-        ), f"No method '_read_from_{source_name}' or '_write_to_{source_name}'. Have you registered a mixin for {source_name}?"
+        if not (hasattr(self, f"_read_from_{source_name}") or hasattr(self, f"_write_to_{source_name}")):
+            raise MissingMixinError(f"No method '_read_from_{source_name}' or '_write_to_{source_name}'. Have you registered a mixin for {source_name}?")
 
     REMOVED_DECLARATIONS = (
         "Dict schemas (`schema = {...}`, `schema_validations`, `schema_metrics`) and YAML schemas (`SCHEMA_FROM_FILE`) were removed in dynamicio 11: "
@@ -134,13 +142,14 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
         """Ensure that every IO class outside dynamicio declares its schema as a Pandera model.
 
         Raises:
-            AssertionError: If the class does not set `schema`
+            SchemaNotDeclaredError: If the class does not set `schema` (a `TypeError` and an `AssertionError`)
             TypeError: If `schema` is not a model (or SCHEMA_FROM_ARGUMENT), or the class still sets `schema_validations` or `schema_metrics`
         """
         module = inspect.getmodule(cls).__name__
         if module == "dynamicio" or module.startswith("dynamicio."):
             return
-        assert "schema" in cls.__dict__, f"{cls.__name__} must define `schema`: a pandera DataFrameModel, or SCHEMA_FROM_ARGUMENT"
+        if "schema" not in cls.__dict__:
+            raise SchemaNotDeclaredError(f"{cls.__name__} must define `schema`: a pandera DataFrameModel, or SCHEMA_FROM_ARGUMENT")
         leftovers = [name for name in ("schema_validations", "schema_metrics") if name in cls.__dict__]
         if leftovers:  # the model's own validations and metrics would replace them without a word
             raise TypeError(f"{cls.__name__} sets {' and '.join(leftovers)}, which the model replaces. {cls.REMOVED_DECLARATIONS}")
