@@ -17,6 +17,7 @@ __all__ = [
     "InvalidDatasetTypeError",
     "NoObjectsFoundError",
     "ObjectNotFoundError",
+    "S3KeyNotFoundError",
     "CASTING_WARNING_MSG",
     "NOTICE_MSG",
 ]
@@ -24,6 +25,7 @@ __all__ = [
 from typing import Any, Optional
 
 from awswrangler.exceptions import NoFilesFound
+from botocore.exceptions import ClientError
 
 
 class DynamicIOError(Exception):
@@ -129,6 +131,30 @@ class ObjectNotFoundError(FileNotFoundError, NoFilesFound):
     It is a `FileNotFoundError`, so a caller can treat it as a missing source. It is also an awswrangler `NoFilesFound`: earlier releases raised
     `NoFilesFound` for a missing key, and callers that catch `NoFilesFound` must not change.
     """
+
+
+class S3KeyNotFoundError(FileNotFoundError, ClientError):
+    """Error raised when the S3 key of a parquet or hdf `file_path` does not exist.
+
+    It is a `FileNotFoundError`, so a caller can treat it as a missing source. It is also the botocore `ClientError` that S3 returned: earlier
+    releases raised that `ClientError` for a missing key, and callers that catch `ClientError` or read its `response` must not change.
+    """
+
+    MISSING_KEY_CODES = ("NoSuchKey", "404")  # GetObject returns NoSuchKey; HeadObject, which `download_fileobj` sends first, returns a bare 404
+
+    def __init__(self, s3_path: str, error: ClientError):
+        """Wrap the `ClientError` of a missing key, keeping its `response` and `operation_name`."""
+        ClientError.__init__(self, error.response, error.operation_name)
+        self.args = (f"No object found at {s3_path}: {error}",)
+
+    def __str__(self) -> str:
+        """The message, not the `OSError` format (which expects errno and strerror)."""
+        return self.args[0]
+
+    @classmethod
+    def is_missing_key(cls, error: ClientError) -> bool:
+        """Whether `error` is the S3 reply for a key that does not exist."""
+        return error.response.get("Error", {}).get("Code") in cls.MISSING_KEY_CODES
 
 
 # Warning messages

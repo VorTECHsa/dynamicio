@@ -1540,7 +1540,9 @@ class TestS3FileWithMissingKey:
         with moto.mock_aws():
             client = boto3.client("s3")
             client.create_bucket(Bucket=constants.MOCK_BUCKET)
-            yield client
+            # A cached shared client may predate the mock and then call AWS, and building a new one rewrites `_CLIENT_CONFIG.retries` in place
+            with patch("dynamicio.mixins.with_s3._shared_s3_client", return_value=client):
+                yield client
 
     @pytest.mark.unit
     @pytest.mark.usefixtures("s3_bucket")
@@ -1591,6 +1593,48 @@ class TestS3FileWithMissingKey:
         # Then
         assert isinstance(error, FileNotFoundError)
         assert isinstance(error, NoFilesFound)
+
+    @pytest.mark.unit
+    @pytest.mark.usefixtures("s3_bucket")
+    @pytest.mark.parametrize("source_key, io_class", [("READ_FROM_S3_PARQUET", ReadS3ParquetIO), ("READ_FROM_S3_HDF", ReadS3HdfIO)], ids=["parquet", "hdf"])
+    def test_a_missing_parquet_or_hdf_key_raises_a_file_not_found_error_that_is_still_a_client_error(self, source_key, io_class):
+        # Given a bucket with no object at the key of the source, and callers that caught the botocore ClientError before
+        config = self._config(source_key)
+
+        # When / Then
+        with pytest.raises(dynamicio.errors.S3KeyNotFoundError, match="No object found at s3://") as raised:
+            io_class(source_config=config).read()
+
+        assert isinstance(raised.value, FileNotFoundError)
+        assert isinstance(raised.value, ClientError)
+        assert raised.value.response["Error"]["Code"] in ("NoSuchKey", "404")
+
+    @pytest.mark.unit
+    @pytest.mark.usefixtures("s3_bucket")
+    @pytest.mark.parametrize("source_key, io_class", [("READ_FROM_S3_PARQUET", ReadS3ParquetIO), ("READ_FROM_S3_HDF", ReadS3HdfIO)], ids=["parquet", "hdf"])
+    def test_a_missing_parquet_or_hdf_key_returns_none_when_missing_ok_is_true(self, source_key, io_class):
+        # Given a bucket with no object at the key of the source
+        config = self._config(source_key)
+
+        # When
+        df = io_class(source_config=config, missing_ok=True).read()
+
+        # Then
+        assert df is None
+
+    @pytest.mark.unit
+    def test_a_client_error_other_than_a_missing_key_is_raised_unchanged(self):
+        # Given a bucket the caller cannot read
+        config = self._config("READ_FROM_S3_PARQUET")
+        client = MagicMock()
+        client.get_object.side_effect = ClientError({"Error": {"Code": "AccessDenied", "Message": "Access Denied"}}, "GetObject")
+
+        # When / Then
+        with patch("dynamicio.mixins.with_s3._shared_s3_client", return_value=client):
+            with pytest.raises(ClientError) as raised:
+                ReadS3ParquetIO(source_config=config, missing_ok=True).read()
+
+        assert not isinstance(raised.value, FileNotFoundError)
 
 
 class TestS3ParquetTransferPaths:

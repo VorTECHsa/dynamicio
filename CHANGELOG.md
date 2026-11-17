@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- fix: a missing S3 key of a parquet or hdf `file_path` raises `S3KeyNotFoundError`, so `missing_ok=True` returns `None` for it as it does for csv and json. The error is a `FileNotFoundError` and also the botocore `ClientError` that S3 returned, with its `response`, so code that catches `ClientError` does not change. Code that catches the narrower `NoSuchKey` class of a boto3 client must catch `ClientError` or `S3KeyNotFoundError`. A parquet read with `filters` still raises the pyarrow `FileNotFoundError`
+- fix: `is_in(..., exact=True)` accepts a list of values. It compared a set with the list and raised `TypeError`. A model compiles `Field(exactly=...)` to a set, so models were not affected
+- perf: `write()` no longer copies the data of a frame that has only the schema columns. A check compared a set with a tuple, was always true, and selected the columns on each write. The output does not change, and the caller's frame keeps its dtypes
+
 ## v11.0.0
 
 Pandera `DataFrameModel` classes are now the only way to declare a schema. Upgrading from 8, 9 or 10: see [Upgrading](https://dynamicio.readthedocs.io/en/latest/guides/schemas-and-validation/#upgrading); `dynamicio migrate` converts the YAML schemas of version 8 and earlier.

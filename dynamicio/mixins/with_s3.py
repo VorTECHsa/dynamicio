@@ -32,12 +32,12 @@ import s3transfer.futures
 import tables
 from awswrangler.exceptions import NoFilesFound
 from botocore.config import Config
-from botocore.exceptions import ConnectionClosedError, ConnectTimeoutError, EndpointConnectionError, IncompleteReadError, ReadTimeoutError, ResponseStreamingError
+from botocore.exceptions import ClientError, ConnectionClosedError, ConnectTimeoutError, EndpointConnectionError, IncompleteReadError, ReadTimeoutError, ResponseStreamingError
 from pandas import DataFrame, Series
 
 # Application Imports
 from dynamicio.config.pydantic import DataframeSchema, S3DataEnvironment, S3PathPrefixEnvironment
-from dynamicio.errors import NoObjectsFoundError, ObjectNotFoundError
+from dynamicio.errors import NoObjectsFoundError, ObjectNotFoundError, S3KeyNotFoundError
 from dynamicio.mixins import utils, with_local
 from dynamicio.mixins.utils import get_file_type_value
 
@@ -689,7 +689,9 @@ class WithS3File:
 
         Raises:
             ObjectNotFoundError: If the key of a csv or json file does not exist. It is a `FileNotFoundError` and an awswrangler
-                `NoFilesFound`. The errors of the parquet and hdf reads for a missing key do not change.
+                `NoFilesFound`.
+            S3KeyNotFoundError: If the key of a parquet or hdf file does not exist. It is a `FileNotFoundError` and the botocore
+                `ClientError` that S3 returned. A parquet read with `filters` raises the pyarrow `FileNotFoundError` instead.
         """
         s3_config = self.sources_config.s3
         file_type = get_file_type_value(s3_config.file_type)
@@ -727,7 +729,13 @@ class WithS3File:
         if kwargs.get("filters") and engine != "fastparquet" and (filesystem is None or isinstance(filesystem, pafs.FileSystem)):
             filesystem = filesystem or _s3_filesystem(bucket)
             return with_local.WithLocal._read_parquet_file(f"{bucket}/{key}", schema, **{**kwargs, "filesystem": filesystem})  # pylint: disable=protected-access
-        return with_local.WithLocal._read_parquet_file(_download_to_memory(bucket, key), schema, **kwargs)  # type: ignore[arg-type] # pylint: disable=protected-access
+        try:
+            fobj = _download_to_memory(bucket, key)
+        except ClientError as error:
+            if S3KeyNotFoundError.is_missing_key(error):
+                raise S3KeyNotFoundError(s3_path, error) from error
+            raise
+        return with_local.WithLocal._read_parquet_file(fobj, schema, **kwargs)  # type: ignore[arg-type] # pylint: disable=protected-access
 
     @staticmethod
     def _read_s3_parquet_directory(s3_path: str, schema: DataframeSchema, **kwargs) -> pd.DataFrame:
@@ -786,7 +794,12 @@ class WithS3File:
         file_path = parsed.path.lstrip("/")
 
         fobj = io.BytesIO()  # Stream file directly into memory (no disk), unlike tempfile or open(...) which write to disk
-        boto3.client("s3").download_fileobj(bucket, file_path, fobj)
+        try:
+            boto3.client("s3").download_fileobj(bucket, file_path, fobj)
+        except ClientError as error:
+            if S3KeyNotFoundError.is_missing_key(error):
+                raise S3KeyNotFoundError(s3_path, error) from error
+            raise
         fobj.seek(0)
 
         df = HdfIO().load(fobj, options=kwargs)
