@@ -32,6 +32,8 @@ class WithKafka:
       `Mapping` as its only argument and returning a `Mapping`, invoked prior to serializing each document. This can be used, for example, to add metadata to each
       document that will be written to the target Kafka topic.
     - `value_serializer: Callable[Mapping, bytes]`: Custom value serialiser; if not provided, a default value-serializer will be used, applied on a Mapping.
+    - `flush_timeout: float`: The most seconds that a write waits for the delivery of its messages. A write raises `TimeoutError` if messages are not
+      delivered in that time. If not provided, a write waits until every message is delivered.
 
     Example:
         >>> # Given
@@ -85,6 +87,8 @@ class WithKafka:
     __value_serializer: Optional[Callable[[Mapping[Any, Any]], bytes]] = None
 
     # N.B.: Please refer to https://github.com/confluentinc/librdkafka/blob/master/CONFIGURATION.md and update this config in case of a major release change.
+    DYNAMICIO_OPTIONS = {"key_generator", "document_transformer", "key_serializer", "value_serializer", "flush_timeout"}  # options of the write, not of the producer
+
     VALID_CONFIG_KEYS = {
         "acks",
         "allow.auto.create.topics",
@@ -263,28 +267,24 @@ class WithKafka:
         self.populate_cls_attributes()
 
         if self.__producer is None:
-            self.__producer = self._get_producer(self.sources_config.kafka.kafka_server, **self.options)
+            producer_options = {name: value for name, value in self.options.items() if name not in self.DYNAMICIO_OPTIONS}
+            self.__producer = self._get_producer(self.sources_config.kafka.kafka_server, **producer_options)
 
         self._send_messages(df=df, topic=self.sources_config.kafka.kafka_topic)
 
     def populate_cls_attributes(self):
-        """Pop dynamicio options (key_generator, document_transformer, key_serializer, value_serializer) from kafka config options."""
+        """Set the dynamicio options (key_generator, document_transformer, key_serializer, value_serializer) from the options, or their defaults.
+
+        The options stay in `self.options`: `_write_to_kafka` keeps them out of the producer configuration.
+        """
         if self.__key_generator is None:
-            self.__key_generator = lambda idx, __: idx  # default key generator uses the dataframe's index
-            if self.options.get("key_generator") is not None:
-                self.__key_generator = self.options.pop("key_generator")
+            self.__key_generator = self.options.get("key_generator") or (lambda idx, __: idx)  # default key generator uses the dataframe's index
         if self.__document_transformer is None:
-            self.__document_transformer = lambda value: value
-            if self.options.get("document_transformer") is not None:
-                self.__document_transformer = self.options.pop("document_transformer")
+            self.__document_transformer = self.options.get("document_transformer") or (lambda value: value)
         if self.__key_serializer is None:
-            self.__key_serializer = self._default_key_serializer
-            if self.options.get("key_serializer") is not None:
-                self.__key_serializer = self.options.pop("key_serializer")
+            self.__key_serializer = self.options.get("key_serializer") or self._default_key_serializer
         if self.__value_serializer is None:
-            self.__value_serializer = self._default_value_serializer
-            if self.options.get("value_serializer") is not None:
-                self.__value_serializer = self.options.pop("value_serializer")
+            self.__value_serializer = self.options.get("value_serializer") or self._default_value_serializer
 
     @utils.allow_options(VALID_CONFIG_KEYS)
     def _get_producer(self, server: str, **options: MutableMapping[str, Any]) -> Producer:
@@ -322,9 +322,18 @@ class WithKafka:
             serialized_key = self.__key_serializer(key)
             serialized_value = self.__value_serializer(transformed_message)
 
-            self.__producer.produce(topic=topic, key=serialized_key, value=serialized_value, on_delivery=self._on_delivery)
+            while True:
+                try:
+                    self.__producer.produce(topic=topic, key=serialized_key, value=serialized_value, on_delivery=self._on_delivery)
+                    break
+                except BufferError:  # the local queue is full: wait for deliveries to make room, then send the message again
+                    self.__producer.poll(1)
+            self.__producer.poll(0)  # serve the delivery callbacks, so a failed delivery raises during the write and not only at the flush
 
-        self.__producer.flush()
+        flush_timeout = self.options.get("flush_timeout")
+        undelivered = self.__producer.flush() if flush_timeout is None else self.__producer.flush(flush_timeout)
+        if undelivered:
+            raise TimeoutError(f"{undelivered} messages to Kafka topic {topic} were not delivered within flush_timeout={flush_timeout}s")
 
     @staticmethod
     def _on_delivery(err, msg):

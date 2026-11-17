@@ -405,3 +405,97 @@ class TestKafkaIO:
 
                 # Ensure only one message is sent successfully before the failure
                 assert mock_kafka_producer_instance.produce_call_count == 1
+
+
+class TestKafkaDelivery:
+    """How a write hands its messages to the producer: queue full, delivery callbacks, flush, and the options it keeps."""
+
+    class Producer(MockKafkaProducer):
+        """A producer whose local queue is full for the first `full` sends, and that has `undelivered` messages left after a flush."""
+
+        def __init__(self, full: int = 0, undelivered: int = 0, **kwargs):
+            super().__init__(**kwargs)
+            self.full, self.undelivered = full, undelivered
+            self.polls, self.flushes = [], []
+
+        def produce(self, topic, key, value, on_delivery):
+            if self.full:
+                self.full -= 1
+                raise BufferError("Local: Queue full")
+            super().produce(topic, key, value, on_delivery)
+
+        def poll(self, timeout=None):
+            self.polls.append(timeout)
+            return 0
+
+        def flush(self, *args):
+            self.flushes.append(args)
+            return self.undelivered
+
+    @staticmethod
+    def write(producer, df, **options):
+        config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="WRITE_TO_KAFKA_JSON")
+        io_obj = WriteKafkaIO(config, **options)
+        with patch("dynamicio.mixins.with_kafka.Producer", return_value=producer) as producer_class:
+            io_obj.write(df)
+        return io_obj, producer_class
+
+    @pytest.mark.unit
+    def test_a_full_queue_is_polled_and_the_message_is_sent_again(self, test_df):
+        # Given
+        producer = self.Producer(full=2)
+
+        # When
+        self.write(producer, test_df)
+
+        # Then
+        assert [message["key"] for message in producer.my_stream] == [b"0", b"1", b"2"]
+        assert producer.polls.count(1) == 2
+
+    @pytest.mark.unit
+    def test_each_send_serves_the_delivery_callbacks(self, test_df):
+        # Given
+        producer = self.Producer()
+
+        # When
+        self.write(producer, test_df)
+
+        # Then
+        assert producer.polls == [0, 0, 0]
+
+    @pytest.mark.unit
+    def test_the_flush_waits_without_a_timeout_by_default(self, test_df):
+        # Given
+        producer = self.Producer()
+
+        # When
+        self.write(producer, test_df)
+
+        # Then
+        assert producer.flushes == [()]
+
+    @pytest.mark.unit
+    def test_messages_left_after_the_flush_timeout_raise_a_timeout_error(self, test_df):
+        # Given
+        producer = self.Producer(undelivered=2)
+
+        # When / Then
+        with pytest.raises(TimeoutError, match="2 messages"):
+            self.write(producer, test_df, flush_timeout=30)
+        assert producer.flushes == [(30,)]
+
+    @pytest.mark.unit
+    def test_the_write_keeps_the_dynamicio_options_and_does_not_give_them_to_the_producer(self, test_df):
+        # Given
+        options = {"key_generator": lambda idx, _: f"k{idx}", "document_transformer": lambda doc: doc, "flush_timeout": 30}
+
+        # When
+        io_obj, producer_class = self.write(self.Producer(), test_df, **options)
+
+        # Then
+        assert {name: io_obj.options[name] for name in options} == options
+        assert not set(options) & producer_class.call_args.kwargs.keys()

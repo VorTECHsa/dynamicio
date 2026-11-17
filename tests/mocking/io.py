@@ -143,8 +143,11 @@ class MockKafkaProducer:
         on_delivery(None, MagicMock())
         self.produce_call_count += 1
 
-    def flush(self):
-        pass
+    def poll(self, timeout=None):  # pylint: disable=unused-argument
+        return 0
+
+    def flush(self, timeout=None):  # pylint: disable=unused-argument
+        return 0
 
     def close(self):
         pass
