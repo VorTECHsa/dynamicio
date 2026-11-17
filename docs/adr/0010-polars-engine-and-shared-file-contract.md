@@ -55,8 +55,11 @@ The reference is the pandas engine of dynamicio 11.1.0. The bug fixes of 11.1.0 
 - The polars engine reads the files from the pandas engine, from 11.1.0 and from 10.x.
 - Each format passes the 4 pairs of writer engine and reader engine against the expected files.
 
-A pandas file can store a named index in its pandas metadata. pandas then gives the index back, and polars reads it as a normal column. On both engines, the schema
-column selection removes the columns that the model does not declare. The two engines then give the same columns.
+A pandas file can store a named index in its pandas metadata. pandas then gives the index back, and polars reads it as a normal column. The schema column selection
+removes the columns that the model does not declare, so the two engines give the same columns.
+- Rule 2 compares the columns of the frame. The pandas index is not part of the contract.
+- A pandas read keeps a named index, and a polars read removes it unless the model declares it as a column. A polars write then cannot give the index back.
+- A repo that needs an index value on both engines writes it as a column (`reset_index()`) and declares it in the model.
 
 ### The 5 open decisions
 
@@ -96,10 +99,16 @@ schema declaration.
    names to the arguments of its own reader and writer, for each format and backend. For example, the CSV option `sep` becomes `separator` inside the polars engine.
    - An option that has no entry for the polars engine raises an error when the user builds the resource. It does not get to the first read or write.
    - The migrate command does not change option names. A resource definition stays the same when a repo changes its engine.
-7. User callables on Kafka. `key_generator`, `document_transformer` and `value_serializer` get one row as a `dict`. The pandas engine makes it with
-   `df.to_dict("records")`. On pandas 2.3.3, numbers and strings are `int`, `float` and `str`, and timestamps are `pd.Timestamp`. A float null is NaN and an `Int64` null is `None`.
-   polars `to_dicts()` gives `datetime` and `None` for all nulls. The polars engine gives the pandas types to these callables, so a custom serializer gives the
-   same bytes on both engines. The default serializers give the same bytes on both engines.
+7. User callables on Kafka. The signatures and the call order of 11.x stay the same on both engines (`with_kafka._send_messages`):
+   - `key_generator(key, row)` gets the key and the row as a `dict`.
+   - `document_transformer(row)` gets the row as a `dict`.
+   - `key_serializer(key)` gets the return value of `key_generator`.
+   - `value_serializer(value)` gets the return value of `document_transformer`, which can be a value of any type.
+
+   The pandas engine makes the row with `df.to_dict("records")`. On pandas 2.3.3, numbers and strings are `int`, `float` and `str`, and timestamps are
+   `pd.Timestamp`. A float null is NaN and an `Int64` null is `None`. polars `to_dicts()` gives `datetime` and `None` for all nulls. The polars engine changes the
+   row to the pandas types before it calls `key_generator` and `document_transformer`, so custom callables give the same bytes on both engines. The default
+   serializers give the same bytes on both engines.
 8. Athena on polars. In v12, the polars engine reads Athena through awswrangler and changes the result to a polars frame inside the engine. The user gets a polars
    frame only. In v13, an install with `[polars]` only has no Athena reads unless a later ADR gives polars its own Athena reader.
 9. JSON on polars. The polars engine reads and writes the `records` orient, with and without `lines`. The pandas orients `split`, `index`, `columns`, `values` and
@@ -115,7 +124,9 @@ schema declaration.
     - Phase 1 moves the pandas code without a change in behavior. The change of order for writes comes in phase 5.
 13. Earlier ADRs apply to the polars engine.
     - [0002](0002-tolerate-missing-columns-in-parquet-prefix-reads.md): a parquet prefix read fills the missing columns with null and logs the same warning. A
-      column that is missing from all objects raises an error. polars gets this with `missing_columns="insert"` and a count of the objects that do not have each column.
+      column that is missing from all objects raises an error. polars infers the schema from the first object, so `missing_columns="insert"` alone fails when
+      the first object does not have a column. The polars engine gives `scan_parquet` an explicit `schema=` from the model columns and dtypes, so the result does
+      not change with the order of the objects. The engine reads the footer of each object to count the objects that do not have each column.
     - [0004](0004-ranged-parquet-reads-with-filters.md): a filtered single-file parquet read reads only the row groups and columns it needs. polars gets this with
       the predicate and projection pushdown of `scan_parquet`.
 14. The dtype map (change 5) covers these pairs at least:
@@ -149,7 +160,7 @@ Phases 1 to 7 are dynamicio 12.0.0.
 
 | Phase | Changes | Scope |
 |---|---|---|
-| 1 | 1 to 4 | Engine seam. An `Engine` protocol with about 15 members (read, scan, cast, validate, write, sink). `PandasEngine` holds the current code without a change in behavior. The old import paths stay as re-exports in 12.x. Each engine has a registry of validators and metrics with the same names. `ModelCompiler` accepts `pandera.polars` models and raises if the model type is not the engine type. `configure()`, the freeze and the wrong-frame error (decision 1). |
+| 1 | 1 to 4 | Engine seam. An `Engine` protocol with about 15 members (read, scan, cast, validate, write, sink). `PandasEngine` calls the current code without a change in behavior. The pandas I/O code stays in the `dynamicio.mixins.*` modules in 12.x, so a patch of a module binding changes the code that runs. A test patches each binding that the dynamicio tests and bon-voyage patch. Each engine has a registry of validators and metrics with the same names. `ModelCompiler` accepts `pandera.polars` models and raises if the model type is not the engine type. `configure()`, the freeze and the wrong-frame error (decision 1). |
 | 2 | 5 to 9 | Schema and null rule. The dtype map (decision 14). The null rule. polars validators and metrics that give the same results as pandas. Each is an expression, and all run in one `collect_all` with the Pandera data checks. |
 | 3 | 17, 18, 20, 26 | Eager codecs and the parquet contract. The pandas metadata through `arrow_schema=`. Footer details equal to 11.1.0: timestamp unit, row group size, snappy compression, coerced timestamps and INT96 reads. JSON (decision 9) and CSV (decision 5) bytes equal to 11.1.0. The option maps (decision 6). Tests use the moto server, because `moto.mock_aws` does not intercept polars S3 calls. |
 | 4 | 10, 14, 16 | `scan()` returns a `LazyFrame`. It checks names and types with `collect_schema()` and adds the casts to the plan. polars reads S3 with a `credential_provider` from the boto3 session. A missing key raises the dynamicio error, so `missing_ok` applies. A prefix read lists the keys with boto3 and makes one `scan_parquet` call that keeps ADR 0002 and ADR 0004 (decision 13). |
@@ -174,7 +185,9 @@ of the 4 pairs use it to compare frames.
   this cost. The success measure limits it.
 - The polars engine changes Kafka rows to pandas Python types (decision 7). This costs time on each message, and keeps custom serializers correct.
 - hdf, pickle and the JSON orients of decision 9 have no polars reader. A polars repo must move these resources to parquet or to `records` JSON first.
-- Tests that patch internals, such as bon-voyage patching `dynamicio.mixins.with_s3.wr`, keep working in 12.x through the re-exports.
+- Tests that patch internals, such as bon-voyage patching `dynamicio.mixins.with_s3.wr.s3.read_json`, keep working in 12.x. The pandas I/O code stays in
+  the `dynamicio.mixins.*` modules, so the code looks up `wr` in the module that the test patches. A re-export only does not give this, because a moved function
+  looks up `wr` in its new module.
 
 ## References
 
