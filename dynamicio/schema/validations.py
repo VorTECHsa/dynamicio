@@ -2,7 +2,7 @@
 
 # pylint: disable=too-many-positional-arguments
 import operator
-from typing import Any, Callable, Dict, NamedTuple, Set
+from typing import Any, Callable, Collection, Dict, NamedTuple, Set
 
 import pandas as pd  # type: ignore
 
@@ -108,7 +108,7 @@ def has_acceptable_percentage_of_nulls(
 
 
 @validator
-def is_in(dataset: str, df: pd.DataFrame, column: str, categorical_values: Set[str], exact: bool = False) -> ValidationResult:
+def is_in(dataset: str, df: pd.DataFrame, column: str, categorical_values: Collection[str], exact: bool = False) -> ValidationResult:
     """Checks if the column only has allowed categorical values as per the set provided.
 
     Note:
@@ -126,6 +126,7 @@ def is_in(dataset: str, df: pd.DataFrame, column: str, categorical_values: Set[s
         `Validation.Result.message` is a message (usually used in exceptions), and `Validation.Result.value` is no_of_not_acceptable
     """
     unique_values = set(df[column][df[column].notna()].unique())
+    categorical_values = set(categorical_values)  # the comparisons below are set comparisons: `set < list` raises TypeError
 
     if exact:
         return _validate_all_acceptable_categoricals_are_present(categorical_values, unique_values, column, dataset, df)
