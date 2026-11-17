@@ -1808,6 +1808,20 @@ class TestS3FileWithMissingKey:
 
         assert not isinstance(raised.value, FileNotFoundError)
 
+    @pytest.mark.unit
+    def test_a_client_error_other_than_a_missing_key_is_raised_unchanged_for_hdf(self):
+        # Given a bucket the caller cannot read
+        config = self._config("READ_FROM_S3_HDF")
+        client = MagicMock()
+        client.download_fileobj.side_effect = ClientError({"Error": {"Code": "AccessDenied", "Message": "Access Denied"}}, "HeadObject")
+
+        # When / Then
+        with patch("dynamicio.mixins.with_s3.boto3.client", return_value=client):
+            with pytest.raises(ClientError) as raised:
+                ReadS3HdfIO(source_config=config, missing_ok=True).read()
+
+        assert not isinstance(raised.value, FileNotFoundError)
+
 
 class TestS3ParquetTransferPaths:
     """Single-file parquet goes through one shared boto3 client by default; awswrangler only on request."""
@@ -2735,3 +2749,22 @@ class TestS3UrlCheck:
         # When/Then
         with pytest.raises(dynamicio.errors.InvalidS3UrlError, match="should be an s3 url"):
             next(dynamicio.mixins.with_s3.WithS3PathPrefix._iter_s3_files(None, "file:///tmp/data/"))  # pylint: disable=protected-access
+
+
+class TestIterS3Files:
+    """`_iter_s3_files` yields the objects under a prefix that have the extension, in batches of at most `max_memory_use` bytes."""
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("max_memory_use", [-1, 1], ids=["one-batch", "one-object-per-batch"])
+    def test_iter_s3_files_yields_each_object_with_the_extension(self, moto_s3_bucket, max_memory_use):
+        # Given
+        bodies = {"data/a.h5": b"first", "data/sub/b.h5": b"second", "data/c.csv": b"other", "elsewhere/d.h5": b"outside"}
+        for key, body in bodies.items():
+            moto_s3_bucket.put_object(Bucket=constants.MOCK_BUCKET, Key=key, Body=body)
+        owner = types.SimpleNamespace(boto3_client=moto_s3_bucket)
+
+        # When
+        fetched = [fobj.read() for fobj in dynamicio.mixins.with_s3.WithS3PathPrefix._iter_s3_files(owner, f"s3://{constants.MOCK_BUCKET}/data/", file_ext=".h5", max_memory_use=max_memory_use)]  # pylint: disable=protected-access
+
+        # Then
+        assert sorted(fetched) == [b"first", b"second"]
