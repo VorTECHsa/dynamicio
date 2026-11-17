@@ -82,15 +82,20 @@ column selection removes the columns that the model does not declare. The two en
 5. The CSV index. When `index` is not `False`, the polars CSV writer writes the same leading column as pandas. This column has an empty header and the row
    numbers 0 to n-1. The default of `index` is `True` on both engines, as in `DataFrame.to_csv`. The schema column selection removes this column at read time on both engines.
    The migrate command writes `index` into each CSV resource definition.
+   - The byte contract covers a pandas frame with the default `RangeIndex` only. A polars frame has no index, so the leading column has the row numbers.
+   - A pandas frame with a named index writes the index name in the header. The polars equivalent is a normal first column with that name and `index: false`.
+     These 2 writes give equal bytes.
+   - A pandas frame with an unnamed index that is not a `RangeIndex`, or with a `MultiIndex`, has no polars equivalent. The contract does not cover these frames.
 
 YAML schemas are not an open decision. dynamicio 11.0 removed them ([0009](0009-pandera-models-as-the-only-schema-declaration.md)), and Pandera models are the only
 schema declaration.
 
 ### Other decisions
 
-6. Resource options. Each engine has a fixed map from the 11.x option names to its own option names, for each format and backend.
+6. Resource options. The 11.x option names are the one option vocabulary of a resource definition on both engines. Each engine has a fixed map from these
+   names to the arguments of its own reader and writer, for each format and backend. For example, the CSV option `sep` becomes `separator` inside the polars engine.
    - An option that has no entry for the polars engine raises an error when the user builds the resource. It does not get to the first read or write.
-   - The migrate command writes the polars names into the resource definitions.
+   - The migrate command does not change option names. A resource definition stays the same when a repo changes its engine.
 7. User callables on Kafka. `key_generator`, `document_transformer` and `value_serializer` get one row as a `dict`. The pandas engine makes it with
    `df.to_dict("records")`. On pandas 2.3.3, numbers and strings are `int`, `float` and `str`, and timestamps are `pd.Timestamp`. A float null is NaN and an `Int64` null is `None`.
    polars `to_dicts()` gives `datetime` and `None` for all nulls. The polars engine gives the pandas types to these callables, so a custom serializer gives the
@@ -103,9 +108,11 @@ schema declaration.
     not return an eager frame under a lazy name.
 11. Tests on both engines. The pytest plugin of `dynamicio.testharness` (the `pytest11` entry point) adds an option `--dynamicio-engine=pandas|polars` that calls `configure()` before the first test. CI runs
     one job for each engine, because one process cannot change its engine.
-12. One order of steps (change 12). Both engines select the columns, cast, validate and then compute metrics. The pandas engine casts inside validation in 11.x
-    (`DynamicDataIO._has_valid_dtypes`). Change 12 is a change in behavior of the pandas engine in 12.0, and the CHANGELOG states it. Phase 1 moves the pandas
-    code without a change in behavior. The change of order comes in phase 5.
+12. One order of steps (change 12). Both engines select the columns, cast, validate and then compute metrics, on reads and on writes.
+    - Reads in 11.x already use this order: `read()` calls `_apply_schema()` before the validations and metrics. Reads do not change.
+    - Writes in 11.x validate and compute metrics on the frame of the user, and then call `_apply_schema()` before the writer. In 12.0, writes cast before
+      they validate. This is a change in behavior of the pandas engine for writes only, and the CHANGELOG states it.
+    - Phase 1 moves the pandas code without a change in behavior. The change of order for writes comes in phase 5.
 13. Earlier ADRs apply to the polars engine.
     - [0002](0002-tolerate-missing-columns-in-parquet-prefix-reads.md): a parquet prefix read fills the missing columns with null and logs the same warning. A
       column that is missing from all objects raises an error. polars gets this with `missing_columns="insert"` and a count of the objects that do not have each column.
@@ -124,6 +131,12 @@ schema declaration.
     | `timedelta64[unit]` | `Duration(unit)` |
 
     A dtype that has no pair raises an error when the polars engine compiles the model.
+
+    The map is many to one: `int64` and `Int64` both become `Int64`, and `object` and `string` both become `String`. The pandas metadata of a polars file
+    (change 17) needs the pandas dtype of each column, so the polars model keeps it.
+    - The migrate command writes the pandas dtype of each field into the field metadata of the polars model, for example `pa.Field(metadata={"pandas_dtype": "int64"})`.
+    - A polars model without this metadata uses a fixed reverse map: `Int64` to `int64` when the column has no null and to `Int64` when it has a null,
+      `String` to `object`, `Boolean` to `bool`, and `Float64` to `float64`. The contract covers the pandas dtypes of this reverse map only.
 
 ### Success measure
 
