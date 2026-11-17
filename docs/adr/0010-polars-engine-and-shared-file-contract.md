@@ -40,7 +40,8 @@ byte in a message causes a full publish.
 ### Rule 1: a repo uses one engine for all its resources
 
 The engine is a setting for the process. The resource definition has no `engine:` key. `read()` returns a frame of the engine, and `write()` raises an error when it
-gets a frame from the other engine. A repo moves to polars in one step with `dynamicio migrate --engine polars`.
+gets a frame from the other engine. A repo moves to polars in one step with `dynamicio migrate --engine polars`. This is a new mode
+of the `dynamicio migrate` command, which changes YAML schemas to Pandera models in 11.x. The new mode changes `pandera.pandas` models to `pandera.polars` models.
 
 The engine does not give the user a frame of the other engine. There is one exception inside the engine. The polars engine reads Athena through awswrangler and changes
 the result to a polars frame (decision 8).
@@ -100,7 +101,7 @@ schema declaration.
    `table` have no polars reader. A polars JSON resource with one of them raises an error when the user builds the resource, as hdf and pickle do.
 10. On the pandas engine, `scan()` and `sink()` raise `NotImplementedError`. The message names the polars engine. pandas has no lazy frame, so these methods do
     not return an eager frame under a lazy name.
-11. Tests on both engines. `dynamicio.testharness` adds a pytest option `--dynamicio-engine=pandas|polars` that calls `configure()` before the first test. CI runs
+11. Tests on both engines. The pytest plugin of `dynamicio.testharness` (the `pytest11` entry point) adds an option `--dynamicio-engine=pandas|polars` that calls `configure()` before the first test. CI runs
     one job for each engine, because one process cannot change its engine.
 12. One order of steps (change 12). Both engines select the columns, cast, validate and then compute metrics. The pandas engine casts inside validation in 11.x
     (`DynamicDataIO._has_valid_dtypes`). Change 12 is a change in behavior of the pandas engine in 12.0, and the CHANGELOG states it. Phase 1 moves the pandas
