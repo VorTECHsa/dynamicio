@@ -2764,7 +2764,9 @@ class TestIterS3Files:
         owner = types.SimpleNamespace(boto3_client=moto_s3_bucket)
 
         # When
-        fetched = [fobj.read() for fobj in dynamicio.mixins.with_s3.WithS3PathPrefix._iter_s3_files(owner, f"s3://{constants.MOCK_BUCKET}/data/", file_ext=".h5", max_memory_use=max_memory_use)]  # pylint: disable=protected-access
+        fetched = [
+            fobj.read() for fobj in dynamicio.mixins.with_s3.WithS3PathPrefix._iter_s3_files(owner, f"s3://{constants.MOCK_BUCKET}/data/", file_ext=".h5", max_memory_use=max_memory_use)
+        ]  # pylint: disable=protected-access
 
         # Then
         assert sorted(fetched) == [b"first", b"second"]
