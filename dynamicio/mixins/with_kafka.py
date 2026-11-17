@@ -32,8 +32,9 @@ class WithKafka:
       `Mapping` as its only argument and returning a `Mapping`, invoked prior to serializing each document. This can be used, for example, to add metadata to each
       document that will be written to the target Kafka topic.
     - `value_serializer: Callable[Mapping, bytes]`: Custom value serialiser; if not provided, a default value-serializer will be used, applied on a Mapping.
-    - `flush_timeout: float`: The most seconds that a write waits for the delivery of its messages. A write raises `TimeoutError` if messages are not
-      delivered in that time. If not provided, a write waits until every message is delivered.
+    - `flush_timeout: float`: The most seconds that the final `flush()` of a write waits for the delivery of its messages. A write raises `TimeoutError` if
+      messages are not delivered in that time. If not provided, a write waits until every message is delivered. It is not a deadline for the whole write:
+      the time that a send waits for room in a full local queue comes before the flush and is not part of the timeout.
 
     Example:
         >>> # Given
