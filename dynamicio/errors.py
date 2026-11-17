@@ -118,10 +118,10 @@ class InvalidDatasetTypeError(DynamicIOError):
 
 
 class NoObjectsFoundError(FileNotFoundError, ValueError):
-    """Error raised when an S3 path prefix, or an S3 parquet `file_path` that ends in `/`, has no objects.
+    """Error raised when an S3 path prefix, an S3 parquet `file_path` that ends in `/`, or a `local_batch` source has no objects.
 
     It is a `FileNotFoundError`, so a caller can treat it as a missing source. It is also a `ValueError`: in earlier releases, a path prefix
-    with no objects raised the pandas `ValueError: No objects to concatenate`, and callers that catch `ValueError` must not change.
+    or a `local_batch` source with no objects raised the pandas `ValueError: No objects to concatenate`, and callers that catch `ValueError` must not change.
     """
 
 

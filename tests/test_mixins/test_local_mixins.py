@@ -8,10 +8,12 @@ from unittest.mock import patch
 import numpy as np
 import pandas as pd
 import pytest
+import yaml
 
 # Application Imports
 import dynamicio
 from dynamicio.config import IOConfig
+from dynamicio.errors import NoObjectsFoundError
 from tests import constants
 from tests.conftest import max_pklproto_hdf
 from tests.constants import TEST_RESOURCES
@@ -913,3 +915,51 @@ class TestBatchLocal:
         # Then
         pd.testing.assert_frame_equal(expected_concatenated_01_df, concatenated_01_df)
         pd.testing.assert_frame_equal(expected_concatenated_02_df, concatenated_02_df)
+
+
+class TestBatchLocalSources:
+    """A `local_batch` source with no matching files, or with a relative path."""
+
+    FRAME = pd.DataFrame({"id": [1, 2], "foo_name": ["a", "b"], "bar": [10, 20]})
+
+    @staticmethod
+    def config(tmp_path, location: dict):
+        definition = tmp_path / "definitions.yaml"
+        definition.write_text(yaml.safe_dump({"BATCH": {"LOCAL": {"type": "local_batch", "local": {"file_type": "parquet", **location}}}}))
+        return IOConfig(path_to_source_yaml=str(definition), env_identifier="LOCAL", dynamic_vars=constants).get(source_key="BATCH")
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("location", [{"path_prefix": "empty/"}, {"dynamic_file_path": "empty/**/part_1.parquet"}], ids=["path_prefix", "dynamic_file_path"])
+    def test_no_matching_files_raises_a_no_objects_found_error(self, tmp_path, location):
+        # Given
+        (tmp_path / "empty").mkdir()
+        location = {key: f"{tmp_path}/{value}" for key, value in location.items()}
+
+        # When / Then
+        with pytest.raises(NoObjectsFoundError) as error:
+            ReadFromBatchLocalParquet(source_config=self.config(tmp_path, location)).read()
+        assert isinstance(error.value, FileNotFoundError) and isinstance(error.value, ValueError)
+
+    @pytest.mark.unit
+    def test_no_matching_files_with_missing_ok_returns_none(self, tmp_path):
+        # Given
+        config = self.config(tmp_path, {"path_prefix": f"{tmp_path}/absent/"})
+
+        # When
+        df = ReadFromBatchLocalParquet(source_config=config, missing_ok=True).read()
+
+        # Then
+        assert df is None
+
+    @pytest.mark.unit
+    def test_a_relative_path_prefix_reads_its_files(self, tmp_path, monkeypatch):
+        # Given
+        (tmp_path / "batch").mkdir()
+        self.FRAME.to_parquet(tmp_path / "batch" / "a.parquet")
+        monkeypatch.chdir(tmp_path)
+
+        # When
+        df = ReadFromBatchLocalParquet(source_config=self.config(tmp_path, {"path_prefix": "batch/"})).read()
+
+        # Then
+        pd.testing.assert_frame_equal(df, self.FRAME)

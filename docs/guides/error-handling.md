@@ -10,7 +10,7 @@ first argument the error was raised with (`None` if there was none).
 | `SchemaNotFoundError` | The IO class has no schema (for example `SCHEMA_FROM_ARGUMENT` without a `schema=` argument) |
 | `MissingSchemaDefinition` | The resource definition has no schema where one is required |
 | `InvalidDatasetTypeError` | `file_type` is not one of `parquet`, `json`, `csv`, `h5` |
-| `NoObjectsFoundError` | An S3 prefix (or a parquet `file_path` ending in `/`) holds no objects. It is both a `FileNotFoundError` and a `ValueError` |
+| `NoObjectsFoundError` | An S3 prefix (or a parquet `file_path` ending in `/`) holds no objects, or no file matches a `local_batch` source. It is both a `FileNotFoundError` and a `ValueError` |
 | `ObjectNotFoundError` | The S3 key of a `csv` or `json` `file_path` does not exist. It is both a `FileNotFoundError` and an awswrangler `NoFilesFound` |
 | `S3KeyNotFoundError` | The S3 key of a `parquet` or `hdf` `file_path` does not exist. It is both a `FileNotFoundError` and the botocore `ClientError` that S3 returned |
 
