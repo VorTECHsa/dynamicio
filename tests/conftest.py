@@ -590,8 +590,8 @@ def mock_temporary_directory():
 
 
 @pytest.fixture
-def mock_listdir():
-    with patch.object(os, "listdir", return_value=local_obj_file_names) as mock:
+def mock_walk():
+    with patch.object(os, "walk", return_value=[("temp", [], local_obj_file_names)]) as mock:
         yield mock
 
 

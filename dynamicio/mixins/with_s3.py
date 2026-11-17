@@ -613,12 +613,13 @@ class WithS3PathPrefix(with_local.WithLocal):
             else:
                 s3_sync_down(full_path, temp_dir)
 
-            files = os.listdir(temp_dir)
+            # The sync keeps the key layout, so a sub-prefix is a directory. Sort on the key form of the path: the order of the S3 listing, which the parquet read keeps
+            files = sorted((os.path.join(root, name) for root, _, names in os.walk(temp_dir) for name in names), key=lambda path: os.path.relpath(path, temp_dir).replace(os.sep, "/"))
             if not files:
                 raise NoObjectsFoundError(f"No objects found under {full_path}")
             dfs: List[DataFrame] = []
             for file in files:
-                df = getattr(self, f"_read_{file_type}_file")(os.path.join(temp_dir, file), self.schema, **options)  # type: ignore
+                df = getattr(self, f"_read_{file_type}_file")(file, self.schema, **options)  # type: ignore
                 if len(df) > 0:
                     dfs.append(df)
 

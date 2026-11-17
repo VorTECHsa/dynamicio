@@ -990,7 +990,7 @@ class TestS3PathPrefixIO:
 
     @pytest.mark.unit
     # pylint: disable=unused-argument
-    def test_s3_sync_is_called_with_correct_s3_path_and_aws_command_when_loading_a_path_prefix_with_env_as_cloud_s3(self, mock_listdir, mock_temporary_directory, mock__read_hdf_file):
+    def test_s3_sync_is_called_with_correct_s3_path_and_aws_command_when_loading_a_path_prefix_with_env_as_cloud_s3(self, mock_walk, mock_temporary_directory, mock__read_hdf_file):
         # Given
         s3_hdf_cloud_config = IOConfig(
             path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/input.yaml")),
@@ -1008,7 +1008,7 @@ class TestS3PathPrefixIO:
     @pytest.mark.unit
     # pylint: disable=unused-argument
     def test__read_hdf_file_is_called_with_correct_local_file_path_when_loading_a_path_prefix_with_env_as_cloud_s3_and_type_as_hdf(
-        self, mock_listdir, mock_temporary_directory, mock__read_hdf_file
+        self, mock_walk, mock_temporary_directory, mock__read_hdf_file
     ):
         # Given
         s3_hdf_cloud_config = IOConfig(
@@ -1120,7 +1120,7 @@ class TestS3PathPrefixIO:
     # pylint: disable=unused-argument
     def test__read_csv_file_is_called_with_correct_local_file_path_when_loading_a_path_prefix_with_env_as_cloud_s3_and_type_as_csv(
         self,
-        mock_listdir,
+        mock_walk,
         mock_temporary_directory,
         mock__read_csv_file,
     ):
@@ -1152,7 +1152,7 @@ class TestS3PathPrefixIO:
     # pylint: disable=unused-argument
     def test__read_json_file_is_called_with_correct_local_file_path_when_loading_a_path_prefix_with_env_as_cloud_s3_and_type_as_json(
         self,
-        mock_listdir,
+        mock_walk,
         mock_temporary_directory,
         mock__read_json_file,
     ):
@@ -1184,7 +1184,7 @@ class TestS3PathPrefixIO:
     # pylint: disable=unused-argument
     def test_a_concatenated_hdf_file_is_returned_with_schema_columns_when_loading_a_path_prefix_with_env_as_cloud_s3_and_type_as_hdf(
         self,
-        mock_listdir,
+        mock_walk,
         mock_temporary_directory,
         mock__read_hdf_file,
     ):
@@ -1217,7 +1217,7 @@ class TestS3PathPrefixIO:
     def test_a_ValueError_is_raised_if_file_type_is_not_supported_when_loading_a_path_prefix_with_env_as_cloud_s3(
         self,
         tmp_path,
-        mock_listdir,
+        mock_walk,
         mock_temporary_directory,
         mock__read_hdf_file,
     ):
@@ -1515,6 +1515,72 @@ class TestS3PathPrefixWithNoObjects:
 
         # Then
         assert df.empty and df.columns.tolist() == ["id", "foo_name", "bar"]
+
+
+class TestS3PathPrefixWithSubPrefixes:
+    """A csv, json or hdf prefix reads the objects of its sub-prefixes too, in key order, as a parquet prefix does.
+
+    The reads go to moto's in-memory S3. Before, the sub-prefix was a directory of the temporary download and the read raised `IsADirectoryError`.
+    """
+
+    FRAMES = {"a": pd.DataFrame({"id": [1], "foo_name": ["a"], "bar": [10]}), "b": pd.DataFrame({"id": [2], "foo_name": ["b"], "bar": [20]})}
+
+    @pytest.fixture
+    def s3_bucket(self, monkeypatch):
+        moto = pytest.importorskip("moto")  # dev dependency only; the dependency-ranges CI jobs do not install it
+        for name, value in {"AWS_ACCESS_KEY_ID": "testing", "AWS_SECRET_ACCESS_KEY": "testing", "AWS_DEFAULT_REGION": "us-east-1"}.items():
+            monkeypatch.setenv(name, value)
+        monkeypatch.delenv("AWS_PROFILE", raising=False)
+        with moto.mock_aws():
+            client = boto3.client("s3")
+            client.create_bucket(Bucket=constants.MOCK_BUCKET)
+            with patch("dynamicio.mixins.with_s3._shared_s3_client", return_value=client):
+                yield client
+
+    @staticmethod
+    def body(df: pd.DataFrame, file_type: str) -> bytes:
+        if file_type == "csv":
+            return df.to_csv(index=False).encode()
+        if file_type == "json":
+            return df.to_json(orient="records").encode()
+        fobj = io.BytesIO()
+        dynamicio.mixins.with_s3.HdfIO().save(df, fobj)
+        return fobj.getvalue()
+
+    @staticmethod
+    def config(tmp_path, file_type: str, location: dict):
+        definition = tmp_path / "definitions.yaml"
+        definition.write_text(yaml.safe_dump({"PREFIX": {"CLOUD": {"type": "s3_path_prefix", "s3": {"bucket": constants.MOCK_BUCKET, "file_type": file_type, **location}}}}))
+        return IOConfig(path_to_source_yaml=str(definition), env_identifier="CLOUD", dynamic_vars=constants).get(source_key="PREFIX")
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("file_type, extension", [("csv", "csv"), ("json", "json"), ("hdf", "h5")])
+    def test_a_prefix_reads_the_objects_of_its_sub_prefixes_in_key_order(self, s3_bucket, tmp_path, file_type, extension):
+        # Given one object under the prefix and one under a sub-prefix, put in the reverse of key order
+        s3_bucket.put_object(Bucket=constants.MOCK_BUCKET, Key=f"data/sub/b.{extension}", Body=self.body(self.FRAMES["b"], file_type))
+        s3_bucket.put_object(Bucket=constants.MOCK_BUCKET, Key=f"data/a.{extension}", Body=self.body(self.FRAMES["a"], file_type))
+        config = self.config(tmp_path, file_type, {"path_prefix": "data/"})
+
+        # When
+        df = ReadS3HdfIO(source_config=config).read()
+
+        # Then
+        pd.testing.assert_frame_equal(df, pd.concat(self.FRAMES.values(), ignore_index=True))
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("file_type, extension", [("csv", "csv"), ("json", "json"), ("hdf", "h5")])
+    def test_a_dynamic_file_path_reads_the_matching_objects_of_every_sub_prefix(self, s3_bucket, tmp_path, file_type, extension):
+        # Given the part of runner 1 in 2 sub-prefixes, and a part of runner 2 that the pattern does not match
+        s3_bucket.put_object(Bucket=constants.MOCK_BUCKET, Key=f"data/x/part_1.{extension}", Body=self.body(self.FRAMES["a"], file_type))
+        s3_bucket.put_object(Bucket=constants.MOCK_BUCKET, Key=f"data/y/part_1.{extension}", Body=self.body(self.FRAMES["b"], file_type))
+        s3_bucket.put_object(Bucket=constants.MOCK_BUCKET, Key=f"data/y/part_2.{extension}", Body=self.body(self.FRAMES["b"], file_type))
+        config = self.config(tmp_path, file_type, {"dynamic_file_path": f"data/**/part_{{runner_id}}.{extension}"})
+
+        # When
+        df = ReadS3HdfIO(source_config=config, runner_id=1).read()
+
+        # Then
+        pd.testing.assert_frame_equal(df, pd.concat(self.FRAMES.values(), ignore_index=True))
 
 
 class TestS3FileWithMissingKey:
