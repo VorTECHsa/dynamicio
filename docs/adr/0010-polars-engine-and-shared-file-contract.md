@@ -148,6 +148,17 @@ schema declaration.
     - The migrate command writes the pandas dtype of each field into the field metadata of the polars model, for example `pa.Field(metadata={"pandas_dtype": "int64"})`.
     - A polars model without this metadata uses a fixed reverse map: `Int64` to `int64` when the column has no null and to `Int64` when it has a null,
       `String` to `object`, `Boolean` to `bool`, and `Float64` to `float64`. The contract covers the pandas dtypes of this reverse map only.
+15. Integration tests on both engines run against [floci](https://github.com/floci-io/floci), a local AWS emulator. One container gives S3, RDS with
+    `postgres:16` and MSK with a Redpanda broker.
+    - `moto.mock_aws` does not intercept polars S3 calls. SQLite, which the unit tests use for Postgres, has no COPY.
+    - A session fixture starts floci, pinned by image digest, with the Docker socket. The integration tests skip when Docker is not available. CI runs them in
+      one job on one Python version.
+    - The unit tests stay on moto and the mocks. floci accepts a DeleteObjects call with more than 1000 keys, and S3 rejects it. Thus the test of the
+      batches of 1000 keys stays on moto.
+    - Athena stays a mock, because floci does not emulate Athena.
+    - A spike on floci 2.5.0 ran 12 checks of the path-prefix writes and the missing-key errors. The results were the same as on S3 in the development
+      account. The spike also passed the Postgres COPY of 11.x with the NULL rule, and the Kafka message bytes.
+    - The fixture is change 26. RND-25426 adds it with the pandas integration tests before phase 1.
 
 ### Success measure
 
@@ -162,13 +173,13 @@ Phases 1 to 7 are dynamicio 12.0.0.
 |---|---|---|
 | 1 | 1 to 4 | Engine seam. An `Engine` protocol with about 15 members (read, scan, cast, validate, write, sink). `PandasEngine` calls the current code without a change in behavior. The pandas I/O code stays in the `dynamicio.mixins.*` modules in 12.x, so a patch of a module binding changes the code that runs. A test patches each binding that the dynamicio tests and bon-voyage patch. Each engine has a registry of validators and metrics with the same names. `ModelCompiler` accepts `pandera.polars` models and raises if the model type is not the engine type. `configure()`, the freeze and the wrong-frame error (decision 1). |
 | 2 | 5 to 9 | Schema and null rule. The dtype map (decision 14). The null rule. polars validators and metrics that give the same results as pandas. Each is an expression, and all run in one `collect_all` with the Pandera data checks. |
-| 3 | 17, 18, 20, 26 | Eager codecs and the parquet contract. The pandas metadata through `arrow_schema=`. Footer details equal to 11.1.0: timestamp unit, row group size, snappy compression, coerced timestamps and INT96 reads. JSON (decision 9) and CSV (decision 5) bytes equal to 11.1.0. The option maps (decision 6). Tests use the moto server, because `moto.mock_aws` does not intercept polars S3 calls. |
+| 3 | 17, 18, 20, 26 | Eager codecs and the parquet contract. The pandas metadata through `arrow_schema=`. Footer details equal to 11.1.0: timestamp unit, row group size, snappy compression, coerced timestamps and INT96 reads. JSON (decision 9) and CSV (decision 5) bytes equal to 11.1.0. The option maps (decision 6). The polars S3 tests run against floci (decision 15). |
 | 4 | 10, 14, 16 | `scan()` returns a `LazyFrame`. It checks names and types with `collect_schema()` and adds the casts to the plan. polars reads S3 with a `credential_provider` from the boto3 session. A missing key raises the dynamicio error, so `missing_ok` applies. A prefix read lists the keys with boto3 and makes one `scan_parquet` call that keeps ADR 0002 and ADR 0004 (decision 13). |
 | 5 | 11, 12, 13, 15 | `sink()` runs all sinks in one `collect_all`. Writes go through a boto3 multipart upload (64 MiB parts, 4 in flight, ACL) that completes only on success and aborts on error. Both engines select columns, cast, validate and then compute metrics, in that order (decision 12). Both engines raise the same dynamicio errors. |
-| 6 | 19, 21, 22, 23 | A footer-only read and a sink from several scans that merges the pandas metadata of all parts (bon-voyage #913). Postgres COPY in chunks of 100k rows with the same NULL rule. Kafka keys from decision 4 and row types from decision 7, with batches, `poll()` and a flush timeout. Athena through awswrangler (decision 8). hdf and pickle resources raise on polars when the user builds the resource. |
+| 6 | 19, 21, 22, 23 | A footer-only read and a sink from several scans that merges the pandas metadata of all parts (bon-voyage #913). Postgres COPY in chunks of 100k rows with the same NULL rule, tested on floci RDS. Kafka keys from decision 4 and row types from decision 7, with batches, `poll()` and a flush timeout, tested on the floci broker. Athena through awswrangler (decision 8). hdf and pickle resources raise on polars when the user builds the resource. |
 | 7 | 24, 25, 27 | No fork on polars, and `POLARS_MAX_THREADS` applies. `dynamicio.testharness` comparisons for each engine and the `--dynamicio-engine` option (decision 11). The `dynamicio[polars]` extra. CI runs all tests on both engines. The migrate command, one demo for each engine and the docs. |
 
-Change 26 starts in phase 3, because the first polars S3 test needs the moto server.
+Change 26 is the floci fixture of decision 15. RND-25426 delivers it before phase 1, with the pandas integration tests. The polars S3 tests of phase 3 are its first polars users.
 
 Change 5 replaces the neutral dtype vocabulary of the first proposal. That vocabulary was for YAML schemas, which dynamicio 11.0 removed. A pandas repo declares
 `pandera.pandas` models and a polars repo declares `pandera.polars` models. The polars writer uses the dtype map to build the pandas metadata (change 17). The tests
@@ -191,5 +202,5 @@ of the 4 pairs use it to compare frames.
 
 ## References
 
-- Jira: the epic is RND-25348, the phases 1 to 7 are RND-25354 and the bon-voyage move is RND-25361.
+- Jira: the epic is RND-25348, the phases 1 to 7 are RND-25354, the floci integration tests are RND-25426 and the bon-voyage move is RND-25361.
 - dynamicio 11.1.0 bug fixes: PR #139.
