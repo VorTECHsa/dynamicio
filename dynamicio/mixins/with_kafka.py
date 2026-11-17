@@ -326,7 +326,11 @@ class WithKafka:
                 try:
                     self.__producer.produce(topic=topic, key=serialized_key, value=serialized_value, on_delivery=self._on_delivery)
                     break
-                except BufferError:  # the local queue is full: wait for deliveries to make room, then send the message again
+                except BufferError as error:  # the local queue is full: wait for deliveries to make room, then send the message again
+                    if len(self.__producer) == 0:
+                        raise BufferError(
+                            f"The message with key {key!r} does not fit in the empty local queue of the producer: increase `queue.buffering.max.kbytes` or make the message smaller"
+                        ) from error
                     self.__producer.poll(1)
             self.__producer.poll(0)  # serve the delivery callbacks, so a failed delivery raises during the write and not only at the flush
 

@@ -536,7 +536,8 @@ class WithS3PathPrefix(with_local.WithLocal):
             - `overwrite`: they are deleted.
             - `overwrite_partitions`: those of the partitions that the write writes to are deleted, the others stay.
         S3 cannot restore a deleted object. The old objects are deleted only after every new object is uploaded, and an object
-        that the write replaces is not deleted. An object that another writer puts under the prefix during the write stays.
+        that the write replaces is not deleted. A new key that another writer puts under the prefix during the write stays, but a
+        key that was there before the write is deleted even if another writer replaced it during the write: one writer per prefix at a time.
 
         Args:
             df (pd.DataFrame): the DataFrame to be written to S3
@@ -567,8 +568,8 @@ class WithS3PathPrefix(with_local.WithLocal):
             written = set(s3_sync_up(temp_dir, full_path_prefix))
 
         stale = [key for key in old_keys if key not in written]
-        if mode == "overwrite_partitions":
-            partitions = {key.rsplit("/", 1)[0] for key in written}
+        if mode == "overwrite_partitions":  # the partitions are the directories of the data files: fastparquet also writes `_metadata` files at the root
+            partitions = {key.rsplit("/", 1)[0] for key in written if not key.rsplit("/", 1)[-1].startswith("_")}
             stale = [key for key in stale if any("/".join(key.split("/")[:depth]) in partitions for depth in range(1, key.count("/") + 1))]
         if stale:
             logger.info(f"[s3] mode={mode!r}: deleting {len(stale)} old objects under {full_path_prefix}")
@@ -813,7 +814,12 @@ class WithS3File:
         kwargs.pop("columns", None)
         kwargs.setdefault("boto3_session", _shared_boto3_session())
         # A one-element list is read as-is; a bare string is treated as a prefix and costs an extra ListObjectsV2.
-        return wr.s3.read_parquet(path=[s3_path], columns=(list(schema.columns.keys())), **kwargs)
+        try:
+            return wr.s3.read_parquet(path=[s3_path], columns=(list(schema.columns.keys())), **kwargs)
+        except ClientError as error:
+            if S3KeyNotFoundError.is_missing_key(error):
+                raise S3KeyNotFoundError(s3_path, error) from error
+            raise
 
     @staticmethod
     @utils.allow_options(utils.args_of(wr.s3.read_csv, pd.read_csv))

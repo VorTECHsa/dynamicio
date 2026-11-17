@@ -56,11 +56,12 @@ A write to an `s3_path_prefix` needs the `partition_cols` option. Each write giv
 | `overwrite_partitions` | dynamicio deletes them in the partitions that the write writes to. The other partitions stay. |
 
 The values and their meaning are those of `mode` in `awswrangler.s3.to_parquet`. dynamicio deletes the old objects only
-after it uploads all new objects, so a failed upload deletes nothing. An object that another writer puts under the
-prefix during the write stays.
+after it uploads all new objects, so a failed upload deletes nothing. A new key that another writer puts under the
+prefix during the write stays. dynamicio lists the old keys before the upload. If another writer replaces one of
+these keys during the write, dynamicio deletes the new object of the other writer.
 
 Caution: S3 cannot restore a deleted object unless the bucket has versioning. Make sure that the prefix holds only
-the data of this resource before you set `overwrite`.
+the data of this resource before you set `overwrite`. Make sure that only one writer writes to the prefix at a time.
 
 ## Athena I/O
 

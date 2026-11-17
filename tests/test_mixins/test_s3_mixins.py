@@ -1646,6 +1646,19 @@ class TestS3PathPrefixWriteModes:
         assert self.new_keys(keys) == {"data/some_dir/col_2=a": 1, "data/some_dir/col_2=b": 1}
 
     @pytest.mark.unit
+    def test_overwrite_partitions_with_fastparquet_keeps_the_partitions_that_the_write_does_not_write(self, bucket):
+        # Given fastparquet, which also writes `_metadata` and `_common_metadata` at the root of the dataset
+
+        # When
+        self.write(mode="overwrite_partitions", engine="fastparquet")
+
+        # Then
+        keys = self.keys(bucket)
+        assert "data/some_dir/_metadata" in keys
+        assert "data/some_dir/col_2=a/old.parquet" not in keys
+        assert {"data/some_dir/col_2=z/old.parquet", *self.OTHER_KEYS} <= keys.keys()
+
+    @pytest.mark.unit
     @pytest.mark.parametrize("mode", ["overwrite", "overwrite_partitions"])
     def test_an_object_that_the_write_replaces_is_kept(self, bucket, mode):
         # Given a writer that names its file like an old object
@@ -1790,6 +1803,30 @@ class TestS3FileWithMissingKey:
 
         # When
         df = io_class(source_config=config, missing_ok=True).read()
+
+        # Then
+        assert df is None
+
+    @pytest.mark.unit
+    @pytest.mark.usefixtures("moto_s3_bucket")
+    def test_a_missing_parquet_key_read_by_awswrangler_raises_s3_key_not_found_error(self):
+        # Given an option that only awswrangler takes, so awswrangler reads the key
+        config = self._config("READ_FROM_S3_PARQUET")
+
+        # When / Then
+        with pytest.raises(dynamicio.errors.S3KeyNotFoundError, match="No object found at s3://") as raised:
+            ReadS3ParquetIO(source_config=config, s3_additional_kwargs={}).read()
+
+        assert isinstance(raised.value, ClientError)
+
+    @pytest.mark.unit
+    @pytest.mark.usefixtures("moto_s3_bucket")
+    def test_a_missing_parquet_key_read_by_awswrangler_returns_none_when_missing_ok_is_true(self):
+        # Given an option that only awswrangler takes, so awswrangler reads the key
+        config = self._config("READ_FROM_S3_PARQUET")
+
+        # When
+        df = ReadS3ParquetIO(source_config=config, s3_additional_kwargs={}, missing_ok=True).read()
 
         # Then
         assert df is None

@@ -411,12 +411,15 @@ class TestKafkaDelivery:
     """How a write hands its messages to the producer: queue full, delivery callbacks, flush, and the options it keeps."""
 
     class Producer(MockKafkaProducer):
-        """A producer whose local queue is full for the first `full` sends, and that has `undelivered` messages left after a flush."""
+        """A producer whose local queue is full for the first `full` sends, holds `queued` messages, and has `undelivered` messages left after a flush."""
 
-        def __init__(self, full: int = 0, undelivered: int = 0, **kwargs):
+        def __init__(self, full: int = 0, undelivered: int = 0, queued: int = 1, **kwargs):
             super().__init__(**kwargs)
-            self.full, self.undelivered = full, undelivered
+            self.full, self.undelivered, self.queued = full, undelivered, queued
             self.polls, self.flushes = [], []
+
+        def __len__(self):
+            return self.queued
 
         def produce(self, topic, key, value, on_delivery):
             if self.full:
@@ -455,6 +458,17 @@ class TestKafkaDelivery:
         # Then
         assert [message["key"] for message in producer.my_stream] == [b"0", b"1", b"2"]
         assert producer.polls.count(1) == 2
+
+    @pytest.mark.unit
+    def test_a_message_that_does_not_fit_in_an_empty_queue_raises(self, test_df):
+        # Given a queue that is empty and still refuses the message
+        producer = self.Producer(full=10**6, queued=0)
+
+        # When / Then
+        with pytest.raises(BufferError, match="queue.buffering.max"):
+            self.write(producer, test_df)
+
+        assert not producer.polls
 
     @pytest.mark.unit
     def test_each_send_serves_the_delivery_callbacks(self, test_df):
