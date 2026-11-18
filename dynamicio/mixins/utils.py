@@ -5,6 +5,7 @@
 import inspect
 import logging
 import string
+import threading
 from contextlib import contextmanager
 from enum import Enum
 from functools import wraps
@@ -126,23 +127,28 @@ def resolve_template(path: str, options: MutableMapping[str, Any]) -> str:  # py
     return path
 
 
+_PICKLE_PROTOCOL_LOCK = threading.RLock()
+
+
 @contextmanager
 def pickle_protocol(protocol: Optional[int]):
     """Downgrade to the provided pickle protocol within the context manager.
+
+    The lock serializes the callers of this context manager only. `pickle.HIGHEST_PROTOCOL` is process-wide, so another thread that pickles while the
+    context is open also gets the downgraded protocol. Lock order: take this lock before `with_local.hdf_lock`, never the other way, or two writers deadlock.
 
     Args:
         protocol: The number of the protocol HIGHEST_PROTOCOL to downgrade to. Defaults to 4, which covers python 3.4 and higher.
     """
     import pickle  # pylint: disable=import-outside-toplevel
 
-    previous = pickle.HIGHEST_PROTOCOL
-    try:
-        pickle.HIGHEST_PROTOCOL = 4
-        if protocol:
-            pickle.HIGHEST_PROTOCOL = protocol
-        yield
-    finally:
-        pickle.HIGHEST_PROTOCOL = previous
+    with _PICKLE_PROTOCOL_LOCK:  # `HIGHEST_PROTOCOL` is global: two threads that overlap here would restore each other's value, and one would remain
+        previous = pickle.HIGHEST_PROTOCOL
+        try:
+            pickle.HIGHEST_PROTOCOL = protocol or 4
+            yield
+        finally:
+            pickle.HIGHEST_PROTOCOL = previous
 
 
 def get_file_type_value(file_type: Union[str, Enum]) -> str:

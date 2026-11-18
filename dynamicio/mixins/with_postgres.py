@@ -80,7 +80,10 @@ def session_for(connection_string: str) -> Generator[SqlAlchemySession, None, No
     try:
         yield session
     finally:
-        session.close()  # pylint: disable=no-member
+        try:
+            session.close()  # pylint: disable=no-member
+        finally:
+            engine.dispose()  # a new engine on each use: without this, its pool keeps the connection open until garbage collection
 
 
 class WithPostgres:
@@ -278,8 +281,10 @@ class WithPostgres:
             session.execute(text(f"DELETE FROM {table_name};"))
 
         # Upload data using PostgreSQL's COPY FROM CSV mechanism for performance
-        with tempfile.NamedTemporaryFile(mode="r+") as temp_file:
-            df.to_csv(temp_file, index=False, header=False, sep="\t", doublequote=False, escapechar="\\", quoting=csv.QUOTE_NONE)
+        # `newline=""`: a text file without it reads a `\r` in a value back as `\n`, so COPY would get a different value.
+        # `lineterminator="\r\n"`: with QUOTE_NONE, Python 3.10 escapes only the characters of the line terminator, so a `\r` in a value would end the line.
+        with tempfile.NamedTemporaryFile(mode="r+", encoding="utf-8", newline="") as temp_file:
+            df.to_csv(temp_file, index=False, header=False, sep="\t", doublequote=False, escapechar="\\", quoting=csv.QUOTE_NONE, lineterminator="\r\n")
             temp_file.flush()
             temp_file.seek(0)
 

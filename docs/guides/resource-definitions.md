@@ -355,8 +355,10 @@ state_df = PreviousRunStateIO(source_config=input_config.get(source_key="PREVIOU
 
 When the source does not exist, `read()` and `async_read()` return `None` and log a warning. "Does not exist" means
 that the reader raised a `FileNotFoundError`. This includes a missing local file, a missing S3 csv or json key
-(`dynamicio.errors.ObjectNotFoundError`) and an S3 path prefix with no objects (`dynamicio.errors.NoObjectsFoundError`).
-A missing S3 parquet or hdf key raises a botocore `ClientError`, so `missing_ok` does not cover it. All other errors,
+(`dynamicio.errors.ObjectNotFoundError`), a missing S3 parquet or hdf key (`dynamicio.errors.S3KeyNotFoundError`) and an
+S3 path prefix or a `local_batch` source with no objects (`dynamicio.errors.NoObjectsFoundError`). A parquet read with `filters` raises the
+`FileNotFoundError` of pyarrow for a missing key, which `missing_ok` also covers. A missing bucket raises the botocore
+`ClientError`, so `missing_ok` does not cover it. All other errors,
 for example a denied access, raise as before. The default is `False`. The caller handles the `None`, so the argument
 is in the code of the caller and not in the resource definition.
 

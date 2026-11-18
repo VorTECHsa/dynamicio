@@ -173,6 +173,21 @@ class TestHasAcceptableCategoricalValues:
         assert validation.valid is True and validation.value == 0 and validation.message == "All acceptable categorical values for TEST[activity] are present"
 
     @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "categorical_values, valid, value",
+        [(["load", "discharge", "pass_through"], True, 0), (["load", "discharge", "pass_through", "one_more"], False, 1), (["load", "discharge"], False, 3)],
+    )
+    def test_exact_accepts_a_list_of_categorical_values_like_a_set(self, input_df, categorical_values, valid, value):
+        # Given
+        df = input_df
+
+        # When
+        validation = is_in("TEST", df, column="activity", categorical_values=categorical_values, exact=True)
+
+        # Then
+        assert validation.valid is valid and validation.value == value
+
+    @pytest.mark.unit
     def test_returns_false_if_columns_unique_vals_are_less_than_the_acceptable_categoricals_when_exact_is_set(self, input_df):
         # Given
         df = input_df

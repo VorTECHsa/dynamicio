@@ -3,6 +3,8 @@
 # pylint: disable=no-member, protected-access, too-few-public-methods, broad-exception-raised
 
 import logging
+import math
+import time
 from typing import Any, Callable, Mapping, MutableMapping, Optional
 
 import pandas as pd  # type: ignore
@@ -32,6 +34,10 @@ class WithKafka:
       `Mapping` as its only argument and returning a `Mapping`, invoked prior to serializing each document. This can be used, for example, to add metadata to each
       document that will be written to the target Kafka topic.
     - `value_serializer: Callable[Mapping, bytes]`: Custom value serialiser; if not provided, a default value-serializer will be used, applied on a Mapping.
+    - `flush_timeout: float`: The most seconds that a write waits for Kafka with no progress. A write raises `TimeoutError` if a full local queue has no room
+      for a message in that time, or if the final `flush()` delivers no message in that time. Progress is a smaller local queue: an error event of the producer,
+      such as a refused connection, is not progress. If not provided, a write waits until every message is delivered. It is not a deadline for the whole write:
+      a write that keeps delivering messages can take longer.
 
     Example:
         >>> # Given
@@ -85,6 +91,8 @@ class WithKafka:
     __value_serializer: Optional[Callable[[Mapping[Any, Any]], bytes]] = None
 
     # N.B.: Please refer to https://github.com/confluentinc/librdkafka/blob/master/CONFIGURATION.md and update this config in case of a major release change.
+    DYNAMICIO_OPTIONS = {"key_generator", "document_transformer", "key_serializer", "value_serializer", "flush_timeout"}  # options of the write, not of the producer
+
     VALID_CONFIG_KEYS = {
         "acks",
         "allow.auto.create.topics",
@@ -263,28 +271,28 @@ class WithKafka:
         self.populate_cls_attributes()
 
         if self.__producer is None:
-            self.__producer = self._get_producer(self.sources_config.kafka.kafka_server, **self.options)
+            producer_options = {name: value for name, value in self.options.items() if name not in self.DYNAMICIO_OPTIONS}
+            self.__producer = self._get_producer(self.sources_config.kafka.kafka_server, **producer_options)
 
         self._send_messages(df=df, topic=self.sources_config.kafka.kafka_topic)
 
     def populate_cls_attributes(self):
-        """Pop dynamicio options (key_generator, document_transformer, key_serializer, value_serializer) from kafka config options."""
+        """Set the dynamicio options (key_generator, document_transformer, key_serializer, value_serializer) from the options, or their defaults.
+
+        The options stay in `self.options`: `_write_to_kafka` keeps them out of the producer configuration.
+        """
         if self.__key_generator is None:
-            self.__key_generator = lambda idx, __: idx  # default key generator uses the dataframe's index
-            if self.options.get("key_generator") is not None:
-                self.__key_generator = self.options.pop("key_generator")
+            key_generator = self.options.get("key_generator")
+            self.__key_generator = (lambda idx, __: idx) if key_generator is None else key_generator  # default key generator uses the dataframe's index
         if self.__document_transformer is None:
-            self.__document_transformer = lambda value: value
-            if self.options.get("document_transformer") is not None:
-                self.__document_transformer = self.options.pop("document_transformer")
+            document_transformer = self.options.get("document_transformer")
+            self.__document_transformer = (lambda value: value) if document_transformer is None else document_transformer
         if self.__key_serializer is None:
-            self.__key_serializer = self._default_key_serializer
-            if self.options.get("key_serializer") is not None:
-                self.__key_serializer = self.options.pop("key_serializer")
+            key_serializer = self.options.get("key_serializer")
+            self.__key_serializer = self._default_key_serializer if key_serializer is None else key_serializer
         if self.__value_serializer is None:
-            self.__value_serializer = self._default_value_serializer
-            if self.options.get("value_serializer") is not None:
-                self.__value_serializer = self.options.pop("value_serializer")
+            value_serializer = self.options.get("value_serializer")
+            self.__value_serializer = self._default_value_serializer if value_serializer is None else value_serializer
 
     @utils.allow_options(VALID_CONFIG_KEYS)
     def _get_producer(self, server: str, **options: MutableMapping[str, Any]) -> Producer:
@@ -315,6 +323,10 @@ class WithKafka:
     def _send_messages(self, df: pd.DataFrame, topic: str) -> None:
         logger.debug(f"Sending {len(df)} messages to Kafka topic: {topic}.")
         messages = df.reset_index(drop=True).to_dict("records")
+        flush_timeout = self.options.get("flush_timeout")
+        # checked before the first message: a TypeError after the queue holds messages would leave them to the cached producer, and a retry would send them twice
+        if flush_timeout is not None and (isinstance(flush_timeout, bool) or not isinstance(flush_timeout, (int, float)) or flush_timeout < 0 or math.isnan(flush_timeout)):
+            raise ValueError(f"`flush_timeout` must be a number of seconds of 0 or more, got {flush_timeout!r}")  # confluent-kafka takes a negative timeout as no timeout
 
         for idx, message in zip(df.index.values, messages):
             key = self.__key_generator(idx, message)
@@ -322,9 +334,44 @@ class WithKafka:
             serialized_key = self.__key_serializer(key)
             serialized_value = self.__value_serializer(transformed_message)
 
-            self.__producer.produce(topic=topic, key=serialized_key, value=serialized_value, on_delivery=self._on_delivery)
+            waiting_since, fewest_queued = None, None
+            while True:
+                try:
+                    self.__producer.produce(topic=topic, key=serialized_key, value=serialized_value, on_delivery=self._on_delivery)
+                    break
+                except BufferError as error:  # the local queue is full: wait for deliveries to make room, then send the message again
+                    queued = len(self.__producer)
+                    if queued == 0:
+                        raise BufferError(
+                            f"The message with key {key!r} does not fit in the empty local queue of the producer: increase `queue.buffering.max.kbytes` or make the message smaller"
+                        ) from error
+                    # progress is a smaller queue: `poll` also counts error events, and a broker that refuses connections gives one on each retry
+                    if waiting_since is None or queued < fewest_queued:
+                        waiting_since, fewest_queued = time.monotonic(), queued
+                    if flush_timeout is not None and time.monotonic() - waiting_since >= flush_timeout:
+                        raise TimeoutError(f"The local queue of the producer for Kafka topic {topic} had no room for {flush_timeout}s: no message was delivered") from error
+                    self.__producer.poll(1 if flush_timeout is None else min(1, flush_timeout))
+            self.__producer.poll(0)  # serve the delivery callbacks, so a failed delivery raises during the write and not only at the flush
 
-        self.__producer.flush()
+        self._flush(topic, flush_timeout)
+
+    def _flush(self, topic: str, flush_timeout: Optional[float]) -> None:
+        """Wait for the delivery of the queued messages, and raise `TimeoutError` after `flush_timeout` seconds with no delivery.
+
+        A single `flush(flush_timeout)` would be a deadline for the whole queue, and a slow queue that still delivers would raise.
+        """
+        if flush_timeout is None:
+            undelivered = self.__producer.flush()
+        else:
+            undelivered, waiting_since = len(self.__producer), time.monotonic()
+            while undelivered:
+                left = self.__producer.flush(min(1, flush_timeout))
+                if left < undelivered:
+                    undelivered, waiting_since = left, time.monotonic()
+                elif time.monotonic() - waiting_since >= flush_timeout:
+                    break
+        if undelivered:
+            raise TimeoutError(f"{undelivered} messages to Kafka topic {topic} were not delivered: no message was delivered for flush_timeout={flush_timeout}s")
 
     @staticmethod
     def _on_delivery(err, msg):

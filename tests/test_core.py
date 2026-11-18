@@ -3,6 +3,8 @@ import asyncio
 import io
 import logging
 import os
+import subprocess
+import sys
 import time
 from typing import Mapping, Tuple
 from unittest.mock import patch
@@ -18,8 +20,9 @@ import dynamicio
 from dynamicio import UnifiedIO
 from dynamicio.config import IOConfig
 from dynamicio.core import CASTING_WARNING_MSG, SCHEMA_FROM_ARGUMENT, DynamicDataIO
-from dynamicio.errors import ColumnsDataTypeError, SchemaNotFoundError, SchemaValidationError
+from dynamicio.errors import ColumnsDataTypeError, MissingMixinError, SchemaNotDeclaredError, SchemaNotFoundError, SchemaValidationError
 from dynamicio.mixins import WithS3File
+from dynamicio.schema import DataModel, Field
 from tests import constants
 from tests.mocking.io import (
     CsvWithSomeBool,
@@ -1170,3 +1173,100 @@ class TestAsyncCoreIO:
 
         # Then
         assert duration < 0.3  # four sequential 0.1s writes would take >= 0.4s; leave headroom for slow CI runners
+
+
+class TestWriteColumnSelection:
+    """`write()` drops the columns the schema does not list, and leaves the caller's frame as it was."""
+
+    class IdAndValue(DataModel, dataset="id_and_value"):
+        id: Series[int] = Field(nullable=False)
+        value: Series[float] = Field(nullable=True)
+
+    @staticmethod
+    def write_and_capture(df: pd.DataFrame) -> pd.DataFrame:
+        source_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/external.yaml")),
+            env_identifier="LOCAL",
+            dynamic_vars=constants,
+        ).get(source_key="WRITE_TO_S3_PARQUET")
+        io_instance = UnifiedIO(source_config=source_config, schema=TestWriteColumnSelection.IdAndValue)
+        with patch.object(UnifiedIO, "_write_to_local") as write_to_local:
+            io_instance.write(df)
+        return write_to_local.call_args.args[0]
+
+    @pytest.mark.unit
+    def test_write_with_only_the_schema_columns_does_not_copy_the_data(self):
+        # Given
+        df = pd.DataFrame({"value": [1.5, 2.5], "id": [1, 2]})
+
+        # When
+        written = self.write_and_capture(df)
+
+        # Then
+        assert list(written.columns) == ["value", "id"]
+        assert np.shares_memory(written["id"].to_numpy(), df["id"].to_numpy())
+
+    @pytest.mark.unit
+    def test_write_drops_the_columns_the_schema_does_not_list(self):
+        # Given
+        df = pd.DataFrame({"id": [1, 2], "extra": ["a", "b"], "value": [1.5, 2.5]})
+
+        # When
+        written = self.write_and_capture(df)
+
+        # Then
+        assert list(written.columns) == ["id", "value"]
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("columns", [{"id": [1.0, 2.0], "value": [1.5, 2.5]}, {"id": [1.0, 2.0], "value": [1.5, 2.5], "extra": ["a", "b"]}])
+    def test_write_casts_a_copy_and_leaves_the_callers_frame_unchanged(self, columns):
+        # Given
+        df = pd.DataFrame(columns)
+
+        # When
+        written = self.write_and_capture(df)
+
+        # Then
+        assert written["id"].dtype == "int64"
+        assert df["id"].dtype == "float64"
+
+
+class TestChecksWithoutAssert:
+    """The checks on an IO class raise typed errors, which `python -O` keeps, and stay `AssertionError`s for the callers that catch that."""
+
+    @pytest.mark.unit
+    def test_class_without_schema_raises_schema_not_declared_error(self):
+        # When/Then
+        with pytest.raises(SchemaNotDeclaredError) as error:
+
+            class NoSchemaIO(DynamicDataIO):  # pylint: disable=unused-variable
+                pass
+
+        assert isinstance(error.value, TypeError) and isinstance(error.value, AssertionError)
+
+    @pytest.mark.unit
+    def test_class_without_mixin_for_its_source_raises_missing_mixin_error(self):
+        # Given
+        athena_cloud_config = IOConfig(
+            path_to_source_yaml=(os.path.join(constants.TEST_RESOURCES, "definitions/external.yaml")),
+            env_identifier="CLOUD",
+            dynamic_vars=constants,
+        ).get(source_key="READ_FROM_ATHENA")
+
+        # When/Then
+        with pytest.raises(MissingMixinError, match="athena") as error:
+            SubclassMissingMixin(source_config=athena_cloud_config)
+
+        assert isinstance(error.value, TypeError) and isinstance(error.value, AssertionError)
+
+    @pytest.mark.unit
+    def test_class_without_schema_still_raises_under_python_optimize(self):
+        # Given
+        source = "from dynamicio.core import DynamicDataIO\nclass NoSchemaIO(DynamicDataIO):\n    pass\n"
+
+        # When
+        result = subprocess.run([sys.executable, "-O", "-c", source], capture_output=True, text=True, check=False)
+
+        # Then
+        assert result.returncode != 0
+        assert "SchemaNotDeclaredError" in result.stderr

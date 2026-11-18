@@ -16,7 +16,7 @@ import urllib.parse
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
-from typing import IO, Any, Callable, Dict, Generator, List, Mapping, Optional, TypeVar, Union
+from typing import IO, Any, Callable, Dict, Generator, List, Mapping, NoReturn, Optional, Set, Tuple, TypeVar, Union
 from urllib.parse import urlparse
 
 import awswrangler as wr
@@ -32,12 +32,12 @@ import s3transfer.futures
 import tables
 from awswrangler.exceptions import NoFilesFound
 from botocore.config import Config
-from botocore.exceptions import ConnectionClosedError, ConnectTimeoutError, EndpointConnectionError, IncompleteReadError, ReadTimeoutError, ResponseStreamingError
+from botocore.exceptions import ClientError, ConnectionClosedError, ConnectTimeoutError, EndpointConnectionError, IncompleteReadError, ReadTimeoutError, ResponseStreamingError
 from pandas import DataFrame, Series
 
 # Application Imports
 from dynamicio.config.pydantic import DataframeSchema, S3DataEnvironment, S3PathPrefixEnvironment
-from dynamicio.errors import NoObjectsFoundError, ObjectNotFoundError
+from dynamicio.errors import InvalidS3UrlError, NoObjectsFoundError, ObjectNotFoundError, S3KeyNotFoundError
 from dynamicio.mixins import utils, with_local
 from dynamicio.mixins.utils import get_file_type_value
 
@@ -243,7 +243,8 @@ def _s3_filesystem(bucket: str) -> pafs.S3FileSystem:
 
 def _split_s3_url(url: str):
     parsed = urlparse(url)
-    assert parsed.scheme == "s3", f"{url!r} should be an s3 url"
+    if parsed.scheme != "s3":
+        raise InvalidS3UrlError(f"{url!r} should be an s3 url")
     return parsed.netloc, parsed.path.lstrip("/")
 
 
@@ -353,7 +354,7 @@ def _upload_file(local_path: str, bucket: str, key: str, acl: str):
     _retry_transient(attempt, f"s3://{bucket}/{key}")
 
 
-def s3_sync_up(source_dir: str, dest_url: str, acl: str = "bucket-owner-full-control", max_concurrency: int = _SYNC_MAX_CONCURRENCY):
+def s3_sync_up(source_dir: str, dest_url: str, acl: str = "bucket-owner-full-control", max_concurrency: int = _SYNC_MAX_CONCURRENCY) -> List[str]:
     """Upload every file under `source_dir` to an S3 prefix, preserving the relative layout.
 
     Args:
@@ -361,19 +362,61 @@ def s3_sync_up(source_dir: str, dest_url: str, acl: str = "bucket-owner-full-con
         dest_url: `s3://bucket/prefix` to upload into.
         acl: Canned ACL applied to every uploaded object.
         max_concurrency: Number of concurrent upload threads.
+
+    Returns:
+        The keys of the uploaded objects.
     """
     bucket, key_prefix = _split_s3_url(dest_url)
     key_prefix = f"{key_prefix.rstrip('/')}/" if key_prefix else ""
 
     with ThreadPoolExecutor(max_workers=max_concurrency) as pool:
-        futures = []
+        futures, keys = [], []
         for root, _, files in os.walk(source_dir):
             for name in files:
                 local_path = os.path.join(root, name)
-                relative_key = os.path.relpath(local_path, source_dir).replace(os.sep, "/")
-                futures.append(pool.submit(_upload_file, local_path, bucket, f"{key_prefix}{relative_key}", acl))
+                key = f"{key_prefix}{os.path.relpath(local_path, source_dir).replace(os.sep, '/')}"
+                keys.append(key)
+                futures.append(pool.submit(_upload_file, local_path, bucket, key, acl))
         for future in futures:
             future.result()
+    return keys
+
+
+class S3Keys:
+    """List and delete the objects under an S3 prefix, for the `overwrite` and `overwrite_partitions` modes of a path prefix write."""
+
+    DELETE_BATCH_SIZE = 1000  # the most keys one DeleteObjects request accepts
+
+    @staticmethod
+    def list(source_url: str) -> List[str]:
+        """Return the keys of every object under an S3 prefix, in listing (lexicographic key) order."""
+        bucket, key_prefix = _split_s3_url(source_url)
+        key_prefix = f"{key_prefix.rstrip('/')}/" if key_prefix else ""
+
+        def attempt():  # a broken connection during the listing repeats the whole listing
+            pages = _shared_s3_client().get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=key_prefix)
+            return [obj["Key"] for page in pages for obj in page.get("Contents", [])]
+
+        return _retry_transient(attempt, f"listing of {source_url}")
+
+    @staticmethod
+    def delete(bucket: str, keys: List[str]):
+        """Delete objects of a bucket, at most 1000 to a request.
+
+        Raises:
+            RuntimeError: If S3 could not delete some of the objects.
+        """
+        for start in range(0, len(keys), S3Keys.DELETE_BATCH_SIZE):
+            S3Keys._delete_batch(bucket, keys[start : start + S3Keys.DELETE_BATCH_SIZE])
+
+    @staticmethod
+    def _delete_batch(bucket: str, keys: List[str]):
+        def attempt():
+            return _shared_s3_client().delete_objects(Bucket=bucket, Delete={"Objects": [{"Key": key} for key in keys], "Quiet": True})
+
+        errors = _retry_transient(attempt, f"delete of {len(keys)} objects in s3://{bucket}").get("Errors", [])
+        if errors:  # DeleteObjects answers 200 and lists the keys it could not delete
+            raise RuntimeError(f"Could not delete {len(errors)} objects in s3://{bucket}, for example {[(error['Key'], error['Code']) for error in errors[:5]]}")
 
 
 _DIRECT_TRANSFER_MAX_BYTES = 16 * 1024**2  # larger objects use the multipart transfer manager
@@ -485,6 +528,8 @@ class WithS3PathPrefix(with_local.WithLocal):
         """Per-process shared S3 client."""
         return _shared_s3_client()
 
+    WRITE_MODES = ("append", "overwrite", "overwrite_partitions")  # the values of the awswrangler `mode` option of `wr.s3.to_parquet`, with the same meaning
+
     def _write_to_s3_path_prefix(self, df: pd.DataFrame):
         """Write a DataFrame to an S3 path prefix.
 
@@ -493,12 +538,29 @@ class WithS3PathPrefix(with_local.WithLocal):
             - `path_prefix`
             - `file_type`
 
+        The `mode` option sets what happens to the objects that are under the prefix before the write:
+            - `append` (the default): they stay, so a second write of the same rows adds them again.
+            - `overwrite`: they are deleted.
+            - `overwrite_partitions`: those of the partitions that the write writes to are deleted, the others stay. A partition is the
+              `col=value` directories of `partition_cols`, and a file directly under the prefix is in no partition. It needs the pyarrow engine,
+              because fastparquet does not encode the values in the directory names.
+        The 2 delete modes delete only with `allow_delete: true`. Without it the write warns and appends, as 11.0.0 did for any `mode`.
+        With `allow_delete: true`, a `mode` that is not in `WRITE_MODES` raises.
+        A delete mode on an empty key prefix (the whole bucket) raises, and so does `overwrite` of an empty DataFrame. S3 cannot restore a deleted object.
+        The old objects are deleted only after every new object is uploaded, and an object that the write replaces is not deleted.
+        A new key that another writer puts under the prefix during the write stays, but a key that was there before the write is
+        deleted even if another writer replaced it during the write: one writer per prefix at a time.
+
         Args:
             df (pd.DataFrame): the DataFrame to be written to S3
 
         Raises:
             ValueError: In case `path_prefix` is missing from config
-            ValueError: In case the `partition_cols` arg is missing while trying to write a parquet file
+            ValueError: In case the `partition_cols` arg is missing while trying to write a parquet file, `allow_delete` is true and `mode` is not
+                one of `WRITE_MODES`, a delete mode has an empty key prefix, or `mode` is `overwrite` and the DataFrame is empty
+            ValueError: If `mode` is `overwrite_partitions` and `partition_cols` is empty or the engine is fastparquet
+            TypeError: If `allow_delete` is not a bool
+            RuntimeError: If S3 could not delete some of the old objects
         """
         s3_config = self.sources_config.s3
         file_type = get_file_type_value(s3_config.file_type)
@@ -507,14 +569,61 @@ class WithS3PathPrefix(with_local.WithLocal):
         options = dict(self.options)
         if "partition_cols" not in options:
             raise ValueError("`partition_cols` is required as an option to write partitioned parquet files to S3")
+        mode = options.pop("mode", "append")
+        allow_delete = options.pop("allow_delete", False)
+        if not isinstance(allow_delete, bool):  # a YAML `allow_delete: "false"` is a nonempty string, which is true
+            raise TypeError(f"`allow_delete` must be true or false, got {allow_delete!r}")
 
-        bucket = s3_config.bucket
-        path_prefix = s3_config.path_prefix
-        full_path_prefix = utils.resolve_template(f"s3://{bucket}/{path_prefix}", options)
+        full_path_prefix = utils.resolve_template(f"s3://{s3_config.bucket}/{s3_config.path_prefix}", options)
+        bucket, key_prefix = _split_s3_url(full_path_prefix)
+        key_prefix = key_prefix.strip("/")
 
+        if mode != "append" and not allow_delete:  # up to 11.0.0 `mode` had no effect on a path prefix write: deleting needs an explicit opt-in
+            logger.warning(f"[s3] mode={mode!r} deletes old objects only with `allow_delete: true`: appending to {full_path_prefix}, as in dynamicio 11.0.0")
+            mode = "append"
+        if mode not in self.WRITE_MODES:
+            raise ValueError(f"`mode` must be one of {self.WRITE_MODES}, got {mode!r}")
+        if mode == "overwrite" and len(df) == 0:  # pyarrow writes no file for an empty DataFrame, so every old object would be deleted
+            raise ValueError(f"mode='overwrite' with an empty DataFrame would delete every object under {full_path_prefix}: nothing was written")
+        if mode != "append" and not key_prefix:
+            raise ValueError(f"mode={mode!r} needs a key prefix: {full_path_prefix} is the whole bucket")
+        if mode == "overwrite_partitions" and not options["partition_cols"]:  # with no partition column, every key would be in the one partition `()`
+            raise ValueError("mode='overwrite_partitions' needs at least one partition column in `partition_cols`")
+        engine = options.get("engine", "auto")
+        if mode == "overwrite_partitions" and (pd.get_option("io.parquet.engine") if engine == "auto" else engine) == "fastparquet":
+            # fastparquet does not encode the values in the `col=value` directories: the value "a/b" writes `col=a/b/`, which is in partition `col=a`
+            raise ValueError("mode='overwrite_partitions' needs the pyarrow engine: fastparquet does not encode the partition values in the keys")
+
+        old_keys = [] if mode == "append" else S3Keys.list(full_path_prefix)
         with tempfile.TemporaryDirectory() as temp_dir:
             self._write_parquet_file(df, temp_dir, **options)
-            s3_sync_up(temp_dir, full_path_prefix)
+            written = set(s3_sync_up(temp_dir, full_path_prefix))
+
+        stale = self._stale_keys(old_keys, written, key_prefix, options["partition_cols"] if mode == "overwrite_partitions" else None)
+        if stale:
+            logger.info(f"[s3] mode={mode!r}: deleting {len(stale)} old objects under {full_path_prefix}")
+            S3Keys.delete(bucket, stale)
+
+    @staticmethod
+    def _stale_keys(old_keys: List[str], written: Set[str], key_prefix: str, partition_cols: Optional[Union[str, List[str]]]) -> List[str]:
+        """Return the `old_keys` that the write did not replace, and with `partition_cols`, only those in a partition that the write wrote to."""
+        stale = [key for key in old_keys if key not in written]
+        if partition_cols is None:
+            return stale
+        partition_cols = [partition_cols] if isinstance(partition_cols, str) else list(partition_cols)  # pandas also takes one name
+        partitions = {WithS3PathPrefix._partition_of(key, key_prefix, partition_cols) for key in written} - {None}
+        return [key for key in stale if WithS3PathPrefix._partition_of(key, key_prefix, partition_cols) in partitions]
+
+    @staticmethod
+    def _partition_of(key: str, key_prefix: str, partition_cols: List[str]) -> Optional[Tuple[str, ...]]:
+        """The `col=value` directories of `key` under `key_prefix`, one for each of `partition_cols` in order, or None for a key outside a partition.
+
+        A key directly under the prefix, such as the `_metadata` file of fastparquet or a data file of a write without partitions, is outside a partition.
+        """
+        segments = key[len(key_prefix) + 1 :].split("/")[:-1]
+        if len(segments) < len(partition_cols) or not all(segment.startswith(f"{col}=") for segment, col in zip(segments, partition_cols)):
+            return None
+        return tuple(segments[: len(partition_cols)])
 
     def _read_from_s3_path_prefix(self) -> pd.DataFrame:  # pylint: disable=too-many-locals,too-many-branches
         """Read files from an S3 bucket based on a path_prefix/dynamic_file_path and return a concatenated DataFrame.
@@ -613,12 +722,13 @@ class WithS3PathPrefix(with_local.WithLocal):
             else:
                 s3_sync_down(full_path, temp_dir)
 
-            files = os.listdir(temp_dir)
+            # The sync keeps the key layout, so a sub-prefix is a directory. Sort on the key form of the path: the order of the S3 listing, which the parquet read keeps
+            files = sorted((os.path.join(root, name) for root, _, names in os.walk(temp_dir) for name in names), key=lambda path: os.path.relpath(path, temp_dir).replace(os.sep, "/"))
             if not files:
                 raise NoObjectsFoundError(f"No objects found under {full_path}")
             dfs: List[DataFrame] = []
             for file in files:
-                df = getattr(self, f"_read_{file_type}_file")(os.path.join(temp_dir, file), self.schema, **options)  # type: ignore
+                df = getattr(self, f"_read_{file_type}_file")(file, self.schema, **options)  # type: ignore
                 if len(df) > 0:
                     dfs.append(df)
 
@@ -633,7 +743,8 @@ class WithS3PathPrefix(with_local.WithLocal):
             max_memory_use: The approximate number of bytes to allocate on each yield of Generator
         """
         parsed_url = urllib.parse.urlparse(s3_prefix)
-        assert parsed_url.scheme == "s3", f"{s3_prefix!r} should be an s3 url"
+        if parsed_url.scheme != "s3":
+            raise InvalidS3UrlError(f"{s3_prefix!r} should be an s3 url")
         bucket_name = parsed_url.netloc
         file_prefix = f"{parsed_url.path.strip('/')}/"
         s3_objects_to_fetch = []
@@ -689,7 +800,9 @@ class WithS3File:
 
         Raises:
             ObjectNotFoundError: If the key of a csv or json file does not exist. It is a `FileNotFoundError` and an awswrangler
-                `NoFilesFound`. The errors of the parquet and hdf reads for a missing key do not change.
+                `NoFilesFound`.
+            S3KeyNotFoundError: If the key of a parquet or hdf file does not exist. It is a `FileNotFoundError` and the botocore
+                `ClientError` that S3 returned. A parquet read with `filters` raises the pyarrow `FileNotFoundError` instead.
         """
         s3_config = self.sources_config.s3
         file_type = get_file_type_value(s3_config.file_type)
@@ -727,7 +840,13 @@ class WithS3File:
         if kwargs.get("filters") and engine != "fastparquet" and (filesystem is None or isinstance(filesystem, pafs.FileSystem)):
             filesystem = filesystem or _s3_filesystem(bucket)
             return with_local.WithLocal._read_parquet_file(f"{bucket}/{key}", schema, **{**kwargs, "filesystem": filesystem})  # pylint: disable=protected-access
-        return with_local.WithLocal._read_parquet_file(_download_to_memory(bucket, key), schema, **kwargs)  # type: ignore[arg-type] # pylint: disable=protected-access
+        try:
+            fobj = _download_to_memory(bucket, key)
+        except ClientError as error:
+            if S3KeyNotFoundError.is_missing_key(error):
+                raise S3KeyNotFoundError(s3_path, error) from error
+            raise
+        return with_local.WithLocal._read_parquet_file(fobj, schema, **kwargs)  # type: ignore[arg-type] # pylint: disable=protected-access
 
     @staticmethod
     def _read_s3_parquet_directory(s3_path: str, schema: DataframeSchema, **kwargs) -> pd.DataFrame:
@@ -745,7 +864,25 @@ class WithS3File:
         kwargs.pop("columns", None)
         kwargs.setdefault("boto3_session", _shared_boto3_session())
         # A one-element list is read as-is; a bare string is treated as a prefix and costs an extra ListObjectsV2.
-        return wr.s3.read_parquet(path=[s3_path], columns=(list(schema.columns.keys())), **kwargs)
+        try:
+            return wr.s3.read_parquet(path=[s3_path], columns=(list(schema.columns.keys())), **kwargs)
+        except ClientError as error:
+            if not S3KeyNotFoundError.is_missing_key(error):
+                raise
+            WithS3File._raise_for_missing_key(s3_path, error, kwargs["boto3_session"].client("s3"))
+
+    @staticmethod
+    def _raise_for_missing_key(s3_path: str, error: ClientError, client: Any) -> NoReturn:
+        """Raise `S3KeyNotFoundError` for the missing-key `error` of a read, or the `ClientError` of HeadBucket if the bucket does not exist.
+
+        HeadObject answers the same bare 404 for a missing bucket as for a missing key, so a bare 404 needs a HeadBucket call to tell them apart.
+        """
+        if error.response.get("Error", {}).get("Code") == "404":
+            try:
+                client.head_bucket(Bucket=urlparse(s3_path).netloc)
+            except ClientError as bucket_error:
+                raise bucket_error from error
+        raise S3KeyNotFoundError(s3_path, error) from error
 
     @staticmethod
     @utils.allow_options(utils.args_of(wr.s3.read_csv, pd.read_csv))
@@ -786,7 +923,13 @@ class WithS3File:
         file_path = parsed.path.lstrip("/")
 
         fobj = io.BytesIO()  # Stream file directly into memory (no disk), unlike tempfile or open(...) which write to disk
-        boto3.client("s3").download_fileobj(bucket, file_path, fobj)
+        client = boto3.client("s3")
+        try:
+            client.download_fileobj(bucket, file_path, fobj)
+        except ClientError as error:
+            if not S3KeyNotFoundError.is_missing_key(error):
+                raise
+            WithS3File._raise_for_missing_key(s3_path, error, client)
         fobj.seek(0)
 
         df = HdfIO().load(fobj, options=kwargs)

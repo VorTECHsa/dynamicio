@@ -17,6 +17,10 @@ __all__ = [
     "InvalidDatasetTypeError",
     "NoObjectsFoundError",
     "ObjectNotFoundError",
+    "S3KeyNotFoundError",
+    "SchemaNotDeclaredError",
+    "MissingMixinError",
+    "InvalidS3UrlError",
     "CASTING_WARNING_MSG",
     "NOTICE_MSG",
 ]
@@ -24,6 +28,7 @@ __all__ = [
 from typing import Any, Optional
 
 from awswrangler.exceptions import NoFilesFound
+from botocore.exceptions import ClientError
 
 
 class DynamicIOError(Exception):
@@ -116,10 +121,10 @@ class InvalidDatasetTypeError(DynamicIOError):
 
 
 class NoObjectsFoundError(FileNotFoundError, ValueError):
-    """Error raised when an S3 path prefix, or an S3 parquet `file_path` that ends in `/`, has no objects.
+    """Error raised when an S3 path prefix, an S3 parquet `file_path` that ends in `/`, or a `local_batch` source has no objects.
 
     It is a `FileNotFoundError`, so a caller can treat it as a missing source. It is also a `ValueError`: in earlier releases, a path prefix
-    with no objects raised the pandas `ValueError: No objects to concatenate`, and callers that catch `ValueError` must not change.
+    or a `local_batch` source with no objects raised the pandas `ValueError: No objects to concatenate`, and callers that catch `ValueError` must not change.
     """
 
 
@@ -128,6 +133,58 @@ class ObjectNotFoundError(FileNotFoundError, NoFilesFound):
 
     It is a `FileNotFoundError`, so a caller can treat it as a missing source. It is also an awswrangler `NoFilesFound`: earlier releases raised
     `NoFilesFound` for a missing key, and callers that catch `NoFilesFound` must not change.
+    """
+
+
+class S3KeyNotFoundError(FileNotFoundError, ClientError):
+    """Error raised when the S3 key of a parquet or hdf `file_path` does not exist.
+
+    It is a `FileNotFoundError`, so a caller can treat it as a missing source. It is also the botocore `ClientError` that S3 returned: earlier
+    releases raised that `ClientError` for a missing key, and callers that catch `ClientError` or read its `response` must not change.
+    """
+
+    MISSING_KEY_CODES = ("NoSuchKey", "404")  # GetObject returns NoSuchKey; HeadObject, which `download_fileobj` sends first, returns a bare 404
+
+    def __init__(self, s3_path: str, error: ClientError):
+        """Wrap the `ClientError` of a missing key, keeping its `response` and `operation_name`."""
+        ClientError.__init__(self, error.response, error.operation_name)
+        self.s3_path = s3_path
+        self.args = (f"No object found at {s3_path}: {error}",)
+
+    def __reduce__(self):
+        """Rebuild from the arguments of `__init__`, so the error survives `pickle` (a process pool worker) and `copy`."""
+        return type(self), (self.s3_path, ClientError(self.response, self.operation_name))
+
+    def __str__(self) -> str:
+        """The message, not the `OSError` format (which expects errno and strerror)."""
+        return self.args[0]
+
+    @classmethod
+    def is_missing_key(cls, error: ClientError) -> bool:
+        """Whether `error` is the S3 reply for a key that does not exist."""
+        return error.response.get("Error", {}).get("Code") in cls.MISSING_KEY_CODES
+
+
+class SchemaNotDeclaredError(DynamicIOError, TypeError, AssertionError):
+    """Error raised when an IO class does not set `schema`.
+
+    It is a `TypeError`, as the other errors of a wrong IO class declaration are. It is also an `AssertionError`: earlier releases checked this with
+    `assert`, and callers that catch `AssertionError` must not change.
+    """
+
+
+class MissingMixinError(DynamicIOError, TypeError, AssertionError):
+    """Error raised when an IO class has no mixin that reads or writes the type of its resource.
+
+    It is a `TypeError`, as the other errors of a wrong IO class declaration are. It is also an `AssertionError`: earlier releases checked this with
+    `assert`, and callers that catch `AssertionError` must not change.
+    """
+
+
+class InvalidS3UrlError(DynamicIOError, ValueError, AssertionError):
+    """Error raised when an S3 operation gets a URL that does not start with `s3://`.
+
+    It is a `ValueError`. It is also an `AssertionError`: earlier releases checked this with `assert`, and callers that catch `AssertionError` must not change.
     """
 
 

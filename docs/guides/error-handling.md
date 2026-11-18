@@ -10,8 +10,12 @@ first argument the error was raised with (`None` if there was none).
 | `SchemaNotFoundError` | The IO class has no schema (for example `SCHEMA_FROM_ARGUMENT` without a `schema=` argument) |
 | `MissingSchemaDefinition` | The resource definition has no schema where one is required |
 | `InvalidDatasetTypeError` | `file_type` is not one of `parquet`, `json`, `csv`, `h5` |
-| `NoObjectsFoundError` | An S3 prefix (or a parquet `file_path` ending in `/`) holds no objects. It is both a `FileNotFoundError` and a `ValueError` |
+| `NoObjectsFoundError` | An S3 prefix (or a parquet `file_path` ending in `/`) holds no objects, or no file matches a `local_batch` source. It is both a `FileNotFoundError` and a `ValueError` |
 | `ObjectNotFoundError` | The S3 key of a `csv` or `json` `file_path` does not exist. It is both a `FileNotFoundError` and an awswrangler `NoFilesFound` |
+| `S3KeyNotFoundError` | The S3 key of a `parquet` or `hdf` `file_path` does not exist. It is both a `FileNotFoundError` and the botocore `ClientError` that S3 returned |
+| `SchemaNotDeclaredError` | An IO class does not set `schema`. It is both a `TypeError` and an `AssertionError` |
+| `MissingMixinError` | An IO class has no mixin that reads or writes the type of its resource. It is both a `TypeError` and an `AssertionError` |
+| `InvalidS3UrlError` | An S3 operation gets a URL that does not start with `s3://`. It is both a `ValueError` and an `AssertionError` |
 
 The full list, with docstrings, is in the [API reference](../reference/index.md#errors).
 
@@ -37,7 +41,7 @@ validates, then logs metrics.
 A source that may legitimately not exist yet, such as state written by a previous run, can be read with
 `missing_ok=True` in the constructor of the IO class (see
 [Resource definitions](resource-definitions.md#optional-sources-missing_ok)). `read()` then returns `None` instead of
-raising `FileNotFoundError`. Because `NoObjectsFoundError` and `ObjectNotFoundError` are `FileNotFoundError`s, code can
+raising `FileNotFoundError`. Because `NoObjectsFoundError`, `ObjectNotFoundError` and `S3KeyNotFoundError` are `FileNotFoundError`s, code can
 also treat any missing source uniformly:
 
 ```python

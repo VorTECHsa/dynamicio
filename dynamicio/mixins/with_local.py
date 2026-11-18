@@ -14,6 +14,7 @@ from pyarrow.parquet import read_table, write_table
 
 # Application Imports
 from dynamicio.config.pydantic import DataframeSchema, LocalBatchDataEnvironment, LocalDataEnvironment
+from dynamicio.errors import NoObjectsFoundError
 from dynamicio.mixins import utils
 from dynamicio.mixins.utils import get_file_type_value
 
@@ -290,6 +291,9 @@ class WithLocalBatch(WithLocal):
 
         Returns:
             A concatenated dataframe composed of all files read through local_batch.
+
+        Raises:
+            NoObjectsFoundError: If no file matches. It is a `FileNotFoundError` and a `ValueError`.
         """
         local_batch_config = self.sources_config.local
         options = dict(self.options)
@@ -309,9 +313,8 @@ class WithLocalBatch(WithLocal):
         else:
             raise ValueError("Either path_prefix or dynamic_path must be provided in local_batch_config")
 
-        dfs_to_concatenate = []
-        for file in files:
-            file_to_load = os.path.join(file_path, file)
-            dfs_to_concatenate.append(getattr(self, f"_read_{file_type}_file")(file_to_load, self.schema, **options))
-
+        if not files:
+            raise NoObjectsFoundError(f"No {filtering_file_type} files found at {file_path}")
+        # `glob` returns the paths with `file_path` in them: joining it again breaks a relative `file_path`
+        dfs_to_concatenate = [getattr(self, f"_read_{file_type}_file")(file, self.schema, **options) for file in files]
         return pd.concat(dfs_to_concatenate).reset_index(drop=True)

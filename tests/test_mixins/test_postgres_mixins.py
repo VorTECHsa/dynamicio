@@ -13,6 +13,7 @@ import pytest
 from pandera.typing import Series
 from sqlalchemy import Column, MetaData, Table, create_engine, inspect, text
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.engine import Engine
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session
 from sqlalchemy.schema import CreateTable
@@ -23,6 +24,7 @@ from dynamicio import UnifiedIO, WithPostgres
 from dynamicio.config import IOConfig
 from dynamicio.core import SCHEMA_FROM_ARGUMENT
 from dynamicio.errors import TableNameNotFoundError
+from dynamicio.mixins.with_postgres import session_for
 from tests import constants
 from tests.mocking.io import ReadPostgresIO, WriteExtendedPostgresIO, WritePostgresIO
 from tests.mocking.models import ERModel, PgModel, PgRows
@@ -47,6 +49,21 @@ class TestPostgresIO:
         assert "DELETE FROM dummy_table" in executed_sql
         assert cursor.copy_expert.call_args.args[0] == "COPY dummy_table (id, val) FROM STDIN WITH (FORMAT text, NULL '')"
         session.commit.assert_called_once()
+
+    @pytest.mark.unit
+    def test_the_copy_data_keeps_the_line_breaks_tabs_and_backslashes_of_the_values(self):
+        # Given
+        session = MagicMock()
+        cursor = session.connection.return_value.connection.cursor.return_value
+        cursor.copy_expert.side_effect = lambda statement, file: copied.append(file.read())
+        copied = []
+        df = pd.DataFrame({"id": [1, 2, 3, 4], "val": ["cr\rx", "lf\nx", "tab\tx", "back\\x"]})
+
+        # When
+        WithPostgres._write_to_database(session, Table("dummy_table", MetaData()), df, is_truncate_and_append=False)
+
+        # Then the COPY text format reads a backslash and the next character as that character
+        assert copied == ["1\tcr\\\rx\r\n2\tlf\\\nx\r\n3\ttab\\\tx\r\n4\tback\\\\x\r\n"]
 
     @pytest.mark.unit
     @pytest.mark.parametrize(
@@ -809,3 +826,48 @@ class TestTableName:
 
         # Then
         mock__logger.error.assert_not_called()
+
+
+class TestSessionFor:
+    @pytest.mark.unit
+    def test_session_for_disposes_the_engine_after_use(self):
+        # Given
+        engines = []
+
+        def recording_create_engine(url):
+            engines.append(create_engine(url))
+            return engines[-1]
+
+        with patch("dynamicio.mixins.with_postgres.create_engine", side_effect=recording_create_engine), patch.object(Engine, "dispose", autospec=True) as mock_dispose:
+            # When
+            with session_for("sqlite://") as session:
+                session.execute(text("SELECT 1"))
+
+        # Then
+        mock_dispose.assert_called_once_with(engines[0])
+
+    @pytest.mark.unit
+    def test_session_for_disposes_the_engine_when_the_session_close_fails(self):
+        # Given a session whose close raises, as when the connection drops during the rollback
+        with patch.object(Engine, "dispose", autospec=True) as mock_dispose, patch("dynamicio.mixins.with_postgres.Session") as mock_session:
+            mock_session.return_value.close.side_effect = RuntimeError("connection dropped")
+
+            # When
+            with pytest.raises(RuntimeError, match="connection dropped"):
+                with session_for("sqlite://"):
+                    pass
+
+        # Then
+        mock_dispose.assert_called_once()
+
+    @pytest.mark.unit
+    def test_session_for_disposes_the_engine_when_the_session_fails(self):
+        # Given
+        with patch.object(Engine, "dispose", autospec=True) as mock_dispose:
+            # When
+            with pytest.raises(RuntimeError, match="query failed"):
+                with session_for("sqlite://"):
+                    raise RuntimeError("query failed")
+
+        # Then
+        mock_dispose.assert_called_once()
