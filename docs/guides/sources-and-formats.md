@@ -56,7 +56,8 @@ A write to an `s3_path_prefix` needs the `partition_cols` option. Each write giv
 | `overwrite_partitions` | dynamicio deletes them in the partitions that the write writes to. The other partitions stay. |
 
 `overwrite` and `overwrite_partitions` delete objects only when the resource also sets `allow_delete: true`. Without
-it, dynamicio logs a warning and appends, as dynamicio 11.0.0 did for any `mode`. A delete mode raises `ValueError`
+it, dynamicio logs a warning and appends, as dynamicio 11.0.0 did for any `mode`. A value of `allow_delete` that is
+not `true` or `false`, such as the string `"false"`, raises `TypeError`. A delete mode raises `ValueError`
 when the key prefix is empty, because the prefix is then the whole bucket. A partition is the `col=value` directories
 of `partition_cols` under the prefix. A file directly under the prefix is in no partition.
 

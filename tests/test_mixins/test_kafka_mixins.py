@@ -413,11 +413,12 @@ class TestKafkaDelivery:
     """How a write hands its messages to the producer: queue full, delivery callbacks, flush, and the options it keeps."""
 
     class Producer(MockKafkaProducer):
-        """A producer whose local queue is full for the first `full` sends, holds `queued` messages, and has `undelivered` messages left after a flush."""
+        """A producer whose local queue is full for the first `full` sends, holds `queued` messages, has `undelivered` messages left after a flush,
+        and serves `delivered` delivery reports on each poll."""
 
-        def __init__(self, full: int = 0, undelivered: int = 0, queued: int = 1, **kwargs):
+        def __init__(self, full: int = 0, undelivered: int = 0, queued: int = 1, delivered: int = 0, **kwargs):
             super().__init__(**kwargs)
-            self.full, self.undelivered, self.queued = full, undelivered, queued
+            self.full, self.undelivered, self.queued, self.delivered = full, undelivered, queued, delivered
             self.polls, self.flushes = [], []
 
         def __len__(self):
@@ -431,7 +432,7 @@ class TestKafkaDelivery:
 
         def poll(self, timeout=None):
             self.polls.append(timeout)
-            return 0
+            return self.delivered
 
         def flush(self, *args):
             self.flushes.append(args)
@@ -513,6 +514,18 @@ class TestKafkaDelivery:
         with patch("dynamicio.mixins.with_kafka.time.monotonic", side_effect=itertools.count(0, 10)), pytest.raises(TimeoutError, match="no room for 30s"):
             self.write(producer, test_df, flush_timeout=30)
         assert producer.polls == [1, 1]
+
+    @pytest.mark.unit
+    def test_a_full_queue_that_keeps_delivering_does_not_raise_a_timeout_error(self, test_df):
+        # Given a queue that is full for 5 sends but delivers a message on each poll, and a clock that moves 10 s on each reading
+        producer = self.Producer(full=5, delivered=1)
+
+        # When
+        with patch("dynamicio.mixins.with_kafka.time.monotonic", side_effect=itertools.count(0, 10)):
+            self.write(producer, test_df, flush_timeout=30)
+
+        # Then
+        assert [message["key"] for message in producer.my_stream] == [b"0", b"1", b"2"]
 
     @pytest.mark.unit
     def test_a_falsy_callable_option_is_kept(self, test_df):

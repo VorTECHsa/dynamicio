@@ -281,7 +281,8 @@ class WithPostgres:
             session.execute(text(f"DELETE FROM {table_name};"))
 
         # Upload data using PostgreSQL's COPY FROM CSV mechanism for performance
-        with tempfile.NamedTemporaryFile(mode="r+") as temp_file:
+        # `newline=""`: a text file without it reads a `\r` in a value back as `\n`, so COPY would get a different value
+        with tempfile.NamedTemporaryFile(mode="r+", encoding="utf-8", newline="") as temp_file:
             df.to_csv(temp_file, index=False, header=False, sep="\t", doublequote=False, escapechar="\\", quoting=csv.QUOTE_NONE)
             temp_file.flush()
             temp_file.seek(0)

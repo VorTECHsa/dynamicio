@@ -1607,7 +1607,7 @@ class TestS3PathPrefixWriteModes:
     @staticmethod
     def write(config=None, **options):
         input_df = pd.DataFrame({"col_1": [1, 2], "col_2": ["a", "b"]})
-        WriteS3IO(source_config=config or TestS3PathPrefixWriteModes.config(), partition_cols=["col_2"], **options).write(input_df)
+        WriteS3IO(source_config=config or TestS3PathPrefixWriteModes.config(), **{"partition_cols": ["col_2"], **options}).write(input_df)
 
     @staticmethod
     def new_keys(keys: Dict[str, bytes]) -> Dict[str, int]:
@@ -1647,6 +1647,28 @@ class TestS3PathPrefixWriteModes:
         assert "data/some_dir/col_2=a/old.parquet" not in keys
         assert {"data/some_dir/col_2=z/old.parquet", *self.OTHER_KEYS} <= keys.keys()
         assert self.new_keys(keys) == {"data/some_dir/col_2=a": 1, "data/some_dir/col_2=b": 1}
+
+    @pytest.mark.unit
+    def test_overwrite_partitions_with_one_partition_column_name_as_a_string_deletes_the_old_objects_of_the_written_partitions(self, bucket):
+        # Given `partition_cols="col_2"`, which pandas takes as `["col_2"]`
+
+        # When
+        self.write(mode="overwrite_partitions", allow_delete=True, partition_cols="col_2")
+
+        # Then
+        keys = self.keys(bucket)
+        assert "data/some_dir/col_2=a/old.parquet" not in keys
+        assert "data/some_dir/col_2=z/old.parquet" in keys
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("allow_delete", ["false", "true", 1, None])
+    def test_an_allow_delete_that_is_not_a_bool_raises_a_type_error_and_writes_nothing(self, bucket, allow_delete):
+        # Given a value such as the YAML `allow_delete: "false"`, a nonempty string that Python takes as true
+
+        # When / Then
+        with pytest.raises(TypeError, match="allow_delete"):
+            self.write(mode="overwrite", allow_delete=allow_delete)
+        assert self.keys(bucket).keys() == set(self.OLD_KEYS + self.OTHER_KEYS)
 
     @pytest.mark.unit
     def test_overwrite_partitions_with_fastparquet_keeps_the_partitions_that_the_write_does_not_write(self, bucket):
@@ -1891,6 +1913,21 @@ class TestS3FileWithMissingKey:
 
         # Then
         assert df is None
+
+    @pytest.mark.unit
+    def test_a_missing_bucket_read_by_awswrangler_raises_the_bucket_error_and_not_a_missing_key(self):
+        # Given an option that only awswrangler takes, and a bucket that does not exist: HeadObject answers the same bare 404 as for a missing key
+        config = self._config("READ_FROM_S3_PARQUET")
+        session = MagicMock()
+        session.client.return_value.head_bucket.side_effect = ClientError({"Error": {"Code": "404", "Message": "Not Found"}}, "HeadBucket")
+        missing = ClientError({"Error": {"Code": "404", "Message": "Not Found"}}, "HeadObject")
+
+        # When / Then
+        with patch("dynamicio.mixins.with_s3.wr.s3.read_parquet", side_effect=missing), pytest.raises(ClientError) as raised:
+            ReadS3ParquetIO(source_config=config, s3_additional_kwargs={}, boto3_session=session, missing_ok=True).read()
+
+        assert raised.value.operation_name == "HeadBucket"
+        assert not isinstance(raised.value, FileNotFoundError)
 
     @pytest.mark.unit
     def test_a_client_error_other_than_a_missing_key_is_raised_unchanged(self):

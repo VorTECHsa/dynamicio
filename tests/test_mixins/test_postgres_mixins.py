@@ -51,6 +51,21 @@ class TestPostgresIO:
         session.commit.assert_called_once()
 
     @pytest.mark.unit
+    def test_the_copy_data_keeps_the_line_breaks_tabs_and_backslashes_of_the_values(self):
+        # Given
+        session = MagicMock()
+        cursor = session.connection.return_value.connection.cursor.return_value
+        cursor.copy_expert.side_effect = lambda statement, file: copied.append(file.read())
+        copied = []
+        df = pd.DataFrame({"id": [1, 2, 3, 4], "val": ["cr\rx", "lf\nx", "tab\tx", "back\\x"]})
+
+        # When
+        WithPostgres._write_to_database(session, Table("dummy_table", MetaData()), df, is_truncate_and_append=False)
+
+        # Then the COPY text format reads a backslash and the next character as that character
+        assert copied == ["1\tcr\\\rx\n2\tlf\\\nx\n3\ttab\\\tx\n4\tback\\\\x\n"]
+
+    @pytest.mark.unit
     @pytest.mark.parametrize(
         "table, truncate, statement, copy",
         [

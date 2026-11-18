@@ -342,7 +342,8 @@ class WithKafka:
                     waiting_since = time.monotonic() if waiting_since is None else waiting_since
                     if flush_timeout is not None and time.monotonic() - waiting_since >= flush_timeout:
                         raise TimeoutError(f"The local queue of the producer for Kafka topic {topic} had no room for {flush_timeout}s: no message was delivered") from error
-                    self.__producer.poll(1)
+                    if self.__producer.poll(1):  # a delivery report is progress, so the wait with no progress starts again
+                        waiting_since = None
             self.__producer.poll(0)  # serve the delivery callbacks, so a failed delivery raises during the write and not only at the flush
 
         undelivered = self.__producer.flush() if flush_timeout is None else self.__producer.flush(flush_timeout)

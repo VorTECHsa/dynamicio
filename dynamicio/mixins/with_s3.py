@@ -16,7 +16,7 @@ import urllib.parse
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
-from typing import IO, Any, Callable, Dict, Generator, List, Mapping, Optional, Tuple, TypeVar, Union
+from typing import IO, Any, Callable, Dict, Generator, List, Mapping, NoReturn, Optional, Tuple, TypeVar, Union
 from urllib.parse import urlparse
 
 import awswrangler as wr
@@ -556,6 +556,7 @@ class WithS3PathPrefix(with_local.WithLocal):
             ValueError: In case `path_prefix` is missing from config
             ValueError: In case the `partition_cols` arg is missing while trying to write a parquet file, `mode` is not one of `WRITE_MODES`,
                 or a delete mode has an empty key prefix
+            TypeError: If `allow_delete` is not a bool
             RuntimeError: If S3 could not delete some of the old objects
         """
         s3_config = self.sources_config.s3
@@ -569,6 +570,9 @@ class WithS3PathPrefix(with_local.WithLocal):
         allow_delete = options.pop("allow_delete", False)
         if mode not in self.WRITE_MODES:
             raise ValueError(f"`mode` must be one of {self.WRITE_MODES}, got {mode!r}")
+        if not isinstance(allow_delete, bool):  # a YAML `allow_delete: "false"` is a nonempty string, which is true
+            raise TypeError(f"`allow_delete` must be true or false, got {allow_delete!r}")
+        partition_cols = [options["partition_cols"]] if isinstance(options["partition_cols"], str) else list(options["partition_cols"])  # pandas also takes one name
 
         full_path_prefix = utils.resolve_template(f"s3://{s3_config.bucket}/{s3_config.path_prefix}", options)
         bucket, key_prefix = _split_s3_url(full_path_prefix)
@@ -587,8 +591,8 @@ class WithS3PathPrefix(with_local.WithLocal):
 
         stale = [key for key in old_keys if key not in written]
         if mode == "overwrite_partitions":
-            partitions = {self._partition_of(key, key_prefix, options["partition_cols"]) for key in written} - {None}
-            stale = [key for key in stale if self._partition_of(key, key_prefix, options["partition_cols"]) in partitions]
+            partitions = {self._partition_of(key, key_prefix, partition_cols) for key in written} - {None}
+            stale = [key for key in stale if self._partition_of(key, key_prefix, partition_cols) in partitions]
         if stale:
             logger.info(f"[s3] mode={mode!r}: deleting {len(stale)} old objects under {full_path_prefix}")
             S3Keys.delete(bucket, stale)
@@ -846,9 +850,22 @@ class WithS3File:
         try:
             return wr.s3.read_parquet(path=[s3_path], columns=(list(schema.columns.keys())), **kwargs)
         except ClientError as error:
-            if S3KeyNotFoundError.is_missing_key(error):
-                raise S3KeyNotFoundError(s3_path, error) from error
-            raise
+            if not S3KeyNotFoundError.is_missing_key(error):
+                raise
+            WithS3File._raise_for_missing_key(s3_path, error, kwargs["boto3_session"].client("s3"))
+
+    @staticmethod
+    def _raise_for_missing_key(s3_path: str, error: ClientError, client: Any) -> NoReturn:
+        """Raise `S3KeyNotFoundError` for the missing-key `error` of a read, or the `ClientError` of HeadBucket if the bucket does not exist.
+
+        HeadObject answers the same bare 404 for a missing bucket as for a missing key, so a bare 404 needs a HeadBucket call to tell them apart.
+        """
+        if error.response.get("Error", {}).get("Code") == "404":
+            try:
+                client.head_bucket(Bucket=urlparse(s3_path).netloc)
+            except ClientError as bucket_error:
+                raise bucket_error from error
+        raise S3KeyNotFoundError(s3_path, error) from error
 
     @staticmethod
     @utils.allow_options(utils.args_of(wr.s3.read_csv, pd.read_csv))
@@ -895,11 +912,7 @@ class WithS3File:
         except ClientError as error:
             if not S3KeyNotFoundError.is_missing_key(error):
                 raise
-            try:  # HeadObject answers the same bare 404 for a missing bucket as for a missing key
-                client.head_bucket(Bucket=bucket)
-            except ClientError as bucket_error:
-                raise bucket_error from error
-            raise S3KeyNotFoundError(s3_path, error) from error
+            WithS3File._raise_for_missing_key(s3_path, error, client)
         fobj.seek(0)
 
         df = HdfIO().load(fobj, options=kwargs)
