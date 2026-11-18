@@ -144,7 +144,7 @@ class Floci:
     def children(self) -> Set[str]:
         """Return the names of the RDS and MSK containers that this floci started."""
         command = ["docker", "ps", "-a", "--filter", f"label=io.floci.resource-id={self.name}", "--format", "{{.Names}}"]
-        return set(subprocess.run(command, capture_output=True, text=True, check=True).stdout.split())
+        return set(subprocess.run(command, capture_output=True, text=True, check=False).stdout.split())  # no raise: in `stop`, it would hide the error of `start`
 
     def stop(self) -> None:
         """Remove floci and the RDS and MSK containers that it started."""
@@ -170,6 +170,8 @@ def floci() -> Iterator[FlociStack]:
     dropped before and after, so that no cached client of the unit tests reaches floci, and no client of floci stays.
     """
     if not Floci.docker_is_available():
+        if os.environ.get("CI"):  # a skip would pass the CI job without a test
+            pytest.fail("the integration tests need Docker, and CI has no Docker")
         pytest.skip("the integration tests need Docker")
     server = Floci()
     with pytest.MonkeyPatch.context() as environment:
