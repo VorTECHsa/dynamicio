@@ -43,13 +43,13 @@ class FlociStack:
 class Floci:
     """Starts and stops floci (https://github.com/floci-io/floci), a local AWS emulator, for the integration tests.
 
-    floci starts RDS and MSK as their own containers through the Docker socket. The images are pinned, so a new
-    release of floci, Postgres or Redpanda cannot change the results of the tests.
+    floci starts RDS and MSK as their own containers through the Docker socket. The images are pinned by digest, so a
+    new release of floci, Postgres or Redpanda cannot change the results of the tests.
     """
 
     IMAGE = "floci/floci@sha256:a0fbf944d7f338cc0856f1ef83831ea749ff2be71956eb7a7fce08fc21458e19"  # floci 2.5.0, linux/amd64 and linux/arm64
-    POSTGRES_IMAGE = "postgres:16.3-alpine"
-    REDPANDA_IMAGE = "redpandadata/redpanda:v26.2.7"
+    POSTGRES_IMAGE = "postgres:16.3-alpine@sha256:36ed71227ae36305d26382657c0b96cbaf298427b3f1eaeb10d77a6dea3eec41"  # linux/amd64 and linux/arm64
+    REDPANDA_IMAGE = "redpandadata/redpanda:v26.2.7@sha256:43545ee03966431f5451e0b3c1e651b39fbe3eb383360220311021f50133b649"  # linux/amd64 and linux/arm64
     PORT = 4566
     RDS_PROXY_PORTS = "7001-7010"
     REGION = "eu-west-1"
@@ -168,6 +168,8 @@ def floci() -> Iterator[FlociStack]:
 
     The shared boto3 session, S3 client and pyarrow file systems of dynamicio are cached for each process. They are
     dropped before and after, so that no cached client of the unit tests reaches floci, and no client of floci stays.
+    `boto3.DEFAULT_SESSION` and the `retries` of `with_s3._CLIENT_CONFIG` are put back after: the hdf read creates the
+    default session, and botocore rewrites `retries` in place when it builds a client.
     """
     if not Floci.docker_is_available():
         if os.environ.get("CI"):  # a skip would pass the CI job without a test
@@ -179,6 +181,8 @@ def floci() -> Iterator[FlociStack]:
             environment.setenv(name, value)
         for name in ("AWS_PROFILE", "AWS_SESSION_TOKEN"):
             environment.delenv(name, raising=False)
+        environment.setattr(boto3, "DEFAULT_SESSION", None)
+        environment.setattr(with_s3._CLIENT_CONFIG, "retries", dict(with_s3._CLIENT_CONFIG.retries))  # pylint: disable=protected-access, no-member
         try:
             stack = server.start()
             FlociCaches.clear()
