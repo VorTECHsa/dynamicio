@@ -52,7 +52,7 @@ run-unit-tests:
 	@uv run pytest -v -m unit ${TESTS}
 
 run-integration-tests:
-	@uv run pytest -v -m integration ${TESTS}
+	@uv run pytest -v -m 'integration and not floci' ${TESTS}
 
 check-test-coverage:
 	@uv run pytest -vv --cov=$(CODE_DIR) --cov-report=term-missing
