@@ -1605,8 +1605,8 @@ class TestS3PathPrefixWriteModes:
         return {obj["Key"]: client.get_object(Bucket=constants.MOCK_BUCKET, Key=obj["Key"])["Body"].read() for obj in objects}
 
     @staticmethod
-    def write(config=None, **options):
-        input_df = pd.DataFrame({"col_1": [1, 2], "col_2": ["a", "b"]})
+    def write(config=None, input_df=None, **options):
+        input_df = pd.DataFrame({"col_1": [1, 2], "col_2": ["a", "b"]}) if input_df is None else input_df
         WriteS3IO(source_config=config or TestS3PathPrefixWriteModes.config(), **{"partition_cols": ["col_2"], **options}).write(input_df)
 
     @staticmethod
@@ -1671,7 +1671,11 @@ class TestS3PathPrefixWriteModes:
         assert self.keys(bucket).keys() == set(self.OLD_KEYS + self.OTHER_KEYS)
 
     @pytest.mark.unit
-    @pytest.mark.parametrize("pandas_engine, options", [("auto", {"engine": "fastparquet"}), ("fastparquet", {})], ids=["option", "pandas-default"])
+    @pytest.mark.parametrize(
+        "pandas_engine, options",
+        [("auto", {"engine": "fastparquet"}), ("fastparquet", {}), ("fastparquet", {"engine": "auto"})],
+        ids=["option", "pandas-default", "auto-option-with-pandas-default"],
+    )
     def test_overwrite_partitions_with_fastparquet_raises_a_value_error_and_writes_nothing(self, bucket, pandas_engine, options):
         # Given fastparquet, which writes the partition value "a/b" to `col=a/b/`, a key in the partition of "a"
 
@@ -1819,11 +1823,44 @@ class TestS3PathPrefixWriteModes:
         assert client.get_paginator.return_value.paginate.call_count == 2
 
     @pytest.mark.unit
-    def test_an_unknown_mode_raises_a_value_error_and_writes_nothing(self, bucket):
+    def test_an_unknown_mode_with_allow_delete_raises_a_value_error_and_writes_nothing(self, bucket):
         # When / Then
         with pytest.raises(ValueError, match="overwrite_partitions"):
-            self.write(mode="replace")
+            self.write(mode="replace", allow_delete=True)
         assert self.keys(bucket).keys() == set(self.OLD_KEYS + self.OTHER_KEYS)
+
+    @pytest.mark.unit
+    def test_an_unknown_mode_without_allow_delete_appends_and_warns_as_in_11_0_0(self, bucket, caplog):
+        # When
+        with caplog.at_level(logging.WARNING):
+            self.write(mode="w")
+
+        # Then
+        keys = self.keys(bucket)
+        assert set(self.OLD_KEYS + self.OTHER_KEYS) <= keys.keys()
+        assert self.new_keys(keys) == {"data/some_dir/col_2=a": 1, "data/some_dir/col_2=b": 1}
+        assert "allow_delete: true" in caplog.text
+
+    @pytest.mark.unit
+    def test_overwrite_of_an_empty_dataframe_raises_a_value_error_and_deletes_nothing(self, bucket):
+        # Given a DataFrame with no rows, for which pyarrow writes no file
+        empty_df = pd.DataFrame({"col_1": pd.Series([], dtype="int64"), "col_2": pd.Series([], dtype="object")})
+
+        # When / Then
+        with pytest.raises(ValueError, match="empty DataFrame"):
+            self.write(input_df=empty_df, mode="overwrite", allow_delete=True)
+        assert self.keys(bucket).keys() == set(self.OLD_KEYS + self.OTHER_KEYS)
+
+    @pytest.mark.unit
+    def test_overwrite_partitions_of_an_empty_dataframe_deletes_nothing(self, bucket):
+        # Given
+        empty_df = pd.DataFrame({"col_1": pd.Series([], dtype="int64"), "col_2": pd.Series([], dtype="object")})
+
+        # When
+        self.write(input_df=empty_df, mode="overwrite_partitions", allow_delete=True)
+
+        # Then
+        assert set(self.OLD_KEYS + self.OTHER_KEYS) <= self.keys(bucket).keys()
 
 
 class TestS3FileWithMissingKey:

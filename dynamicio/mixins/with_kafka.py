@@ -3,6 +3,7 @@
 # pylint: disable=no-member, protected-access, too-few-public-methods, broad-exception-raised
 
 import logging
+import math
 import time
 from typing import Any, Callable, Mapping, MutableMapping, Optional
 
@@ -34,8 +35,9 @@ class WithKafka:
       document that will be written to the target Kafka topic.
     - `value_serializer: Callable[Mapping, bytes]`: Custom value serialiser; if not provided, a default value-serializer will be used, applied on a Mapping.
     - `flush_timeout: float`: The most seconds that a write waits for Kafka with no progress. A write raises `TimeoutError` if a full local queue has no room
-      for a message in that time, or if the final `flush()` does not deliver every message in that time. If not provided, a write waits until every message
-      is delivered. It is not a deadline for the whole write: a write that keeps delivering messages can take longer.
+      for a message in that time, or if the final `flush()` delivers no message in that time. Progress is a smaller local queue: an error event of the producer,
+      such as a refused connection, is not progress. If not provided, a write waits until every message is delivered. It is not a deadline for the whole write:
+      a write that keeps delivering messages can take longer.
 
     Example:
         >>> # Given
@@ -323,7 +325,7 @@ class WithKafka:
         messages = df.reset_index(drop=True).to_dict("records")
         flush_timeout = self.options.get("flush_timeout")
         # checked before the first message: a TypeError after the queue holds messages would leave them to the cached producer, and a retry would send them twice
-        if flush_timeout is not None and (isinstance(flush_timeout, bool) or not isinstance(flush_timeout, (int, float)) or flush_timeout < 0):
+        if flush_timeout is not None and (isinstance(flush_timeout, bool) or not isinstance(flush_timeout, (int, float)) or flush_timeout < 0 or math.isnan(flush_timeout)):
             raise ValueError(f"`flush_timeout` must be a number of seconds of 0 or more, got {flush_timeout!r}")  # confluent-kafka takes a negative timeout as no timeout
 
         for idx, message in zip(df.index.values, messages):
@@ -332,21 +334,23 @@ class WithKafka:
             serialized_key = self.__key_serializer(key)
             serialized_value = self.__value_serializer(transformed_message)
 
-            waiting_since = None
+            waiting_since, fewest_queued = None, None
             while True:
                 try:
                     self.__producer.produce(topic=topic, key=serialized_key, value=serialized_value, on_delivery=self._on_delivery)
                     break
                 except BufferError as error:  # the local queue is full: wait for deliveries to make room, then send the message again
-                    if len(self.__producer) == 0:
+                    queued = len(self.__producer)
+                    if queued == 0:
                         raise BufferError(
                             f"The message with key {key!r} does not fit in the empty local queue of the producer: increase `queue.buffering.max.kbytes` or make the message smaller"
                         ) from error
-                    waiting_since = time.monotonic() if waiting_since is None else waiting_since
+                    # progress is a smaller queue: `poll` also counts error events, and a broker that refuses connections gives one on each retry
+                    if waiting_since is None or queued < fewest_queued:
+                        waiting_since, fewest_queued = time.monotonic(), queued
                     if flush_timeout is not None and time.monotonic() - waiting_since >= flush_timeout:
                         raise TimeoutError(f"The local queue of the producer for Kafka topic {topic} had no room for {flush_timeout}s: no message was delivered") from error
-                    if self.__producer.poll(1):  # a delivery report is progress, so the wait with no progress starts again
-                        waiting_since = None
+                    self.__producer.poll(1 if flush_timeout is None else min(1, flush_timeout))
             self.__producer.poll(0)  # serve the delivery callbacks, so a failed delivery raises during the write and not only at the flush
 
         self._flush(topic, flush_timeout)

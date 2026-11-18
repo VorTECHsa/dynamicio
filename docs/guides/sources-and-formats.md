@@ -57,12 +57,14 @@ engine names the files of each partition `part.0.parquet` and onward, so a write
 | `overwrite_partitions` | dynamicio deletes them in the partitions that the write writes to. The other partitions stay. |
 
 `overwrite` and `overwrite_partitions` delete objects only when the resource also sets `allow_delete: true`. Without
-it, dynamicio logs a warning and appends, as dynamicio 11.0.0 did for any `mode`. A value of `allow_delete` that is
+it, dynamicio logs a warning and appends, as dynamicio 11.0.0 did for any `mode`. With `allow_delete: true`, a `mode`
+that is not in the table raises `ValueError`. A value of `allow_delete` that is
 not `true` or `false`, such as the string `"false"`, raises `TypeError`. A delete mode raises `ValueError`
-when the key prefix is empty, because the prefix is then the whole bucket. A partition is the `col=value` directories
+when the key prefix is empty, because the prefix is then the whole bucket. `overwrite` of a DataFrame with no rows
+raises `ValueError` and deletes nothing, because pyarrow writes no file for it. A partition is the `col=value` directories
 of `partition_cols` under the prefix. A file directly under the prefix is in no partition. `overwrite_partitions` needs
 the pyarrow engine. fastparquet does not encode the partition values in the keys: the value `a/b` writes to
-`col=a/b/`, which is in the partition of the value `a`. With fastparquet, `overwrite_partitions` raises `ValueError`. It also raises `ValueError` when
+`col=a/b/`, which is in the partition of the value `a`. With fastparquet, also through `engine: auto` and the pandas option `io.parquet.engine`, `overwrite_partitions` raises `ValueError`. It also raises `ValueError` when
 `partition_cols` is empty.
 
 The values and their meaning are those of `mode` in `awswrangler.s3.to_parquet`. dynamicio deletes the old objects only

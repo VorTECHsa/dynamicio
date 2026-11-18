@@ -414,11 +414,11 @@ class TestKafkaDelivery:
 
     class Producer(MockKafkaProducer):
         """A producer whose local queue is full for the first `full` sends, holds `queued` messages, has `undelivered` messages left after a flush
-        (one count for each flush when it is a list), and serves `delivered` delivery reports on each poll."""
+        (one count for each flush when it is a list), and on each poll delivers up to `delivered` queued messages and serves `errors` error events."""
 
-        def __init__(self, full: int = 0, undelivered: int = 0, queued: int = 1, delivered: int = 0, **kwargs):
+        def __init__(self, full: int = 0, undelivered: int = 0, queued: int = 1, delivered: int = 0, errors: int = 0, **kwargs):
             super().__init__(**kwargs)
-            self.full, self.queued, self.delivered = full, queued, delivered
+            self.full, self.queued, self.delivered, self.errors = full, queued, delivered, errors
             self.undelivered = iter(undelivered) if isinstance(undelivered, list) else itertools.repeat(undelivered)
             self.polls, self.flushes = [], []
 
@@ -433,7 +433,9 @@ class TestKafkaDelivery:
 
         def poll(self, timeout=None):
             self.polls.append(timeout)
-            return self.delivered
+            delivered = min(self.delivered, self.queued)
+            self.queued -= delivered
+            return delivered + self.errors
 
         def flush(self, *args):
             self.flushes.append(args)
@@ -519,7 +521,7 @@ class TestKafkaDelivery:
         assert producer.flushes == [(1,)] * 5
 
     @pytest.mark.unit
-    @pytest.mark.parametrize("flush_timeout", [-1, -0.5, "30", True])
+    @pytest.mark.parametrize("flush_timeout", [-1, -0.5, float("nan"), "30", True])
     def test_a_flush_timeout_that_is_not_a_number_of_0_or_more_raises_before_the_first_message(self, test_df, flush_timeout):
         # Given
         producer = self.Producer()
@@ -552,7 +554,7 @@ class TestKafkaDelivery:
     @pytest.mark.unit
     def test_a_full_queue_that_keeps_delivering_does_not_raise_a_timeout_error(self, test_df):
         # Given a queue that is full for 5 sends but delivers a message on each poll, and a clock that moves 10 s on each reading
-        producer = self.Producer(full=5, delivered=1)
+        producer = self.Producer(full=5, queued=6, delivered=1)
 
         # When
         with patch("dynamicio.mixins.with_kafka.time.monotonic", side_effect=itertools.count(0, 10)):
@@ -560,6 +562,27 @@ class TestKafkaDelivery:
 
         # Then
         assert [message["key"] for message in producer.my_stream] == [b"0", b"1", b"2"]
+
+    @pytest.mark.unit
+    def test_a_full_queue_that_only_serves_error_events_raises_a_timeout_error(self, test_df):
+        # Given a full queue that delivers nothing and serves an error event on each poll, as with a broker that refuses connections
+        producer = self.Producer(full=50, errors=1)
+
+        # When / Then
+        with patch("dynamicio.mixins.with_kafka.time.monotonic", side_effect=itertools.count(0, 10)), pytest.raises(TimeoutError, match="no room for 30s"):
+            self.write(producer, test_df, flush_timeout=30)
+        assert not producer.my_stream
+
+    @pytest.mark.unit
+    def test_a_full_queue_waits_no_longer_than_a_flush_timeout_below_1s(self, test_df):
+        # Given a queue that is full for 1 send and delivers on each poll
+        producer = self.Producer(full=1, queued=2, delivered=1)
+
+        # When
+        self.write(producer, test_df, flush_timeout=0.25)
+
+        # Then
+        assert producer.polls[0] == 0.25
 
     @pytest.mark.unit
     def test_a_falsy_callable_option_is_kept(self, test_df):
