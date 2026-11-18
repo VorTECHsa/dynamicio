@@ -44,8 +44,8 @@ class TestS3PathPrefixWrite:
     """The 3 `mode` values of a path prefix write on S3 that deletes objects with `DeleteObjects`."""
 
     @staticmethod
-    def write(config, **options):
-        WriteS3IO(source_config=config, partition_cols=["col_2"], **options).write(pd.DataFrame({"col_1": [1, 2], "col_2": ["a", "b"]}))
+    def write(config, values=("a", "b"), **options):
+        WriteS3IO(source_config=config, partition_cols=["col_2"], **options).write(pd.DataFrame({"col_1": range(len(values)), "col_2": list(values)}))
 
     def test_append_keeps_the_old_objects(self, floci, prefix, tmp_path):
         # Given
@@ -89,21 +89,42 @@ class TestS3PathPrefixWrite:
         assert {key.split("/")[-2] for key in keys} == {"col_2=a", "col_2=b"}
         assert S3Objects.keys(floci, f"{prefix}/data_2") == {sibling}
 
-    @pytest.mark.parametrize("engine", ["pyarrow", "fastparquet"])
-    def test_overwrite_partitions_deletes_the_old_objects_of_the_written_partitions_only(self, floci, prefix, tmp_path, engine):
+    def test_overwrite_partitions_deletes_the_old_objects_of_the_written_partitions_only(self, floci, prefix, tmp_path):
         # Given an old object in a written partition, one in another partition and one directly under the prefix
         written, kept = f"{prefix}/data/col_2=a/old.parquet", {f"{prefix}/data/col_2=z/old.parquet", f"{prefix}/data/root.parquet"}
         S3Objects.put(floci, written, *kept)
 
         # When
-        self.write(Resources.s3_path_prefix(tmp_path, floci.bucket, f"{prefix}/data/"), mode="overwrite_partitions", allow_delete=True, engine=engine)
+        self.write(Resources.s3_path_prefix(tmp_path, floci.bucket, f"{prefix}/data/"), mode="overwrite_partitions", allow_delete=True)
 
         # Then
         keys = S3Objects.keys(floci, f"{prefix}/data")
         assert written not in keys
         assert kept <= keys
-        new_data_files = {key for key in keys - kept if not key.split("/")[-1].startswith("_")}  # fastparquet also writes `_metadata` files under the prefix
-        assert {key.split("/")[-2] for key in new_data_files} == {"col_2=a", "col_2=b"}
+        assert {key.split("/")[-2] for key in keys - kept} == {"col_2=a", "col_2=b"}
+
+    def test_overwrite_partitions_of_a_value_with_a_slash_keeps_the_partition_of_its_first_part(self, floci, prefix, tmp_path):
+        # Given an old object in the partition of "a", and pyarrow, which writes the value "a/b" to `col_2=a%2Fb/`
+        kept = f"{prefix}/data/col_2=a/old.parquet"
+        S3Objects.put(floci, kept)
+
+        # When
+        self.write(Resources.s3_path_prefix(tmp_path, floci.bucket, f"{prefix}/data/"), values=["a/b"], mode="overwrite_partitions", allow_delete=True)
+
+        # Then
+        keys = S3Objects.keys(floci, f"{prefix}/data")
+        assert kept in keys
+        assert {key.split("/")[-2] for key in keys - {kept}} == {"col_2=a%2Fb"}
+
+    def test_overwrite_partitions_with_fastparquet_raises_and_deletes_nothing(self, floci, prefix, tmp_path):
+        # Given
+        old = {f"{prefix}/data/col_2=a/old.parquet", f"{prefix}/data/col_2=z/old.parquet"}
+        S3Objects.put(floci, *old)
+
+        # When / Then
+        with pytest.raises(ValueError, match="pyarrow engine"):
+            self.write(Resources.s3_path_prefix(tmp_path, floci.bucket, f"{prefix}/data/"), mode="overwrite_partitions", allow_delete=True, engine="fastparquet")
+        assert S3Objects.keys(floci, f"{prefix}/data") == old
 
     def test_a_delete_mode_on_the_whole_bucket_raises_before_the_write(self, floci, tmp_path):
         # Given
