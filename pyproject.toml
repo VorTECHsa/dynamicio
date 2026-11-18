@@ -154,9 +154,11 @@ max-line-length = 185
     markers = [
         "unit: mark tests that asses the logic of a functions smaller logical components",
         "integration: mark a test concerned with the use of multiple functions",
+        "floci: mark a test that needs the floci fixture of tests/integration, which starts floci in Docker",
     ]
     # the dynamicio plugin is off here: pytest would import the package before coverage starts and undercount it (the plugin is tested by calling its hook)
-    addopts = "-p no:warnings -p no:dynamicio"
+    # the floci tests start floci in Docker, so a default run leaves them out: `pytest -m floci tests/integration` runs them
+    addopts = "-p no:warnings -p no:dynamicio -m 'not floci'"
     log_cli = false
 
 [tool.pydocstyle]

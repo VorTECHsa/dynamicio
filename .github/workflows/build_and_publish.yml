@@ -60,6 +60,25 @@ jobs:
           name: test-results-${{ matrix.python-version }}
           path: test-results
 
+  integration:
+    # S3, RDS Postgres and MSK Kafka on floci, a local AWS emulator in Docker (tests/integration/conftest.py pins the images)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Run integration tests
+        run: uv run --frozen pytest -vv -m floci tests/integration
+
   dependency-ranges:
     # `pyproject.toml` declares wide ranges for users; these jobs prove both ends: the declared minimums and the newest releases.
     runs-on: ubuntu-latest
@@ -209,7 +228,7 @@ jobs:
 
   publish:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: ["style-checks", "test", "dependency-ranges", "docs", "package", "validate-release"]
+    needs: ["style-checks", "test", "integration", "dependency-ranges", "docs", "package", "validate-release"]
     runs-on: ubuntu-latest
     concurrency:
       group: release-${{ github.ref_name }}  # one release run per tag; a re-run waits instead of racing
