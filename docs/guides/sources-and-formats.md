@@ -46,8 +46,9 @@ than an old schema ([design decision](https://github.com/VorTECHsa/dynamicio/blo
 
 ### Writes to a parquet prefix
 
-A write to an `s3_path_prefix` needs the `partition_cols` option. Each write gives its files new names, so the
-`mode` option sets what happens to the objects that are already under the prefix:
+A write to an `s3_path_prefix` needs the `partition_cols` option. With the pyarrow engine, each write gives its files
+new names, so the `mode` option sets what happens to the objects that are already under the prefix. The fastparquet
+engine names the files of each partition `part.0.parquet` and onward, so a write replaces the files of the same name.
 
 | `mode` | The objects under the prefix before the write |
 |---|---|
@@ -59,7 +60,9 @@ A write to an `s3_path_prefix` needs the `partition_cols` option. Each write giv
 it, dynamicio logs a warning and appends, as dynamicio 11.0.0 did for any `mode`. A value of `allow_delete` that is
 not `true` or `false`, such as the string `"false"`, raises `TypeError`. A delete mode raises `ValueError`
 when the key prefix is empty, because the prefix is then the whole bucket. A partition is the `col=value` directories
-of `partition_cols` under the prefix. A file directly under the prefix is in no partition.
+of `partition_cols` under the prefix. A file directly under the prefix is in no partition. `overwrite_partitions` needs
+the pyarrow engine. fastparquet does not encode the partition values in the keys: the value `a/b` writes to
+`col=a/b/`, which is in the partition of the value `a`. With fastparquet, `overwrite_partitions` raises `ValueError`.
 
 The values and their meaning are those of `mode` in `awswrangler.s3.to_parquet`. dynamicio deletes the old objects only
 after it uploads all new objects, so a failed upload deletes nothing. A new key that another writer puts under the

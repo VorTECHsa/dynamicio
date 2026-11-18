@@ -1671,17 +1671,36 @@ class TestS3PathPrefixWriteModes:
         assert self.keys(bucket).keys() == set(self.OLD_KEYS + self.OTHER_KEYS)
 
     @pytest.mark.unit
-    def test_overwrite_partitions_with_fastparquet_keeps_the_partitions_that_the_write_does_not_write(self, bucket):
+    @pytest.mark.parametrize("pandas_engine, options", [("auto", {"engine": "fastparquet"}), ("fastparquet", {})], ids=["option", "pandas-default"])
+    def test_overwrite_partitions_with_fastparquet_raises_a_value_error_and_writes_nothing(self, bucket, pandas_engine, options):
+        # Given fastparquet, which writes the partition value "a/b" to `col=a/b/`, a key in the partition of "a"
+
+        # When / Then
+        with pd.option_context("io.parquet.engine", pandas_engine), pytest.raises(ValueError, match="pyarrow engine"):
+            self.write(mode="overwrite_partitions", allow_delete=True, **options)
+        assert self.keys(bucket).keys() == set(self.OLD_KEYS + self.OTHER_KEYS)
+
+    @pytest.mark.unit
+    def test_overwrite_partitions_with_fastparquet_and_without_allow_delete_appends_as_in_11_0_0(self, bucket):
+        # When
+        self.write(mode="overwrite_partitions", engine="fastparquet")
+
+        # Then
+        keys = self.keys(bucket)
+        assert {"data/some_dir/_metadata", *self.OLD_KEYS, *self.OTHER_KEYS} <= keys.keys()
+
+    @pytest.mark.unit
+    def test_overwrite_with_fastparquet_deletes_the_old_objects_and_keeps_the_new_metadata(self, bucket):
         # Given fastparquet, which also writes `_metadata` and `_common_metadata` at the root of the dataset
 
         # When
-        self.write(mode="overwrite_partitions", allow_delete=True, engine="fastparquet")
+        self.write(mode="overwrite", allow_delete=True, engine="fastparquet")
 
         # Then
         keys = self.keys(bucket)
         assert "data/some_dir/_metadata" in keys
-        assert "data/some_dir/col_2=a/old.parquet" not in keys
-        assert {"data/some_dir/col_2=z/old.parquet", *self.OTHER_KEYS} <= keys.keys()
+        assert not set(self.OLD_KEYS) & keys.keys()
+        assert set(self.OTHER_KEYS) <= keys.keys()
 
     @pytest.mark.unit
     @pytest.mark.parametrize("mode", ["overwrite", "overwrite_partitions"])

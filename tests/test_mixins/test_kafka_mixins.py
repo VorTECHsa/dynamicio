@@ -413,12 +413,13 @@ class TestKafkaDelivery:
     """How a write hands its messages to the producer: queue full, delivery callbacks, flush, and the options it keeps."""
 
     class Producer(MockKafkaProducer):
-        """A producer whose local queue is full for the first `full` sends, holds `queued` messages, has `undelivered` messages left after a flush,
-        and serves `delivered` delivery reports on each poll."""
+        """A producer whose local queue is full for the first `full` sends, holds `queued` messages, has `undelivered` messages left after a flush
+        (one count for each flush when it is a list), and serves `delivered` delivery reports on each poll."""
 
         def __init__(self, full: int = 0, undelivered: int = 0, queued: int = 1, delivered: int = 0, **kwargs):
             super().__init__(**kwargs)
-            self.full, self.undelivered, self.queued, self.delivered = full, undelivered, queued, delivered
+            self.full, self.queued, self.delivered = full, queued, delivered
+            self.undelivered = iter(undelivered) if isinstance(undelivered, list) else itertools.repeat(undelivered)
             self.polls, self.flushes = [], []
 
         def __len__(self):
@@ -436,7 +437,7 @@ class TestKafkaDelivery:
 
         def flush(self, *args):
             self.flushes.append(args)
-            return self.undelivered
+            return next(self.undelivered)
 
     @staticmethod
     def write(producer, df, **options):
@@ -496,14 +497,36 @@ class TestKafkaDelivery:
         assert producer.flushes == [()]
 
     @pytest.mark.unit
-    def test_messages_left_after_the_flush_timeout_raise_a_timeout_error(self, test_df):
-        # Given
-        producer = self.Producer(undelivered=2)
+    def test_a_flush_that_delivers_nothing_for_flush_timeout_seconds_raises_a_timeout_error(self, test_df):
+        # Given 2 queued messages that the flush does not deliver, and a clock that moves 10 s on each reading
+        producer = self.Producer(queued=2, undelivered=2)
 
         # When / Then
-        with pytest.raises(TimeoutError, match="2 messages"):
+        with patch("dynamicio.mixins.with_kafka.time.monotonic", side_effect=itertools.count(0, 10)), pytest.raises(TimeoutError, match="2 messages"):
             self.write(producer, test_df, flush_timeout=30)
-        assert producer.flushes == [(30,)]
+        assert producer.flushes == [(1,)] * 3
+
+    @pytest.mark.unit
+    def test_a_slow_flush_that_keeps_delivering_does_not_raise_a_timeout_error(self, test_df):
+        # Given 5 queued messages that the flush delivers one at a time, and a clock that moves 10 s on each reading
+        producer = self.Producer(queued=5, undelivered=[4, 3, 2, 1, 0])
+
+        # When
+        with patch("dynamicio.mixins.with_kafka.time.monotonic", side_effect=itertools.count(0, 10)):
+            self.write(producer, test_df, flush_timeout=30)
+
+        # Then
+        assert producer.flushes == [(1,)] * 5
+
+    @pytest.mark.unit
+    def test_a_flush_timeout_of_zero_flushes_once_without_waiting(self, test_df):
+        # Given
+        producer = self.Producer(queued=2, undelivered=2)
+
+        # When / Then
+        with pytest.raises(TimeoutError, match="flush_timeout=0s"):
+            self.write(producer, test_df, flush_timeout=0)
+        assert producer.flushes == [(0,)]
 
     @pytest.mark.unit
     def test_a_queue_with_no_room_for_flush_timeout_seconds_raises_a_timeout_error(self, test_df):

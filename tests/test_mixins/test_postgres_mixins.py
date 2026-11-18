@@ -63,7 +63,7 @@ class TestPostgresIO:
         WithPostgres._write_to_database(session, Table("dummy_table", MetaData()), df, is_truncate_and_append=False)
 
         # Then the COPY text format reads a backslash and the next character as that character
-        assert copied == ["1\tcr\\\rx\n2\tlf\\\nx\n3\ttab\\\tx\n4\tback\\\\x\n"]
+        assert copied == ["1\tcr\\\rx\r\n2\tlf\\\nx\r\n3\ttab\\\tx\r\n4\tback\\\\x\r\n"]
 
     @pytest.mark.unit
     @pytest.mark.parametrize(

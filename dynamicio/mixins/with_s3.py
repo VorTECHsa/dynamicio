@@ -16,7 +16,7 @@ import urllib.parse
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
-from typing import IO, Any, Callable, Dict, Generator, List, Mapping, NoReturn, Optional, Tuple, TypeVar, Union
+from typing import IO, Any, Callable, Dict, Generator, List, Mapping, NoReturn, Optional, Set, Tuple, TypeVar, Union
 from urllib.parse import urlparse
 
 import awswrangler as wr
@@ -542,7 +542,8 @@ class WithS3PathPrefix(with_local.WithLocal):
             - `append` (the default): they stay, so a second write of the same rows adds them again.
             - `overwrite`: they are deleted.
             - `overwrite_partitions`: those of the partitions that the write writes to are deleted, the others stay. A partition is the
-              `col=value` directories of `partition_cols`, and a file directly under the prefix is in no partition.
+              `col=value` directories of `partition_cols`, and a file directly under the prefix is in no partition. It needs the pyarrow engine,
+              because fastparquet does not encode the values in the directory names.
         The 2 delete modes delete only with `allow_delete: true`. Without it the write warns and appends, as 11.0.0 did for any `mode`.
         A delete mode on an empty key prefix (the whole bucket) raises. S3 cannot restore a deleted object.
         The old objects are deleted only after every new object is uploaded, and an object that the write replaces is not deleted.
@@ -556,6 +557,7 @@ class WithS3PathPrefix(with_local.WithLocal):
             ValueError: In case `path_prefix` is missing from config
             ValueError: In case the `partition_cols` arg is missing while trying to write a parquet file, `mode` is not one of `WRITE_MODES`,
                 or a delete mode has an empty key prefix
+            ValueError: If `mode` is `overwrite_partitions` and the engine is fastparquet
             TypeError: If `allow_delete` is not a bool
             RuntimeError: If S3 could not delete some of the old objects
         """
@@ -572,7 +574,6 @@ class WithS3PathPrefix(with_local.WithLocal):
             raise ValueError(f"`mode` must be one of {self.WRITE_MODES}, got {mode!r}")
         if not isinstance(allow_delete, bool):  # a YAML `allow_delete: "false"` is a nonempty string, which is true
             raise TypeError(f"`allow_delete` must be true or false, got {allow_delete!r}")
-        partition_cols = [options["partition_cols"]] if isinstance(options["partition_cols"], str) else list(options["partition_cols"])  # pandas also takes one name
 
         full_path_prefix = utils.resolve_template(f"s3://{s3_config.bucket}/{s3_config.path_prefix}", options)
         bucket, key_prefix = _split_s3_url(full_path_prefix)
@@ -583,19 +584,29 @@ class WithS3PathPrefix(with_local.WithLocal):
             mode = "append"
         if mode != "append" and not key_prefix:
             raise ValueError(f"mode={mode!r} needs a key prefix: {full_path_prefix} is the whole bucket")
+        if mode == "overwrite_partitions" and options.get("engine", pd.get_option("io.parquet.engine")) == "fastparquet":
+            # fastparquet does not encode the values in the `col=value` directories: the value "a/b" writes `col=a/b/`, which is in partition `col=a`
+            raise ValueError("mode='overwrite_partitions' needs the pyarrow engine: fastparquet does not encode the partition values in the keys")
 
         old_keys = [] if mode == "append" else S3Keys.list(full_path_prefix)
         with tempfile.TemporaryDirectory() as temp_dir:
             self._write_parquet_file(df, temp_dir, **options)
             written = set(s3_sync_up(temp_dir, full_path_prefix))
 
-        stale = [key for key in old_keys if key not in written]
-        if mode == "overwrite_partitions":
-            partitions = {self._partition_of(key, key_prefix, partition_cols) for key in written} - {None}
-            stale = [key for key in stale if self._partition_of(key, key_prefix, partition_cols) in partitions]
+        stale = self._stale_keys(old_keys, written, key_prefix, options["partition_cols"] if mode == "overwrite_partitions" else None)
         if stale:
             logger.info(f"[s3] mode={mode!r}: deleting {len(stale)} old objects under {full_path_prefix}")
             S3Keys.delete(bucket, stale)
+
+    @staticmethod
+    def _stale_keys(old_keys: List[str], written: Set[str], key_prefix: str, partition_cols: Optional[Union[str, List[str]]]) -> List[str]:
+        """Return the `old_keys` that the write did not replace, and with `partition_cols`, only those in a partition that the write wrote to."""
+        stale = [key for key in old_keys if key not in written]
+        if partition_cols is None:
+            return stale
+        partition_cols = [partition_cols] if isinstance(partition_cols, str) else list(partition_cols)  # pandas also takes one name
+        partitions = {WithS3PathPrefix._partition_of(key, key_prefix, partition_cols) for key in written} - {None}
+        return [key for key in stale if WithS3PathPrefix._partition_of(key, key_prefix, partition_cols) in partitions]
 
     @staticmethod
     def _partition_of(key: str, key_prefix: str, partition_cols: List[str]) -> Optional[Tuple[str, ...]]:

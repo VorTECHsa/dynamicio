@@ -346,9 +346,25 @@ class WithKafka:
                         waiting_since = None
             self.__producer.poll(0)  # serve the delivery callbacks, so a failed delivery raises during the write and not only at the flush
 
-        undelivered = self.__producer.flush() if flush_timeout is None else self.__producer.flush(flush_timeout)
+        self._flush(topic, flush_timeout)
+
+    def _flush(self, topic: str, flush_timeout: Optional[float]) -> None:
+        """Wait for the delivery of the queued messages, and raise `TimeoutError` after `flush_timeout` seconds with no delivery.
+
+        A single `flush(flush_timeout)` would be a deadline for the whole queue, and a slow queue that still delivers would raise.
+        """
+        if flush_timeout is None:
+            undelivered = self.__producer.flush()
+        else:
+            undelivered, waiting_since = len(self.__producer), time.monotonic()
+            while undelivered:
+                left = self.__producer.flush(min(1, flush_timeout))
+                if left < undelivered:
+                    undelivered, waiting_since = left, time.monotonic()
+                elif time.monotonic() - waiting_since >= flush_timeout:
+                    break
         if undelivered:
-            raise TimeoutError(f"{undelivered} messages to Kafka topic {topic} were not delivered within flush_timeout={flush_timeout}s")
+            raise TimeoutError(f"{undelivered} messages to Kafka topic {topic} were not delivered: no message was delivered for flush_timeout={flush_timeout}s")
 
     @staticmethod
     def _on_delivery(err, msg):
