@@ -1681,6 +1681,15 @@ class TestS3PathPrefixWriteModes:
         assert self.keys(bucket).keys() == set(self.OLD_KEYS + self.OTHER_KEYS)
 
     @pytest.mark.unit
+    def test_overwrite_partitions_with_no_partition_columns_raises_a_value_error_and_writes_nothing(self, bucket):
+        # Given no partition column, so that every key under the prefix, also a file directly under it, would be in the same partition
+
+        # When / Then
+        with pytest.raises(ValueError, match="at least one partition column"):
+            self.write(mode="overwrite_partitions", allow_delete=True, partition_cols=[])
+        assert self.keys(bucket).keys() == set(self.OLD_KEYS + self.OTHER_KEYS)
+
+    @pytest.mark.unit
     def test_overwrite_partitions_with_fastparquet_and_without_allow_delete_appends_as_in_11_0_0(self, bucket):
         # When
         self.write(mode="overwrite_partitions", engine="fastparquet")
@@ -2110,9 +2119,10 @@ class TestS3CopilotRegressions:
             dynamicio.mixins.with_s3.s3_sync_down("s3://b/p/", str(tmp_path))
             assert (tmp_path / "a.parquet").read_bytes() == b"abc" and (tmp_path / "sub" / "b.parquet").read_bytes() == b"abc"
             client.head_object.assert_not_called()
-            dynamicio.mixins.with_s3.s3_sync_up(str(tmp_path), "s3://b/q/", acl="private")
+            uploaded = dynamicio.mixins.with_s3.s3_sync_up(str(tmp_path), "s3://b/q/", acl="private")
         keys = sorted(c.kwargs["Key"] for c in client.put_object.call_args_list)
         assert keys == ["q/a.parquet", "q/sub/b.parquet"]
+        assert sorted(uploaded) == keys
         assert all(c.kwargs["ACL"] == "private" for c in client.put_object.call_args_list)
 
     def test_read_down_parses_in_memory_in_key_order_with_one_request_per_file(self):

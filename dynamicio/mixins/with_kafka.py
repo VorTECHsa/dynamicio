@@ -322,6 +322,9 @@ class WithKafka:
         logger.debug(f"Sending {len(df)} messages to Kafka topic: {topic}.")
         messages = df.reset_index(drop=True).to_dict("records")
         flush_timeout = self.options.get("flush_timeout")
+        # checked before the first message: a TypeError after the queue holds messages would leave them to the cached producer, and a retry would send them twice
+        if flush_timeout is not None and (isinstance(flush_timeout, bool) or not isinstance(flush_timeout, (int, float)) or flush_timeout < 0):
+            raise ValueError(f"`flush_timeout` must be a number of seconds of 0 or more, got {flush_timeout!r}")  # confluent-kafka takes a negative timeout as no timeout
 
         for idx, message in zip(df.index.values, messages):
             key = self.__key_generator(idx, message)

@@ -557,7 +557,7 @@ class WithS3PathPrefix(with_local.WithLocal):
             ValueError: In case `path_prefix` is missing from config
             ValueError: In case the `partition_cols` arg is missing while trying to write a parquet file, `mode` is not one of `WRITE_MODES`,
                 or a delete mode has an empty key prefix
-            ValueError: If `mode` is `overwrite_partitions` and the engine is fastparquet
+            ValueError: If `mode` is `overwrite_partitions` and `partition_cols` is empty or the engine is fastparquet
             TypeError: If `allow_delete` is not a bool
             RuntimeError: If S3 could not delete some of the old objects
         """
@@ -584,6 +584,8 @@ class WithS3PathPrefix(with_local.WithLocal):
             mode = "append"
         if mode != "append" and not key_prefix:
             raise ValueError(f"mode={mode!r} needs a key prefix: {full_path_prefix} is the whole bucket")
+        if mode == "overwrite_partitions" and not options["partition_cols"]:  # with no partition column, every key would be in the one partition `()`
+            raise ValueError("mode='overwrite_partitions' needs at least one partition column in `partition_cols`")
         if mode == "overwrite_partitions" and options.get("engine", pd.get_option("io.parquet.engine")) == "fastparquet":
             # fastparquet does not encode the values in the `col=value` directories: the value "a/b" writes `col=a/b/`, which is in partition `col=a`
             raise ValueError("mode='overwrite_partitions' needs the pyarrow engine: fastparquet does not encode the partition values in the keys")

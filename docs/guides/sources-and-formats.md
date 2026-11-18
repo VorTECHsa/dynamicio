@@ -62,7 +62,8 @@ not `true` or `false`, such as the string `"false"`, raises `TypeError`. A delet
 when the key prefix is empty, because the prefix is then the whole bucket. A partition is the `col=value` directories
 of `partition_cols` under the prefix. A file directly under the prefix is in no partition. `overwrite_partitions` needs
 the pyarrow engine. fastparquet does not encode the partition values in the keys: the value `a/b` writes to
-`col=a/b/`, which is in the partition of the value `a`. With fastparquet, `overwrite_partitions` raises `ValueError`.
+`col=a/b/`, which is in the partition of the value `a`. With fastparquet, `overwrite_partitions` raises `ValueError`. It also raises `ValueError` when
+`partition_cols` is empty.
 
 The values and their meaning are those of `mode` in `awswrangler.s3.to_parquet`. dynamicio deletes the old objects only
 after it uploads all new objects, so a failed upload deletes nothing. A new key that another writer puts under the

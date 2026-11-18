@@ -519,6 +519,17 @@ class TestKafkaDelivery:
         assert producer.flushes == [(1,)] * 5
 
     @pytest.mark.unit
+    @pytest.mark.parametrize("flush_timeout", [-1, -0.5, "30", True])
+    def test_a_flush_timeout_that_is_not_a_number_of_0_or_more_raises_before_the_first_message(self, test_df, flush_timeout):
+        # Given
+        producer = self.Producer()
+
+        # When / Then
+        with pytest.raises(ValueError, match="flush_timeout"):
+            self.write(producer, test_df, flush_timeout=flush_timeout)
+        assert not producer.my_stream and not producer.flushes
+
+    @pytest.mark.unit
     def test_a_flush_timeout_of_zero_flushes_once_without_waiting(self, test_df):
         # Given
         producer = self.Producer(queued=2, undelivered=2)
