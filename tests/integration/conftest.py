@@ -6,7 +6,7 @@ import time
 import uuid
 from contextlib import closing
 from dataclasses import dataclass
-from typing import Any, Callable, Iterator, Set
+from typing import Any, Callable, Iterator, List, Set
 
 import boto3
 import psycopg2
@@ -33,7 +33,8 @@ class FlociStack:
     kafka_container: str
 
     def s3_client(self):
-        return boto3.client("s3", endpoint_url=self.endpoint_url)
+        # Its own session: `boto3.client` would create and keep `boto3.DEFAULT_SESSION`, which outlives the floci environment
+        return boto3.Session(aws_access_key_id="test", aws_secret_access_key="test", region_name=Floci.REGION).client("s3", endpoint_url=self.endpoint_url)
 
     def pg_connection(self):
         return psycopg2.connect(host=self.db_host, port=self.db_port, user=self.db_user, password=self.db_password, dbname=self.db_name)
@@ -64,13 +65,8 @@ class Floci:
     DB_USER, DB_PASSWORD, DB_NAME = "dynamicio", "dynamicio", "postgres"
 
     def __init__(self):
+        # Also the name of the RDS instance and the MSK cluster: floci labels their containers with it (`io.floci.resource-id`)
         self.name = f"dynamicio-floci-{uuid.uuid4().hex[:8]}"
-        self.others: Set[str] = set()
-
-    @staticmethod
-    def floci_children() -> Set[str]:
-        """Return the names of the RDS and MSK containers of all floci servers on this Docker host."""
-        return set(subprocess.run(["docker", "ps", "-a", "--filter", "name=floci-aws-", "--format", "{{.Names}}"], capture_output=True, text=True, check=True).stdout.split())
 
     @staticmethod
     def docker_is_available() -> bool:
@@ -94,19 +90,16 @@ class Floci:
             time.sleep(1)
 
     def start(self) -> FlociStack:
-        self.others = self.floci_children()
-        subprocess.run(
+        self.docker_run(
             [
                 "docker", "run", "-d", "--name", self.name, "-u", "root",
-                "-p", f"{self.PORT}:{self.PORT}", "-p", f"{self.RDS_PROXY_PORTS}:{self.RDS_PROXY_PORTS}",
+                "-p", f"127.0.0.1:{self.PORT}:{self.PORT}", "-p", f"127.0.0.1:{self.RDS_PROXY_PORTS}:{self.RDS_PROXY_PORTS}",
                 "-v", "/var/run/docker.sock:/var/run/docker.sock",
                 "-e", "FLOCI_SERVICES_MSK_BOOTSTRAP_HOSTNAME=localhost",
                 "-e", f"FLOCI_SERVICES_RDS_DEFAULT_POSTGRES_IMAGE={self.POSTGRES_IMAGE}",
                 "-e", f"FLOCI_SERVICES_MSK_DEFAULT_IMAGE={self.REDPANDA_IMAGE}",
                 self.IMAGE,
-            ],
-            check=True,
-            capture_output=True,
+            ]
         )  # fmt: skip
         endpoint_url = self.ENVIRONMENT["AWS_ENDPOINT_URL"]
         session = boto3.Session(aws_access_key_id="test", aws_secret_access_key="test", region_name=self.REGION)
@@ -116,13 +109,13 @@ class Floci:
         bucket = f"dynamicio-it-{uuid.uuid4().hex[:8]}"
         s3.create_bucket(Bucket=bucket, CreateBucketConfiguration={"LocationConstraint": self.REGION})
         rds.create_db_instance(
-            DBInstanceIdentifier="dynamicio", DBInstanceClass="db.t3.micro", Engine="postgres", MasterUsername=self.DB_USER, MasterUserPassword=self.DB_PASSWORD, AllocatedStorage=20
+            DBInstanceIdentifier=self.name, DBInstanceClass="db.t3.micro", Engine="postgres", MasterUsername=self.DB_USER, MasterUserPassword=self.DB_PASSWORD, AllocatedStorage=20
         )
         cluster_arn = kafka.create_cluster(
-            ClusterName="dynamicio", KafkaVersion="3.6.1", NumberOfBrokerNodes=1, BrokerNodeGroupInfo={"InstanceType": "kafka.m5.large", "ClientSubnets": ["subnet-1"]}
+            ClusterName=self.name, KafkaVersion="3.6.1", NumberOfBrokerNodes=1, BrokerNodeGroupInfo={"InstanceType": "kafka.m5.large", "ClientSubnets": ["subnet-1"]}
         )["ClusterArn"]
 
-        endpoint = self.wait_for(lambda: rds.describe_db_instances(DBInstanceIdentifier="dynamicio")["DBInstances"][0].get("Endpoint"), "RDS")
+        endpoint = self.wait_for(lambda: rds.describe_db_instances(DBInstanceIdentifier=self.name)["DBInstances"][0].get("Endpoint"), "RDS")
         self.wait_for(lambda: kafka.describe_cluster(ClusterArn=cluster_arn)["ClusterInfo"]["State"] == "ACTIVE", "MSK")
         # The bootstrap string lists the address inside the Docker network first and the address on the host last
         bootstrap = kafka.get_bootstrap_brokers(ClusterArn=cluster_arn)["BootstrapBrokerString"].split(",")[-1]
@@ -141,9 +134,17 @@ class Floci:
         self.wait_for(lambda: AdminClient({"bootstrap.servers": bootstrap}).list_topics(timeout=5).brokers, "the Kafka broker")
         return stack
 
+    @staticmethod
+    def docker_run(command: List[str]) -> None:
+        """Run `command` and raise its stderr on a failure, such as a port that another process holds."""
+        result = subprocess.run(command, capture_output=True, text=True, check=False)
+        if result.returncode != 0:
+            raise RuntimeError(f"floci: `docker run` failed: {result.stderr.strip()}")
+
     def children(self) -> Set[str]:
         """Return the names of the RDS and MSK containers that this floci started."""
-        return self.floci_children() - self.others
+        command = ["docker", "ps", "-a", "--filter", f"label=io.floci.resource-id={self.name}", "--format", "{{.Names}}"]
+        return set(subprocess.run(command, capture_output=True, text=True, check=True).stdout.split())
 
     def stop(self) -> None:
         """Remove floci and the RDS and MSK containers that it started."""

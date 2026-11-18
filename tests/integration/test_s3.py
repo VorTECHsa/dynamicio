@@ -129,6 +129,25 @@ class TestS3MissingObjects:
             io_class(source_config=config).read()
         assert raised.value.response["Error"]["Code"] == code
 
+    def test_a_missing_key_read_by_awswrangler_raises_s3_key_not_found_error(self, floci, prefix, tmp_path):
+        # Given an option that only awswrangler takes, so that awswrangler reads the file
+        config = Resources.s3_file(tmp_path, floci.bucket, f"{prefix}/missing.parquet", "parquet")
+
+        # When / Then
+        with pytest.raises(dynamicio.errors.S3KeyNotFoundError):
+            ReadS3ParquetIO(source_config=config, ignore_empty=False).read()
+
+    @pytest.mark.usefixtures("floci")
+    def test_a_missing_bucket_read_by_awswrangler_raises_the_head_bucket_error(self, tmp_path):
+        # Given
+        config = Resources.s3_file(tmp_path, f"dynamicio-missing-{uuid.uuid4().hex[:8]}", "data.parquet", "parquet")
+
+        # When / Then
+        with pytest.raises(ClientError) as raised:
+            ReadS3ParquetIO(source_config=config, ignore_empty=False, missing_ok=True).read()
+        assert raised.value.operation_name == "HeadBucket"
+        assert not isinstance(raised.value, dynamicio.errors.S3KeyNotFoundError)
+
     @pytest.mark.parametrize("file_type, io_class", [("parquet", ReadS3ParquetIO), ("hdf", ReadS3HdfIO)], ids=["parquet", "hdf"])
     def test_a_missing_key_returns_none_when_missing_ok_is_true(self, floci, prefix, tmp_path, file_type, io_class):
         # Given

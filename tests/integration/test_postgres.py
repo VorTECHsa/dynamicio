@@ -35,6 +35,17 @@ class TestPostgresCopyWrite:
         # Then
         assert self.read(pg_config).loc[0, "foo"] is None
 
+    def test_line_breaks_tabs_and_backslashes_in_values_read_back_unchanged(self, pg_config):
+        # Given the characters that the text format of COPY escapes, and a value that looks like its default NULL marker
+        values = ["cr\rx", "lf\nx", "crlf\r\nx", "tab\tx", "back\\x", "\\N", "end\\"]
+        df = pd.DataFrame({"id": [str(i) for i in range(len(values))], "foo": values, "bar": range(len(values)), "baz": "z"})
+
+        # When
+        WritePostgresIO(source_config=pg_config, create_table=True).write(df)
+
+        # Then
+        pd.testing.assert_frame_equal(self.read(pg_config), df)
+
     @pytest.mark.parametrize("truncate_and_append", [False, True])
     def test_a_second_write_replaces_the_rows(self, pg_config, truncate_and_append):
         # Given
