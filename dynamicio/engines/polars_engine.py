@@ -77,8 +77,15 @@ class PolarsEngine(Engine):
         self.not_yet("sink")
 
     def select_columns(self, io: "DynamicDataIO", frame: Any) -> Any:
-        """The schema columns of a frame, in the order of the frame. A polars frame does not change in place, so the caller's frame does not change."""
-        return frame.select([column for column in frame.collect_schema().names() if column in io.schema.column_names])
+        """The schema columns of a frame, in the order of the frame, with float NaN changed to null as the cast changes it.
+
+        The write validations and metrics then see a NaN as a null, as the pandas engine sees it. A polars frame does not change in place, so the caller's
+        frame does not change.
+        """
+        import polars.selectors as cs  # pylint: disable=import-outside-toplevel
+
+        selected = frame.select([column for column in frame.collect_schema().names() if column in io.schema.column_names])
+        return selected.with_columns(cs.float().fill_nan(None))
 
     def cast(self, io: "DynamicDataIO", frame: Any) -> Any:
         """A frame with the polars dtypes of the model, and float NaN changed to null (decision 3 of ADR 0010).

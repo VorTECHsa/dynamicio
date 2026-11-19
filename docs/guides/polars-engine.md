@@ -94,7 +94,7 @@ The readers are polars readers, and the engine then casts the frame to the model
 
 The `options` of a resource go beside its `local` or `s3` section. A file type accepts the options of its pandas reader and of its pandas writer. Examples are `sep`,
 `na_values` and `nrows` for CSV, and `compression` and `row_group_size` for parquet. The engine gives the read options to the polars reader with their polars names,
-for example `separator` for `sep`.
+for example `separator` for `sep`, and `decimal_comma` for `decimal: ","`.
 
 The polars engine raises `EngineResourceError` for a resource that it cannot read or write:
 
@@ -102,6 +102,8 @@ The polars engine raises `EngineResourceError` for a resource that it cannot rea
 - an option that has no polars entry, for example `dtype` or `parse_dates`
 - the parquet `engine: fastparquet`, or `index: true`, because a polars frame has no index
 - a CSV `header` on a line other than the first, a `skiprows` that is not a number, or an encoding other than UTF-8
+- a CSV `na_values` map with null strings for each column, or a `decimal` mark other than `.` and `,`
+- a read of a CSV resource with `header: false` or `header: null`. The pandas engine cannot read that file either. A write with `header: false` is accepted
 - a JSON orient other than records. The default orient is records on S3 and columns on a local file, so a local JSON resource must set `orient: records`.
 
 The engine checks the resource when you make the IO object, and again at each read and write. Thus it also finds a change of the options after you make the IO object.

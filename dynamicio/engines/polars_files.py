@@ -23,7 +23,7 @@ from botocore.exceptions import ClientError
 from pandas._libs.parsers import STR_NA_VALUES  # pylint: disable=no-name-in-module
 
 from dynamicio.engines.polars_options import PolarsOptions
-from dynamicio.errors import ObjectNotFoundError, S3KeyNotFoundError
+from dynamicio.errors import EngineResourceError, ObjectNotFoundError, S3KeyNotFoundError
 from dynamicio.mixins import utils, with_s3
 from dynamicio.mixins.utils import get_file_type_value
 from dynamicio.schema.polars_dtypes import DtypeMap
@@ -43,6 +43,17 @@ class PolarsFiles:
     # The pandas metadata of the columns index of a frame with string column names, as `DataFrame.to_parquet` writes it
     COLUMN_INDEXES = [{"name": None, "field_name": None, "pandas_type": "unicode", "numpy_type": "object", "metadata": {"encoding": "UTF-8"}}]
     DURATION_UNITS = {"s": "seconds", "ms": "milliseconds", "us": "microseconds", "ns": "nanoseconds"}
+    # The pandas nullable dtype of each arrow integer type. The default conversion gives float64 to an integer column with nulls, which loses digits above 2**53
+    NULLABLE_INTEGERS = {
+        pa.int8(): pd.Int8Dtype(),
+        pa.int16(): pd.Int16Dtype(),
+        pa.int32(): pd.Int32Dtype(),
+        pa.int64(): pd.Int64Dtype(),
+        pa.uint8(): pd.UInt8Dtype(),
+        pa.uint16(): pd.UInt16Dtype(),
+        pa.uint32(): pd.UInt32Dtype(),
+        pa.uint64(): pd.UInt64Dtype(),
+    }
 
     @staticmethod
     def source_of(io: "DynamicDataIO") -> str:
@@ -139,6 +150,9 @@ class PolarsFiles:
         so a float on the last row of an integer-looking column does not fail the read.
         """
         arguments = PolarsOptions.read_arguments("csv", options)
+        if not arguments.pop("has_header", True):
+            # pandas cannot read it either: `usecols` names columns that a headerless file does not have
+            raise EngineResourceError("the polars engine reads CSV files with a header line, as the pandas engine does. Remove header: false from the read resource.")
         extra = arguments.pop("null_values", None)
         extra = [extra] if isinstance(extra, str) else list(extra or [])
         dtypes = DtypeMap.of_model(io._model)  # pylint: disable=protected-access
@@ -188,7 +202,7 @@ class PolarsFiles:
         options = dict(io.options)
         path = utils.resolve_template(section.file_path, options)
         arguments = {name: value for name, value in PolarsOptions.write_options("parquet", options).items() if name not in ("engine", "index")}
-        table = cls.arrow_table(io, frame)
+        table = cls.arrow_table(io, frame, index=options.get("index") is not False)
         if source == "local":
             pq.write_table(table, path, **arguments)
             return
@@ -208,21 +222,28 @@ class PolarsFiles:
 
     @classmethod
     def to_pandas(cls, io: "DynamicDataIO", frame: pl.DataFrame) -> pd.DataFrame:
-        """The pandas frame of a polars frame, with the pandas dtypes of the model and a ``RangeIndex``, for the pandas writers."""
-        return frame.to_pandas().astype(cls.pandas_dtypes(io, frame))
+        """The pandas frame of a polars frame, with the pandas dtypes of the model and a ``RangeIndex``, for the pandas writers.
+
+        An integer column goes through a pandas nullable integer dtype, so a large integer next to a null keeps its value.
+        """
+        return frame.to_pandas(types_mapper=cls.NULLABLE_INTEGERS.get).astype(cls.pandas_dtypes(io, frame))
 
     @classmethod
-    def arrow_table(cls, io: "DynamicDataIO", frame: pl.DataFrame) -> pa.Table:
+    def arrow_table(cls, io: "DynamicDataIO", frame: pl.DataFrame, index: bool = True) -> pa.Table:
         """The arrow table of a frame, with the arrow types and the pandas metadata that ``DataFrame.to_parquet`` gives for the pandas dtypes of the model.
 
         pyarrow makes the types and the metadata from an empty pandas frame with these dtypes. An empty ``object`` column has the ``null`` type there, and
         an empty ``category`` column has no categories, so the engine gives them their string types and the number of categories of the frame.
+
+        ``index=False`` gives the metadata of ``DataFrame.to_parquet(index=False)``, without an index. Otherwise the metadata has the ``RangeIndex`` of
+        the frame, as ``DataFrame.to_parquet`` writes by default.
         """
         empty = pd.DataFrame({column: pd.Series([], dtype=dtype) for column, dtype in cls.pandas_dtypes(io, frame).items()})
         schema = pa.Schema.from_pandas(empty, preserve_index=False)
         metadata = json.loads(schema.metadata[b"pandas"])
-        metadata["index_columns"] = [{"kind": "range", "name": None, "start": 0, "stop": frame.height, "step": 1}]
-        metadata["column_indexes"] = cls.COLUMN_INDEXES
+        if index:
+            metadata["index_columns"] = [{"kind": "range", "name": None, "start": 0, "stop": frame.height, "step": 1}]
+            metadata["column_indexes"] = cls.COLUMN_INDEXES
         fields = []
         for field, column in zip(schema, metadata["columns"]):
             kind = field.type

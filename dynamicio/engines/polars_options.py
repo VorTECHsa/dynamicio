@@ -32,6 +32,7 @@ class PolarsOptions:
             "comment": "comment_prefix",
             "encoding": "encoding",
             "usecols": None,
+            "decimal": None,
         },
         "json": {"orient": None, "lines": None, "convert_dates": None},
     }
@@ -127,6 +128,10 @@ class PolarsOptions:
             raise EngineResourceError(f"the polars engine reads a CSV header on the first line or no header, not header={options['header']!r}")
         if not isinstance(options.get("skiprows", 0), int):
             raise EngineResourceError(f"the polars engine skips a number of rows, not skiprows={options['skiprows']!r}")
+        if isinstance(options.get("na_values"), Mapping):
+            raise EngineResourceError("the polars engine reads null strings for all columns, not for each column. Set na_values to a string or a list of strings.")
+        if options.get("decimal", ".") not in (".", ","):
+            raise EngineResourceError(f"the polars engine reads a decimal point or a decimal comma, not decimal={options['decimal']!r}")
         if "encoding" in options and options["encoding"] not in cls.ENCODINGS:
             raise EngineResourceError(f"the polars engine reads UTF-8 CSV files, not encoding={options['encoding']!r}")
 
@@ -150,6 +155,8 @@ class PolarsOptions:
             arguments["has_header"] = arguments["has_header"] is not None and arguments["has_header"] is not False
         if "encoding" in arguments:
             arguments["encoding"] = cls.ENCODINGS[arguments["encoding"]]
+        if file_type == "csv" and options.get("decimal") == ",":
+            arguments["decimal_comma"] = True
         return arguments
 
     @classmethod

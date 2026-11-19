@@ -607,3 +607,94 @@ class TestResourceCheck:
             io.read()
         with pytest.raises(NotImplementedError, match="does not write postgres resources yet"):
             io.write(pl.DataFrame({"a": [1], "b": ["x"]}))
+
+
+class TestWriteConversion:
+    @pytest.mark.unit
+    @pytest.mark.parametrize("file_type, options", [("csv", {"index": False}), ("json", {"orient": "records"})])
+    def test_a_large_integer_next_to_a_null_keeps_its_value(self, tmp_path, file_type, options):
+        class Counts(DataModel, dataset="counts"):
+            id: int
+            count: int = Field(nullable=True, pandas_dtype="Int64")
+
+        class PandasCounts(pa.DataFrameModel):
+            __dataset_name__ = "counts"
+
+            id: Series[int]
+            count: Series[pd.Int64Dtype] = pa.Field(nullable=True)
+
+        # Given
+        config = Files.config(tmp_path, file_type, options)
+        frame = pl.DataFrame({"id": [1, 2], "count": [2**53 + 1, None]})
+
+        # When
+        Files.polars(config, Counts).write(frame)
+
+        # Then
+        assert Files.polars(config, Counts).read().equals(frame)
+        written = (tmp_path / f"data.{file_type}").read_bytes()
+        EngineSetting.reset("pandas")
+        FilesIO(source_config=config, schema=PandasCounts).write(pd.DataFrame({"id": [1, 2], "count": pd.array([2**53 + 1, None], dtype="Int64")}))
+        assert written == (tmp_path / f"data.{file_type}").read_bytes()
+
+    @pytest.mark.unit
+    def test_a_nan_in_a_required_float_column_fails_the_write_validation(self, tmp_path):
+        class Prices(DataModel, dataset="prices"):
+            price: float
+
+        # Given
+        frame = pl.DataFrame({"price": [1.5, float("nan")]})
+
+        # When / Then
+        with pytest.raises(dynamicio.errors.SchemaValidationError, match="has_no_null_values"):
+            Files.polars(Files.config(tmp_path, "parquet"), Prices, apply_schema_validations=True).write(frame)
+        assert not (tmp_path / "data.parquet").exists()
+
+    @pytest.mark.unit
+    def test_a_parquet_write_without_an_index_has_the_footer_of_the_pandas_engine(self, tmp_path):
+        # Given
+        config = Files.config(tmp_path, "parquet", {"index": False})
+
+        # When
+        (polars_schema, _), (pandas_schema, _) = TestParquetFooter.footers(tmp_path, Files.frame(), Mixed, Files.pandas_frame(config), PandasMixed, index=False)
+
+        # Then
+        metadata = json.loads(polars_schema.metadata[b"pandas"])
+        assert metadata == json.loads(pandas_schema.metadata[b"pandas"])
+        assert metadata["index_columns"] == [] and metadata["column_indexes"] == []
+
+
+class TestCsvOptions:
+    @pytest.mark.unit
+    def test_a_decimal_comma_file_reads_back_as_floats(self, tmp_path):
+        # Given
+        config = Files.config(tmp_path, "csv", {"sep": ";", "decimal": ",", "index": False})
+        Files.polars(config).write(Files.frame())
+
+        # When
+        result = Files.polars(config).read()
+
+        # Then
+        assert "1,5" in (tmp_path / "data.csv").read_text()
+        assert result.equals(Files.frame())
+
+    @pytest.mark.unit
+    def test_a_headerless_csv_is_refused_at_the_read(self, tmp_path):
+        # Given
+        config = Files.config(tmp_path, "csv", {"header": False, "index": False})
+        Files.polars(config, Pair).write(pl.DataFrame({"a": [1], "b": ["x"]}))
+
+        # When / Then
+        assert (tmp_path / "data.csv").read_text() == "1,x\n"
+        with pytest.raises(EngineResourceError, match="with a header line"):
+            Files.polars(config, Pair).read()
+
+    @pytest.mark.unit
+    def test_null_strings_for_each_column_are_refused_when_the_resource_is_built(self, tmp_path):
+        with pytest.raises(EngineResourceError, match="not for each column"):
+            Files.polars(Files.config(tmp_path, "csv", {"na_values": {"b": ["-"]}}), Pair)
+
+    @pytest.mark.unit
+    def test_a_decimal_mark_that_is_not_a_point_or_a_comma_is_refused(self, tmp_path):
+        with pytest.raises(EngineResourceError, match="decimal point or a decimal comma"):
+            Files.polars(Files.config(tmp_path, "csv", {"decimal": "'"}), Pair)
