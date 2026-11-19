@@ -18,8 +18,11 @@ import dynamicio
 dynamicio.configure(engine="polars")
 ```
 
-The first read or write fixes the engine. After that, `dynamicio.configure()` with another engine raises `EngineConfigurationError`. The polars
-engine needs polars 2.1 or later. Without polars, it raises `ImportError`. Install it with `pip install "dynamicio[polars]"`.
+The first read or write fixes the engine. After that, `dynamicio.configure()` with another engine raises `EngineConfigurationError`.
+
+The polars engine needs polars 2.1 or later. Without polars, or with an older polars, `dynamicio.configure(engine="polars")` raises `ImportError`.
+This check reads the version of the installed package and does not import polars. Install polars with `pip install "dynamicio[polars]"`.
+The pandas engine and the CLI do not need polars, but `dynamicio migrate --engine polars` needs it.
 
 ## Migrate a repo
 

@@ -131,6 +131,10 @@ jobs:
       - name: Show resolved versions
         run: uv pip list
 
+      - name: Check that polars is not installed
+        # These jobs install dynamicio without the polars extra, so the run proves that the pandas engine and the CLI work without polars
+        run: uv run --no-sync python -c "import importlib.util, sys; sys.exit(importlib.util.find_spec('polars') is not None)"
+
       - name: Run tests
         run: uv run --no-sync pytest -vv
 

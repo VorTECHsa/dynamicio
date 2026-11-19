@@ -1,8 +1,10 @@
 """The engine of the process: ``dynamicio.configure(engine=...)`` sets it, and the first read or write fixes it."""
 
+import importlib.metadata
 import importlib.util
 import logging
 import os
+import re
 import sys
 import threading
 from typing import Any, Dict, Optional, Tuple
@@ -28,6 +30,7 @@ class EngineSetting:
     ENGINES = {"pandas": PandasEngine, "polars": PolarsEngine}
     NAMES: Tuple[str, ...] = tuple(ENGINES)
     DEFAULT = "pandas"
+    POLARS_MINIMUM = (2, 1)  # the minimum of the dynamicio[polars] extra
 
     _name: str = DEFAULT
     _frozen: bool = False
@@ -57,9 +60,26 @@ class EngineSetting:
             if cls._frozen and engine != cls._name:  # before the import check: installing polars cannot make this switch legal
                 raise EngineConfigurationError(f"The engine is {cls._name}, fixed by the first read or write. Call dynamicio.configure(engine={engine!r}) before it.")
             cls._refuse_a_polars_fork(engine)
-            if engine == "polars" and importlib.util.find_spec("polars") is None:
-                raise ImportError('The polars engine needs polars: pip install "polars>=2.1"')
+            if engine == "polars":
+                cls.require_polars()
             cls._name = engine
+
+    @classmethod
+    def require_polars(cls) -> None:
+        """Raise ``ImportError`` if polars is not installed or is older than 2.1. It reads the version of the distribution, and does not import polars.
+
+        polars reads ``POLARS_MAX_THREADS`` when it is first imported, so ``configure()`` must not import it. A polars build of another distribution
+        name, for example ``polars-lts-cpu``, has no ``polars`` distribution, and the check accepts it.
+        """
+        minimum = ".".join(str(part) for part in cls.POLARS_MINIMUM)
+        if importlib.util.find_spec("polars") is None:
+            raise ImportError(f'The polars engine needs polars {minimum} or later: pip install "dynamicio[polars]"')
+        try:
+            version = importlib.metadata.version("polars")
+        except importlib.metadata.PackageNotFoundError:
+            return
+        if tuple(int(part) for part in re.findall(r"\d+", version)[: len(cls.POLARS_MINIMUM)]) < cls.POLARS_MINIMUM:
+            raise ImportError(f'The polars engine needs polars {minimum} or later, and polars {version} is installed: pip install "dynamicio[polars]"')
 
     @classmethod
     def instance(cls, name: str) -> Engine:

@@ -10,6 +10,7 @@ import pandas as pd  # type: ignore
 
 # Application Imports
 from dynamicio.config.pydantic import DataframeSchema
+from dynamicio.engines.engine_setting import EngineSetting
 from dynamicio.errors import InvalidDatasetTypeError
 from dynamicio.schema.migrate import ModelRenderer, migrate
 
@@ -128,6 +129,7 @@ def run_migrate(argv: Sequence[str]) -> None:
 
 def run_polars_migrate(path: str, output: str, scan: str) -> None:
     """``dynamicio migrate --engine polars``: the pandas models at ``path`` to polars models, plus a report of the checks and resources to change."""
+    EngineSetting.require_polars()
     from dynamicio.schema.polars_migrate import migrate_to_polars  # pylint: disable=import-outside-toplevel
 
     report = migrate_to_polars(path, output, scan)

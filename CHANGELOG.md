@@ -44,6 +44,8 @@
 - feat: the pytest plugin adds the option `--dynamicio-engine=pandas|polars`, which calls `dynamicio.configure()` before the first test
 - feat: `dynamicio migrate --engine polars` writes a polars model for each pandas model of a module or a package, checks the parity of each model, and writes a report. The report lists the checks to port, a model with an index, the resource definitions that the polars engine refuses, and the CSV definitions without an `index` option. The command does not change the resource definitions
 - test: the demo pipeline on the polars engine, in `demo/polars_pipeline`. It reads the inputs of the pandas demo, and its outputs are equal to the expected outputs of the pandas demo. A CI job runs it with `--dynamicio-engine=polars`.
+- feat: `dynamicio.configure(engine="polars")` and `dynamicio migrate --engine polars` raise `ImportError` if polars is older than 2.1, the minimum of the `polars` extra. The check reads the version of the installed package and does not import polars. The message names `pip install "dynamicio[polars]"`.
+- test: an install without polars. A test in a new process blocks the polars import, and checks that the modules of dynamicio, the pandas engine and the CLI work. The dependency-ranges CI jobs install dynamicio without the `polars` extra, and a step checks that polars is not installed.
 
 ## v11.1.0
 

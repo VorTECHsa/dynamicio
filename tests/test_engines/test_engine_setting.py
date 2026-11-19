@@ -1,6 +1,10 @@
 # pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring
+import importlib.metadata
+import importlib.util
 import logging
 import threading
+import tomllib
+from pathlib import Path
 from unittest.mock import patch
 
 import pandas as pd
@@ -52,10 +56,52 @@ class TestConfigure:
     @pytest.mark.unit
     def test_the_polars_engine_without_polars_raises_an_import_error(self):
         with patch("dynamicio.engines.engine_setting.importlib.util.find_spec", return_value=None):
-            with pytest.raises(ImportError, match="polars>=2.1"):
+            with pytest.raises(ImportError, match=r'needs polars 2.1 or later: pip install "dynamicio\[polars\]"'):
                 dynamicio.configure(engine="polars")
 
         assert isinstance(EngineSetting.current(), PandasEngine)
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("version", ["1.31.0", "2.0.5", "0.20.31", "2.0.99rc1"])
+    def test_a_polars_older_than_2_1_raises_an_import_error(self, version):
+        with (
+            patch("dynamicio.engines.engine_setting.importlib.util.find_spec", return_value=object()),
+            patch("dynamicio.engines.engine_setting.importlib.metadata.version", return_value=version),
+        ):
+            with pytest.raises(ImportError, match=f"polars {version} is installed"):
+                dynamicio.configure(engine="polars")
+
+        assert isinstance(EngineSetting.current(), PandasEngine)
+
+    @pytest.mark.unit
+    @pytest.mark.skipif(importlib.util.find_spec("polars") is None, reason="the polars engine needs the polars extra")
+    @pytest.mark.parametrize("version", ["2.1.0", "2.1.0rc1", "2.10.0", "3.0.0", "10.0"])
+    def test_a_polars_of_2_1_or_later_is_accepted(self, version):
+        with (
+            patch("dynamicio.engines.engine_setting.importlib.util.find_spec", return_value=object()),
+            patch("dynamicio.engines.engine_setting.importlib.metadata.version", return_value=version),
+        ):
+            dynamicio.configure(engine="polars")
+
+        assert isinstance(EngineSetting.current(), PolarsEngine)
+
+    @pytest.mark.unit
+    @pytest.mark.skipif(importlib.util.find_spec("polars") is None, reason="the polars engine needs the polars extra")
+    def test_a_polars_build_of_another_distribution_name_is_accepted(self):
+        with (
+            patch("dynamicio.engines.engine_setting.importlib.util.find_spec", return_value=object()),
+            patch("dynamicio.engines.engine_setting.importlib.metadata.version", side_effect=importlib.metadata.PackageNotFoundError("polars")),
+        ):
+            dynamicio.configure(engine="polars")
+
+        assert isinstance(EngineSetting.current(), PolarsEngine)
+
+    @pytest.mark.unit
+    def test_the_minimum_is_the_minimum_of_the_polars_extra(self):
+        with open(Path(__file__).parents[2] / "pyproject.toml", "rb") as file:
+            extra = tomllib.load(file)["project"]["optional-dependencies"]["polars"]
+
+        assert extra == [f"polars>={'.'.join(str(part) for part in EngineSetting.POLARS_MINIMUM)}"]
 
     @pytest.mark.unit
     def test_a_switch_to_polars_after_the_first_use_without_polars_is_an_engine_configuration_error(self):
