@@ -2,6 +2,8 @@
 
 import importlib.util
 import logging
+import os
+import sys
 import threading
 from typing import Any, Dict, Optional, Tuple
 
@@ -18,6 +20,9 @@ class EngineSetting:
 
     The default is pandas. ``configure`` changes it until the first read or write, which freezes it, so that all resources of a process take and give
     frames of one library. After that, ``configure`` with the same engine does nothing, and with another engine raises ``EngineConfigurationError``.
+
+    A process that ``fork`` makes from a process with the polars engine and polars imported cannot use the polars engine (change 24 of ADR 0010). The
+    threads of polars do not go into the fork, so a lock that one of them held stays locked, and the next polars call can wait for ever.
     """
 
     ENGINES = {"pandas": PandasEngine, "polars": PolarsEngine}
@@ -28,6 +33,11 @@ class EngineSetting:
     _frozen: bool = False
     _lock = threading.RLock()
     _instances: Dict[str, Engine] = {}
+    _forked: bool = False
+    FORK_MESSAGE = (
+        "This process is a fork of a process with the polars engine, and polars can deadlock in a fork. "
+        'Start the processes with "spawn" or "forkserver", for example multiprocessing.get_context("spawn")'
+    )
 
     @classmethod
     def configure(cls, engine: str) -> None:
@@ -39,12 +49,14 @@ class EngineSetting:
         Raises:
             EngineConfigurationError: If dynamicio has no engine of that name, or a read or write has already fixed another engine.
             ImportError: If the engine is polars and polars is not installed.
+            EngineConfigurationError: If the engine is polars and the process is a fork of a process with the polars engine.
         """
         if engine not in cls.ENGINES:
             raise EngineConfigurationError(f"dynamicio has no engine {engine!r}: use one of {', '.join(cls.NAMES)}")
         with cls._lock:
             if cls._frozen and engine != cls._name:  # before the import check: installing polars cannot make this switch legal
                 raise EngineConfigurationError(f"The engine is {cls._name}, fixed by the first read or write. Call dynamicio.configure(engine={engine!r}) before it.")
+            cls._refuse_a_polars_fork(engine)
             if engine == "polars" and importlib.util.find_spec("polars") is None:
                 raise ImportError('The polars engine needs polars: pip install "polars>=2.1"')
             cls._name = engine
@@ -75,8 +87,10 @@ class EngineSetting:
             ModelEngineMismatchError: If the model is not for the engine. The engine stays unfrozen, so ``configure()`` can still correct it.
             WrongFrameError: If a frame is of the other engine. The engine stays unfrozen.
             EngineResourceError: If the engine cannot read or write the resource. The engine stays unfrozen.
+            EngineConfigurationError: If the engine is polars and the process is a fork of a process with the polars engine.
         """
         with cls._lock:
+            cls._refuse_a_polars_fork(cls._name)
             engine = cls.current()
             if model is not None:
                 engine.check_model(model)
@@ -95,3 +109,20 @@ class EngineSetting:
         with cls._lock:
             cls._name = engine or cls.DEFAULT
             cls._frozen = False
+            cls._forked = False
+
+    @classmethod
+    def _refuse_a_polars_fork(cls, engine: str) -> None:
+        if engine == "polars" and cls._forked:
+            raise EngineConfigurationError(cls.FORK_MESSAGE)
+
+    @classmethod
+    def after_fork_in_child(cls) -> None:
+        """Mark a fork of a process with the polars engine and polars imported. The fork gets a new lock, because a thread of the parent can hold the old one."""
+        cls._lock = threading.RLock()
+        if cls._name == "polars" and "polars" in sys.modules:
+            cls._forked = True
+
+
+if hasattr(os, "register_at_fork"):  # Windows has no fork
+    os.register_at_fork(after_in_child=EngineSetting.after_fork_in_child)

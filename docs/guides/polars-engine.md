@@ -19,7 +19,17 @@ dynamicio.configure(engine="polars")
 ```
 
 The first read or write fixes the engine. After that, `dynamicio.configure()` with another engine raises `EngineConfigurationError`. The polars
-engine needs polars 2.1 or later. Without polars, it raises `ImportError`.
+engine needs polars 2.1 or later. Without polars, it raises `ImportError`. Install it with `pip install "dynamicio[polars]"`.
+
+## Processes and threads
+
+polars can deadlock in a fork of a process that has used polars. A fork of a process with the polars engine thus refuses the engine: its first read or
+write, and `dynamicio.configure(engine="polars")`, raise `EngineConfigurationError`. Start the processes with `spawn` or `forkserver`, for example
+`multiprocessing.get_context("spawn")`. A spawned process does not get the `configure()` call of its parent, so call `configure()` in the package
+`__init__.py` of the repo. A fork of a process with the pandas engine does not change.
+
+dynamicio does not set the number of polars threads. polars reads `POLARS_MAX_THREADS` when it is first imported, and `import dynamicio` does not import
+polars. Thus a value that the repo sets after `import dynamicio` and before the first read or write applies.
 
 ## Declare a polars model
 

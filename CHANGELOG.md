@@ -37,6 +37,9 @@
 - feat: the Kafka option `key_column` names the column of the message keys on the two engines. The column is not in the message values. On the pandas engine it gives the bytes of `set_index(key_column)`. A value that is not a column name, or a column that the frame does not have, raises `ValueError` before the first message
 - feat: the polars engine writes a `kafka` resource with the producer of the pandas engine. The resource needs `key_column`, and a missing or wrong `key_column` raises `EngineResourceError` when the IO object is built. The frame goes to pandas in chunks of 100,000 rows, with the dtypes of the model. The user callables thus get the values and types of the pandas engine. The producer flushes once
 - feat: the polars engine reads an `athena` resource with the awswrangler query of the pandas engine, and casts the result to the model
+- feat: a fork of a process with the polars engine refuses the engine, because polars can deadlock in a fork. Its first read or write and `configure(engine="polars")` raise `EngineConfigurationError`, with a message that names `spawn` and `forkserver`. The fork gets a new engine lock. A fork of a pandas process does not change
+- feat: dynamicio does not set the number of polars threads, and `import dynamicio` does not import polars. `POLARS_MAX_THREADS` set after `import dynamicio` thus applies
+- feat: the `dynamicio[polars]` extra installs `polars>=2.1`
 
 ## v11.1.0
 

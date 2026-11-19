@@ -33,6 +33,9 @@ dependencies = [
     "tables>=3.10.1",
 ]
 
+[project.optional-dependencies]
+polars = ["polars>=2.1"]
+
 [project.urls]
 Documentation = "https://dynamicio.readthedocs.io/en/latest/"
 Source = "https://github.com/VorTECHsa/dynamicio"

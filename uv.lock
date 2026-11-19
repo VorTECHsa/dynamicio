@@ -967,6 +967,11 @@ dependencies = [
     { name = "tables" },
 ]
 
+[package.optional-dependencies]
+polars = [
+    { name = "polars" },
+]
+
 [package.dev-dependencies]
 dev = [
     { name = "black" },
@@ -1008,6 +1013,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.24.4" },
     { name = "pandas", specifier = ">=2.2.2" },
     { name = "pandera", specifier = ">=0.34.1" },
+    { name = "polars", marker = "extra == 'polars'", specifier = ">=2.1" },
     { name = "psycopg2-binary", specifier = ">=2.9.3,<3" },
     { name = "pyarrow", specifier = ">=16.0.0" },
     { name = "pydantic", specifier = ">=1.9.2,<3" },
@@ -1017,6 +1023,7 @@ requires-dist = [
     { name = "sqlalchemy", specifier = ">=1.4.11" },
     { name = "tables", specifier = ">=3.10.1" },
 ]
+provides-extras = ["polars"]
 
 [package.metadata.requires-dev]
 dev = [
