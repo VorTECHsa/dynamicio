@@ -199,7 +199,7 @@ Phases 1 to 7 are dynamicio 12.0.0.
 | 3 | 17, 18, 20, 26 | Eager codecs and the parquet contract. The pandas metadata through `arrow_schema=`. Footer details equal to 11.1.0: timestamp unit, row group size, snappy compression, coerced timestamps and INT96 reads. JSON (decision 9) and CSV (decision 5) bytes equal to 11.1.0. The option maps (decision 6). The polars S3 tests run against floci (decision 15). |
 | 4 | 10, 14, 16 | `scan()` returns a `LazyFrame`. It checks names and types with `collect_schema()` and adds the casts to the plan. polars reads S3 with a `credential_provider` from the boto3 session. A missing key raises the dynamicio error, so `missing_ok` applies. A prefix read lists the keys with boto3 and makes one `scan_parquet` call that keeps ADR 0002 and ADR 0004 (decision 13). |
 | 5 | 11, 12, 13, 15 | `sink()` runs all sinks in one `collect_all`. Writes go through a boto3 multipart upload (64 MiB parts, 4 in flight, ACL) that completes only on success and aborts on error. Both engines select columns, cast, validate and then compute metrics, in that order (decision 12). Both engines raise the same dynamicio errors. |
-| 6 | 19, 21, 22, 23 | A footer-only read and a sink from several scans that merges the pandas metadata of all parts (a consumer repo needs it). Postgres COPY in chunks of 100k rows with the same NULL rule, tested on floci RDS. Kafka keys from decision 4 and row types from decision 7, with batches, `poll()` and a flush timeout, tested on the floci broker. Athena through awswrangler (decision 8). hdf and pickle resources raise on polars when the user builds the resource. |
+| 6 | 19, 21, 22, 23 | A footer-only read and a sink from several scans that merges the pandas metadata of all parts (a consumer repo needs it). Postgres COPY in chunks of 100k rows with the same NULL rule, tested on floci RDS. Kafka keys from decision 4 and row types from decision 7, with batches, `poll()` and a flush timeout, tested on the floci broker. Athena through awswrangler (decision 8). |
 | 7 | 24, 25, 27 | No fork on polars, and `POLARS_MAX_THREADS` applies. `dynamicio.testharness` comparisons for each engine and the `--dynamicio-engine` option (decision 11). The `dynamicio[polars]` extra. CI runs all tests on both engines. The migrate command, one demo for each engine and the docs. |
 
 Phase 1 as built:
@@ -242,6 +242,31 @@ Phase 2 as built:
 - The 8 metrics give the `METRIC` lines of the pandas engine. For an empty or an all-null column, `Min`, `Max`, `Mean`, `Std` and `Variance` give NaN.
   `Counts` and `UniqueCounts` give the counts of the pandas engine, for example 0 for an empty column and 2 and 1 for `[None, None]`. `CountsPerLabel` does
   not count nulls. It logs 0 for each category of an `Enum` that is not in the column, as `value_counts` does for a pandas `category`.
+
+Phase 3 as built:
+
+- The polars engine reads and writes parquet, CSV and JSON on `local` and `s3_file`, and reads `local_batch`. The other resources, `scan()` and `sink()`
+  raise `NotImplementedError` until phases 4 to 6.
+- The CSV and JSON writers change the frame to pandas with the pandas dtypes of the model, and call the pandas writers of 11.1.0. Thus the bytes are equal by
+  construction, and the tests compare them for each case on a local disk and on floci S3.
+- The parquet writer calls `pyarrow.parquet.write_table`, not the polars `write_parquet` with `arrow_schema=`. pyarrow makes the arrow types and the pandas
+  metadata from an empty pandas frame with the dtypes of the model, as `DataFrame.to_parquet` does. The footer schema, the metadata and the SNAPPY compression
+  are then equal to 11.1.0. A `category` column has the code width of pandas: `int8` below 127 categories, `int16` below 32767 and `int32` after that.
+- The readers are polars readers, and the cast of phase 2 then gives the dtypes of the model. A CSV column that is not a number or a Boolean reads as a string,
+  so a value such as `007` keeps its text. The cast parses the strings of a `Duration` with `pd.to_timedelta`, and the strings `True` and `False` of a
+  `Boolean`. A `DataFrame` with a bad string raises `ColumnsDataTypeError`. A `LazyFrame` raises the polars `InvalidOperationError` when the caller collects it.
+- A JSON integer under a `Datetime` or `Duration` column of the model is an epoch in `date_unit`. The pandas engine of 11.1.0 reads an epoch column with a
+  name that is not a date name as a naive `datetime64[ns]`, and then cannot cast it to a column with a time zone. The polars engine reads it as a UTC instant.
+  A JSON file without records, as pandas writes a frame without rows, reads as a frame without rows with the columns of the model. The pandas engine raises
+  `KeyError` for this file.
+- The option maps of decision 6 are in `PolarsOptions`. A resource has one set of options for its reads and its writes, so a file type accepts the options of
+  its pandas reader and of its pandas writer. The `options` of a resource go beside its `local` or `s3` section. Options inside the section have no effect on
+  either engine.
+- `EngineResourceError` is the error of decision 6 and decision 9. It is also a `ValueError`. The polars engine raises it when the user builds the resource,
+  and again at each read and write, so a `configure()` or a change of the options after the build cannot bypass it. The refusal of hdf and pickle also comes in
+  this phase, and not in phase 6.
+- A missing S3 key raises the error of the pandas engine: `S3KeyNotFoundError` for parquet and `ObjectNotFoundError` for CSV and JSON. `missing_ok` applies.
+  An `s3_file` key that ends in `/` raises `NotImplementedError` at read, and a parquet write to it raises the `ValueError` of the pandas engine.
 
 Change 26 is the floci fixture of decision 15. RND-25426 delivers it before phase 1, with the pandas integration tests. The polars S3 tests of phase 3 are its first polars users.
 
