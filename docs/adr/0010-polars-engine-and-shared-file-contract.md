@@ -270,6 +270,10 @@ Phase 2 as built:
 - The 8 metrics give the `METRIC` lines of the pandas engine. For an empty or an all-null column, `Min`, `Max`, `Mean`, `Std` and `Variance` give NaN.
   `Counts` and `UniqueCounts` give the counts of the pandas engine, for example 0 for an empty column and 2 and 1 for `[None, None]`. `CountsPerLabel` does
   not count nulls. It logs 0 for each category of an `Enum` that is not in the column, as `value_counts` does for a pandas `category`.
+- `UniqueCounts` counts a null as one value on the two engines. A pandas `object` column can hold `None` and NaN, and `Series.unique()` then counts
+  them as 2 values. A polars column has one null, so `["a", None, NaN]` gives 3 on pandas and 2 on polars. This case comes only from a pandas frame
+  that the caller makes. A pandas read of a parquet or CSV file gives one kind of null, so the two engines give the same count for the same file.
+  The pandas metric does not change, because its value is the value of 11.x.
 
 Phase 3 as built:
 
