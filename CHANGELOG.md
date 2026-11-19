@@ -2,6 +2,7 @@
 
 ## v12.0.0
 
+- breaking: dynamicio needs Python 3.11 or later. polars 2.1 needs Python 3.11, and Python 3.10 reaches its end of life in October 2026. CI runs Python 3.11 to 3.14, and the `lowest` dependency-range job runs on Python 3.11
 - feat: an engine is the dataframe library of a process. `DynamicDataIO` sends its read, write, cast, validations and metrics to the engine, in the same order as before. The pandas engine is the default and runs the code of 11.x, so a pandas process does not change and does not import polars. The engine classes are in `dynamicio.engines`
 - feat: `dynamicio.configure(engine="pandas" | "polars")` sets the engine. The first read or write fixes it and logs it once. After that, another engine raises `EngineConfigurationError`. An engine that dynamicio does not have also raises `EngineConfigurationError`, and the polars engine without polars installed raises `ImportError`
 - feat: the polars engine takes `pandera.polars` models and checks frames. Its read, write, cast, validations and metrics raise `NotImplementedError` in this release

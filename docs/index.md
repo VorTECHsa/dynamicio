@@ -61,7 +61,7 @@ pip install dynamicio
 uv add dynamicio
 ```
 
-Python 3.10 to 3.14 is supported. See [Installation](getting-started/installation.md).
+Python 3.11 to 3.14 is supported. See [Installation](getting-started/installation.md).
 
 ## A minimal example
 

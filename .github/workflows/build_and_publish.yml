@@ -18,7 +18,7 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.10"
+          python-version: "3.11"
           enable-cache: true
 
       - name: Install dependencies
@@ -35,7 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v4
 
@@ -86,7 +86,7 @@ jobs:
       matrix:
         include:
           - name: lowest
-            python-version: "3.10"
+            python-version: "3.11"
             install-args: "--resolution lowest-direct"
           - name: lowest-numpy2
             python-version: "3.11"
@@ -174,7 +174,7 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.10"
+          python-version: "3.11"
           enable-cache: true
 
       - name: Install dependencies
@@ -207,7 +207,7 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.10"
+          python-version: "3.11"
           enable-cache: true
 
       - name: Install dependencies
@@ -241,7 +241,7 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.10"
+          python-version: "3.11"
           enable-cache: true
 
       - name: Download the validated distributions

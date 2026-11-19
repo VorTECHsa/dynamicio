@@ -13,7 +13,7 @@ uv sync                    # .venv from uv.lock (dev group); add --group docs fo
 uv run pytest              # always prefix commands with `uv run`, never activate or pip install
 ```
 
-- Python `>=3.10`; CI runs 3.10 to 3.14. `.python-version` is the local default.
+- Python `>=3.11`; CI runs 3.11 to 3.14. `.python-version` is the local default.
 - Dependencies: `uv add <pkg>` / `uv add --group dev <pkg>` / `uv remove <pkg>`. Commit `pyproject.toml` and `uv.lock` together.
   CI uses `uv sync --locked`, so a stale lock fails.
 - `[tool.uv] constraint-dependencies` keeps the dev environment on pandas 2 / SQLAlchemy 2.0 (not yet supported on 3 / 2.1).

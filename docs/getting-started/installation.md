@@ -6,7 +6,7 @@ pip install dynamicio
 uv add dynamicio
 ```
 
-dynamicio requires Python 3.10 or newer; CI runs 3.10 to 3.14. The published ranges of its dependencies are wide on
+dynamicio requires Python 3.11 or newer; CI runs 3.11 to 3.14. The published ranges of its dependencies are wide on
 purpose (`pandas>=2.2.2`, `pandera>=0.34.1`, `pyarrow>=16`, `awswrangler>=3.9`, ...), so dynamicio can sit in an existing
 environment. The development environment is kept on pandas 2 and SQLAlchemy 2.0.
 
