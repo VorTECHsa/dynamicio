@@ -43,6 +43,7 @@
 - feat: `dynamicio.testharness` reads and compares the outputs with the engine of the process. On the polars engine it reads parquet, CSV and JSON records with the polars readers, and compares with `polars.testing.assert_frame_equal` under the same `Expectations`. A custom assertion gets polars frames. Without `sort_by`, `check_row_order=False` compares the rows of a polars frame as a multiset
 - feat: the pytest plugin adds the option `--dynamicio-engine=pandas|polars`, which calls `dynamicio.configure()` before the first test
 - feat: `dynamicio migrate --engine polars` writes a polars model for each pandas model of a module or a package, checks the parity of each model, and writes a report. The report lists the checks to port, a model with an index, the resource definitions that the polars engine refuses, and the CSV definitions without an `index` option. The command does not change the resource definitions
+- test: the demo pipeline on the polars engine, in `demo/polars_pipeline`. It reads the inputs of the pandas demo, and its outputs are equal to the expected outputs of the pandas demo. A CI job runs it with `--dynamicio-engine=polars`.
 
 ## v11.1.0
 

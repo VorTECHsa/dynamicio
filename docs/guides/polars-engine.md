@@ -44,6 +44,11 @@ The command also writes `POLARS_MIGRATION.md` next to the models. The report lis
 
 The command does not change the resource definitions, the options that the code gives to an IO object, or the transformation code.
 
+The package `demo/polars_pipeline` of the repo is the demo pipeline after a migration. The command wrote its models from the pandas models of `demo/src`.
+Its definitions change the two resources of the report: `FOO` is a parquet file on S3, and the Kafka resource sets `key_column`. Its runners read and
+write polars frames, and the transform task uses `scan()` and `sink()`. The pipeline reads the inputs of the pandas demo, and its outputs are equal to the
+expected outputs of the pandas demo. Run its tests with `pytest -o addopts="-p no:warnings" --dynamicio-engine=polars demo`.
+
 ## Processes and threads
 
 polars can deadlock in a fork of a process that has used polars. A fork of a process with the polars engine thus refuses the engine: its first read or
