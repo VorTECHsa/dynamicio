@@ -61,8 +61,8 @@ a file that the pandas engine refuses. Rule 2 does not include these cases, and 
 1. A CSV or JSON string column without a string `dtype` option. The pandas reader infers the type, so `007` becomes the integer 7, and the cast gives `"7"`.
    The polars reader keeps the text `007`. A repo that needs the same value on both engines sets a string `dtype` for the column on the pandas engine, for
    CSV and for JSON.
-2. A JSON file without records, as `DataFrame.to_json` writes a frame without rows. The pandas engine raises `KeyError`, and the polars engine gives a frame
-   without rows with the columns of the model.
+2. A JSON file without records, as `DataFrame.to_json` writes a frame without rows. The pandas engine raises `ColumnsDataTypeError` (`KeyError` in 11.x),
+   and the polars engine gives a frame without rows with the columns of the model.
 3. A JSON epoch under a `Datetime` or a `Duration` column. `pandas.read_json` converts only the columns with a date name, such as `created_at`, and gives a
    naive `datetime64[ns]`. The cast of a column with a time zone then fails. Another column stays an integer, and the cast reads it in nanoseconds, so 1 ms
    becomes 1 ns. The polars engine reads each epoch in `date_unit` and keeps the value. A column with a time zone gives a UTC instant.
@@ -281,7 +281,7 @@ Phase 3 as built:
 - A JSON integer under a `Datetime` or `Duration` column of the model is an epoch in `date_unit`. The pandas engine of 11.1.0 cannot cast a date name
   column to a time zone, and casts the epoch of another column in nanoseconds. The polars engine keeps the value, and reads a UTC instant for a time zone.
   A JSON file without records, as pandas writes a frame without rows, reads as a frame without rows with the columns of the model. The pandas engine raises
-  `KeyError` for this file. These are exceptions 2 and 3 of rule 2.
+  `ColumnsDataTypeError` for this file. These are exceptions 2 and 3 of rule 2.
 - The option maps of decision 6 are in `PolarsOptions`. A resource has one set of options for its reads and its writes, so a file type accepts the options of
   its pandas reader and of its pandas writer. The `options` of a resource go beside its `local` or `s3` section. Options inside the section have no effect on
   either engine.
@@ -339,7 +339,7 @@ Phase 5 as built:
 - A prefix read on the two engines does not read the `col=value` directories back as a column. A read of a prefix with `partition_cols` thus raises
   the `ValueError` of a column that no object has, on the two engines.
 - The pandas `write()` now casts before its validations and metrics (decision 12). A schema column that is not in the frame raises `ColumnsDataTypeError`
-  on the two engines (change 15). The pandas engine of 11.x raised `KeyError`. The CHANGELOG states the two changes as breaking.
+  on the two engines, on reads and on writes (change 15). The pandas engine of 11.x raised `KeyError`. The CHANGELOG states the two changes as breaking.
 - The checks of the polars engine are in `PolarsChecks`, and the parquet metadata code is in `PolarsParquet`. `PolarsFiles` and `PolarsSinks` share them.
 
 Phase 6 as built:
@@ -398,10 +398,10 @@ of the 4 pairs use it to compare frames.
 
 ## Consequences
 
-- A repo that does not call `configure()` gets the pandas engine. The pandas engine of 12.0 has 2 changes in behavior, both on writes:
+- A repo that does not call `configure()` gets the pandas engine. The pandas engine of 12.0 has 2 changes in behavior:
   - A write casts before it validates and computes metrics (decision 12).
-  - A schema column that is not in the frame raises `ColumnsDataTypeError` (change 15). The pandas engine of 11.x raised `KeyError`, so a caller that
-    catches `KeyError` must catch `ColumnsDataTypeError`.
+  - A schema column that is not in the frame raises `ColumnsDataTypeError` on reads and on writes (change 15). The pandas engine of 11.x raised `KeyError`,
+    so a caller that catches `KeyError` must catch `ColumnsDataTypeError`. A CSV or parquet read still raises the error of its reader first.
 - A repo cannot use pandas for one resource and polars for another. A repo that needs both engines must split into two processes that share files.
 - The migrate command writes the polars models. Its report lists the resource definitions and the options to change, and the user changes them.
   It does not change the transformation code of the repo. A repo must change its own pandas code to polars before it moves.
