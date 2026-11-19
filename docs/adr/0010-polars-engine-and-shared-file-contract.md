@@ -188,6 +188,9 @@ schema declaration.
     - A polars model without this metadata uses a fixed reverse map. An integer gives its pandas name (`Int64` to `int64`). `String` gives `object`,
       `Boolean` gives `bool`, and `Categorical` and `Enum` give `category`. `Datetime` and `Duration` give `datetime64` and `timedelta64`, with the
       same unit and time zone. With a null, an integer gives its nullable pandas dtype (`Int64`), and `Boolean` gives `boolean`.
+    - The null rule of the reverse map also applies to a numpy dtype of the metadata. A column with `pandas_dtype="int64"` or `"bool"` and a null
+      thus gives `Int64` or `boolean`, as `DataFrame.to_parquet` gives for a pandas column with a null. The rule applies to `write()`, to `sink()`
+      and to the pandas frames of the CSV, JSON, Postgres and Kafka writers. pandas then reads the exact integers, also above 2**53.
     - The contract covers the pandas dtypes of this reverse map only.
 15. Integration tests on both engines run against [floci](https://github.com/floci-io/floci), a local AWS emulator. One container gives S3, RDS with
     `postgres:16` and MSK with a Redpanda broker.
@@ -308,7 +311,8 @@ Phase 4 as built:
   a JSON scan reads the file with the eager reader and then calls `lazy()`. A CSV scan reads all rows for the types (`infer_schema_length=None`), as the
   eager read does. Thus it reads the file twice. A CSV scan gives the columns in the order of the file, as the eager read and `usecols` on pandas do.
 - polars reads S3 with a `credential_provider` that gives the frozen credentials of the boto3 session of dynamicio, with their expiry. polars calls it again
-  after the expiry. The region comes from the boto3 client. A boto3 endpoint that is not an AWS endpoint, for example floci, also goes to polars.
+  after the expiry. The region comes from the boto3 client. Each boto3 endpoint other than the public endpoint of a region (`s3.amazonaws.com` and
+  `s3.<region>.amazonaws.com`) goes to polars. Examples are floci, a VPC interface endpoint, a FIPS endpoint and a dual-stack endpoint.
 - A scan of one S3 object first does a ranged `GetObject` of 1 byte. A missing key then raises the dynamicio error at the scan, and `missing_ok` applies.
   A missing bucket raises the botocore `ClientError`. An `s3_file` key that ends in `/` raises `NotImplementedError`.
 - A prefix lists its keys with boto3, with the filter of the pandas engine: no directory keys, and the pattern of `dynamic_file_path`. A prefix without
