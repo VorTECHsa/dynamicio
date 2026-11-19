@@ -190,7 +190,8 @@ Phase 1 as built:
 - The model check runs when the user creates an IO object, and again at each read and write, because `configure()` can change the engine between them.
   The checks run before the freeze, so a refused read or write does not fix the engine. `ModelEngineMismatchError` is also a `ValueError`, as the
   11.x error of a polars model.
-- The frame check runs at `write()` and `sink()`, before any I/O. It compares the top-level module name of the type of the frame, so it imports no polars.
+- The frame check runs at `write()` and `sink()`, before any I/O. It compares the top-level module name of each class in the MRO of
+  the frame, so a subclass of a polars or pandas frame counts as one, and it imports no polars. `configure()` checks the freeze before it looks for polars.
 - The dtype check of `DataframeSchema` knows only the pandas dtype names. In phase 1, only the integer and float columns of a polars model compile. Phase 2
   (the dtype map of decision 14) adds the other polars dtypes.
 - The polars engine checks models and frames. Its I/O, cast, validations and metrics raise `NotImplementedError` until phases 2 to 6.
