@@ -11,6 +11,8 @@ reference documents the public classes and functions; names beginning with an un
 
 ::: dynamicio.config.io_config
 
+::: dynamicio.parquet_footer
+
 ## Backends
 
 ### S3
@@ -48,6 +50,12 @@ reference documents the public classes and functions; names beginning with an un
 ::: dynamicio.engines.polars_engine
 
 ::: dynamicio.engines.polars_sinks
+
+::: dynamicio.engines.polars_postgres
+
+::: dynamicio.engines.polars_kafka
+
+::: dynamicio.engines.polars_athena
 
 ::: dynamicio.engines.s3_upload
 

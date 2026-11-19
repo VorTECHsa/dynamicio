@@ -2,8 +2,9 @@
 
 The polars engine casts, validates and logs the metrics of polars frames. It has the validators and the metrics of the pandas engine, with the same
 names, messages and `METRIC` lines. It reads, scans and writes parquet, CSV and JSON files on a `local` or an `s3_file` resource, and reads and
-scans a `local_batch` or an `s3_path_prefix` resource. It writes an `s3_path_prefix` resource, and `sink()` writes a `LazyFrame`. In this release,
-the other resources raise `NotImplementedError`.
+scans a `local_batch` or an `s3_path_prefix` resource. It writes an `s3_path_prefix` resource, and `sink()` writes a `LazyFrame`. It reads and
+writes a `postgres` resource, reads an `athena` resource and writes a `kafka` resource. A Kafka read and an Athena write raise the
+`NotImplementedError` of the pandas engine.
 
 [ADR 0010](https://github.com/VorTECHsa/dynamicio/pull/140) records the design. The ADR is not final and changes with each release of the engine.
 
@@ -163,6 +164,68 @@ io.sink(io.scan().filter(pl.col("a") > 10))
 - A failed validation raises `SchemaValidationError`, and the file or the objects do not change. The metrics are logged only after the validations pass.
 - A failed cast in the plan, or a schema column that is not in the frame, raises `ColumnsDataTypeError`.
 - A `local_batch` resource has no writer, and `sink()` raises `NotImplementedError` on it.
+
+`sink()` also takes a list or a tuple of lazy frames, the parts of one frame in their order:
+
+```python
+io.sink([io_a.scan(), io_b.scan()])
+```
+
+Each part gets the schema columns and the casts of the model before the concatenation. The parts can thus have other types of a column, for example
+`Int32` and `Int64`, or a column of nulls only. An empty list raises `ValueError`.
+
+## Footer
+
+`footer()` reads the footer of the parquet file of a `local` or an `s3_file` resource, without its rows:
+
+```python
+footer = io.footer()
+footer.rows, footer.row_groups, footer.schema, footer.metadata[b"pandas"]
+```
+
+The read is the same on the two engines, and does not fix the engine. On S3 it reads the end of the object with ranged `GetObject` calls. A
+missing file raises `FileNotFoundError`, or `S3KeyNotFoundError` on S3. With `missing_ok=True`, `footer()` returns `None`. Another resource or
+file type raises `EngineResourceError`.
+
+## Postgres
+
+A read runs the query of the pandas engine, so `sql_query` and `params` give the same rows. `params` has the style of the driver, for example
+`%(low)s`. The engine then casts the frame to the model. A `pd.read_sql` option that changes the frame, for example `dtype` or `parse_dates`,
+raises `EngineResourceError`, because the cast of the model gives the types.
+
+A write replaces the rows of the table with the COPY of the pandas engine, in one transaction:
+
+- The frame goes to the COPY in chunks of 100,000 rows. Each chunk changes to pandas with the pandas dtypes of the model.
+- The NULL rule and the text of each value are those of the pandas engine. An empty string and a NaN are thus written as NULL.
+- A failed chunk rolls back the write, and the table keeps its old rows.
+- A polars `Datetime` column has the unit `us`. The pandas engine maps `datetime64[us]` and `datetime64[ms]` to a Postgres `timestamp`.
+
+## Kafka
+
+A `kafka` resource of the polars engine needs the option `key_column`, the column of the message keys:
+
+```yaml
+WRITE_TO_KAFKA:
+  CLOUD:
+    type: "kafka"
+    kafka:
+      kafka_server: "[[ KAFKA_SERVER ]]"
+      kafka_topic: "[[ KAFKA_TOPIC ]]"
+    options:
+      key_column: "key"
+```
+
+- A polars frame has no index. A missing `key_column`, or a `key_column` that is not a column of the model, thus raises `EngineResourceError` at once.
+- The column is not in the message values. On the pandas engine, `key_column` gives the bytes of `set_index(key_column)`.
+- The frame goes to the producer of the pandas engine in chunks of 100,000 rows, and the producer flushes once.
+- Each chunk changes to pandas with the dtypes of the model. `key_generator`, `document_transformer` and the serializers thus get the values and types of the pandas engine. A nanosecond `Datetime` reaches them as a `Timestamp` with its nanoseconds.
+
+A Kafka read raises the `NotImplementedError` of the pandas engine.
+
+## Athena
+
+A read runs the awswrangler query of the pandas engine with its options, and the engine casts the result to the model. The `chunksize` option raises
+the `ValueError` of the pandas engine. An Athena write raises the `NotImplementedError` of the pandas engine.
 
 ## Cast
 
