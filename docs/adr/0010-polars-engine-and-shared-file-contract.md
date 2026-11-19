@@ -115,6 +115,9 @@ schema declaration.
    `pd.Timestamp`. A float null is NaN and an `Int64` null is `None`. polars `to_dicts()` gives `datetime` and `None` for all nulls. The polars engine changes the
    row to the pandas types before it calls `key_generator` and `document_transformer`, so custom callables give the same bytes on both engines. The default
    serializers give the same bytes on both engines.
+   - A Python `datetime` and `timedelta` keep microseconds only, so `to_dicts()` loses the last 3 digits of a `Datetime("ns")` value. The engine makes the
+     `pd.Timestamp` and `pd.Timedelta` values from the columns, with `Series.to_pandas()`, and not from the values of `to_dicts()`.
+   - A test sends a value that ends in `.123456789` through a custom serializer on both engines and compares the bytes.
 8. Athena on polars. In v12, the polars engine reads Athena through awswrangler and changes the result to a polars frame inside the engine. The user gets a polars
    frame only. In v13, an install with `[polars]` only has no Athena reads unless a later ADR gives polars its own Athena reader.
 9. JSON on polars. The polars engine reads and writes the `records` orient, with and without `lines`. The pandas orients `split`, `index`, `columns`, `values` and
@@ -131,8 +134,14 @@ schema declaration.
 13. Earlier ADRs apply to the polars engine.
     - [0002](0002-tolerate-missing-columns-in-parquet-prefix-reads.md): a parquet prefix read fills the missing columns with null and logs the same warning. A
       column that is missing from all objects raises an error. polars infers the schema from the first object, so `missing_columns="insert"` alone fails when
-      the first object does not have a column. The polars engine gives `scan_parquet` an explicit `schema=` from the model columns and dtypes, so the result does
+      the first object does not have a column. The polars engine gives `scan_parquet` an explicit `schema=` of the model columns, so the result does
       not change with the order of the objects. The engine reads the footer of each object to count the objects that do not have each column.
+    - The `schema=` of `scan_parquet` gives the types of the files, and it does not cast. An `Int32` column under an `Int64` type raises `SchemaError`
+      at scan time (probe on polars 2.1.0). The engine therefore takes the type of each column from the footers, and not from the model.
+    - When the footers give different types for a column, the engine uses the widest type. `ScanCastOptions(integer_cast="upcast", float_cast="upcast")`
+      then reads the narrower objects. Footers with types that do not upcast, such as `String` and `Int64`, raise `ColumnsDataTypeError` before the scan.
+    - The lazy cast of the model then runs in the plan, as for a single file. A file type that the pandas engine casts to the model type thus also casts on
+      polars, for example an `Int32` file under an `Int64` model.
     - [0004](0004-ranged-parquet-reads-with-filters.md): a filtered single-file parquet read reads only the row groups and columns it needs. polars gets this with
       the predicate and projection pushdown of `scan_parquet`.
 14. The dtype map (change 5) covers these pairs at least:
@@ -226,7 +235,9 @@ Phase 2 as built:
 - The polars engine runs `Config.unique`, `Config.ordered` and `@pa.dataframe_check` as lazy queries, with the keys and the message template of the
   pandas engine. The counts and the examples come from the polars failure cases, so they are not always the pandas values. For a dataframe check, the
   count is the number of failing rows.
-- The 8 metrics give the `METRIC` lines of the pandas engine. The metric of an empty or an all-null column is NaN.
+- The 8 metrics give the `METRIC` lines of the pandas engine. For an empty or an all-null column, `Min`, `Max`, `Mean`, `Std` and `Variance` give NaN.
+  `Counts` and `UniqueCounts` give the counts of the pandas engine, for example 0 for an empty column and 2 and 1 for `[None, None]`. `CountsPerLabel` does
+  not count nulls.
 
 Change 26 is the floci fixture of decision 15. RND-25426 delivers it before phase 1, with the pandas integration tests. The polars S3 tests of phase 3 are its first polars users.
 
