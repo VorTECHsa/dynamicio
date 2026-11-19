@@ -55,7 +55,7 @@ The reference is the pandas engine of dynamicio 11.1.0. The bug fixes of 11.1.0 
 - The polars engine reads the files from the pandas engine, from 11.1.0 and from 10.x.
 - Each format passes the 4 pairs of writer engine and reader engine against the expected files.
 
-The polars reader differs from the 11.1.0 pandas reader for 4 kinds of file. In each case the polars engine keeps a value that the pandas engine loses, or reads
+The polars reader differs from the 11.1.0 pandas reader for 5 kinds of file. In each case the polars engine keeps a value that the pandas engine loses, or reads
 a file that the pandas engine refuses. Rule 2 does not include these cases, and the tests of the 4 pairs do not use them. Each case has its own test.
 
 1. A CSV or JSON string column without a string `dtype` option. The pandas reader infers the type, so `007` becomes the integer 7, and the cast gives `"7"`.
@@ -68,6 +68,10 @@ a file that the pandas engine refuses. Rule 2 does not include these cases, and 
    becomes 1 ns. The polars engine reads each epoch in `date_unit` and keeps the value. A column with a time zone gives a UTC instant.
 4. A CSV resource with `header: false` and `names`. The pandas reader raises `TypeError` for `header: false`, and the polars engine reads the file that the
    writer gives.
+5. A CSV or JSON integer column with a null. The pandas reader infers `float64`, so an integer above 2**53 loses digits before the cast, and
+   `9007199254740993` becomes `9007199254740992`. The polars reader keeps the integer. The bytes of the file are equal on the two engines. On the pandas
+   engine, a nullable integer `dtype` option such as `Int64` keeps the value for CSV. `pandas.read_json` loses the digits also with this option, so a repo
+   that needs these values on both engines uses parquet or CSV.
 
 A pandas file can store a named index in its pandas metadata. pandas then gives the index back, and polars reads it as a normal column. The schema column selection
 removes the columns that the model does not declare, so the two engines give the same columns.
@@ -190,7 +194,8 @@ schema declaration.
       same unit and time zone. With a null, an integer gives its nullable pandas dtype (`Int64`), and `Boolean` gives `boolean`.
     - The null rule of the reverse map also applies to a numpy dtype of the metadata. A column with `pandas_dtype="int64"` or `"bool"` and a null
       thus gives `Int64` or `boolean`, as `DataFrame.to_parquet` gives for a pandas column with a null. The rule applies to `write()`, to `sink()`
-      and to the pandas frames of the CSV, JSON, Postgres and Kafka writers. pandas then reads the exact integers, also above 2**53.
+      and to the pandas frames of the CSV, JSON, Postgres and Kafka writers. A pandas read of the parquet file then gives the exact integers, also
+      above 2**53. A pandas read of a CSV or JSON file infers `float64` for this column (exception 5 of rule 2).
     - The contract covers the pandas dtypes of this reverse map only.
 15. Integration tests on both engines run against [floci](https://github.com/floci-io/floci), a local AWS emulator. One container gives S3, RDS with
     `postgres:16` and MSK with a Redpanda broker.
