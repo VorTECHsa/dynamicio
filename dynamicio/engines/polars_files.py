@@ -1,4 +1,5 @@
-"""The eager file I/O of the polars engine: parquet, CSV and JSON files on a local disk, in a local batch and in one S3 object.
+"""The eager file I/O of the polars engine: parquet, CSV and JSON files on a local disk, in a local batch and in one S3 object. ``PolarsScans`` reads
+an S3 prefix.
 
 A file that the polars engine writes gives the same frame to the pandas engine of 11.1.0 (rule 2 of ADR 0010):
 
@@ -23,7 +24,8 @@ from botocore.exceptions import ClientError
 from pandas._libs.parsers import STR_NA_VALUES  # pylint: disable=no-name-in-module
 
 from dynamicio.engines.polars_options import PolarsOptions
-from dynamicio.errors import EngineResourceError, ObjectNotFoundError, S3KeyNotFoundError
+from dynamicio.engines.polars_s3 import PolarsS3
+from dynamicio.errors import EngineResourceError
 from dynamicio.mixins import utils, with_s3
 from dynamicio.mixins.utils import get_file_type_value
 from dynamicio.schema.polars_dtypes import DtypeMap
@@ -32,12 +34,15 @@ if TYPE_CHECKING:  # pragma: no cover
     from dynamicio.core import DynamicDataIO
 
 Source = Union[str, std_io.BytesIO]
+Frame = Union[pl.DataFrame, pl.LazyFrame]
 
 
 class PolarsFiles:
     """The polars readers and writers of the file resources: ``local``, ``local_batch`` and ``s3_file``."""
 
     SOURCES = ("local", "local_batch", "s3_file")
+    # The resources that the engine checks and reads: an `s3_path_prefix` read is a scan of its objects
+    READ_SOURCES = (*SOURCES, "s3_path_prefix")
     # The codes of a pandas categorical: int8 below 127 categories, int16 below 32767 and int32 below 2**31 - 1, as `coerce_indexer_dtype` gives them
     CODE_TYPES = ((2**7 - 1, pa.int8()), (2**15 - 1, pa.int16()), (2**31 - 1, pa.int32()))
     # The pandas metadata of the columns index of a frame with string column names, as `DataFrame.to_parquet` writes it
@@ -63,7 +68,7 @@ class PolarsFiles:
     @classmethod
     def section_of(cls, io: "DynamicDataIO") -> Any:
         """The ``local`` or ``s3`` section of the resource definition of an IO object."""
-        return io.sources_config.s3 if cls.source_of(io) == "s3_file" else io.sources_config.local
+        return io.sources_config.s3 if cls.source_of(io) in ("s3_file", "s3_path_prefix") else io.sources_config.local
 
     @classmethod
     def paths_of(cls, io: "DynamicDataIO") -> List[str]:
@@ -79,7 +84,7 @@ class PolarsFiles:
             EngineResourceError: The file type or an option has no polars reader and writer.
         """
         source = cls.source_of(io)
-        if source not in cls.SOURCES:
+        if source not in cls.READ_SOURCES:
             return
         fields = {field for path in cls.paths_of(io) for field in utils.get_string_template_field_names(path)}
         options = {name: value for name, value in io.options.items() if name not in fields}
@@ -116,11 +121,7 @@ class PolarsFiles:
         try:
             return with_s3._download_to_memory(bucket, key)  # pylint: disable=protected-access
         except ClientError as error:
-            if not S3KeyNotFoundError.is_missing_key(error):
-                raise
-            if file_type == "parquet":
-                raise S3KeyNotFoundError(s3_path, error) from error
-            raise ObjectNotFoundError(f"No object found at {s3_path}") from error
+            PolarsS3.raise_missing(error, s3_path, file_type)
 
     @classmethod
     def decode(cls, file_type: str, source: Source, io: "DynamicDataIO", options: MutableMapping[str, Any]) -> pl.DataFrame:
@@ -128,9 +129,9 @@ class PolarsFiles:
         return getattr(cls, f"read_{file_type}")(source, io, options)
 
     @staticmethod
-    def schema_columns(frame: pl.DataFrame, io: "DynamicDataIO") -> pl.DataFrame:
-        """The columns of a frame that the schema declares, in the order of the file, as ``usecols`` gives them on pandas."""
-        return frame.select([column for column in frame.columns if column in io.schema.column_names])
+    def schema_columns(frame: Frame, io: "DynamicDataIO") -> Frame:
+        """The columns of a frame or a lazy frame that the schema declares, in the order of the file, as ``usecols`` gives them on pandas."""
+        return frame.select([column for column in frame.collect_schema().names() if column in io.schema.column_names])
 
     @staticmethod
     def read_parquet(source: Source, io: "DynamicDataIO", options: MutableMapping[str, Any]) -> pl.DataFrame:
@@ -144,21 +145,37 @@ class PolarsFiles:
 
     @classmethod
     def read_csv(cls, source: Source, io: "DynamicDataIO", options: MutableMapping[str, Any]) -> pl.DataFrame:
-        """Read a CSV file with the null strings of ``pandas.read_csv``, and the columns that are not numbers or booleans as strings.
+        """Read a CSV file with the arguments of ``csv_arguments``."""
+        return cls.schema_columns(pl.read_csv(source, **cls.csv_arguments(io, options)), io)
+
+    @staticmethod
+    def csv_arguments(io: "DynamicDataIO", options: MutableMapping[str, Any]) -> Dict[str, Any]:
+        """The arguments of ``read_csv`` and ``scan_csv``: the null strings of ``pandas.read_csv``, and the columns that are not numbers or booleans as strings.
+
+        ``names`` gives the names of the columns of the file, as on pandas: without ``header``, the first line is data, and ``header: 0`` replaces the
+        names of the header line. polars raises ``SchemaError`` if the file has
+        another number of columns. pandas then makes an index of the first columns, or adds columns of nulls.
 
         A string column keeps its text, for example ``007``, and the cast then parses the temporal columns. The schema of the numbers comes from all rows,
-        so a float on the last row of an integer-looking column does not fail the read.
+        so a float on the last row of an integer-looking column does not fail the read. A scan therefore reads the file once for the schema.
         """
         arguments = PolarsOptions.read_arguments("csv", options)
+        if "new_columns" in arguments and options.get("header", "infer") == "infer":
+            # pandas reads the first line as data when `names` is set without `header`
+            arguments["has_header"] = False
         if not arguments.pop("has_header", True):
-            # pandas cannot read it either: `usecols` names columns that a headerless file does not have
-            raise EngineResourceError("the polars engine reads CSV files with a header line, as the pandas engine does. Remove header: false from the read resource.")
+            if "new_columns" not in arguments:
+                # pandas cannot read it either: `usecols` names columns that a headerless file without `names` does not have
+                raise EngineResourceError(
+                    "the polars engine reads a CSV file without a header line only with the names option, as the pandas engine does. "
+                    "Set names to one name for each column of the file, or remove header: false from the read resource."
+                )
+            arguments["has_header"] = False
         extra = arguments.pop("null_values", None)
         extra = [extra] if isinstance(extra, str) else list(extra or [])
         dtypes = DtypeMap.of_model(io._model)  # pylint: disable=protected-access
         overrides = {column: pl.String for column, dtype in dtypes.items() if not (dtype.is_numeric() or dtype == pl.Boolean)}
-        frame = pl.read_csv(source, schema_overrides=overrides, infer_schema_length=None, null_values=sorted(STR_NA_VALUES) + extra, **arguments)
-        return cls.schema_columns(frame, io)
+        return {**arguments, "schema_overrides": overrides, "infer_schema_length": None, "null_values": sorted(STR_NA_VALUES) + extra}
 
     @classmethod
     def read_json(cls, source: Source, io: "DynamicDataIO", options: MutableMapping[str, Any]) -> pl.DataFrame:

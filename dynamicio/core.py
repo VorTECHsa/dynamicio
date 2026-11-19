@@ -209,12 +209,28 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
         engine.write(self, self._apply_schema(df))
 
     def scan(self) -> Any:
-        """Read the source lazily: a polars ``LazyFrame`` on the polars engine.
+        """Read the source lazily: a polars ``LazyFrame`` on the polars engine, with the casts of the model in its plan.
+
+        A failed cast raises when the frame is collected. A lazy frame has no rows before it is collected, so ``scan()`` does not validate the frame
+        or log its metrics. Call ``validate_from_schema`` on the collected frame, or use ``read()``.
+
+        Returns:
+            A polars ``LazyFrame``. None if the source does not exist and `missing_ok` is True.
 
         Raises:
             NotImplementedError: On the pandas engine, which has no lazy frame.
         """
-        return EngineSetting.use(self._model, resource=self).scan(self)
+        engine = EngineSetting.use(self._model, resource=self)
+        try:
+            frame = engine.scan(self)
+        except FileNotFoundError as err:
+            if not self.missing_ok:
+                raise
+            logger.warning(f"Source {self.name!r} does not exist and missing_ok is set: returning None. ({err})")
+            return None
+        if self.apply_schema_validations or self.log_schema_metrics:
+            logger.warning(f"scan() of {self.name!r} does not validate or log metrics: a lazy frame has no rows before it is collected. Use read(), or validate the collected frame.")
+        return self._apply_schema(frame)
 
     def sink(self, df: Any) -> None:
         """Write a lazy frame to the source: a polars ``LazyFrame`` on the polars engine.

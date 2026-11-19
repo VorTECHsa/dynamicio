@@ -24,8 +24,10 @@ class Resources:
         return Resources.build(directory, f'    type: "s3_file"\n    s3:\n      bucket: "{bucket}"\n      file_path: "{key}"\n      file_type: "{file_type}"\n{options_line}')
 
     @staticmethod
-    def s3_path_prefix(directory: Path, bucket: str, prefix: str):
-        return Resources.build(directory, f'    type: "s3_path_prefix"\n    s3:\n      bucket: "{bucket}"\n      path_prefix: "{prefix}"\n      file_type: "parquet"\n')
+    def s3_path_prefix(directory: Path, bucket: str, prefix: str, file_type: str = "parquet", *, options: Optional[dict] = None, path_key: str = "path_prefix"):
+        """A prefix resource. ``path_key="dynamic_file_path"`` makes ``prefix`` a dynamic file path with ``/**/`` in it."""
+        options_line = f"    options: {json.dumps(options)}\n" if options else ""
+        return Resources.build(directory, f'    type: "s3_path_prefix"\n    s3:\n      bucket: "{bucket}"\n      {path_key}: "{prefix}"\n      file_type: "{file_type}"\n{options_line}')
 
     @staticmethod
     def postgres(directory: Path, stack):

@@ -1,4 +1,4 @@
-"""The polars engine. It checks frames, models and resources, reads and writes files, casts, validates and logs metrics."""
+"""The polars engine. It checks frames, models and resources, reads, scans and writes files, casts, validates and logs metrics."""
 
 from typing import TYPE_CHECKING, Any, Dict, List, NoReturn, Tuple
 
@@ -51,12 +51,19 @@ class PolarsEngine(Engine):
         PolarsFiles.check(io)
 
     def read(self, io: "DynamicDataIO") -> Any:
-        """Read a ``local``, ``local_batch`` or ``s3_file`` resource into a polars frame. Other resources are not read yet."""
-        from dynamicio.engines.polars_files import PolarsFiles  # pylint: disable=import-outside-toplevel
+        """Read a ``local``, ``local_batch``, ``s3_file`` or ``s3_path_prefix`` resource into a polars frame. Other resources are not read yet.
+
+        A prefix read collects the scan of the prefix, so that the eager and the lazy reads of a prefix give the same frame.
+        """
+        # pylint: disable=import-outside-toplevel
+        from dynamicio.engines.polars_files import PolarsFiles
+        from dynamicio.engines.polars_scans import PolarsScans
 
         source = self.source_of(io)
-        if source not in PolarsFiles.SOURCES:
+        if source not in PolarsFiles.READ_SOURCES:
             self.not_yet(f"read {source} resources")
+        if source == "s3_path_prefix":
+            return PolarsScans.scan(io).collect()
         return PolarsFiles.read(io)
 
     def write(self, io: "DynamicDataIO", frame: Any) -> None:
@@ -69,8 +76,13 @@ class PolarsEngine(Engine):
         PolarsFiles.write(io, frame.collect() if hasattr(frame, "collect") else frame)
 
     def scan(self, io: "DynamicDataIO") -> Any:
-        """Refuse: no polars scans yet."""
-        self.not_yet("scan")
+        """The ``LazyFrame`` of a ``local``, ``local_batch``, ``s3_file`` or ``s3_path_prefix`` resource. Other resources are not scanned yet."""
+        from dynamicio.engines.polars_scans import PolarsScans  # pylint: disable=import-outside-toplevel
+
+        source = self.source_of(io)
+        if source not in PolarsScans.SOURCES:
+            self.not_yet(f"scan {source} resources")
+        return PolarsScans.scan(io)
 
     def sink(self, io: "DynamicDataIO", frame: Any) -> None:
         """Refuse: no polars sinks yet."""

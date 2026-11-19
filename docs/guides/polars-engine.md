@@ -1,8 +1,8 @@
 # The polars engine
 
 The polars engine casts, validates and logs the metrics of polars frames. It has the validators and the metrics of the pandas engine, with the same
-names, messages and `METRIC` lines. It reads and writes parquet, CSV and JSON files on a `local` or an `s3_file` resource, and reads a
-`local_batch` resource. In this release, `scan()`, `sink()` and the other resources raise `NotImplementedError`.
+names, messages and `METRIC` lines. It reads, scans and writes parquet, CSV and JSON files on a `local` or an `s3_file` resource, and reads and
+scans a `local_batch` or an `s3_path_prefix` resource. In this release, `sink()`, a prefix write and the other resources raise `NotImplementedError`.
 
 [ADR 0010](https://github.com/VorTECHsa/dynamicio/pull/140) records the design. The ADR is not final and changes with each release of the engine.
 
@@ -74,6 +74,7 @@ The polars engine reads and writes these resources:
 | `local` | parquet, CSV, JSON | parquet, CSV, JSON |
 | `local_batch` | parquet, CSV, JSON | no writer, as on the pandas engine |
 | `s3_file` | parquet, CSV, JSON | parquet, CSV, JSON |
+| `s3_path_prefix` | parquet, CSV, JSON | not yet |
 
 A file that the polars engine writes gives the same frame to the pandas engine of 11.1.0:
 
@@ -86,15 +87,44 @@ The readers are polars readers, and the engine then casts the frame to the model
 - A JSON file has the orient records, or JSON lines with `lines: true`. An integer under a `Datetime` or a `Duration` column is an epoch in `date_unit`, which is `ms` by default. An epoch of a `Datetime` with a time zone is a UTC instant. A file without records, as the pandas engine writes a frame without rows, reads as a frame without rows with the columns of the model.
 - A `local_batch` resource reads its files in sorted order. A file without a column of the model gives nulls in that column.
 - A missing local file raises `FileNotFoundError`. A missing S3 key raises `S3KeyNotFoundError` for parquet and `ObjectNotFoundError` for CSV and JSON, as on the pandas engine. With `missing_ok=True`, `read()` returns `None`.
+- An `s3_path_prefix` resource reads all the objects under `path_prefix`, or the objects that match `dynamic_file_path`, in the order of the S3 listing, as on the pandas engine. Keys that end in `/` are left out. A prefix without objects raises `NoObjectsFoundError`.
 - An `s3_file` key that ends in `/` raises `NotImplementedError` at read. A parquet write to such a key raises `ValueError`, as on the pandas engine.
 
 `write()` collects a `LazyFrame` before it writes the file.
+
+## Scan
+
+`scan()` gives a `LazyFrame` with the columns of the model and the casts of the model in its plan. Nothing is read before you collect it:
+
+```python
+lazy = io.scan()
+frame = lazy.filter(pl.col("a") > 10).select("b").collect()
+```
+
+- A parquet or CSV scan uses `scan_parquet` or `scan_csv`. A filter or a selection then reads only the row groups and the columns that it needs.
+- A JSON scan reads the file with the eager reader, then calls `lazy()`. polars has no lazy reader of a JSON array.
+- A CSV scan reads the file once for the types of its columns, as the eager read does. The columns are in the order of the file, as on `read()`.
+- A failed cast raises when you collect the frame.
+- `scan()` does not validate the frame or log its metrics, because a lazy frame has no rows before you collect it. It logs a warning if the IO object asks for validations or metrics. Collect the frame and call `validate_from_schema`, or use `read()`.
+- A missing file or key raises the error of `read()`. With `missing_ok=True`, `scan()` returns `None`.
+
+A parquet prefix is one scan of all its objects:
+
+- The engine reads the footer of each object. A column has the widest type of the footers, as `pd.concat` gives it, for example `Int64` for `Int32` and `Int64`, and `Float64` for an integer and a float. The scan upcasts the narrower objects.
+- A pair of types that does not upcast, for example `String` and `Int64`, or `Int64` and `UInt64`, raises `ColumnsDataTypeError`.
+- An object that lacks a column gets nulls in it, with the warning of the pandas engine. A column that no object has raises the `ValueError` of the pandas engine.
+
+The S3 reads of polars use the credentials and the region of the boto3 session of dynamicio. polars refreshes the credentials when they expire. A boto3 endpoint that is not an AWS endpoint, for example a local S3 stack, also goes to polars.
 
 ### Options
 
 The `options` of a resource go beside its `local` or `s3` section. A file type accepts the options of its pandas reader and of its pandas writer. Examples are `sep`,
 `na_values` and `nrows` for CSV, and `compression` and `row_group_size` for parquet. The engine gives the read options to the polars reader with their polars names,
 for example `separator` for `sep`, and `decimal_comma` for `decimal: ","`.
+
+A CSV `names` option names the columns of the file, as on pandas. Without `header`, the first line is data. With `header: 0`, the names replace the
+names of the header line. A file with another number of columns raises the `SchemaError` of polars. pandas then makes an index of the first columns, or
+adds columns of nulls.
 
 The polars engine raises `EngineResourceError` for a resource that it cannot read or write:
 
@@ -103,8 +133,10 @@ The polars engine raises `EngineResourceError` for a resource that it cannot rea
 - the parquet `engine: fastparquet`, or `index: true`, because a polars frame has no index
 - a CSV `header` on a line other than the first, a `skiprows` that is not a number, or an encoding other than UTF-8
 - a CSV `na_values` map with null strings for each column, or a `decimal` mark other than `.` and `,`
-- a read of a CSV resource with `header: false` or `header: null`. The pandas engine cannot read that file either. A write with `header: false` is accepted
+- a read of a CSV resource with `header: false` or `header: null` and without `names`. The pandas engine cannot read that file either. A write with `header: false` is accepted
 - a JSON orient other than records. The default orient is records on S3 and columns on a local file, so a local JSON resource must set `orient: records`.
+
+An `s3_path_prefix` resource also accepts `no_disk_space`, `partition_cols`, `mode` and `allow_delete`. The polars engine refuses them on the other resources.
 
 The engine checks the resource when you make the IO object, and again at each read and write. Thus it also finds a change of the options after you make the IO object.
 

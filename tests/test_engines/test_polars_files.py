@@ -679,15 +679,77 @@ class TestCsvOptions:
         assert result.equals(Files.frame())
 
     @pytest.mark.unit
-    def test_a_headerless_csv_is_refused_at_the_read(self, tmp_path):
+    def test_a_headerless_csv_without_names_is_refused_at_the_read(self, tmp_path):
         # Given
         config = Files.config(tmp_path, "csv", {"header": False, "index": False})
         Files.polars(config, Pair).write(pl.DataFrame({"a": [1], "b": ["x"]}))
 
         # When / Then
         assert (tmp_path / "data.csv").read_text() == "1,x\n"
-        with pytest.raises(EngineResourceError, match="with a header line"):
+        with pytest.raises(EngineResourceError, match="without a header line only with the names option"):
             Files.polars(config, Pair).read()
+        with pytest.raises(EngineResourceError, match="without a header line only with the names option"):
+            Files.polars(config, Pair).scan()
+
+    @pytest.mark.unit
+    def test_a_headerless_csv_with_names_reads_as_on_the_pandas_engine(self, tmp_path):
+        # Given
+        (tmp_path / "data.csv").write_text("1,x\n2,NA\n")
+        config = Files.config(tmp_path, "csv", {"header": None, "names": ["a", "b"]})
+
+        # When
+        result = Files.polars(config, Pair).read()
+        scanned = Files.polars(config, Pair).scan().collect()
+        EngineSetting.reset("pandas")
+        expected = FilesIO(source_config=config, schema=PandasPair).read()
+
+        # Then
+        assert result.to_dicts() == [{"a": 1, "b": "x"}, {"a": 2, "b": None}]
+        assert scanned.equals(result)
+        assert expected["a"].tolist() == [1, 2] and expected["b"].tolist()[0] == "x" and pd.isna(expected["b"].tolist()[1])
+
+    @pytest.mark.unit
+    def test_a_file_that_the_polars_engine_writes_with_header_false_reads_back_with_names(self, tmp_path):
+        # Given: the pandas reader refuses `header: false`, and the polars reader reads the file that the writer gives
+        config = Files.config(tmp_path, "csv", {"header": False, "index": False, "names": ["a", "b"]})
+        Files.polars(config, Pair).write(pl.DataFrame({"a": [1], "b": ["007"]}))
+
+        # When / Then
+        assert (tmp_path / "data.csv").read_text() == "1,007\n"
+        assert Files.polars(config, Pair).read().to_dicts() == [{"a": 1, "b": "007"}]
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("options, text", [({"header": 0}, "x,y\n1,z\n"), ({}, "1,z\n")])
+    def test_names_replace_a_header_line_or_name_a_file_without_one_as_on_the_pandas_engine(self, tmp_path, options, text):
+        # Given: with names and without header, pandas reads the first line as data
+        (tmp_path / "data.csv").write_text(text)
+        config = Files.config(tmp_path, "csv", {**options, "names": ["a", "b"]})
+
+        # When
+        result = Files.polars(config, Pair).read()
+        EngineSetting.reset("pandas")
+        expected = FilesIO(source_config=config, schema=PandasPair).read()
+
+        # Then
+        assert result.to_dicts() == [{"a": 1, "b": "z"}]
+        assert expected.to_dict("records") == [{"a": 1, "b": "z"}]
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("names", [["a"], ["a", "b", "c"]])
+    def test_names_for_another_number_of_columns_raise_at_the_read(self, tmp_path, names):
+        # Given
+        (tmp_path / "data.csv").write_text("1,x\n")
+        config = Files.config(tmp_path, "csv", {"header": None, "names": names})
+
+        # When / Then
+        with pytest.raises(pl.exceptions.SchemaError, match="does not match number of columns"):
+            Files.polars(config, Pair).read()
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("names", ["a,b", ["a", 1]])
+    def test_names_that_are_not_a_list_of_strings_are_refused_when_the_resource_is_built(self, tmp_path, names):
+        with pytest.raises(EngineResourceError, match="list of column names"):
+            Files.polars(Files.config(tmp_path, "csv", {"names": names}), Pair)
 
     @pytest.mark.unit
     def test_null_strings_for_each_column_are_refused_when_the_resource_is_built(self, tmp_path):

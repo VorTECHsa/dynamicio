@@ -31,6 +31,7 @@ class PolarsOptions:
             "quotechar": "quote_char",
             "comment": "comment_prefix",
             "encoding": "encoding",
+            "names": "new_columns",
             "usecols": None,
             "decimal": None,
         },
@@ -90,6 +91,9 @@ class PolarsOptions:
         "json": frozenset({"orient", "date_format", "double_precision", "force_ascii", "date_unit", "default_handler", "lines", "compression", "index", "indent", "mode"}),
     }
 
+    # The options of an `s3_path_prefix` resource for each file type: `no_disk_space` of the reads, and the options of the partitioned parquet writes
+    PREFIX = frozenset({"no_disk_space", "partition_cols", "mode", "allow_delete"})
+
     ENCODINGS = {"utf-8": "utf8", "utf8": "utf8", "UTF-8": "utf8"}
     PANDAS_PARQUET_ENGINES = (None, "auto", "pyarrow")
 
@@ -99,7 +103,7 @@ class PolarsOptions:
 
         Args:
             file_type: The file type of the resource.
-            source: The backend of the resource, for the default JSON orient.
+            source: The backend of the resource, for the default JSON orient and the options of a prefix.
             options: The options of the resource, without the fields of its path template.
 
         Raises:
@@ -107,7 +111,8 @@ class PolarsOptions:
         """
         if file_type not in cls.FILE_TYPES:
             raise EngineResourceError(f"the polars engine reads and writes {', '.join(cls.FILE_TYPES)} files, not {file_type} files. Use the pandas engine for {file_type}.")
-        unknown = sorted(name for name in options if name not in cls.READ[file_type] and name not in cls.WRITE[file_type])
+        prefix = cls.PREFIX if source == "s3_path_prefix" else frozenset()
+        unknown = sorted(name for name in options if name not in cls.READ[file_type] and name not in cls.WRITE[file_type] and name not in prefix)
         if unknown:
             raise EngineResourceError(f"the polars engine has no {file_type} option {', '.join(unknown)}. Remove the option, or use the pandas engine.")
         getattr(cls, f"check_{file_type}")(source, options)
@@ -130,6 +135,9 @@ class PolarsOptions:
             raise EngineResourceError(f"the polars engine skips a number of rows, not skiprows={options['skiprows']!r}")
         if isinstance(options.get("na_values"), Mapping):
             raise EngineResourceError("the polars engine reads null strings for all columns, not for each column. Set na_values to a string or a list of strings.")
+        names = options.get("names")
+        if names is not None and not (isinstance(names, (list, tuple)) and all(isinstance(name, str) for name in names)):
+            raise EngineResourceError(f"the polars engine takes a list of column names, not names={names!r}")
         if options.get("decimal", ".") not in (".", ","):
             raise EngineResourceError(f"the polars engine reads a decimal point or a decimal comma, not decimal={options['decimal']!r}")
         if "encoding" in options and options["encoding"] not in cls.ENCODINGS:
