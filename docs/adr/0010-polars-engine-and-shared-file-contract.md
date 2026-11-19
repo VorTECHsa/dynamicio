@@ -55,6 +55,16 @@ The reference is the pandas engine of dynamicio 11.1.0. The bug fixes of 11.1.0 
 - The polars engine reads the files from the pandas engine, from 11.1.0 and from 10.x.
 - Each format passes the 4 pairs of writer engine and reader engine against the expected files.
 
+The polars reader differs from the 11.1.0 pandas reader for 3 kinds of file. In each case the polars engine keeps a value that the pandas engine loses, or reads
+a file that the pandas engine refuses. Rule 2 does not include these cases, and the tests of the 4 pairs do not use them. Each case has its own test.
+
+1. A CSV string column without a string `dtype` option. The pandas reader infers the type, so `007` becomes the integer 7, and the cast gives `"7"`. The
+   polars reader keeps the text `007`. A repo that needs the same value on both engines sets a string `dtype` for the column on the pandas engine.
+2. A JSON file without records, as `DataFrame.to_json` writes a frame without rows. The pandas engine raises `KeyError`, and the polars engine gives a frame
+   without rows with the columns of the model.
+3. A JSON epoch under a `Datetime` column with a time zone, in a column with a name that is not a date name. The pandas engine reads a naive `datetime64[ns]`
+   and cannot cast it. The polars engine reads a UTC instant.
+
 A pandas file can store a named index in its pandas metadata. pandas then gives the index back, and polars reads it as a normal column. The schema column selection
 removes the columns that the model does not declare, so the two engines give the same columns.
 - Rule 2 compares the columns of the frame. The pandas index is not part of the contract.
@@ -253,18 +263,23 @@ Phase 3 as built:
   metadata from an empty pandas frame with the dtypes of the model, as `DataFrame.to_parquet` does. The footer schema, the metadata and the SNAPPY compression
   are then equal to 11.1.0. A `category` column has the code width of pandas: `int8` below 127 categories, `int16` below 32767 and `int32` after that.
 - The readers are polars readers, and the cast of phase 2 then gives the dtypes of the model. A CSV column that is not a number or a Boolean reads as a string,
-  so a value such as `007` keeps its text. The cast parses the strings of a `Duration` with `pd.to_timedelta`, and the strings `True` and `False` of a
+  so a value such as `007` keeps its text (exception 1 of rule 2). The cast parses the strings of a `Duration` with `pd.to_timedelta`, and the strings `True` and `False` of a
   `Boolean`. A `DataFrame` with a bad string raises `ColumnsDataTypeError`. A `LazyFrame` raises the polars `InvalidOperationError` when the caller collects it.
 - A JSON integer under a `Datetime` or `Duration` column of the model is an epoch in `date_unit`. The pandas engine of 11.1.0 reads an epoch column with a
   name that is not a date name as a naive `datetime64[ns]`, and then cannot cast it to a column with a time zone. The polars engine reads it as a UTC instant.
   A JSON file without records, as pandas writes a frame without rows, reads as a frame without rows with the columns of the model. The pandas engine raises
-  `KeyError` for this file.
+  `KeyError` for this file. These are exceptions 2 and 3 of rule 2.
 - The option maps of decision 6 are in `PolarsOptions`. A resource has one set of options for its reads and its writes, so a file type accepts the options of
   its pandas reader and of its pandas writer. The `options` of a resource go beside its `local` or `s3` section. Options inside the section have no effect on
   either engine.
 - `EngineResourceError` is the error of decision 6 and decision 9. It is also a `ValueError`. The polars engine raises it when the user builds the resource,
   and again at each read and write, so a `configure()` or a change of the options after the build cannot bypass it. The refusal of hdf and pickle also comes in
   this phase, and not in phase 6.
+- The CSV options that polars cannot apply raise `EngineResourceError`: a `na_values` map for each column, and a `decimal` mark other than `.` and `,`.
+  `decimal: ","` becomes `decimal_comma`. A read of a CSV resource without a header line also raises it, because the 11.1.0 pandas engine cannot read that
+  file either. A write with `header: false` is accepted.
+- The CSV and JSON writers change an integer column to a pandas nullable integer, so an integer above 2**53 next to a null keeps its value. A parquet write
+  with `index: false` has the pandas metadata of `to_parquet(index=False)`. A write changes float NaN to null before its validations and metrics.
 - A missing S3 key raises the error of the pandas engine: `S3KeyNotFoundError` for parquet and `ObjectNotFoundError` for CSV and JSON. `missing_ok` applies.
   An `s3_file` key that ends in `/` raises `NotImplementedError` at read, and a parquet write to it raises the `ValueError` of the pandas engine.
 
