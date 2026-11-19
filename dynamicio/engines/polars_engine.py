@@ -168,6 +168,8 @@ class PolarsEngine(Engine):
 
     def log_metrics(self, io: "DynamicDataIO", frame: Any) -> None:
         """Compute the metrics of all columns in one ``select``, then log each, in the order of the schema, as the pandas engine does."""
+        import polars as pl  # pylint: disable=import-outside-toplevel
+
         from dynamicio.schema.polars_metrics import PolarsMetrics  # pylint: disable=import-outside-toplevel
 
         wanted = [(column, getattr(metric, "value", metric)) for column, column_metrics in io.schema_metrics.items() for metric in column_metrics]
@@ -176,6 +178,10 @@ class PolarsEngine(Engine):
         expressions = [self.registry.metric(metric)(column).alias(f"_dynamicio_metric_{index}") for index, (column, metric) in enumerate(wanted)]
         lazy = frame.lazy()
         dtypes = lazy.collect_schema()
-        values = lazy.select(expressions).collect().row(0)
+        try:
+            values = lazy.select(expressions).collect().row(0)
+        except (pl.exceptions.InvalidOperationError, pl.exceptions.ComputeError):
+            self.logger().exception(f"The metrics of {io.name} could not collect the frame: a cast in its plan failed")
+            raise ColumnsDataTypeError() from None
         for (column, metric), value in zip(wanted, values):
             PolarsMetrics.log(io.name, column, metric, value, dtypes.get(column))

@@ -116,6 +116,16 @@ class TestValidatorParity:
             ("datetimes", [datetime(2020, 1, 1)]),
             ("durations", [timedelta(hours=1), timedelta(0)]),
             ("durations", [timedelta(hours=1)]),
+            ("ints", [1, 2, 3, 7, "unused"]),
+            ("ints", [1, 2, "3"]),
+            ("ints", [1.0, 2.0, 3.0, 7.0]),
+            ("ints", [1, 2, 3, 7.5]),
+            ("floats", [1, 2, 5.5, -1, "x"]),
+            ("strings", ["a", "b", "c", 1]),
+            ("categories", ["a", "b", "c", 2]),
+            ("bools", [True, False, "yes"]),
+            ("datetimes", [datetime(2020, 1, 1), datetime(2021, 6, 1), "2020-01-01"]),
+            ("durations", [timedelta(hours=1), timedelta(0), 3600]),
         ],
     )
     @pytest.mark.parametrize("exact", [False, True])
@@ -266,6 +276,51 @@ class TestValidatorEdgeCases:
 
         assert PolarsValidations.python_values(series) == [pd.Timestamp("2020-01-01"), None]
         assert repr(PolarsValidations.python_values(pl.Series([timedelta(hours=1)]))) == repr([pd.Timedelta(hours=1)])
+
+    @pytest.mark.unit
+    def test_python_values_keeps_the_nanoseconds_of_datetimes_and_durations(self):
+        durations = pl.Series([1, None], dtype=pl.Duration("ns"))
+        datetimes = pl.Series([5], dtype=pl.Datetime("ns", "UTC"))
+
+        assert PolarsValidations.python_values(durations) == [pd.Timedelta(1), None]
+        assert PolarsValidations.python_values(datetimes) == [pd.Timestamp(5, tz="UTC")]
+
+    @pytest.mark.unit
+    def test_has_unique_values_reports_a_duplicated_nanosecond_duration_as_pandas_does(self):
+        expected = validations.has_unique_values("d", pd.DataFrame({"x": pd.to_timedelta([1, 1], unit="ns")}), "x")
+
+        result = self.run(PolarsValidations.has_unique_values("d", pl.LazyFrame({"x": pl.Series([1, 1], dtype=pl.Duration("ns"))}), "x"))
+
+        assert (result.valid, result.message) == (False, expected.message)
+        assert "00:00:00.000000001" in result.message
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        ("dtype", "values", "kept"),
+        [
+            (pl.Int64, [1, "unused"], [1]),
+            (pl.Int64, [1.0, 2.5], [1]),
+            (pl.Float64, [1, 2.5], [1.0, 2.5]),
+            (pl.String, ["a", 1], ["a"]),
+            (pl.Enum(["a", "b"]), ["a", "z"], ["a"]),
+            (pl.Date, [datetime(2020, 1, 1).date(), pd.Timestamp("2020-01-01")], [datetime(2020, 1, 1).date()]),
+            (pl.Datetime("ns", "UTC"), [pd.Timestamp("2020-01-01")], []),
+            (pl.Datetime("ns"), [pd.Timestamp("2020-01-01", tz="UTC")], []),
+            (pl.Datetime("ns", "UTC"), [pd.Timestamp("2020-01-01 01:00", tz="Europe/London")], [datetime(2020, 1, 1, 1, tzinfo=timezone.utc)]),
+            (pl.Int64, [], []),
+        ],
+    )
+    def test_candidates_are_the_acceptable_values_that_a_column_can_hold(self, dtype, values, kept):
+        candidates = PolarsValidations.candidates(values, dtype)
+
+        assert candidates.dtype == dtype
+        assert candidates.to_list() == kept
+
+    @pytest.mark.unit
+    def test_a_nanosecond_duration_candidate_keeps_its_nanoseconds(self):
+        result = self.run(PolarsValidations.is_in("d", pl.LazyFrame({"x": pl.Series([1], dtype=pl.Duration("ns"))}), "x", categorical_values=[pd.Timedelta(1)]))
+
+        assert result.valid
 
     @pytest.mark.unit
     def test_is_in_prints_numbers_as_numpy_scalars_as_pandas_does(self):

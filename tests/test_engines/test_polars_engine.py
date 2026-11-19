@@ -8,6 +8,7 @@ from unittest.mock import patch
 import pandas as pd
 import pandera.pandas as pa
 import pytest
+from pandera.errors import SchemaWarning
 from pandera.typing import Series
 
 import dynamicio
@@ -178,6 +179,16 @@ class TestCast:
         with caplog.at_level(logging.ERROR, logger="dynamicio.core"), pytest.raises(ColumnsDataTypeError):
             io.validate_from_schema(cast)
         assert "a cast in its plan failed" in caplog.text
+
+    @pytest.mark.unit
+    def test_a_lazy_frame_that_does_not_cast_raises_when_its_metrics_are_logged(self, polars_io, tmp_path, caplog):
+        io = polars_io(tmp_path)
+        cast = io._apply_schema(pl.LazyFrame({"order_id": ["1", "x"], "price": [1.0, 2.0], "status": ["open", "open"]}))  # pylint: disable=protected-access
+
+        with caplog.at_level(logging.ERROR, logger="dynamicio.core"), pytest.raises(ColumnsDataTypeError), patch.object(metrics, "log_metric") as log_metric:
+            io.log_metrics_from_schema(cast)
+        assert "The metrics of ORDERS could not collect the frame: a cast in its plan failed" in caplog.text
+        log_metric.assert_not_called()
 
     @pytest.mark.unit
     def test_a_schema_column_that_is_not_in_the_frame_raises(self, polars_io, tmp_path, caplog):
@@ -440,6 +451,57 @@ class TestValidate:
             io.validate_from_schema(pl.DataFrame({"b": [1], "a": [1], "c": [1]}))
 
         assert error.value.message == {"column_ordered": "ORDERED: 2 failure(s) of column_ordered, for example ['b', 'a']"}
+
+    @pytest.mark.unit
+    def test_a_failing_dataframe_check_with_raise_warning_warns_as_on_pandas(self, polars_io, tmp_path):
+        class Spans(DataModel, dataset="spans"):
+            start: int
+            end: int
+
+            @pa_polars.dataframe_check(raise_warning=True)
+            @classmethod
+            def start_before_end(cls, data):
+                return data.lazyframe.select(pl.col("start") <= pl.col("end"))
+
+        io = polars_io(tmp_path, Spans)
+
+        with pytest.warns(SchemaWarning, match=r"SPANS: 1 failure\(s\) of start_before_end, for example \[5, 4\]"):
+            io.validate_from_schema(pl.DataFrame({"start": [1, 5], "end": [2, 4]}))
+
+    @pytest.mark.unit
+    def test_a_failing_dataframe_check_with_raise_warning_warns_on_pandas(self, tmp_path):
+        class Spans(pa.DataFrameModel):
+            __dataset_name__ = "spans"
+            start: Series[int]
+            end: Series[int]
+
+            @pa.dataframe_check(raise_warning=True)
+            @classmethod
+            def start_before_end(cls, df):
+                return df["start"] <= df["end"]
+
+        io = EngineCheckIO.make(tmp_path, Spans)
+
+        with pytest.warns(SchemaWarning):
+            io.validate_from_schema(pd.DataFrame({"start": [1, 5], "end": [2, 4]}))
+
+    @pytest.mark.unit
+    def test_config_unique_converts_five_values_of_each_column_for_its_examples(self, polars_io, tmp_path):
+        class Pairs(DataModel, dataset="pairs"):
+            a: int
+            b: int
+
+            class Config:
+                unique = ["a", "b"]
+
+        io = polars_io(tmp_path, Pairs)
+        frame = pl.DataFrame({"a": [1] * 1000, "b": [2] * 1000})
+
+        with patch.object(pl.Series, "to_list", autospec=True, side_effect=pl.Series.to_list) as to_list, pytest.raises(SchemaValidationError) as error:
+            io.validate_from_schema(frame)
+
+        assert error.value.message == {"multiple_fields_uniqueness": "PAIRS: 2000 failure(s) of multiple_fields_uniqueness, for example [1, 1, 1, 1, 1]"}
+        assert all(len(call.args[0]) <= 5 for call in to_list.call_args_list)
 
     @pytest.mark.unit
     def test_a_dataframe_check_reports_its_failing_rows(self, polars_io, tmp_path):

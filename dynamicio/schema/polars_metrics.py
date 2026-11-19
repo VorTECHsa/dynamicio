@@ -48,7 +48,8 @@ class PolarsMetrics:
             for entity in sorted(value.keys()):
                 metrics.log_metric(dataset, entity, name, value[entity])
         else:
-            metrics.log_metric(dataset=dataset, column=column, metric=name, value=cls.value_of(value))
+            value = cls.value_of(value)
+            metrics.log_metric(dataset=dataset, column=column, metric=name, value=value)
         return value
 
     @staticmethod

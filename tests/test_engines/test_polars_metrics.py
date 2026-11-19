@@ -83,11 +83,13 @@ class TestMetricParity:
 
 class TestMetricLog:
     @pytest.mark.unit
-    def test_the_metric_of_an_empty_column_logs_nan(self):
+    def test_the_metric_of_an_empty_column_logs_and_returns_nan(self):
         with patch.object(metrics, "log_metric") as log_metric:
-            PolarsMetrics.log("d", "x", "Min", None)
+            value = PolarsMetrics.log("d", "x", "Min", None)
 
         assert math.isnan(log_metric.call_args.kwargs["value"])
+        assert math.isnan(value)
+        assert math.isnan(metrics.Min(dataset_name="d", df=pd.DataFrame({"x": pd.Series([], dtype="float64")}), column="x")())
 
     @pytest.mark.unit
     @pytest.mark.parametrize(("values", "expected"), [([], {"Counts": 0, "UniqueCounts": 0}), ([None, None], {"Counts": 2, "UniqueCounts": 1})])

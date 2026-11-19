@@ -9,13 +9,14 @@ as NaN and None are in pandas.
 """
 
 # pylint: disable=too-many-positional-arguments, too-many-public-methods
-import datetime
 import math
 import operator
+import warnings
 from typing import Any, Callable, Collection, Dict, List, NamedTuple, Sequence, Tuple
 
 import pandas as pd
 import polars as pl
+from pandera.errors import SchemaWarning
 
 from dynamicio.schema.validations import ValidationResult
 
@@ -53,8 +54,13 @@ class PolarsValidations:
 
     @staticmethod
     def python_values(series: pl.Series) -> List[Any]:
-        """The values of a series as the pandas validators print them: a ``datetime`` as a ``pd.Timestamp`` and a ``timedelta`` as a ``pd.Timedelta``."""
-        return [pd.Timestamp(value) if isinstance(value, datetime.datetime) else pd.Timedelta(value) if isinstance(value, datetime.timedelta) else value for value in series.to_list()]
+        """The values of a series as the pandas validators print them: a ``Datetime`` as a ``pd.Timestamp`` and a ``Duration`` as a ``pd.Timedelta``.
+
+        ``to_list`` gives ``datetime`` values, which have microseconds, so a temporal series goes through pandas to keep its nanoseconds.
+        """
+        if isinstance(series.dtype, (pl.Datetime, pl.Duration)):
+            return [None if value is pd.NaT else value for value in series.to_pandas()]
+        return series.to_list()
 
     @staticmethod
     def has_unique_values(dataset: str, frame: pl.LazyFrame, column: str) -> "PolarsValidations.Pending":
@@ -116,9 +122,10 @@ class PolarsValidations:
         """
         acceptable = set(categorical_values)
         values = [value for value in acceptable if not PolarsValidations.is_null(value)]
-        null_is_acceptable = PolarsValidations.null_is_acceptable(frame.collect_schema()[column], acceptable)
+        dtype = frame.collect_schema()[column]
+        null_is_acceptable = PolarsValidations.null_is_acceptable(dtype, acceptable)
         unique = frame.select(pl.col(column).drop_nulls().unique())
-        not_acceptable = frame.select((~pl.col(column).is_in(pl.Series(values, strict=False)).fill_null(null_is_acceptable)).sum())
+        not_acceptable = frame.select((~pl.col(column).is_in(PolarsValidations.candidates(values, dtype)).fill_null(null_is_acceptable)).sum())
 
         def finish(frames: List[pl.DataFrame]) -> ValidationResult:
             # The values of `to_pandas` are the scalars that `unique()` gives in pandas: `pd.Timestamp` with its time zone, numpy integers
@@ -137,6 +144,41 @@ class PolarsValidations:
             return ValidationResult(valid=False, message=not_acceptable_message, value=count_invalid)
 
         return PolarsValidations.Pending((unique, not_acceptable), finish)
+
+    @classmethod
+    def candidates(cls, values: Collection[Any], dtype: pl.DataType) -> pl.Series:
+        """The acceptable values that a column of ``dtype`` can hold, as a series of ``dtype``.
+
+        A value of another type, for example ``"unused"`` for an ``Int64`` column, matches no cell in pandas, so it is left out. A series of all the
+        values would coerce them to one type, and polars refuses to compare an ``Int64`` column with a ``String`` series.
+        """
+        kept = []
+        for value in values:
+            try:
+                kept.append(cls.candidate(value, dtype))
+            except (TypeError, ValueError, OverflowError, pl.exceptions.PolarsError):
+                continue
+        return pl.concat(kept) if kept else pl.Series([], dtype=dtype)
+
+    @staticmethod
+    def candidate(value: Any, dtype: pl.DataType) -> pl.Series:
+        """One acceptable value as a series of ``dtype``. It raises for a value that a column of ``dtype`` cannot hold.
+
+        A ``pd.Timestamp`` or a ``pd.Timedelta`` goes through pandas to keep its nanoseconds. In pandas, a time zone-naive timestamp matches no cell of a
+        time zone-aware column, and the reverse. A float with no fraction matches the equal integer, as ``1.0 == 1``.
+        """
+        if isinstance(value, pd.Timestamp) and isinstance(dtype, pl.Datetime):
+            if (value.tz is None) != (dtype.time_zone is None):
+                raise TypeError(f"{value!r} and a {dtype} column have different time zone kinds")
+            return pl.from_pandas(pd.Series([value])).cast(dtype, strict=True)
+        if isinstance(value, pd.Timedelta) and isinstance(dtype, pl.Duration):
+            return pl.from_pandas(pd.Series([value])).cast(dtype, strict=True)
+        if dtype.is_integer() and isinstance(value, float) and value.is_integer():
+            value = int(value)
+        series = pl.Series([value], dtype=dtype, strict=True)
+        if series.dtype != dtype:  # polars keeps the type of a `datetime` for a `Date` series
+            raise TypeError(f"{value!r} is not a {dtype} value")
+        return series
 
     @staticmethod
     def is_null(value: Any) -> bool:
@@ -281,7 +323,12 @@ class PolarsValidations:
             if passed:
                 return ValidationResult(valid=True, message=f"{dataset} passes {check.name}", value=0)
             examples = [value for row in first.head(5).rows() for value in row][:5] if first is not None else [False]
-            return ValidationResult(valid=False, message=cls.dataframe_message(dataset, str(check.name), failing, examples), value=failing)
+            message = cls.dataframe_message(dataset, str(check.name), failing, examples)
+            if check.raise_warning:
+                # As `DataFrameSchema.validate` in pandas: a check with `raise_warning=True` warns and does not fail the validation
+                warnings.warn(message, SchemaWarning)
+                return ValidationResult(valid=True, message=message, value=failing)
+            return ValidationResult(valid=False, message=message, value=failing)
 
         return PolarsValidations.Pending(cls.check_queries(result, failure_cases), finish)
 
@@ -302,7 +349,7 @@ class PolarsValidations:
         def finish(frames: List[pl.DataFrame]) -> ValidationResult:
             for group, failing in zip(groups, frames):
                 if failing.height > 0:
-                    examples = [value for name in group for value in failing[name].to_list()][:5]
+                    examples = [value for name in group for value in failing[name].head(5).to_list()][:5]
                     cells = failing.height * len(group)
                     return ValidationResult(valid=False, message=cls.dataframe_message(dataset, "multiple_fields_uniqueness", cells, examples), value=cells)
             return ValidationResult(valid=True, message=f"{dataset} has unique rows in {groups}", value=0)
