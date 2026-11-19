@@ -225,19 +225,23 @@ Phase 2 as built:
   cast raises when the frame is collected. polars 2 does not cast a string to a datetime, so a string column parses with `str.to_datetime`.
 - A failed cast raises `ColumnsDataTypeError`, as on the pandas engine. A schema column that is not in the frame also raises it, and so does a frame column
   that is not in the schema.
-  The messages go to the `dynamicio.core` logger, so a test that patches it sees the messages of the two engines. The polars engine ignores
+  The polars engine reads `dynamicio.core.logger` at each message, so a test that patches it sees the messages of the two engines. The polars engine ignores
   `strict_dtype_check`.
 - The validators and the Pandera column and dataframe checks run in one `pl.collect_all`. The metrics run in a second `select`, after the
   validations. Change 2 first had one `collect_all` for all of them. Two queries keep the order of decision 12: a failed validation stops the step
   before the metrics.
 - A polars validator returns its lazy queries and a function that makes the `ValidationResult` from the collected frames. The 9 validators give the
   names, messages and values of the pandas validators. Tests compare the two engines on the same data, with 200 columns of random floats.
+- `is_in` accepts a null when the pandas `isin` accepts it for the pandas dtype of the column. A float null matches NaN only. An integer or Boolean null
+  matches no value. A string, categorical or temporal null matches None or NaN. The set of values comes from `to_pandas().unique()`, as in pandas.
 - The polars engine runs `Config.unique`, `Config.ordered` and `@pa.dataframe_check` as lazy queries, with the keys and the message template of the
   pandas engine. The counts and the examples come from the polars failure cases, so they are not always the pandas values. For a dataframe check, the
-  count is the number of failing rows.
+  count is the number of failing rows. A check that returns one bool has no failure cases, so its count is 1 when it fails. Each dataframe check is
+  kept, and the engine joins the messages of checks with one name. `Config.unique` with column groups has one query for each group. As on the pandas
+  engine, the result is the first group with repeated rows.
 - The 8 metrics give the `METRIC` lines of the pandas engine. For an empty or an all-null column, `Min`, `Max`, `Mean`, `Std` and `Variance` give NaN.
   `Counts` and `UniqueCounts` give the counts of the pandas engine, for example 0 for an empty column and 2 and 1 for `[None, None]`. `CountsPerLabel` does
-  not count nulls.
+  not count nulls. It logs 0 for each category of an `Enum` that is not in the column, as `value_counts` does for a pandas `category`.
 
 Change 26 is the floci fixture of decision 15. RND-25426 delivers it before phase 1, with the pandas integration tests. The polars S3 tests of phase 3 are its first polars users.
 
