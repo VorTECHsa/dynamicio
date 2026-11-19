@@ -12,9 +12,8 @@ engine imports it.
 """
 
 import io as std_io
-import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, MutableMapping, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, MutableMapping, Union
 
 import pandas as pd
 import polars as pl
@@ -24,7 +23,9 @@ from botocore.exceptions import ClientError
 from pandas._libs.parsers import STR_NA_VALUES  # pylint: disable=no-name-in-module
 
 from dynamicio.engines.polars_options import PolarsOptions
+from dynamicio.engines.polars_parquet import PolarsParquet
 from dynamicio.engines.polars_s3 import PolarsS3
+from dynamicio.engines.s3_upload import S3Upload
 from dynamicio.errors import EngineResourceError
 from dynamicio.mixins import utils, with_s3
 from dynamicio.mixins.utils import get_file_type_value
@@ -41,12 +42,10 @@ class PolarsFiles:
     """The polars readers and writers of the file resources: ``local``, ``local_batch`` and ``s3_file``."""
 
     SOURCES = ("local", "local_batch", "s3_file")
+    # The resources that the engine writes: an `s3_path_prefix` write goes to the prefix writer of the pandas engine
+    WRITE_SOURCES = (*SOURCES, "s3_path_prefix")
     # The resources that the engine checks and reads: an `s3_path_prefix` read is a scan of its objects
     READ_SOURCES = (*SOURCES, "s3_path_prefix")
-    # The codes of a pandas categorical: int8 below 127 categories, int16 below 32767 and int32 below 2**31 - 1, as `coerce_indexer_dtype` gives them
-    CODE_TYPES = ((2**7 - 1, pa.int8()), (2**15 - 1, pa.int16()), (2**31 - 1, pa.int32()))
-    # The pandas metadata of the columns index of a frame with string column names, as `DataFrame.to_parquet` writes it
-    COLUMN_INDEXES = [{"name": None, "field_name": None, "pandas_type": "unicode", "numpy_type": "object", "metadata": {"encoding": "UTF-8"}}]
     DURATION_UNITS = {"s": "seconds", "ms": "milliseconds", "us": "microseconds", "ns": "nanoseconds"}
     # The pandas nullable dtype of each arrow integer type. The default conversion gives float64 to an integer column with nulls, which loses digits above 2**53
     NULLABLE_INTEGERS = {
@@ -209,27 +208,43 @@ class PolarsFiles:
     def write(cls, io: "DynamicDataIO", frame: pl.DataFrame) -> None:
         """Write a frame that has the polars dtypes of the model.
 
-        A CSV or JSON frame goes to the pandas writer of its source. A ``local_batch`` resource has no writer on either engine.
+        A CSV or JSON frame, and the frame of an ``s3_path_prefix`` resource, go to the pandas writer of their source. The prefix writer of the pandas
+        engine thus writes the same objects and deletes the same old objects for each ``mode``. A ``local_batch`` resource has no writer on either engine.
         """
         source, section = cls.source_of(io), cls.section_of(io)
         file_type = get_file_type_value(section.file_type)
-        if file_type != "parquet" or source == "local_batch":
+        if file_type != "parquet" or source in ("local_batch", "s3_path_prefix"):
             getattr(io, f"_write_to_{source}")(cls.to_pandas(io, frame))
             return
         options = dict(io.options)
-        path = utils.resolve_template(section.file_path, options)
-        arguments = {name: value for name, value in PolarsOptions.write_options("parquet", options).items() if name not in ("engine", "index")}
-        table = cls.arrow_table(io, frame, index=options.get("index") is not False)
+        table = PolarsParquet.arrow_table(io, frame, index=options.get("index") is not False)
+        target = cls.target_of(io, options)
         if source == "local":
-            pq.write_table(table, path, **arguments)
+            pq.write_table(table, target, **PolarsParquet.parquet_arguments(options))
             return
-        if path.endswith("/"):
-            raise ValueError("[s3-parquet] Parquet output path must be a file, not a directory (e.g., 's3://bucket/data.parquet').")
-        s3_path = f"s3://{section.bucket}/{path}"
-        with_s3.logger.info(f"[s3] Started uploading: {s3_path}")
         buffer = std_io.BytesIO()
-        pq.write_table(table, buffer, **arguments)
-        with_s3._upload_from_memory(buffer, section.bucket, path)  # pylint: disable=protected-access
+        pq.write_table(table, buffer, **PolarsParquet.parquet_arguments(options))
+        cls.upload(buffer, section.bucket, target)
+
+    @classmethod
+    def target_of(cls, io: "DynamicDataIO", options: MutableMapping[str, Any]) -> str:
+        """The local path or the S3 key of a ``local`` or ``s3_file`` resource.
+
+        Raises:
+            ValueError: The S3 key of a parquet file ends in ``/``, as on the pandas engine.
+        """
+        source, section = cls.source_of(io), cls.section_of(io)
+        path = utils.resolve_template(section.file_path, options)
+        if source == "s3_file" and path.endswith("/"):
+            raise ValueError("[s3-parquet] Parquet output path must be a file, not a directory (e.g., 's3://bucket/data.parquet').")
+        return path
+
+    @staticmethod
+    def upload(source: Union[str, std_io.BytesIO], bucket: str, key: str) -> None:
+        """Upload a parquet file or buffer to an S3 key, with the log lines of the pandas engine."""
+        s3_path = f"s3://{bucket}/{key}"
+        with_s3.logger.info(f"[s3] Started uploading: {s3_path}")
+        S3Upload.upload(source, bucket, key)
         with_s3.logger.info(f"[s3] Finished uploading: {s3_path}")
 
     @staticmethod
@@ -244,40 +259,3 @@ class PolarsFiles:
         An integer column goes through a pandas nullable integer dtype, so a large integer next to a null keeps its value.
         """
         return frame.to_pandas(types_mapper=cls.NULLABLE_INTEGERS.get).astype(cls.pandas_dtypes(io, frame))
-
-    @classmethod
-    def arrow_table(cls, io: "DynamicDataIO", frame: pl.DataFrame, index: bool = True) -> pa.Table:
-        """The arrow table of a frame, with the arrow types and the pandas metadata that ``DataFrame.to_parquet`` gives for the pandas dtypes of the model.
-
-        pyarrow makes the types and the metadata from an empty pandas frame with these dtypes. An empty ``object`` column has the ``null`` type there, and
-        an empty ``category`` column has no categories, so the engine gives them their string types and the number of categories of the frame.
-
-        ``index=False`` gives the metadata of ``DataFrame.to_parquet(index=False)``, without an index. Otherwise the metadata has the ``RangeIndex`` of
-        the frame, as ``DataFrame.to_parquet`` writes by default.
-        """
-        empty = pd.DataFrame({column: pd.Series([], dtype=dtype) for column, dtype in cls.pandas_dtypes(io, frame).items()})
-        schema = pa.Schema.from_pandas(empty, preserve_index=False)
-        metadata = json.loads(schema.metadata[b"pandas"])
-        if index:
-            metadata["index_columns"] = [{"kind": "range", "name": None, "start": 0, "stop": frame.height, "step": 1}]
-            metadata["column_indexes"] = cls.COLUMN_INDEXES
-        fields = []
-        for field, column in zip(schema, metadata["columns"]):
-            kind = field.type
-            if pa.types.is_null(kind):
-                kind = pa.string()
-                column["pandas_type"] = "unicode"
-            elif pa.types.is_dictionary(kind):
-                kind, column["numpy_type"], column["metadata"]["num_categories"] = cls.categorical(frame, field.name)
-            fields.append(pa.field(field.name, kind))
-        target = pa.schema(fields, metadata={b"pandas": json.dumps(metadata).encode()})
-        table = frame.to_arrow()
-        return pa.Table.from_arrays([table.column(field.name).cast(field.type) for field in target], schema=target)
-
-    @classmethod
-    def categorical(cls, frame: pl.DataFrame, column: str) -> Tuple[pa.DataType, str, int]:
-        """The arrow dictionary type, the pandas code dtype and the number of categories of a ``Categorical`` or ``Enum`` column."""
-        dtype = frame.schema[column]
-        count = len(dtype.categories) if isinstance(dtype, pl.Enum) else frame.get_column(column).drop_nulls().n_unique()
-        index = next((kind for limit, kind in cls.CODE_TYPES if count < limit), pa.int64())
-        return pa.dictionary(index, pa.string()), str(index), count

@@ -47,8 +47,18 @@ class PandasEngine(Engine):
         return frame[[column for column in frame.columns.to_list() if column in io.schema.column_names]]
 
     def cast(self, io: "DynamicDataIO", frame: pd.DataFrame) -> pd.DataFrame:
-        """Cast with ``DynamicDataIO._has_valid_dtypes``, and raise ``ColumnsDataTypeError`` for a column that does not cast."""
-        if not io._has_valid_dtypes(frame):  # pylint: disable=protected-access
+        """Cast with ``DynamicDataIO._has_valid_dtypes``, and raise ``ColumnsDataTypeError`` for a missing schema column or a column that does not cast.
+
+        A missing column raised a ``KeyError`` up to dynamicio 11. It now raises the error of the polars engine (change 15 of ADR 0010).
+        """
+        try:
+            valid = io._has_valid_dtypes(frame)  # pylint: disable=protected-access
+        except KeyError as error:
+            from dynamicio import core  # pylint: disable=import-outside-toplevel
+
+            core.logger.error(f"The column {error} of the schema of {io.name} is not in the frame")
+            raise ColumnsDataTypeError() from error
+        if not valid:
             raise ColumnsDataTypeError()
         return frame
 

@@ -2,7 +2,8 @@
 
 The polars engine casts, validates and logs the metrics of polars frames. It has the validators and the metrics of the pandas engine, with the same
 names, messages and `METRIC` lines. It reads, scans and writes parquet, CSV and JSON files on a `local` or an `s3_file` resource, and reads and
-scans a `local_batch` or an `s3_path_prefix` resource. In this release, `sink()`, a prefix write and the other resources raise `NotImplementedError`.
+scans a `local_batch` or an `s3_path_prefix` resource. It writes an `s3_path_prefix` resource, and `sink()` writes a `LazyFrame`. In this release,
+the other resources raise `NotImplementedError`.
 
 [ADR 0010](https://github.com/VorTECHsa/dynamicio/pull/140) records the design. The ADR is not final and changes with each release of the engine.
 
@@ -74,7 +75,7 @@ The polars engine reads and writes these resources:
 | `local` | parquet, CSV, JSON | parquet, CSV, JSON |
 | `local_batch` | parquet, CSV, JSON | no writer, as on the pandas engine |
 | `s3_file` | parquet, CSV, JSON | parquet, CSV, JSON |
-| `s3_path_prefix` | parquet, CSV, JSON | not yet |
+| `s3_path_prefix` | parquet, CSV, JSON | parquet, CSV, JSON, with the prefix writer of the pandas engine |
 
 A file that the polars engine writes gives the same frame to the pandas engine of 11.1.0:
 
@@ -91,6 +92,13 @@ The readers are polars readers, and the engine then casts the frame to the model
 - An `s3_file` key that ends in `/` raises `NotImplementedError` at read. A parquet write to such a key raises `ValueError`, as on the pandas engine.
 
 `write()` collects a `LazyFrame` before it writes the file.
+
+A parquet file of the polars engine goes to S3 in one `PutObject` up to 64 MiB, and in a multipart upload of 64 MiB parts above that, with 4 parts
+at a time. Each upload has the `bucket-owner-full-control` ACL. A failed part aborts the upload, so S3 keeps no part and the old object does not change.
+
+An `s3_path_prefix` write goes to the prefix writer of the pandas engine. `partition_cols`, `mode` and `allow_delete` thus write the same objects and
+delete the same old objects. A prefix read on the two engines does not read the `col=value` directories back as a column. A read of a prefix with
+`partition_cols` thus raises the `ValueError` of a column that no object has.
 
 ## Scan
 
@@ -139,6 +147,22 @@ The polars engine raises `EngineResourceError` for a resource that it cannot rea
 An `s3_path_prefix` resource also accepts `no_disk_space`, `partition_cols`, `mode` and `allow_delete`. The polars engine refuses them on the other resources.
 
 The engine checks the resource when you make the IO object, and again at each read and write. Thus it also finds a change of the options after you make the IO object.
+
+## Sink
+
+`sink()` writes a `LazyFrame` with the casts, the validations and the metrics of the model in one `pl.collect_all`:
+
+```python
+io.sink(io.scan().filter(pl.col("a") > 10))
+```
+
+- A parquet sink to a `local` or an `s3_file` resource streams the rows to a temporary file. It then copies the row groups to a file with the arrow
+  types, the pandas metadata and the options of `write()`. The file has the footer and the row groups of `write()`.
+- A local file goes into place with `os.replace`, from a temporary directory beside it. An S3 file goes up with the upload of `write()`.
+- A CSV, a JSON or a prefix sink collects the frame and calls the writer of `write()`, so the bytes and the objects are equal.
+- A failed validation raises `SchemaValidationError`, and the file or the objects do not change. The metrics are logged only after the validations pass.
+- A failed cast in the plan, or a schema column that is not in the frame, raises `ColumnsDataTypeError`.
+- A `local_batch` resource has no writer, and `sink()` raises `NotImplementedError` on it.
 
 ## Cast
 

@@ -78,7 +78,7 @@ class Files:
     @staticmethod
     def config(tmp_path: Path, file_type: str, options: Optional[Dict[str, Any]] = None, source: str = "local", **section: Any) -> Any:
         section = section or {"file_path": str(tmp_path / f"data.{file_type}")}
-        environment: Dict[str, Any] = {"type": source, "local": {**section, "file_type": file_type}}
+        environment: Dict[str, Any] = {"type": source, "s3" if source.startswith("s3") else "local": {**section, "file_type": file_type}}
         if options:
             environment["options"] = options
         path = tmp_path / f"definitions_{uuid.uuid4().hex}.yaml"

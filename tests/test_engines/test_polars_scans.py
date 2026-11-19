@@ -416,17 +416,6 @@ class TestPrefixOptions:
             Files.polars(Files.config(tmp_path, "parquet", {"no_disk_space": True}), Pair)
 
     @pytest.mark.unit
-    def test_a_prefix_is_not_written_yet(self, tmp_path):
-        # Given
-        definition = {"X": {"LOCAL": {"type": "s3_path_prefix", "s3": {"bucket": "b", "path_prefix": "p/", "file_type": "parquet"}}}}
-        (tmp_path / "prefix.yaml").write_text(yaml.safe_dump(definition))
-        config = IOConfig(str(tmp_path / "prefix.yaml"), env_identifier="LOCAL", dynamic_vars=FilesIO).get(source_key="X")
-
-        # When / Then
-        with pytest.raises(NotImplementedError, match="does not write s3_path_prefix resources yet"):
-            Files.polars(config, Pair).write(pl.DataFrame({"a": [1], "b": ["x"]}))
-
-    @pytest.mark.unit
     def test_an_hdf_prefix_is_refused_when_the_resource_is_built(self, tmp_path):
         # Given
         definition = {"X": {"LOCAL": {"type": "s3_path_prefix", "s3": {"bucket": "b", "path_prefix": "p/", "file_type": "hdf"}}}}

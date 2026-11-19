@@ -199,14 +199,15 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
             df: The data to be written
         """
         engine = EngineSetting.use(self._model, (df,), resource=self)
-        df = engine.select_columns(self, df)
+        # Decision 12 of ADR 0010: the validations and the metrics see the cast frame, as on a read. 11.x validated the frame of the caller.
+        df = self._apply_schema(engine.select_columns(self, df))
 
         if self.apply_schema_validations:
             self.validate_from_schema(df)
         if self.log_schema_metrics:
             self.log_metrics_from_schema(df)
 
-        engine.write(self, self._apply_schema(df))
+        engine.write(self, df)
 
     def scan(self) -> Any:
         """Read the source lazily: a polars ``LazyFrame`` on the polars engine, with the casts of the model in its plan.
@@ -235,11 +236,17 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
     def sink(self, df: Any) -> None:
         """Write a lazy frame to the source: a polars ``LazyFrame`` on the polars engine.
 
+        The engine runs the write, the validations and the metrics of the schema in one ``collect_all``. The write goes to a temporary file, and the
+        destination changes only after the validations pass. The metrics are logged after the validations pass. ``sink()`` does not call
+        ``validate_from_schema`` or ``log_metrics_from_schema``.
+
         Args:
-            df: The lazy frame to write.
+            df: The lazy frame to write. A polars ``DataFrame`` is written as its lazy frame.
 
         Raises:
-            NotImplementedError: On the pandas engine, which has no lazy frame.
+            NotImplementedError: On the pandas engine, which has no lazy frame, and for a resource that the polars engine does not sink yet.
+            ColumnsDataTypeError: A schema column is not in the frame, or a cast failed.
+            SchemaValidationError: A validation failed. The destination does not change.
         """
         EngineSetting.use(self._model, (df,), resource=self).sink(self, df)
 

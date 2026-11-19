@@ -166,7 +166,7 @@ class TestLifecycleOrder:
         log_metrics.assert_called_once()
 
     @pytest.mark.unit
-    def test_a_write_validates_logs_metrics_and_casts_through_the_io_methods(self, tmp_path):
+    def test_a_write_casts_validates_and_logs_metrics_through_the_io_methods(self, tmp_path):
         # Given
         io = EngineCheckIO.make(tmp_path, apply_schema_validations=True, log_schema_metrics=True)
         calls = []
@@ -180,8 +180,34 @@ class TestLifecycleOrder:
             io.write(pd.DataFrame({"a": [1, 2]}))
 
         # Then
-        assert calls == ["validate", "metrics", "cast"]
+        assert calls == ["cast", "validate", "metrics"]
         assert (tmp_path / "data.csv").exists()
+
+    @pytest.mark.unit
+    def test_the_validations_and_the_metrics_of_a_write_see_the_cast_frame(self, tmp_path):
+        # Given
+        io = EngineCheckIO.make(tmp_path, apply_schema_validations=True, log_schema_metrics=True)
+        seen = []
+
+        # When
+        with (
+            patch.object(DynamicDataIO, "validate_from_schema", side_effect=lambda df: seen.append(("validate", df.columns.to_list(), str(df["a"].dtype))) or io),
+            patch.object(DynamicDataIO, "log_metrics_from_schema", side_effect=lambda df: seen.append(("metrics", df.columns.to_list(), str(df["a"].dtype))) or io),
+        ):
+            io.write(pd.DataFrame({"extra": ["x", "y"], "a": [1.0, 2.0]}))
+
+        # Then
+        assert seen == [("validate", ["a"], "int64"), ("metrics", ["a"], "int64")]
+
+    @pytest.mark.unit
+    def test_a_write_that_fails_its_validations_writes_no_file(self, tmp_path):
+        # Given
+        io = EngineCheckIO.make(tmp_path, apply_schema_validations=True)
+
+        # When / Then
+        with pytest.raises(SchemaValidationError):
+            io.write(pd.DataFrame({"a": [1, -1]}))
+        assert not (tmp_path / "data.csv").exists()
 
     @pytest.mark.unit
     def test_the_cast_messages_go_to_the_core_logger(self, tmp_path):
