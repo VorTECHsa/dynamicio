@@ -1,6 +1,7 @@
 # pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring
 import math
 import random
+import warnings
 from datetime import datetime, timedelta, timezone
 
 import numpy as np
@@ -183,33 +184,6 @@ class TestValidatorEdgeCases:
         assert result.value == 3
 
     @pytest.mark.unit
-    def test_is_in_counts_a_null_as_a_value_that_is_not_acceptable(self):
-        frame = pl.LazyFrame({"x": ["a", None, "z"]})
-
-        result = self.run(PolarsValidations.is_in("d", frame, "x", categorical_values=["a"]))
-
-        assert result.message == "Values {'z'} for d[x] are not acceptable for 2 cells"
-        assert result.value == 2
-
-    @pytest.mark.unit
-    def test_is_in_accepts_a_null_when_the_acceptable_values_hold_none(self):
-        frame = pl.LazyFrame({"x": ["a", None, "z"]})
-
-        result = self.run(PolarsValidations.is_in("d", frame, "x", categorical_values=["a", None]))
-
-        assert result.message == "Values {'z'} for d[x] are not acceptable for 1 cells"
-        assert result.value == 1
-
-    @pytest.mark.unit
-    def test_is_in_accepts_a_time_zone_aware_datetime_of_the_acceptable_values(self):
-        at = datetime(2020, 1, 1, tzinfo=timezone.utc)
-        frame = pl.LazyFrame({"x": pl.Series([at, at])})
-
-        result = self.run(PolarsValidations.is_in("d", frame, "x", categorical_values=[pd.Timestamp(at)], exact=True))
-
-        assert (result.valid, result.value) == (True, 0)
-
-    @pytest.mark.unit
     def test_has_unique_values_takes_a_column_with_the_name_of_a_helper_column(self):
         for name in ("value", "row", "count", "_dynamicio_row", "_dynamicio_count"):
             result = self.run(PolarsValidations.has_unique_values("d", pl.LazyFrame({name: [1, 1, 2]}), name))
@@ -222,14 +196,6 @@ class TestValidatorEdgeCases:
         result = self.run(PolarsValidations.has_acceptable_percentage_of_nulls("d", pl.LazyFrame({name: [1, None]}), name, threshold=0.9))
 
         assert (result.valid, result.value) == (True, 0.5)
-
-    @pytest.mark.unit
-    def test_is_in_on_an_enum_column_accepts_its_categories(self):
-        frame = pl.LazyFrame({"x": pl.Series(["a", "b", None], dtype=pl.Enum(["a", "b", "c"]))})
-
-        result = self.run(PolarsValidations.is_in("d", frame, "x", categorical_values=["a", "b", "c"], exact=True))
-
-        assert (result.valid, result.message) == (False, "Missing categorical values for d[x]: {'c'}")
 
     @pytest.mark.unit
     def test_a_comparison_of_a_column_of_nulls_only_is_valid(self):
@@ -331,6 +297,82 @@ class TestValidatorEdgeCases:
         result = self.run(PolarsValidations.is_in("d", pl.LazyFrame({"x": pl.Series([1], dtype=pl.Duration("ns"))}), "x", categorical_values=[pd.Timedelta(1)]))
 
         assert result.valid
+
+
+class TestIsInEdgeCases:
+    @staticmethod
+    def run(pending):
+        return pending.finish(pl.collect_all(list(pending.queries)) if pending.queries else [])
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("zone", ["UTC", None])
+    @pytest.mark.parametrize(
+        "value",
+        [
+            datetime(2024, 1, 1, 12, tzinfo=timezone.utc),
+            datetime(2024, 1, 1, 12),
+            datetime(2024, 1, 1, 7, tzinfo=timezone(timedelta(hours=-5))),
+            datetime(2024, 1, 1, 17, tzinfo=timezone(timedelta(hours=5))),
+        ],
+        ids=["utc", "naive", "minus_5", "plus_5"],
+    )
+    def test_is_in_matches_a_python_datetime_as_pandas_isin_does(self, zone, value):
+        # Given a column at 12:00 UTC, or at 12:00 without a time zone
+        series = pl.Series("x", [datetime(2024, 1, 1, 12, tzinfo=timezone.utc) if zone else datetime(2024, 1, 1, 12)], dtype=pl.Datetime("ns", zone))
+
+        # When
+        result = self.run(PolarsValidations.is_in("d", series.to_frame().lazy(), "x", categorical_values=[value]))
+
+        # Then the same instant matches a column with a time zone, and only a naive value matches a naive column
+        assert result.valid == bool(series.to_pandas().isin([value]).all())
+
+    @pytest.mark.unit
+    def test_is_in_compares_with_the_acceptable_values_without_a_polars_deprecation_warning(self):
+        frame = pl.LazyFrame({"x": [1, 2, 3]})
+
+        # `collect_all` does not give the warning, so each query is collected alone. polars gives it from its query engine, so it cannot raise
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            pending = PolarsValidations.is_in("d", frame, "x", categorical_values=[1, 2])
+            result = pending.finish([query.collect() for query in pending.queries])
+
+        assert result.value == 1
+        assert not [warning for warning in caught if issubclass(warning.category, DeprecationWarning) and "is_in" in str(warning.message)]
+
+    @pytest.mark.unit
+    def test_is_in_counts_a_null_as_a_value_that_is_not_acceptable(self):
+        frame = pl.LazyFrame({"x": ["a", None, "z"]})
+
+        result = self.run(PolarsValidations.is_in("d", frame, "x", categorical_values=["a"]))
+
+        assert result.message == "Values {'z'} for d[x] are not acceptable for 2 cells"
+        assert result.value == 2
+
+    @pytest.mark.unit
+    def test_is_in_accepts_a_null_when_the_acceptable_values_hold_none(self):
+        frame = pl.LazyFrame({"x": ["a", None, "z"]})
+
+        result = self.run(PolarsValidations.is_in("d", frame, "x", categorical_values=["a", None]))
+
+        assert result.message == "Values {'z'} for d[x] are not acceptable for 1 cells"
+        assert result.value == 1
+
+    @pytest.mark.unit
+    def test_is_in_accepts_a_time_zone_aware_datetime_of_the_acceptable_values(self):
+        at = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        frame = pl.LazyFrame({"x": pl.Series([at, at])})
+
+        result = self.run(PolarsValidations.is_in("d", frame, "x", categorical_values=[pd.Timestamp(at)], exact=True))
+
+        assert (result.valid, result.value) == (True, 0)
+
+    @pytest.mark.unit
+    def test_is_in_on_an_enum_column_accepts_its_categories(self):
+        frame = pl.LazyFrame({"x": pl.Series(["a", "b", None], dtype=pl.Enum(["a", "b", "c"]))})
+
+        result = self.run(PolarsValidations.is_in("d", frame, "x", categorical_values=["a", "b", "c"], exact=True))
+
+        assert (result.valid, result.message) == (False, "Missing categorical values for d[x]: {'c'}")
 
     @pytest.mark.unit
     def test_is_in_prints_numbers_as_numpy_scalars_as_pandas_does(self):

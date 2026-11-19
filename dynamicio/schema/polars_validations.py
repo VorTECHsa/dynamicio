@@ -130,7 +130,7 @@ class PolarsValidations:
         dtype = frame.collect_schema()[column]
         null_is_acceptable = PolarsValidations.null_is_acceptable(dtype, acceptable)
         unique = frame.select(pl.col(column).drop_nulls().unique())
-        not_acceptable = frame.select((~pl.col(column).is_in(PolarsValidations.candidates(values, dtype)).fill_null(null_is_acceptable)).sum())
+        not_acceptable = frame.select((~pl.col(column).is_in(PolarsValidations.candidates(values, dtype).implode()).fill_null(null_is_acceptable)).sum())
 
         def finish(frames: List[pl.DataFrame]) -> ValidationResult:
             # The values of `to_pandas` are the scalars that `unique()` gives in pandas: `pd.Timestamp` with its time zone, numpy integers
