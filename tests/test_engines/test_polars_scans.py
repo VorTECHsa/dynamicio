@@ -9,7 +9,8 @@ import yaml
 
 from dynamicio.config import IOConfig
 from dynamicio.engines import EngineSetting
-from dynamicio.errors import ColumnsDataTypeError, EngineResourceError, NoObjectsFoundError
+from dynamicio.errors import ColumnsDataTypeError, EngineResourceError, NoObjectsFoundError, ObjectNotFoundError, S3KeyNotFoundError
+from tests import constants
 
 pl = pytest.importorskip("polars")
 pa = pytest.importorskip("pyarrow")
@@ -509,9 +510,10 @@ class TestS3Credentials:
             PolarsS3.credentials()
 
     @pytest.mark.unit
-    def test_an_aws_endpoint_is_left_to_polars(self, monkeypatch):
+    @pytest.mark.parametrize("endpoint", ["https://s3.eu-west-1.amazonaws.com", "https://s3.amazonaws.com"])
+    def test_an_aws_endpoint_is_left_to_polars(self, monkeypatch, endpoint):
         # Given
-        Sessions.patch(monkeypatch, Sessions.credentials())
+        Sessions.patch(monkeypatch, Sessions.credentials(), endpoint=endpoint)
 
         # When
         arguments = PolarsS3.arguments()
@@ -533,6 +535,25 @@ class TestS3Credentials:
         assert options["aws_endpoint_url"] == endpoint
         assert ("aws_allow_http" in options) is allow_http
         assert "aws_region" not in options
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "endpoint",
+        [
+            "https://bucket.vpce-0a1b2c3d-e4f5g6h7.s3.eu-west-1.vpce.amazonaws.com",
+            "https://s3-fips.us-east-1.amazonaws.com",
+            "https://s3.dualstack.eu-west-1.amazonaws.com",
+        ],
+    )
+    def test_a_private_fips_or_dual_stack_aws_endpoint_reaches_polars(self, monkeypatch, endpoint):
+        # Given
+        Sessions.patch(monkeypatch, Sessions.credentials(), endpoint=endpoint)
+
+        # When
+        options = PolarsS3.arguments()["storage_options"]
+
+        # Then
+        assert options == {"aws_region": "eu-west-1", "aws_endpoint_url": endpoint}
 
 
 class TestPrefixOptions:
@@ -562,3 +583,22 @@ class TestPrefixOptions:
         # When / Then
         with pytest.raises(EngineResourceError, match="not hdf files"):
             Files.polars(config, Pair)
+
+
+class TestCheckKey:
+    @pytest.mark.unit
+    @pytest.mark.parametrize("file_type", ["parquet", "csv"])
+    def test_an_empty_object_passes_the_check(self, moto_s3_bucket, file_type):
+        # Given an object without a first byte to get
+        moto_s3_bucket.put_object(Bucket=constants.MOCK_BUCKET, Key="empty", Body=b"")
+
+        # When / Then
+        assert PolarsS3.check_key(constants.MOCK_BUCKET, "empty", file_type) is None
+
+    @pytest.mark.unit
+    @pytest.mark.usefixtures("moto_s3_bucket")
+    @pytest.mark.parametrize("file_type, error", [("parquet", S3KeyNotFoundError), ("csv", ObjectNotFoundError)])
+    def test_a_missing_key_raises_the_error_of_the_pandas_engine(self, file_type, error):
+        # When / Then
+        with pytest.raises(error):
+            PolarsS3.check_key(constants.MOCK_BUCKET, "missing", file_type)

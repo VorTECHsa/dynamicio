@@ -1,6 +1,7 @@
 """The S3 access of the polars engine. polars and boto3 use the credentials, the region and the endpoint of the one boto3 session of the process."""
 
 import fnmatch
+import re
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, NoReturn, Optional, Tuple
 from urllib.parse import urlparse
@@ -16,6 +17,8 @@ class PolarsS3:
     """The S3 arguments of a polars scan, the check of a key, and the keys and the parquet footers under a prefix."""
 
     MAX_CONCURRENCY = 32  # the threads of `s3_read_down` on the pandas engine
+    # The public endpoints that boto3 makes for a region: `s3.amazonaws.com` and `s3.<region>.amazonaws.com`. polars makes the same endpoint itself
+    DEFAULT_ENDPOINT = re.compile(r"^s3(\.[a-z0-9-]+)?\.amazonaws\.com$")
 
     @staticmethod
     def credentials() -> Tuple[Dict[str, str], Optional[int]]:
@@ -41,13 +44,14 @@ class PolarsS3:
     def arguments(cls) -> Dict[str, Any]:
         """The S3 arguments of a polars scan: the credentials, and the region and the endpoint of the shared boto3 client.
 
-        The endpoint goes to polars only when it is not an AWS endpoint, for example ``AWS_ENDPOINT_URL`` or the ``endpoint_url`` of the AWS config. polars
-        then reads the S3 that boto3 reads. On AWS, polars makes its own endpoint for the region of the bucket.
+        The endpoint goes to polars when it is not the public endpoint of a region, so polars reads the S3 that boto3 reads. Examples are
+        ``AWS_ENDPOINT_URL``, the ``endpoint_url`` of the AWS config, a VPC interface endpoint (``*.vpce.amazonaws.com``), and a FIPS or a dual-stack
+        endpoint. For the public endpoint, polars makes its own endpoint for the region of the bucket.
         """
         client = with_s3._shared_s3_client()  # pylint: disable=protected-access
         options = {"aws_region": client.meta.region_name} if client.meta.region_name else {}
         endpoint = urlparse(client.meta.endpoint_url)
-        if not (endpoint.hostname or "").endswith("amazonaws.com"):
+        if not cls.DEFAULT_ENDPOINT.match(endpoint.hostname or ""):
             options["aws_endpoint_url"] = client.meta.endpoint_url
             if endpoint.scheme == "http":
                 options["aws_allow_http"] = "true"

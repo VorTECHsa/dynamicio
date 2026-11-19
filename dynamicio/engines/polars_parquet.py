@@ -5,13 +5,14 @@ write with this footer.
 """
 
 import json
-from typing import TYPE_CHECKING, Any, Dict, MutableMapping, Tuple
+from typing import TYPE_CHECKING, Any, Collection, Dict, MutableMapping, Tuple
 
 import pandas as pd
 import polars as pl
 import pyarrow as pa
 
 from dynamicio.engines.polars_options import PolarsOptions
+from dynamicio.schema.polars_dtypes import DtypeMap
 
 if TYPE_CHECKING:  # pragma: no cover
     from dynamicio.core import DynamicDataIO
@@ -33,8 +34,15 @@ class PolarsParquet:
     @classmethod
     def arrow_table(cls, io: "DynamicDataIO", frame: pl.DataFrame, index: bool = True) -> pa.Table:
         """The arrow table of a frame, with the arrow types and the pandas metadata that ``DataFrame.to_parquet`` gives for the pandas dtypes of the model."""
-        target = cls.arrow_schema(io, frame.schema, frame.height, cls.category_counts(frame), index)
+        nulls = [column for column in frame.columns if frame.get_column(column).null_count()]
+        target = cls.arrow_schema(io, frame.schema, frame.height, cls.category_counts(frame), index=index, nulls=nulls)
         return cls.to_schema(frame.to_arrow(), target)
+
+    @staticmethod
+    def pandas_dtype(io: "DynamicDataIO", column: str, has_nulls: bool) -> str:
+        """The pandas dtype of a column of the model, with the nullable dtype of an integer or a boolean column that has a null (decision 14 of ADR 0010)."""
+        dtype = io.schema.columns[column].data_type
+        return DtypeMap.holding_nulls(dtype) if has_nulls else dtype
 
     @staticmethod
     def to_schema(table: pa.Table, target: pa.Schema) -> pa.Table:
@@ -47,7 +55,7 @@ class PolarsParquet:
         return {column: frame.get_column(column).drop_nulls().n_unique() for column, dtype in frame.schema.items() if dtype == pl.Categorical}
 
     @classmethod
-    def arrow_schema(cls, io: "DynamicDataIO", schema: pl.Schema, height: int, counts: Dict[str, int], index: bool = True) -> pa.Schema:
+    def arrow_schema(cls, io: "DynamicDataIO", schema: pl.Schema, height: int, counts: Dict[str, int], *, index: bool = True, nulls: Collection[str] = ()) -> pa.Schema:
         """The arrow types and the pandas metadata that ``DataFrame.to_parquet`` gives for the pandas dtypes of the model.
 
         pyarrow makes the types and the metadata from an empty pandas frame with these dtypes. An empty ``object`` column has the ``null`` type there, and
@@ -62,8 +70,9 @@ class PolarsParquet:
             height: The number of rows of the frame, for the ``RangeIndex``.
             counts: The number of categories of each ``Categorical`` column. An ``Enum`` column has the number of its categories.
             index: Whether the metadata has the ``RangeIndex``.
+            nulls: The columns with a null. An integer or a boolean column among them has the nullable pandas dtype in the metadata.
         """
-        dtypes = {column: io.schema.columns[column].data_type for column in schema.names()}
+        dtypes = {column: cls.pandas_dtype(io, column, column in nulls) for column in schema.names()}
         empty = pd.DataFrame({column: pd.Series([], dtype=dtype) for column, dtype in dtypes.items()})
         arrow = pa.Schema.from_pandas(empty, preserve_index=False)
         metadata = json.loads(arrow.metadata[b"pandas"])

@@ -105,14 +105,22 @@ class PolarsSinks:
     def stage(cls, engine: "PolarsEngine", io: "DynamicDataIO", lazy: pl.LazyFrame, staged: str, options: MutableMapping[str, Any]) -> pa.Schema:
         """Sink the rows to the staged file, with the validations and the metrics in the same ``collect_all``, and return the arrow schema of the file.
 
-        The same ``collect_all`` counts the rows, for the ``RangeIndex`` of the pandas metadata, and the categories of each ``Categorical`` column.
+        The same ``collect_all`` counts the rows, for the ``RangeIndex`` of the pandas metadata, the categories of each ``Categorical`` column, and the
+        nulls of each integer or boolean column, for its pandas dtype.
         """
-        categorical = [column for column, dtype in lazy.collect_schema().items() if dtype == pl.Categorical]
+        schema = lazy.collect_schema()
+        categorical = [column for column, dtype in schema.items() if dtype == pl.Categorical]
+        nullable = [column for column, dtype in schema.items() if dtype.is_integer() or dtype == pl.Boolean]
         # Each aggregate has its own alias, so a column of the model cannot have the name of another aggregate
-        shape = lazy.select(pl.len().alias("rows"), *[pl.col(column).drop_nulls().n_unique().alias(f"categories_{number}") for number, column in enumerate(categorical)])
+        shape = lazy.select(
+            pl.len().alias("rows"),
+            *[pl.col(column).drop_nulls().n_unique().alias(f"categories_{number}") for number, column in enumerate(categorical)],
+            *[pl.col(column).null_count().alias(f"nulls_{number}") for number, column in enumerate(nullable)],
+        )
         collected = cls.collect(engine, io, lazy, [lazy.sink_parquet(staged, compression=cls.STAGE_COMPRESSION, lazy=True), shape])
-        height, *counts = collected[1].row(0)
-        return PolarsParquet.arrow_schema(io, lazy.collect_schema(), height, dict(zip(categorical, counts)), index=options.get("index") is not False)
+        height, *aggregates = collected[1].row(0)
+        nulls = [column for column, count in zip(nullable, aggregates[len(categorical) :]) if count]
+        return PolarsParquet.arrow_schema(io, schema, height, dict(zip(categorical, aggregates)), index=options.get("index") is not False, nulls=nulls)
 
     @classmethod
     def collect(cls, engine: "PolarsEngine", io: "DynamicDataIO", lazy: pl.LazyFrame, queries: List[pl.LazyFrame]) -> List[pl.DataFrame]:

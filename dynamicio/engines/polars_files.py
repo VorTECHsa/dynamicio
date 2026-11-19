@@ -249,8 +249,11 @@ class PolarsFiles:
 
     @staticmethod
     def pandas_dtypes(io: "DynamicDataIO", frame: pl.DataFrame) -> Dict[str, str]:
-        """The pandas dtype of each column of a frame, from the model: the ``pandas_dtype`` metadata or the reverse map of decision 14 of ADR 0010."""
-        return {column: io.schema.columns[column].data_type for column in frame.columns}
+        """The pandas dtype of each column of a frame, from the model: the ``pandas_dtype`` metadata or the reverse map of decision 14 of ADR 0010.
+
+        An integer or a boolean column with a null takes the nullable pandas dtype, as decision 14 states.
+        """
+        return {column: PolarsParquet.pandas_dtype(io, column, frame.get_column(column).null_count() > 0) for column in frame.columns}
 
     @classmethod
     def to_pandas(cls, io: "DynamicDataIO", frame: pl.DataFrame) -> pd.DataFrame:

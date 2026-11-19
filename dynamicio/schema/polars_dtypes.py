@@ -76,9 +76,18 @@ class DtypeMap:
         name = cls.reverse_name(polars_dtype)
         if name is None:
             raise ValueError(f"the polars dtype {polars_dtype} has no pandas dtype in the dtype map of dynamicio")
-        if has_nulls and name in cls.INTEGERS:
-            return f"UInt{name[4:]}" if name.startswith("uint") else f"Int{name[3:]}"
-        return "boolean" if has_nulls and name == "bool" else name
+        return cls.holding_nulls(name) if has_nulls else name
+
+    @classmethod
+    def holding_nulls(cls, pandas_dtype: str) -> str:
+        """The pandas dtype of a column with a null: the nullable dtype of a numpy integer or ``bool`` (``Int64``, ``UInt8``, ``boolean``), else the dtype.
+
+        ``int64`` and ``bool`` cannot hold a null. Their pandas metadata over a null makes a pandas reader give ``float64``, which loses the digits of an
+        integer above 2**53, or ``object``.
+        """
+        if pandas_dtype in cls.INTEGERS:
+            return f"UInt{pandas_dtype[4:]}" if pandas_dtype.startswith("uint") else f"Int{pandas_dtype[3:]}"
+        return "boolean" if pandas_dtype == "bool" else pandas_dtype
 
     @classmethod
     def reverse_name(cls, polars_dtype: pl.DataType) -> Optional[str]:

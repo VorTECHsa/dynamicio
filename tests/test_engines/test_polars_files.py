@@ -644,6 +644,71 @@ class TestResourceCheck:
             io.write(pl.DataFrame({"a": [1], "b": ["x"]}))
 
 
+class Nullable(DataModel, dataset="nullable"):
+    a: pl.Int64 = Field(nullable=True)
+    b: pl.Boolean = Field(nullable=True)
+    c: pl.UInt8 = Field(nullable=True)
+
+
+class TestNullsOfANumpyDtype:
+    """A column of a numpy integer or ``bool`` dtype with a null takes the nullable pandas dtype, as `DataFrame.to_parquet` gives it."""
+
+    FRAME = {"a": [1, None, 2**60 + 1], "b": [True, None, False], "c": [1, None, 3]}
+    SCHEMA = {"a": pl.Int64, "b": pl.Boolean, "c": pl.UInt8}
+
+    @classmethod
+    def frame(cls) -> Any:
+        return pl.DataFrame(cls.FRAME, schema=cls.SCHEMA)
+
+    @staticmethod
+    def store(io: FilesIO, frame: Any, operation: str) -> None:
+        if operation == "write":
+            io.write(frame)
+        else:
+            io.sink(frame.lazy())
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("operation", ["write", "sink"])
+    def test_a_parquet_file_reads_in_pandas_with_the_nullable_dtypes_and_the_exact_values(self, tmp_path, operation):
+        # Given
+        io = Files.polars(Files.config(tmp_path, "parquet"), Nullable)
+
+        # When
+        self.store(io, self.frame(), operation)
+
+        # Then
+        result = pd.read_parquet(tmp_path / "data.parquet")
+        assert result.dtypes.astype(str).to_dict() == {"a": "Int64", "b": "boolean", "c": "UInt8"}
+        assert result["a"].tolist() == [1, pd.NA, 2**60 + 1]
+        assert Files.polars(Files.config(tmp_path, "parquet"), Nullable).read().equals(self.frame())
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("operation", ["write", "sink"])
+    def test_a_frame_without_nulls_keeps_the_numpy_dtypes(self, tmp_path, operation):
+        # Given
+        frame = pl.DataFrame({"a": [1, 2], "b": [True, False], "c": [1, 3]}, schema=self.SCHEMA)
+        io = Files.polars(Files.config(tmp_path, "parquet"), Nullable)
+
+        # When
+        self.store(io, frame, operation)
+
+        # Then
+        assert pd.read_parquet(tmp_path / "data.parquet").dtypes.astype(str).to_dict() == {"a": "int64", "b": "bool", "c": "uint8"}
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("file_type, options", [("csv", {"index": False}), ("json", {"orient": "records"})])
+    def test_a_text_file_keeps_the_exact_values_and_reads_back_equal(self, tmp_path, file_type, options):
+        # Given
+        config = Files.config(tmp_path, file_type, options)
+
+        # When
+        Files.polars(config, Nullable).write(self.frame())
+
+        # Then
+        assert str(2**60 + 1) in (tmp_path / f"data.{file_type}").read_text()
+        assert Files.polars(config, Nullable).read().equals(self.frame())
+
+
 class TestWriteConversion:
     @pytest.mark.unit
     @pytest.mark.parametrize("file_type, options", [("csv", {"index": False}), ("json", {"orient": "records"})])

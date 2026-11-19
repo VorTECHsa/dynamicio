@@ -46,6 +46,9 @@
 - test: the demo pipeline on the polars engine, in `demo/polars_pipeline`. It reads the inputs of the pandas demo, and its outputs are equal to the expected outputs of the pandas demo. A CI job runs it with `--dynamicio-engine=polars`.
 - feat: `dynamicio.configure(engine="polars")` and `dynamicio migrate --engine polars` raise `ImportError` if polars is older than 2.1, the minimum of the `polars` extra. The check reads the version of the installed package and does not import polars. The message names `pip install "dynamicio[polars]"`.
 - test: an install without polars. A test in a new process blocks the polars import, and checks that the modules of dynamicio, the pandas engine and the CLI work. The dependency-ranges CI jobs install dynamicio without the `polars` extra, and a step checks that polars is not installed.
+- fix: on the polars engine, an integer, unsigned integer or Boolean column with a null writes the nullable pandas dtype (`Int64`, `UInt8`, `boolean`) to the pandas metadata of a parquet file, also when the model declares a numpy dtype. The pandas engine of 11.x then reads the exact values. Before, pandas read `float64` or `object`, and an integer above 2**53 lost digits. A CSV or JSON write of such a column no longer raises `cannot convert NA to integer`.
+- fix: the polars engine gives polars the S3 endpoint of the boto3 client for each endpoint other than the public endpoint of a region. A VPC interface endpoint (`*.vpce.amazonaws.com`), a FIPS endpoint and a dual-stack endpoint thus reach polars. Before, polars used the public endpoint for each `amazonaws.com` host.
+- chore: the floci integration tests upload their coverage to Codecov with the `integration` flag.
 
 ## v11.1.0
 
