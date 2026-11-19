@@ -234,9 +234,9 @@ class ResourceReview:
                 return str(error), False
             return None, file_type == "csv" and "index" not in options
         if source == "kafka" and "key_column" not in options:
-            return "the polars engine needs the option key_column: a polars frame has no index to give the message keys", False
+            return "the polars engine needs the option key_column: a polars frame has no index to give the message keys.", False
         refused = sorted(PolarsPostgres.PANDAS_READ_OPTIONS & set(options)) if source == "postgres" else []
-        return (f"the polars engine has no Postgres option {', '.join(refused)}", False) if refused else (None, False)
+        return (f"the polars engine has no Postgres option {', '.join(refused)}.", False) if refused else (None, False)
 
     @classmethod
     def review(cls, root: str) -> Dict[str, List[str]]:

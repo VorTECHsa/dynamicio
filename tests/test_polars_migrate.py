@@ -451,7 +451,7 @@ class TestResourceReview:
         found = ResourceReview.review(str(tmp_path))
 
         # Then
-        assert found["refused"] == ["nested/r.yaml: K.CLOUD: the polars engine needs the option key_column: a polars frame has no index to give the message keys"]
+        assert found["refused"] == ["nested/r.yaml: K.CLOUD: the polars engine needs the option key_column: a polars frame has no index to give the message keys."]
 
     @pytest.mark.unit
     def test_yaml_anchors_and_placeholders_are_read(self, tmp_path):
