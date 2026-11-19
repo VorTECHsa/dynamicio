@@ -78,6 +78,10 @@ removes the columns that the model does not declare, so the two engines give the
    - Phase 7 records the v13 dependency list and an import test for each extra.
 3. The null rule. The polars engine changes float NaN to null when it reads and when it writes. The rule is always on and has no option. The pandas writer already
    stores NaN as null, so validators, metrics and files then agree across engines.
+   - The cast of the polars engine applies the rule. Each float column of the model gets `fill_nan(None)`, so the validators and the metrics count a NaN as a null.
+     Reads and writes cast, so the rule applies to both.
+   - A float column that casts to an integer gets `fill_nan(None)` before the cast. pandas casts a NaN to `<NA>` of a nullable integer.
+     A strict polars cast refuses a NaN.
 4. The Kafka key for polars. A new resource option `key_column` names the column that gives the message key.
    - The polars engine requires `key_column`, because a polars frame has no index. A polars Kafka resource without it raises an error when the user builds the resource.
      A row number is not a key: it is equal to the pandas key only when the pandas index is a `RangeIndex`.
@@ -136,6 +140,7 @@ schema declaration.
     | pandas | polars |
     |---|---|
     | `int8` to `int64`, `Int8` to `Int64` | `Int8` to `Int64` |
+    | `uint8` to `uint64`, `UInt8` to `UInt64` | `UInt8` to `UInt64` |
     | `float32`, `float64` | `Float32`, `Float64` |
     | `bool`, `boolean` | `Boolean` |
     | `object` with strings, `string` | `String` |
@@ -143,13 +148,20 @@ schema declaration.
     | `datetime64[unit]`, `datetime64[unit, tz]` | `Datetime(unit)`, `Datetime(unit, time_zone)` |
     | `timedelta64[unit]` | `Duration(unit)` |
 
-    A dtype that has no pair raises an error when the polars engine compiles the model.
+    The unit is `ms`, `us` or `ns`. polars has no second unit, so `datetime64[s]` and `timedelta64[s]` have no pair. A dtype that has no pair raises
+    `ValueError` when the polars engine compiles the model. Examples are `Date`, `Time`, `List`, `Struct` and `Decimal`.
 
     The map is many to one: `int64` and `Int64` both become `Int64`, and `object` and `string` both become `String`. The pandas metadata of a polars file
     (change 17) needs the pandas dtype of each column, so the polars model keeps it.
-    - The migrate command writes the pandas dtype of each field into the field metadata of the polars model, for example `pa.Field(metadata={"pandas_dtype": "int64"})`.
-    - A polars model without this metadata uses a fixed reverse map: `Int64` to `int64` when the column has no null and to `Int64` when it has a null,
-      `String` to `object`, `Boolean` to `bool`, and `Float64` to `float64`. The contract covers the pandas dtypes of this reverse map only.
+    - The polars model keeps the pandas dtype in the `pandas_dtype` key of the field metadata. `Field(pandas_dtype="Int64")` writes it, and a
+      `pa.Field(metadata={"pandas_dtype": "Int64"})` also works. The migrate command writes it for each field.
+    - The pandas dtype of the metadata must be a pair of the polars dtype of the column, else the model raises `ValueError` when it compiles. Any
+      `category` pairs with any `Categorical` or `Enum`. A datetime pairs only with the same unit and time zone.
+    - A pandas model with `pandas_dtype` raises `ValueError`, because the column type of a pandas model is its pandas dtype.
+    - A polars model without this metadata uses a fixed reverse map. An integer gives its pandas name (`Int64` to `int64`). `String` gives `object`,
+      `Boolean` gives `bool`, and `Categorical` and `Enum` give `category`. `Datetime` and `Duration` give `datetime64` and `timedelta64`, with the
+      same unit and time zone. With a null, an integer gives its nullable pandas dtype (`Int64`), and `Boolean` gives `boolean`.
+    - The contract covers the pandas dtypes of this reverse map only.
 15. Integration tests on both engines run against [floci](https://github.com/floci-io/floci), a local AWS emulator. One container gives S3, RDS with
     `postgres:16` and MSK with a Redpanda broker.
     - `moto.mock_aws` does not intercept polars S3 calls. SQLite, which the unit tests use for Postgres, has no COPY.
@@ -174,7 +186,7 @@ Phases 1 to 7 are dynamicio 12.0.0.
 | Phase | Changes | Scope |
 |---|---|---|
 | 1 | 1 to 4 | Engine seam. An `Engine` abstract base class in `dynamicio.engines` with 16 members (read, scan, cast, validate, write, sink). `PandasEngine` calls the current code without a change in behavior. The pandas I/O code stays in the `dynamicio.mixins.*` modules in 12.x, so a patch of a module binding changes the code that runs. A test patches each binding that the dynamicio tests and a consumer repo patch. Each engine has a registry of validators and metrics with the same names. `ModelCompiler` accepts `pandera.polars` models and raises if the model type is not the engine type. `configure()`, the freeze and the wrong-frame error (decision 1). |
-| 2 | 5 to 9 | Schema and null rule. The dtype map (decision 14). The null rule. polars validators and metrics that give the same results as pandas. Each is an expression, and all run in one `collect_all` with the Pandera data checks. |
+| 2 | 5 to 9 | Schema and null rule. The dtype map (decision 14). The null rule. polars validators and metrics that give the same results as pandas. The validators and the Pandera checks run in one `collect_all`. The metrics run in one `select` after the validations. |
 | 3 | 17, 18, 20, 26 | Eager codecs and the parquet contract. The pandas metadata through `arrow_schema=`. Footer details equal to 11.1.0: timestamp unit, row group size, snappy compression, coerced timestamps and INT96 reads. JSON (decision 9) and CSV (decision 5) bytes equal to 11.1.0. The option maps (decision 6). The polars S3 tests run against floci (decision 15). |
 | 4 | 10, 14, 16 | `scan()` returns a `LazyFrame`. It checks names and types with `collect_schema()` and adds the casts to the plan. polars reads S3 with a `credential_provider` from the boto3 session. A missing key raises the dynamicio error, so `missing_ok` applies. A prefix read lists the keys with boto3 and makes one `scan_parquet` call that keeps ADR 0002 and ADR 0004 (decision 13). |
 | 5 | 11, 12, 13, 15 | `sink()` runs all sinks in one `collect_all`. Writes go through a boto3 multipart upload (64 MiB parts, 4 in flight, ACL) that completes only on success and aborts on error. Both engines select columns, cast, validate and then compute metrics, in that order (decision 12). Both engines raise the same dynamicio errors. |
@@ -192,9 +204,29 @@ Phase 1 as built:
   11.x error of a polars model.
 - The frame check runs at `write()` and `sink()`, before any I/O. It compares the top-level module name of each class in the MRO of
   the frame, so a subclass of a polars or pandas frame counts as one, and it imports no polars. `configure()` checks the freeze before it looks for polars.
-- The dtype check of `DataframeSchema` knows only the pandas dtype names. In phase 1, only the integer and float columns of a polars model compile. Phase 2
-  (the dtype map of decision 14) adds the other polars dtypes.
-- The polars engine checks models and frames. Its I/O, cast, validations and metrics raise `NotImplementedError` until phases 2 to 6.
+- The dtype check of `DataframeSchema` knows only the pandas dtype names. In phase 1, only the integer and float columns of a polars model compiled.
+  Phase 2 compiles all the dtypes of the dtype map (decision 14).
+- The polars engine checks models and frames. Its I/O raises `NotImplementedError` until phases 3 to 6.
+
+Phase 2 as built:
+
+- `SchemaColumn` does not change. The `data_type` of a compiled polars column is a pandas dtype name, from the `pandas_dtype` metadata or the reverse
+  map of decision 14. The engine takes the polars dtypes from the model, with `DtypeMap.of_model()`.
+- The cast is strict. A `DataFrame` casts one column at a time, so a failed cast names its column. A `LazyFrame` gets the casts in its plan, and a failed
+  cast raises when the frame is collected. polars 2 does not cast a string to a datetime, so a string column parses with `str.to_datetime`.
+- A failed cast raises `ColumnsDataTypeError`, as on the pandas engine. A schema column that is not in the frame also raises it, and so does a frame column
+  that is not in the schema.
+  The messages go to the `dynamicio.core` logger, so a test that patches it sees the messages of the two engines. The polars engine ignores
+  `strict_dtype_check`.
+- The validators and the Pandera column and dataframe checks run in one `pl.collect_all`. The metrics run in a second `select`, after the
+  validations. Change 2 first had one `collect_all` for all of them. Two queries keep the order of decision 12: a failed validation stops the step
+  before the metrics.
+- A polars validator returns its lazy queries and a function that makes the `ValidationResult` from the collected frames. The 9 validators give the
+  names, messages and values of the pandas validators. Tests compare the two engines on the same data, with 200 columns of random floats.
+- The polars engine runs `Config.unique`, `Config.ordered` and `@pa.dataframe_check` as lazy queries, with the keys and the message template of the
+  pandas engine. The counts and the examples come from the polars failure cases, so they are not always the pandas values. For a dataframe check, the
+  count is the number of failing rows.
+- The 8 metrics give the `METRIC` lines of the pandas engine. The metric of an empty or an all-null column is NaN.
 
 Change 26 is the floci fixture of decision 15. RND-25426 delivers it before phase 1, with the pandas integration tests. The polars S3 tests of phase 3 are its first polars users.
 
