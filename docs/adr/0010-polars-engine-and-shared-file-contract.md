@@ -250,8 +250,10 @@ Phase 2 as built:
   before the metrics.
 - A polars validator returns its lazy queries and a function that makes the `ValidationResult` from the collected frames. The 9 validators give the
   names, messages and values of the pandas validators. Tests compare the two engines on the same data, with 200 columns of random floats.
-- `is_in` accepts a null when the pandas `isin` accepts it for the pandas dtype of the column. A float null matches NaN only. An integer or Boolean null
-  matches no value. A string, categorical or temporal null matches None or NaN. The set of values comes from `to_pandas().unique()`, as in pandas.
+- `is_in` ignores nulls when it decides the result, as in pandas, so a null never fails the validation. The set of values comes from
+  `to_pandas().unique()` without the nulls. After a failure, the count of cells that are not acceptable includes a null when the pandas `isin`
+  does not accept it for the pandas dtype of the column. A float null matches NaN only. An integer or Boolean null matches no value. A string,
+  categorical or temporal null matches None or NaN.
 - The polars engine runs `Config.unique`, `Config.ordered` and `@pa.dataframe_check` as lazy queries, with the keys and the message template of the
   pandas engine. The counts and the examples come from the polars failure cases, so they are not always the pandas values. For a dataframe check, the
   count is the number of failing rows. A check that returns one bool has no failure cases, so its count is 1 when it fails. Each dataframe check is
