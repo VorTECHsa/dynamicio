@@ -67,7 +67,7 @@ Quoting from the same paper:
 
 ![Resolve the resource definition, read it, validate it against the schema, emit metrics](../images/how-it-works.svg){ width="900" }
 
-Dynamicio (or dynamic(i/o)) serves exactly that; it serves as a convenient wrapper around `pandas` I/O operations. It's a manifestation of 
+Dynamicio (or dynamic(i/o)) serves exactly that; it serves as a convenient wrapper around `pandas` and `polars` I/O operations. It's a manifestation of 
 the dependency inversion principle--a layer of indirection if you want--which keeps your code DRY and increases re-usability, effectively 
 decoupling business logic from the I/O layer. That boundary is a *seam*: a place where behaviour changes (a different environment,
 a different storage, sample files in a test) without editing the code on either side.

@@ -37,7 +37,9 @@ arguments and which bucket a task reads this week.
 | AWS Athena | yes | no | SQL query results |
 | Kafka | no | yes | messages |
 
-Dataframe execution currently supports pandas only; Polars is not yet supported.
+The pandas engine is the default. The polars engine runs the same IO classes on polars frames. It reads and writes parquet, CSV and JSON
+files on local and S3 resources, and it reads and writes Postgres. It reads Athena and writes Kafka. One process uses one engine. See
+[the polars engine](https://dynamicio.readthedocs.io/en/latest/guides/polars-engine/).
 
 ## Install
 
@@ -45,6 +47,8 @@ Dataframe execution currently supports pandas only; Polars is not yet supported.
 pip install dynamicio
 # or, in a uv project
 uv add dynamicio
+# with the polars engine
+pip install "dynamicio[polars]"
 ```
 
 Python 3.11 to 3.14.

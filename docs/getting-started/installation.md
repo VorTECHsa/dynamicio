@@ -14,6 +14,16 @@ All the backends ship with the package: there are no extras to install for S3, P
 libraries are only exercised when a resource of that type is used. A `local` resource needs no credentials, no network
 and no services, which is why the examples in this documentation use it.
 
+The polars engine is an extra. It installs polars 2.1 or later:
+
+```shell
+pip install "dynamicio[polars]"
+# or, in a uv project
+uv add "dynamicio[polars]"
+```
+
+The pandas engine and the CLI do not import polars. See [The polars engine](../guides/polars-engine.md).
+
 ## Credentials
 
 dynamicio never asks for credentials itself.

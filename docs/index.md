@@ -9,8 +9,9 @@ lives. Declare *where* a dataset is in YAML, declare *what* it looks like as a [
 model, and your code calls `read()` and `write()`. The same code then runs on a laptop against sample files and in
 production against S3, PostgreSQL, Athena or Kafka.
 
-!!! note "pandas only"
-    Dataframe execution supports `pandas`. Polars is not supported.
+!!! note "pandas and polars"
+    The pandas engine is the default. The polars engine runs the same IO classes on polars frames. One process uses one engine.
+    See [The polars engine](guides/polars-engine.md).
 
 ## The point
 

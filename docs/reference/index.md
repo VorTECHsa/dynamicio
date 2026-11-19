@@ -59,7 +59,15 @@ reference documents the public classes and functions; names beginning with an un
 
 ::: dynamicio.engines.s3_upload
 
+## Schemas
+
+::: dynamicio.schema.data_model
+
+::: dynamicio.schema.field
+
 ## Polars schemas
+
+::: dynamicio.schema.polars
 
 ::: dynamicio.schema.polars_dtypes
 
@@ -70,6 +78,10 @@ reference documents the public classes and functions; names beginning with an un
 ## Errors
 
 ::: dynamicio.errors
+
+## Command line
+
+::: dynamicio.cli
 
 ## Test harness
 

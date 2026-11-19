@@ -11,6 +11,9 @@
 - **Athena** Input only (`type: athena`)
 - **Kafka** Output
 
+The list is for the pandas engine. The polars engine does not read or write `hdf` files. See [The polars engine](polars-engine.md)
+for its resources.
+
 ## S3 I/O
 
 S3 is accessed directly through `boto3`, with one client shared per process (safe across forked workers):
