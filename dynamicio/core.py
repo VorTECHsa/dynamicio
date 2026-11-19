@@ -197,7 +197,7 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
         Args:
             df: The data to be written
         """
-        engine = EngineSetting.use(self._model, df)
+        engine = EngineSetting.use(self._model, (df,))
         df = engine.select_columns(self, df)
 
         if self.apply_schema_validations:
@@ -224,7 +224,7 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
         Raises:
             NotImplementedError: On the pandas engine, which has no lazy frame.
         """
-        EngineSetting.use(self._model, df).sink(self, df)
+        EngineSetting.use(self._model, (df,)).sink(self, df)
 
     def validate_from_schema(self, df: pd.DataFrame) -> "DynamicDataIO":
         """Validates a dataframe based on the validations present in its schema definition.

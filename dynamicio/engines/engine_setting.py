@@ -63,7 +63,7 @@ class EngineSetting:
         return cls.instance(cls._name)
 
     @classmethod
-    def use(cls, model: Optional[type] = None, *frames: Any) -> Engine:
+    def use(cls, model: Optional[type] = None, frames: Tuple[Any, ...] = ()) -> Engine:
         """The engine of a read or write. The first call that passes the checks freezes the engine and logs its name.
 
         Args:
