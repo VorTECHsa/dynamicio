@@ -7,9 +7,11 @@ from unittest.mock import patch
 import pandas as pd
 import pytest
 
+import dynamicio
 import dynamicio.core
 import dynamicio.schema.metrics
 from dynamicio.config import IOConfig
+from dynamicio.errors import ColumnsDataTypeError
 from tests import constants
 from tests.mocking.io import ReadS3JsonIO, WriteS3JsonIO
 from tests.test_engines.ios import EngineCheckIO
@@ -60,6 +62,28 @@ class TestPatchTargetsOfConsumers:
 
         # Then
         log_metric.assert_called_once_with(dataset="POSITIVE", column="a", metric="Min", value=4)
+
+    @pytest.mark.unit
+    def test_a_patched_core_logger_gets_the_messages_of_the_polars_cast(self, tmp_path):
+        pl = pytest.importorskip("polars")
+        data_model = pytest.importorskip("dynamicio.schema.polars").DataModel
+
+        # Given
+        class Codes(data_model, dataset="codes"):
+            code: int
+
+        dynamicio.configure(engine="polars")
+        io = EngineCheckIO.make(tmp_path, Codes, show_casting_warnings=True)
+
+        # When
+        with patch("dynamicio.core.logger") as logger:
+            io._apply_schema(pl.DataFrame({"code": pl.Series([1], dtype=pl.Int32)}))  # pylint: disable=protected-access
+            with pytest.raises(ColumnsDataTypeError):
+                io._apply_schema(pl.DataFrame({"code": ["x"]}))  # pylint: disable=protected-access
+
+        # Then
+        assert logger.info.call_args_list[0].args == ("Expected: 'Int64' dtype for CODES['code'], found 'Int32'",)
+        assert "Tried casting column CODES['code']" in logger.exception.call_args.args[0]
 
     @pytest.mark.unit
     def test_the_old_import_paths_resolve(self):

@@ -1,7 +1,7 @@
 # pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring
 import math
 import random
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import numpy as np
 import pandas as pd
@@ -103,6 +103,19 @@ class TestValidatorParity:
             ("floats", [1.0, 2.0]),
             ("empty", [1.0]),
             ("all_null", [1.0]),
+            ("strings", ["a", "b", None]),
+            ("strings", ["a", "b", "c", NAN]),
+            ("categories", ["a", "b", "c", None]),
+            ("ints", [1, 2, 3, 7, None]),
+            ("floats", [1.0, 2.0, 5.5, -1.0, NAN]),
+            ("floats", [1.0, 2.0, 5.5, -1.0, None]),
+            ("all_null", [NAN]),
+            ("bools", [True, None]),
+            ("datetimes", [datetime(2020, 1, 1), datetime(2021, 6, 1)]),
+            ("datetimes", [datetime(2020, 1, 1), datetime(2021, 6, 1), None]),
+            ("datetimes", [datetime(2020, 1, 1)]),
+            ("durations", [timedelta(hours=1), timedelta(0)]),
+            ("durations", [timedelta(hours=1)]),
         ],
     )
     @pytest.mark.parametrize("exact", [False, True])
@@ -167,6 +180,38 @@ class TestValidatorEdgeCases:
 
         assert result.message == "Values {'z'} for d[x] are not acceptable for 2 cells"
         assert result.value == 2
+
+    @pytest.mark.unit
+    def test_is_in_accepts_a_null_when_the_acceptable_values_hold_none(self):
+        frame = pl.LazyFrame({"x": ["a", None, "z"]})
+
+        result = self.run(PolarsValidations.is_in("d", frame, "x", categorical_values=["a", None]))
+
+        assert result.message == "Values {'z'} for d[x] are not acceptable for 1 cells"
+        assert result.value == 1
+
+    @pytest.mark.unit
+    def test_is_in_accepts_a_time_zone_aware_datetime_of_the_acceptable_values(self):
+        at = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        frame = pl.LazyFrame({"x": pl.Series([at, at])})
+
+        result = self.run(PolarsValidations.is_in("d", frame, "x", categorical_values=[pd.Timestamp(at)], exact=True))
+
+        assert (result.valid, result.value) == (True, 0)
+
+    @pytest.mark.unit
+    def test_has_unique_values_takes_a_column_with_the_name_of_a_helper_column(self):
+        for name in ("value", "row", "count", "_dynamicio_row", "_dynamicio_count"):
+            result = self.run(PolarsValidations.has_unique_values("d", pl.LazyFrame({name: [1, 1, 2]}), name))
+
+            assert (result.valid, result.message) == (False, f"Values [1] for d[{name}] are duplicated!")
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("name", ["len", "nulls", "rows"])
+    def test_the_null_fraction_takes_a_column_with_the_name_of_an_aggregate(self, name):
+        result = self.run(PolarsValidations.has_acceptable_percentage_of_nulls("d", pl.LazyFrame({name: [1, None]}), name, threshold=0.9))
+
+        assert (result.valid, result.value) == (True, 0.5)
 
     @pytest.mark.unit
     def test_is_in_on_an_enum_column_accepts_its_categories(self):

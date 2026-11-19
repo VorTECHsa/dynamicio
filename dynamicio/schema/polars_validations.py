@@ -8,10 +8,11 @@ The engine casts a frame before it validates it, and the cast changes float NaN 
 as NaN and None are in pandas.
 """
 
-# pylint: disable=too-many-positional-arguments
+# pylint: disable=too-many-positional-arguments, too-many-public-methods
 import datetime
+import math
 import operator
-from typing import Any, Callable, Collection, Dict, List, NamedTuple, Sequence
+from typing import Any, Callable, Collection, Dict, List, NamedTuple, Sequence, Tuple
 
 import pandas as pd
 import polars as pl
@@ -58,15 +59,16 @@ class PolarsValidations:
     @staticmethod
     def has_unique_values(dataset: str, frame: pl.LazyFrame, column: str) -> "PolarsValidations.Pending":
         """The non-null values that repeat, most frequent first and then in the order they first appear, as ``value_counts`` gives them in pandas."""
+        # The column is renamed first, so its name does not collide with the names of the row index and of the count
         duplicates = (
-            frame.select(column)
+            frame.select(pl.col(column).alias("value"))
             .drop_nulls()
-            .with_row_index("_dynamicio_row")
-            .group_by(column)
-            .agg(pl.len().alias("_dynamicio_count"), pl.col("_dynamicio_row").first())
-            .filter(pl.col("_dynamicio_count") > 1)
-            .sort(["_dynamicio_count", "_dynamicio_row"], descending=[True, False])
-            .select(column)
+            .with_row_index("row")
+            .group_by("value")
+            .agg(pl.len().alias("count"), pl.col("row").first())
+            .filter(pl.col("count") > 1)
+            .sort(["count", "row"], descending=[True, False])
+            .select("value")
         )
 
         def finish(frames: List[pl.DataFrame]) -> ValidationResult:
@@ -104,23 +106,23 @@ class PolarsValidations:
                 value=percentage_of_nulls,
             )
 
-        return PolarsValidations.Pending((frame.select(pl.col(column).null_count(), pl.len()),), finish)
+        return PolarsValidations.Pending((frame.select(pl.col(column).null_count().alias("nulls"), pl.len().alias("rows")),), finish)
 
     @staticmethod
     def is_in(dataset: str, frame: pl.LazyFrame, column: str, categorical_values: Collection[Any], exact: bool = False) -> "PolarsValidations.Pending":
         """The non-null values of a column are a subset of the acceptable values, or exactly them when ``exact`` is True.
 
-        As in pandas, the set of values ignores nulls, but the count of cells that are not acceptable includes them.
+        As in pandas, the set of values ignores nulls, but the count of cells that are not acceptable includes the nulls that ``isin`` does not accept.
         """
         acceptable = set(categorical_values)
-        values = list(acceptable)
+        values = [value for value in acceptable if not PolarsValidations.is_null(value)]
+        null_is_acceptable = PolarsValidations.null_is_acceptable(frame.collect_schema()[column], acceptable)
         unique = frame.select(pl.col(column).drop_nulls().unique())
-        # A null is not in the acceptable values: `fill_null(False)` counts it, as `~isin` does in pandas
-        not_acceptable = frame.select((~pl.col(column).is_in(pl.Series(values, strict=False)).fill_null(False)).sum())
+        not_acceptable = frame.select((~pl.col(column).is_in(pl.Series(values, strict=False)).fill_null(null_is_acceptable)).sum())
 
         def finish(frames: List[pl.DataFrame]) -> ValidationResult:
-            # `to_numpy` gives the numpy scalars that `unique()` gives in pandas, so the messages print the same
-            unique_values = set(frames[0].to_series().to_numpy())
+            # The values of `to_pandas` are the scalars that `unique()` gives in pandas: `pd.Timestamp` with its time zone, numpy integers
+            unique_values = set(frames[0].to_series().to_pandas().unique())
             count_invalid = frames[1].item()
             not_acceptable_message = f"Values {unique_values - acceptable} for {dataset}[{column}] are not acceptable for {count_invalid} cells"
             if exact:
@@ -135,6 +137,24 @@ class PolarsValidations:
             return ValidationResult(valid=False, message=not_acceptable_message, value=count_invalid)
 
         return PolarsValidations.Pending((unique, not_acceptable), finish)
+
+    @staticmethod
+    def is_null(value: Any) -> bool:
+        """Whether a value is None or a float NaN."""
+        return value is None or (isinstance(value, float) and math.isnan(value))
+
+    @staticmethod
+    def null_is_acceptable(dtype: pl.DataType, acceptable: Collection[Any]) -> bool:
+        """Whether ``isin`` in pandas accepts a null of the pandas column of a polars dtype, for a set of acceptable values.
+
+        A float column holds NaN, which only a NaN matches. An integer or Boolean column of a model holds ``<NA>``, which no value matches. A string,
+        categorical or temporal column holds None, NaN or ``NaT``, and None or NaN matches each.
+        """
+        if dtype.is_float():
+            return any(isinstance(value, float) and math.isnan(value) for value in acceptable)
+        if dtype.is_integer() or dtype == pl.Boolean:
+            return False
+        return any(PolarsValidations.is_null(value) for value in acceptable)
 
     @staticmethod
     def bounded(frame: pl.LazyFrame, column: str, valid: pl.Expr, finish: Callable[[int, int], ValidationResult]) -> "PolarsValidations.Pending":
@@ -195,13 +215,31 @@ class PolarsValidations:
         result = pandera_check(frame, column)
 
         def finish(frames: List[pl.DataFrame]) -> ValidationResult:
-            passed, failing, first = frames
-            if bool(passed.item()):
+            passed, failing, first = PolarsValidations.check_frames(frames)
+            if passed:
                 return ValidationResult(valid=True, message=f"{dataset}[{column}] passes {pandera_check.name}", value=0)
-            examples = PolarsValidations.python_values(first.to_series(0))
-            return ValidationResult(valid=False, message=f"Values {examples} for {dataset}[{column}] fail the check {pandera_check.name}!", value=failing.item())
+            examples = PolarsValidations.python_values(first.to_series(0)) if first is not None else [False]
+            return ValidationResult(valid=False, message=f"Values {examples} for {dataset}[{column}] fail the check {pandera_check.name}!", value=failing)
 
-        return PolarsValidations.Pending((result.check_passed, result.failure_cases.select(pl.len()), result.failure_cases.head(5)), finish)
+        return PolarsValidations.Pending(PolarsValidations.check_queries(result, result.failure_cases), finish)
+
+    @staticmethod
+    def check_queries(result: Any, failure_cases: Any) -> Sequence[pl.LazyFrame]:
+        """The queries of a Pandera check result: whether it passed, and the count and the first rows of its failure cases.
+
+        A check that returns one bool, not a bool for each row, has no failure cases: its only query is whether it passed.
+        """
+        if failure_cases is None:
+            return (result.check_passed,)
+        return (result.check_passed, failure_cases.select(pl.len()), failure_cases.head(5))
+
+    @staticmethod
+    def check_frames(frames: List[pl.DataFrame]) -> tuple:
+        """``(passed, failing count, first failure cases)`` of the collected ``check_queries``. A check of one bool that fails has one failure and no rows."""
+        passed = bool(frames[0].item())
+        if len(frames) == 1:
+            return passed, 0 if passed else 1, None
+        return passed, frames[1].item(), frames[2]
 
     @staticmethod
     def dataframe_message(dataset: str, check: str, failures: int, examples: List[Any]) -> str:
@@ -209,55 +247,67 @@ class PolarsValidations:
         return f"{dataset}: {failures} failure(s) of {check}, for example {examples}"
 
     @classmethod
-    def dataframe_checks(cls, dataset: str, frame: pl.LazyFrame, columns: Sequence[str], dataframe_validator: Any) -> Dict[str, "PolarsValidations.Pending"]:
-        """The dataframe-level part of a polars model (``@pa.dataframe_check``, ``Config.unique``, ``Config.ordered``), by the Pandera check name.
+    def dataframe_checks(cls, dataset: str, frame: pl.LazyFrame, columns: Sequence[str], dataframe_validator: Any) -> List[Tuple[str, "PolarsValidations.Pending"]]:
+        """The dataframe-level part of a polars model (``@pa.dataframe_check``, ``Config.unique``, ``Config.ordered``), with the Pandera check name of each.
 
-        The checks run as lazy queries, so they join the ``collect_all`` of the column validators. The keys are the Pandera check names of pandas
-        (``multiple_fields_uniqueness``, ``column_ordered``). The count of a dataframe check is its failing rows, and the examples are the values of
-        the first failing rows.
+        The checks run as lazy queries, so they join the ``collect_all`` of the column validators. The names are the Pandera check names of pandas
+        (``multiple_fields_uniqueness``, ``column_ordered``). Two checks can have one name: each is kept, and the engine joins their failures. The count of
+        a dataframe check is its failing rows, and the examples are the values of the first failing rows.
         """
-        checks: Dict[str, PolarsValidations.Pending] = {}
-        for check in dataframe_validator.checks:
-            checks[str(check.name)] = cls.dataframe_check(dataset, frame, check)
+        checks = [(str(check.name), cls.dataframe_check(dataset, frame, check)) for check in dataframe_validator.checks]
         if dataframe_validator.unique:
-            checks["multiple_fields_uniqueness"] = cls.unique_rows(dataset, frame, list(dataframe_validator.unique), dataframe_validator.report_duplicates)
+            checks.append(("multiple_fields_uniqueness", cls.unique_rows(dataset, frame, cls.unique_groups(dataframe_validator.unique), dataframe_validator.report_duplicates)))
         if dataframe_validator.ordered:
-            checks["column_ordered"] = cls.ordered(dataset, columns, list(dataframe_validator.columns))
+            checks.append(("column_ordered", cls.ordered(dataset, columns, list(dataframe_validator.columns))))
         return checks
+
+    @staticmethod
+    def unique_groups(unique: Any) -> List[List[str]]:
+        """The column groups of ``Config.unique``: a name or a list of names is one group, and a list of lists is a list of groups."""
+        if isinstance(unique, str):
+            return [[unique]]
+        if all(isinstance(name, str) for name in unique):
+            return [list(unique)]
+        return [[group] if isinstance(group, str) else list(group) for group in unique]
 
     @classmethod
     def dataframe_check(cls, dataset: str, frame: pl.LazyFrame, check: Any) -> "PolarsValidations.Pending":
         """A ``@pa.dataframe_check``: the failing rows, without the ``check_output`` column of Pandera."""
         result = check(frame)
-        failure_cases = result.failure_cases.select(pl.exclude("check_output"))
+        failure_cases = None if result.failure_cases is None else result.failure_cases.select(pl.exclude("check_output"))
 
         def finish(frames: List[pl.DataFrame]) -> ValidationResult:
-            passed, failing, first = frames
-            if bool(passed.item()):
+            passed, failing, first = cls.check_frames(frames)
+            if passed:
                 return ValidationResult(valid=True, message=f"{dataset} passes {check.name}", value=0)
-            examples = [value for row in first.head(5).rows() for value in row][:5]
-            return ValidationResult(valid=False, message=cls.dataframe_message(dataset, str(check.name), failing.item(), examples), value=failing.item())
+            examples = [value for row in first.head(5).rows() for value in row][:5] if first is not None else [False]
+            return ValidationResult(valid=False, message=cls.dataframe_message(dataset, str(check.name), failing, examples), value=failing)
 
-        return PolarsValidations.Pending((result.check_passed, failure_cases.select(pl.len()), failure_cases.head(5)), finish)
+        return PolarsValidations.Pending(cls.check_queries(result, failure_cases), finish)
 
     @classmethod
-    def unique_rows(cls, dataset: str, frame: pl.LazyFrame, unique: List[str], report_duplicates: str) -> "PolarsValidations.Pending":
-        """``Config.unique``: the rows whose values in the unique columns repeat. As in pandas, the count is of cells and the examples go column by column."""
-        key = pl.struct(unique)
-        duplicated = {"exclude_first": key.is_duplicated() & ~key.is_first_distinct(), "exclude_last": key.is_duplicated() & ~key.is_last_distinct()}.get(
-            report_duplicates, key.is_duplicated()
-        )
-        rows = frame.select(unique).filter(duplicated)
+    def unique_rows(cls, dataset: str, frame: pl.LazyFrame, groups: List[List[str]], report_duplicates: str) -> "PolarsValidations.Pending":
+        """``Config.unique``: the rows whose values in the columns of a group repeat. As in pandas, the count is of cells and the examples go column by column.
+
+        Each group is a query. As in pandas, the result is the failure of the first group with repeated rows.
+        """
+
+        def duplicated_rows(group: List[str]) -> pl.LazyFrame:
+            key = pl.struct(group)
+            duplicated = {"exclude_first": key.is_duplicated() & ~key.is_first_distinct(), "exclude_last": key.is_duplicated() & ~key.is_last_distinct()}.get(
+                report_duplicates, key.is_duplicated()
+            )
+            return frame.select(group).filter(duplicated)
 
         def finish(frames: List[pl.DataFrame]) -> ValidationResult:
-            failing = frames[0]
-            if failing.height == 0:
-                return ValidationResult(valid=True, message=f"{dataset} has unique rows in {unique}", value=0)
-            examples = [value for name in unique for value in failing[name].to_list()][:5]
-            cells = failing.height * len(unique)
-            return ValidationResult(valid=False, message=cls.dataframe_message(dataset, "multiple_fields_uniqueness", cells, examples), value=cells)
+            for group, failing in zip(groups, frames):
+                if failing.height > 0:
+                    examples = [value for name in group for value in failing[name].to_list()][:5]
+                    cells = failing.height * len(group)
+                    return ValidationResult(valid=False, message=cls.dataframe_message(dataset, "multiple_fields_uniqueness", cells, examples), value=cells)
+            return ValidationResult(valid=True, message=f"{dataset} has unique rows in {groups}", value=0)
 
-        return PolarsValidations.Pending((rows,), finish)
+        return PolarsValidations.Pending(tuple(duplicated_rows(group) for group in groups), finish)
 
     @classmethod
     def ordered(cls, dataset: str, columns: Sequence[str], expected: List[str]) -> "PolarsValidations.Pending":

@@ -311,6 +311,90 @@ class TestValidate:
         assert error.value.message == {"is_even": "Values [3, 5] for EVEN[n] fail the check is_even!"}
 
     @pytest.mark.unit
+    @pytest.mark.parametrize("values, expected", [([2, 4], None), ([2, 3], {"is_small": "Values [False] for SMALL[n] fail the check is_small!"})])
+    def test_a_column_check_that_returns_one_bool_passes_or_fails(self, polars_io, tmp_path, values, expected):
+        class Small(DataModel, dataset="small"):
+            n: int
+
+            @pa_polars.check("n", name="is_small")
+            @classmethod
+            def is_small(cls, data):
+                return data.lazyframe.select(pl.col(data.key).sum() < 7).collect().item()
+
+        io = polars_io(tmp_path, Small)
+
+        if expected is None:
+            io.validate_from_schema(pl.DataFrame({"n": values}))
+            return
+        with pytest.raises(SchemaValidationError) as error:
+            io.validate_from_schema(pl.DataFrame({"n": values + [5]}))
+        assert error.value.message == expected
+
+    @pytest.mark.unit
+    def test_a_dataframe_check_that_returns_one_bool_passes_or_fails(self, polars_io, tmp_path):
+        class Total(DataModel, dataset="total"):
+            n: int
+
+            @pa_polars.dataframe_check
+            @classmethod
+            def small_total(cls, data):
+                return data.lazyframe.select(pl.col("n").sum()).collect().item() < 7
+
+        io = polars_io(tmp_path, Total)
+
+        io.validate_from_schema(pl.DataFrame({"n": [1, 2]}))
+        with pytest.raises(SchemaValidationError) as error:
+            io.validate_from_schema(pl.DataFrame({"n": [4, 5]}))
+        assert error.value.message == {"small_total": "TOTAL: 1 failure(s) of small_total, for example [False]"}
+
+    @pytest.mark.unit
+    def test_two_dataframe_checks_with_one_name_both_run(self, polars_io, tmp_path):
+        class Bounds(DataModel, dataset="bounds"):
+            low: int
+            high: int
+
+            @pa_polars.dataframe_check(name="bounds")
+            @classmethod
+            def low_is_positive(cls, data):
+                return data.lazyframe.select(pl.col("low") > 0)
+
+            @pa_polars.dataframe_check(name="bounds")
+            @classmethod
+            def high_is_small(cls, data):
+                return data.lazyframe.select(pl.col("high") < 10)
+
+        io = polars_io(tmp_path, Bounds)
+
+        with pytest.raises(SchemaValidationError) as error:
+            io.validate_from_schema(pl.DataFrame({"low": [-1, 1], "high": [1, 2]}))
+        assert error.value.message == {"bounds": "BOUNDS: 1 failure(s) of bounds, for example [-1, 1]"}
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "a, expected",
+        [
+            ([1, 1, 2], "GROUPS: 2 failure(s) of multiple_fields_uniqueness, for example [1, 1]"),
+            ([1, 3, 2], "GROUPS: 4 failure(s) of multiple_fields_uniqueness, for example [1, 1, 5, 5]"),
+        ],
+    )
+    def test_config_unique_with_groups_reports_the_first_group_with_repeated_rows(self, polars_io, tmp_path, a, expected):
+        # The messages are those of the pandas engine for the same data
+        class Groups(DataModel, dataset="groups"):
+            a: int
+            b: int
+            c: int
+
+            class Config:
+                unique = [["a"], ["b", "c"]]
+
+        io = polars_io(tmp_path, Groups)
+
+        io.validate_from_schema(pl.DataFrame({"a": [1, 2, 3], "b": [1, 2, 1], "c": [5, 6, 7]}))
+        with pytest.raises(SchemaValidationError) as error:
+            io.validate_from_schema(pl.DataFrame({"a": a, "b": [1, 2, 1], "c": [5, 6, 5]}))
+        assert error.value.message == {"multiple_fields_uniqueness": expected}
+
+    @pytest.mark.unit
     def test_config_unique_reports_the_repeated_rows(self, polars_io, tmp_path):
         class Pairs(DataModel, dataset="pairs"):
             a: int
@@ -333,7 +417,7 @@ class TestValidate:
         PolarsValidations = pytest.importorskip("dynamicio.schema.polars_validations").PolarsValidations  # pylint: disable=invalid-name
         frame = pl.LazyFrame({"a": [1, 1, 1, 2], "b": ["x", "x", "x", "y"]})
 
-        pending = PolarsValidations.unique_rows("PAIRS", frame, ["a", "b"], report_duplicates)
+        pending = PolarsValidations.unique_rows("PAIRS", frame, [["a", "b"]], report_duplicates)
         result = pending.finish(pl.collect_all(list(pending.queries)))
 
         assert result.value == cells
@@ -439,6 +523,36 @@ class TestLogMetrics:
         values = {c.kwargs["metric"]: c.kwargs["value"] for c in log_metric.call_args_list}
         assert values["Counts"] == 0
         assert all(math.isnan(values[name]) for name in ("Min", "Max", "Mean", "Std"))
+
+    @pytest.mark.unit
+    def test_counts_per_label_logs_a_zero_for_an_enum_category_that_is_not_in_the_column(self, polars_io, tmp_path):
+        # Given a pandas category column with the same categories
+        expected = metrics.CountsPerLabel(dataset_name="LABELS", df=pd.DataFrame({"s": pd.Categorical(["open", "open", None], categories=["open", "closed"])}), column="s")
+
+        class Labels(DataModel, dataset="labels"):
+            s: Annotated[pl.Enum, ["open", "closed"]] = Field(nullable=True, metrics=[Metric.COUNTS_PER_LABEL])
+
+        io = polars_io(tmp_path, Labels)
+
+        # When
+        with patch.object(metrics, "log_metric") as log_metric:
+            io.log_metrics_from_schema(pl.DataFrame({"s": pl.Series(["open", "open", None], dtype=pl.Enum(["open", "closed"]))}))
+
+        # Then
+        assert {c.args[1]: c.args[3] for c in log_metric.call_args_list} == expected.calculate_metric() == {"s-open": 2, "s-closed": 0}
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("name", ["count", "count-count"])
+    def test_counts_per_label_takes_a_column_with_the_name_of_the_count_field(self, polars_io, tmp_path, name):
+        class Counted(DataModel, dataset="counted"):
+            label: str = Field(nullable=False, alias=name, metrics=[Metric.COUNTS_PER_LABEL])
+
+        io = polars_io(tmp_path, Counted)
+
+        with patch.object(metrics, "log_metric") as log_metric:
+            io.log_metrics_from_schema(pl.DataFrame({name: ["a", "b", "a"]}))
+
+        assert {c.args[1]: c.args[3] for c in log_metric.call_args_list} == {f"{name}-a": 2, f"{name}-b": 1}
 
     @pytest.mark.unit
     def test_a_model_without_metrics_logs_nothing(self, polars_io, tmp_path):

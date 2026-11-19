@@ -123,6 +123,8 @@ class TestModelCheck:
         "engine, model_fixture, expected", [(PandasEngine, None, True), (PolarsEngine, None, False), (PandasEngine, "polars_model", False), (PolarsEngine, "polars_model", True)]
     )
     def test_is_model_matches_the_backend_of_the_model(self, request, engine, model_fixture, expected):
+        if engine is PolarsEngine:
+            pytest.importorskip("polars")
         model = request.getfixturevalue(model_fixture) if model_fixture else Positive
         assert engine().is_model(model) is expected
 
@@ -177,6 +179,7 @@ class TestFrameCheck:
 
     @pytest.mark.unit
     def test_a_pandas_frame_on_the_polars_engine_is_refused(self):
+        pytest.importorskip("polars")
         with pytest.raises(WrongFrameError, match="pandas DataFrame on the polars engine"):
             PolarsEngine().check_frame(pd.DataFrame({"a": [1]}))
 
@@ -214,6 +217,8 @@ class TestFrameCheck:
 
     @pytest.mark.unit
     def test_a_subclass_of_a_pandas_frame_is_a_pandas_frame(self):
+        pytest.importorskip("polars")
+
         # Given
         class AppFrame(pd.DataFrame):
             pass

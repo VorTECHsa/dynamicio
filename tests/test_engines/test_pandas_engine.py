@@ -44,6 +44,8 @@ class TestRegistry:
 
     @pytest.mark.unit
     def test_the_polars_registry_has_the_names_of_the_pandas_registry(self):
+        pytest.importorskip("polars")
+
         # Given
         pandas_registry, polars_registry = PandasEngine().registry, PolarsEngine().registry
 

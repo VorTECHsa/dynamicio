@@ -90,7 +90,12 @@ All of the checks run as lazy queries in one `pl.collect_all`, so the engine rea
 
 The messages of the column validators are the messages of the pandas engine. The dataframe-level checks have the keys and the message template of the
 pandas engine (`multiple_fields_uniqueness`, `column_ordered`, the name of the check). Their counts and examples come from the polars failure cases, so
-they are not always the pandas values. For a `@pa.dataframe_check`, the count is the number of failing rows.
+they are not always the pandas values. For a `@pa.dataframe_check`, the count is the number of failing rows. A check that returns one bool has a count of 1
+when it fails. Two dataframe checks with one name both run, and their messages go into one entry. `Config.unique` with a list of column groups checks each
+group. As on the pandas engine, the entry gives the first group with repeated rows.
+
+`is_in` accepts a null when the pandas `isin` accepts it. A null of a float column matches NaN only. A null of an integer or a Boolean column matches no
+value. A null of the other columns matches None or NaN.
 
 `PolarsValidations.validator` registers a polars validator, as `@validator` of `dynamicio.schema.validations` does for the pandas engine.
 
@@ -98,7 +103,7 @@ they are not always the pandas values. For a `@pa.dataframe_check`, the count is
 
 `log_metrics_from_schema()` computes the metrics of all columns in one `select`, and logs them in the order of the schema. The `METRIC` lines are the
 lines of the pandas engine. For an empty or an all-null column, `Min`, `Max`, `Mean`, `Std` and `Variance` give NaN.
-`Counts` and `UniqueCounts` count the rows and the distinct values, so they give 0 for an empty column. `CountsPerLabel` does not count nulls. The metrics run after the validations, in a second query.
+`Counts` and `UniqueCounts` count the rows and the distinct values, so they give 0 for an empty column. `CountsPerLabel` does not count nulls. It logs a count of 0 for each category of an `Enum` that is not in the column, as a pandas `category` does. The metrics run after the validations, in a second query.
 
 `PolarsMetrics.metric("Name")` registers a polars metric, as a `Metric` subclass does for the pandas engine. A polars metric is a function of the
 column name that returns a polars expression with one value.
