@@ -3,7 +3,7 @@
 ## v12.0.0
 
 - breaking: `write()` on the pandas engine casts the frame before its validations and metrics, in the order of the polars engine. A validator and a metric thus see the columns of the schema with the dtypes of the schema. In 11.x they saw the frame of the caller, and the cast came after them
-- breaking: a schema column that is not in the frame raises `ColumnsDataTypeError` on the pandas engine, as on the polars engine. 11.x raised `KeyError`
+- breaking: a schema column that is not in the frame raises `ColumnsDataTypeError` on the pandas engine, as on the polars engine. 11.x raised `KeyError`. This applies to reads and writes. For example, a pandas read of a JSON file without a schema column, or without records, raises `ColumnsDataTypeError`. A CSV or parquet read still raises the error of its reader
 - breaking: dynamicio needs Python 3.11 or later. polars 2.1 needs Python 3.11, and Python 3.10 reaches its end of life in October 2026. CI runs Python 3.11 to 3.14, and the `lowest` dependency-range job runs on Python 3.11
 - feat: an engine is the dataframe library of a process. `DynamicDataIO` sends its read, write, cast, validations and metrics to the engine, in the same order as before. The pandas engine is the default and runs the code of 11.x, so a pandas process does not change and does not import polars. The engine classes are in `dynamicio.engines`
 - feat: `dynamicio.configure(engine="pandas" | "polars")` sets the engine. The first read or write fixes it and logs it once. After that, another engine raises `EngineConfigurationError`. An engine that dynamicio does not have also raises `EngineConfigurationError`, and the polars engine without polars installed raises `ImportError`

@@ -1,10 +1,13 @@
 # pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring
 import asyncio
+import json
 from unittest.mock import patch
 
 import pandas as pd
 import pytest
+import yaml
 
+from dynamicio.config import IOConfig
 from dynamicio.core import DynamicDataIO
 from dynamicio.engines import Engine, EngineSetting, PandasEngine, PolarsEngine, Registry
 from dynamicio.errors import ColumnsDataTypeError, SchemaValidationError
@@ -120,6 +123,19 @@ class TestPandasLifecycle:
     def test_a_column_that_does_not_cast_is_a_columns_data_type_error(self, tmp_path):
         with pytest.raises(ColumnsDataTypeError):
             PandasEngine().cast(EngineCheckIO.make(tmp_path), pd.DataFrame({"a": ["x"]}))
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("records", [[{"b": 1}], []], ids=["without-the-column", "without-records"])
+    def test_a_json_read_without_a_schema_column_is_a_columns_data_type_error(self, tmp_path, records):
+        # Given
+        (tmp_path / "data.json").write_text(json.dumps(records))
+        definition = {"X": {"LOCAL": {"type": "local", "local": {"file_path": str(tmp_path / "data.json"), "file_type": "json", "options": {"orient": "records"}}}}}
+        (tmp_path / "definitions.yaml").write_text(yaml.safe_dump(definition))
+        source_config = IOConfig(str(tmp_path / "definitions.yaml"), env_identifier="LOCAL", dynamic_vars=EngineCheckIO).get(source_key="X")
+
+        # When / Then
+        with pytest.raises(ColumnsDataTypeError):
+            EngineCheckIO.make(tmp_path, source_config=source_config).read()
 
     @pytest.mark.unit
     def test_validate_raises_for_a_failing_validation(self, tmp_path):
