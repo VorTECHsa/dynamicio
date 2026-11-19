@@ -307,8 +307,26 @@ Phase 4 as built:
   `Int64`, or `Int64` and `UInt64`, raises `ColumnsDataTypeError`. An object that lacks a column gets nulls, with the warning of the pandas engine.
 - `read()` of a prefix is `scan().collect()`, so the two reads give the same frame. A CSV or JSON prefix reads each object with the eager reader, as the
   pandas engine does, and the engine calls `lazy()` on the concatenated frame.
-- A prefix write raises `NotImplementedError` until phase 5. The options `no_disk_space`, `partition_cols`, `mode` and `allow_delete` are accepted on a
+- A prefix write raised `NotImplementedError` in phase 4. The options `no_disk_space`, `partition_cols`, `mode` and `allow_delete` are accepted on a
   prefix, and refused on the other resources.
+
+Phase 5 as built:
+
+- `sink()` writes a `LazyFrame` to `local`, `s3_file` and `s3_path_prefix`. One `pl.collect_all` runs the sink, the validations and the metrics of the
+  model. The sink goes to a temporary file, so a failed validation leaves the old file or object. The engine logs the metrics after the validations pass.
+- A parquet sink to one file streams the rows to the temporary file with lz4. pyarrow then copies its row groups to a second file with the arrow types,
+  the pandas metadata and the options of `write()`. The same `collect_all` counts the rows and the categories of each `Categorical` column for that metadata.
+  The file has the footer and the row groups of `write()`. Only one row group is in memory at a time.
+- A local file goes into place with `os.replace`, from a temporary directory in the directory of the file. An S3 file goes up with the upload of change 13.
+- A CSV or JSON sink and a prefix sink collect the frame and call the writer of `write()`. The bytes stay equal to 11.1.0, and the prefix writer of the
+  pandas engine gives the same objects and deletes the same old objects for each `mode`. A prefix write thus no longer raises `NotImplementedError`.
+- Change 13 applies to the parquet writes of the polars engine to S3. `S3Upload` uses the boto3 transfer manager with parts of 64 MiB, 4 in flight and
+  the `bucket-owner-full-control` ACL. A failed part aborts the multipart upload. The S3 uploads of the pandas engine do not change.
+- A prefix read on the two engines does not read the `col=value` directories back as a column. A read of a prefix with `partition_cols` thus raises
+  the `ValueError` of a column that no object has, on the two engines.
+- The pandas `write()` now casts before its validations and metrics (decision 12). A schema column that is not in the frame raises `ColumnsDataTypeError`
+  on the two engines (change 15). The pandas engine of 11.x raised `KeyError`. The CHANGELOG states the two changes as breaking.
+- The checks of the polars engine are in `PolarsChecks`, and the parquet metadata code is in `PolarsParquet`. `PolarsFiles` and `PolarsSinks` share them.
 
 Change 26 is the floci fixture of decision 15. RND-25426 delivers it before phase 1, with the pandas integration tests. The polars S3 tests of phase 3 are its first polars users.
 
