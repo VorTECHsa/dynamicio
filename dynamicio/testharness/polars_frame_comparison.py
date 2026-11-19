@@ -32,11 +32,32 @@ class PolarsFrameComparison(RuleComparison):
         df = df.drop([column for column in rules.ignore_columns if column in df.columns])
         if rules.list_columns_to_sort:
             self._require_columns(df, rules.list_columns_to_sort, "list_columns_to_sort")
-            df = df.with_columns(pl.col(column).list.sort() for column in rules.list_columns_to_sort)
+            # As in the pandas comparison, a column without lists keeps its values, so the comparison reports the difference
+            df = df.with_columns(self.sorted_lists(column, df.schema[column]) for column in rules.list_columns_to_sort)
         if not rules.check_row_order and rules.sort_by:
             self._require_columns(df, rules.sort_by, "sort_by")
             df = df.sort(list(rules.sort_by), maintain_order=True)
         return df
+
+    @staticmethod
+    def sorted_lists(column: str, dtype: Any) -> pl.Expr:
+        """The expression that sorts each list of a ``List`` or ``Array`` column, and keeps the values of another column."""
+        if isinstance(dtype, pl.List):
+            return pl.col(column).list.sort()
+        if isinstance(dtype, pl.Array):
+            return pl.col(column).arr.sort()
+        return pl.col(column)
+
+    def compare(self, actual: Any, expected: Any) -> None:
+        """Raise ``AssertionError`` if ``actual`` does not satisfy the expectations against ``expected``.
+
+        A polars error of the comparison, for example a sort of a type that polars cannot sort, also raises ``AssertionError``, so the harness records
+        the failure and checks the other outputs.
+        """
+        try:
+            super().compare(actual, expected)
+        except pl.exceptions.PolarsError as error:
+            raise AssertionError(f"polars cannot compare the frames: {type(error).__name__}: {error}") from error
 
     def _matched(self, actual: pl.DataFrame, expected: pl.DataFrame) -> Tuple[pl.DataFrame, pl.DataFrame]:
         rules = self.expectations

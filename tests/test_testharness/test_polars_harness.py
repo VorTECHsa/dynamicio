@@ -178,6 +178,50 @@ class TestPolarsFrameComparison:
         assert result.stdout.strip().splitlines()[-1] == "False"
 
 
+class TestPolarsComparisonErrors:
+    @pytest.mark.unit
+    @pytest.mark.parametrize("check_dtype", [True, False])
+    @pytest.mark.parametrize("lists_side", ["actual", "expected"])
+    def test_a_list_column_that_became_a_string_column_fails_the_comparison(self, check_dtype, lists_side):
+        # Given
+        lists, strings = pl.DataFrame({"k": [1, 2], "v": [["y", "x"], ["z"]]}), pl.DataFrame({"k": [1, 2], "v": ["x,y", "z"]})
+        actual, expected = (lists, strings) if lists_side == "actual" else (strings, lists)
+
+        # When / Then
+        with pytest.raises(AssertionError):
+            Frames.compare(actual, expected, list_columns_to_sort=("v",), check_dtype=check_dtype)
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("dtype", [pl.List(pl.Int64), pl.Array(pl.Int64, 2)])
+    def test_the_lists_of_a_list_or_array_column_are_sorted(self, dtype):
+        Frames.compare(pl.DataFrame({"v": [[2, 1]]}, schema={"v": dtype}), pl.DataFrame({"v": [[1, 2]]}, schema={"v": dtype}), list_columns_to_sort=("v",))
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("rules", [{}, {"sort_by": ("v",)}], ids=["multiset", "sort_by"])
+    def test_a_column_that_polars_cannot_sort_fails_the_comparison(self, rules):
+        # Given
+        frame = pl.DataFrame({"v": pl.Series([{1}, {2}], dtype=pl.Object)})
+
+        # When / Then
+        with pytest.raises(AssertionError, match="polars cannot compare the frames: InvalidOperationError"):
+            Frames.compare(frame, frame, **rules)
+
+    @pytest.mark.unit
+    def test_expected_outputs_records_a_polars_error_and_checks_the_next_output(self):
+        # Given
+        outputs = ExpectedOutputs()
+        frame = pl.DataFrame({"k": [1], "v": ["x"]})
+
+        # When
+        first = outputs.compare(frame, frame, "lists", Expectations(list_columns_to_sort=("v",)))
+        second = outputs.compare(pl.DataFrame({"v": pl.Series([{1}], dtype=pl.Object)}), pl.DataFrame({"v": pl.Series([{1}], dtype=pl.Object)}), "objects")
+        third = outputs.compare(frame, frame, "plain")
+
+        # Then
+        assert (first, second, third) == (True, False, True)
+        assert [name for name, _ in outputs.errors] == ["objects"]
+
+
 class TestPolarsOutputFiles:
     @pytest.mark.unit
     def test_parquet_is_read_as_a_polars_frame(self, config, polars_engine):  # pylint: disable=unused-argument
