@@ -138,8 +138,11 @@ schema declaration.
    `table` have no polars reader. A polars JSON resource with one of them raises an error when the user builds the resource, as hdf and pickle do.
 10. On the pandas engine, `scan()` and `sink()` raise `NotImplementedError`. The message names the polars engine. pandas has no lazy frame, so these methods do
     not return an eager frame under a lazy name.
-11. Tests on both engines. The pytest plugin of `dynamicio.testharness` (the `pytest11` entry point) adds an option `--dynamicio-engine=pandas|polars` that calls `configure()` before the first test. CI runs
-    one job for each engine, because one process cannot change its engine.
+11. Tests on both engines. The pytest plugin of `dynamicio.testharness` (the `pytest11` entry point) adds an option `--dynamicio-engine=pandas|polars`.
+    - The option calls `configure()` before the first test, so it sets one engine for the whole pytest process. A consumer repo runs one pytest process
+      for each engine.
+    - The tests of dynamicio do not use the option, except the polars demo. Each test sets its engine, and a fixture resets the engine after the test.
+      One CI test job thus runs the tests of the two engines ("Phase 7 as built").
 12. One order of steps (change 12). Both engines select the columns, cast, validate and then compute metrics, on reads and on writes.
     - Reads in 11.x already use this order: `read()` calls `_apply_schema()` before the validations and metrics. Reads do not change.
     - Writes in 11.x validate and compute metrics on the frame of the user, and then call `_apply_schema()` before the writer. In 12.0, writes cast before
@@ -361,8 +364,9 @@ Phase 6 as built:
 
 Phase 7 as built:
 
-- polars can deadlock in a fork of a process that has used polars. A fork of a process with the polars engine and polars imported thus refuses the
-  engine. Its first read or write, and `dynamicio.configure(engine="polars")`, raise `EngineConfigurationError`. A fork on the pandas engine does not change.
+- polars can deadlock in a fork of a process that imported polars. A fork of such a process thus refuses the polars engine, also when the parent
+  has the pandas engine or no engine yet. Its first polars read or write, and `dynamicio.configure(engine="polars")`, raise `EngineConfigurationError`.
+  A fork of a process that did not import polars does not change.
 - dynamicio does not set `POLARS_MAX_THREADS`. polars reads it at its first import, and `import dynamicio` and `configure()` do not import polars.
 - `configure(engine="polars")` raises `ImportError` if polars is missing or older than 2.1, the minimum of the `polars` extra. The check reads the
   version of the installed package, so it does not import polars. `dynamicio migrate --engine polars` runs the same check.
@@ -376,6 +380,13 @@ Phase 7 as built:
   the refused resources and the CSV definitions without `index`. The command does not change the resource definitions, because PyYAML drops their comments.
 - `demo/polars_pipeline` is the pandas demo on the polars engine, with models from the migrate command. Its outputs are equal to the expected outputs
   of the pandas demo, so the demo tests rule 2.
+- The review of phases 4 to 7 changes these items:
+  - `scan()` and `sink()` check the operation before the freeze. A pandas process that calls them thus keeps no engine, and `configure(engine="polars")` still works.
+  - A parquet prefix with an empty object and a type conflict leaves the empty object out of the types and the scan, as `pd.concat` does. If all objects are
+    empty, the conflict raises `ColumnsDataTypeError`.
+  - `Duration` columns of a prefix give the finest time unit. The objects with the same units are one scan, and a cast gives the finest unit.
+  - The CSV options `escapechar` and `doublequote` raise `EngineResourceError` on polars, and `quoting=csv.QUOTE_NONE` reads the quotes as text.
+  - The parts of a sink take the column order of the first part. The footer read repeats a ranged `GetObject` that breaks while it reads the body.
 
 Change 26 is the floci fixture of decision 15. RND-25426 delivers it before phase 1, with the pandas integration tests. The polars S3 tests of phase 3 are its first polars users.
 
