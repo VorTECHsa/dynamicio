@@ -97,7 +97,8 @@ they are not always the pandas values. For a `@pa.dataframe_check`, the count is
 ## Metrics
 
 `log_metrics_from_schema()` computes the metrics of all columns in one `select`, and logs them in the order of the schema. The `METRIC` lines are the
-lines of the pandas engine. The metric of an empty or an all-null column is NaN. The metrics run after the validations, in a second query.
+lines of the pandas engine. For an empty or an all-null column, `Min`, `Max`, `Mean`, `Std` and `Variance` give NaN.
+`Counts` and `UniqueCounts` count the rows and the distinct values, so they give 0 for an empty column. `CountsPerLabel` does not count nulls. The metrics run after the validations, in a second query.
 
 `PolarsMetrics.metric("Name")` registers a polars metric, as a `Metric` subclass does for the pandas engine. A polars metric is a function of the
 column name that returns a polars expression with one value.

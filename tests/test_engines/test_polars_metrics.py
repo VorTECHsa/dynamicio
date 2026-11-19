@@ -90,6 +90,18 @@ class TestMetricLog:
         assert math.isnan(log_metric.call_args.kwargs["value"])
 
     @pytest.mark.unit
+    @pytest.mark.parametrize(("values", "expected"), [([], {"Counts": 0, "UniqueCounts": 0}), ([None, None], {"Counts": 2, "UniqueCounts": 1})])
+    def test_the_count_metrics_of_an_empty_or_null_column_log_counts(self, values, expected):
+        frame = pl.DataFrame({"x": values}, schema={"x": pl.Float64})
+        collected = frame.select(**{name: PolarsMetrics.ALL[name]("x") for name in expected}).row(0, named=True)
+
+        with patch.object(metrics, "log_metric") as log_metric:
+            for name in expected:
+                PolarsMetrics.log("d", "x", name, collected[name])
+
+        assert [c.kwargs["value"] for c in log_metric.call_args_list] == list(expected.values())
+
+    @pytest.mark.unit
     def test_counts_per_label_logs_one_line_for_each_label_in_sorted_order(self):
         counts = pl.DataFrame({"x": ["b", "a", None, "b"]}).select(PolarsMetrics.ALL["CountsPerLabel"]("x")).item().to_list()
 

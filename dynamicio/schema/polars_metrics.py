@@ -32,7 +32,7 @@ class PolarsMetrics:
 
     @staticmethod
     def value_of(value: Any) -> Any:
-        """The value of a metric as pandas gives it: the metric of an empty or all-null column is NaN, where polars gives None."""
+        """The value of a metric as pandas gives it: polars gives None where pandas gives NaN, such as the ``Min`` of an empty or all-null column."""
         return math.nan if value is None else value
 
     @classmethod
