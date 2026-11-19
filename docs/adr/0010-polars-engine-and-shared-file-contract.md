@@ -145,6 +145,7 @@ schema declaration.
     - Writes in 11.x validate and compute metrics on the frame of the user, and then call `_apply_schema()` before the writer. In 12.0, writes cast before
       they validate. This is a change in behavior of the pandas engine for writes only, and the CHANGELOG states it.
     - Phase 1 moves the pandas code without a change in behavior. The change of order for writes comes in phase 5.
+    - `sink()` on polars is the one exception. Its metric queries run in the same pass as its validations ("Phase 5 as built").
 13. Earlier ADRs apply to the polars engine.
     - [0002](0002-tolerate-missing-columns-in-parquet-prefix-reads.md): a parquet prefix read fills the missing columns with null and logs the same warning. A
       column that is missing from all objects raises an error. polars infers the schema from the first object, so `missing_columns="insert"` alone fails when
@@ -315,6 +316,10 @@ Phase 5 as built:
 
 - `sink()` writes a `LazyFrame` to `local`, `s3_file` and `s3_path_prefix`. One `pl.collect_all` runs the sink, the validations and the metrics of the
   model. The sink goes to a temporary file, so a failed validation leaves the old file or object. The engine logs the metrics after the validations pass.
+- `sink()` is the one exception to the order of decision 12. Its metric queries run in the same pass as the validations, so they also run on rows that
+  fail a validation. A second pass after the validations would read a lazy source two times. The results keep the order of decision 12:
+  - A failed validation raises `SchemaValidationError`. The engine does not log the metrics, and the destination does not change.
+  - A metric query that fails makes the `collect_all` fail. Its polars error then comes before the result of the validations, and the destination does not change.
 - A parquet sink to one file streams the rows to the temporary file with lz4. pyarrow then copies its row groups to a second file with the arrow types,
   the pandas metadata and the options of `write()`. The same `collect_all` counts the rows and the categories of each `Categorical` column for that metadata.
   The file has the footer and the row groups of `write()`. Only one row group is in memory at a time.
@@ -329,6 +334,28 @@ Phase 5 as built:
   on the two engines (change 15). The pandas engine of 11.x raised `KeyError`. The CHANGELOG states the two changes as breaking.
 - The checks of the polars engine are in `PolarsChecks`, and the parquet metadata code is in `PolarsParquet`. `PolarsFiles` and `PolarsSinks` share them.
 
+Phase 6 as built:
+
+- `footer()` reads the arrow schema, the key-value metadata and the row count of a `local` or `s3_file` parquet file, without its rows. An S3 read
+  takes the last 64 KiB with one ranged `GetObject`, and a second ranged `GetObject` only for a larger footer. The read is the same on the two engines.
+  It does not fix the engine, and `missing_ok` gives None for a missing file.
+- `sink()` takes a list of lazy frames as the parts of one frame. Each part gets the schema columns and the casts of the model, so the parts can have
+  other types of a column. The pandas metadata comes from the model and has one `RangeIndex` for all the rows.
+- A polars Postgres read runs the statement as `pd.read_sql` runs it. A `str` query goes to the driver with `params` in the style of the driver, so a
+  `sql_query` and its `params` mean the same on the two engines. The rows become a polars frame, and the cast of the model gives the types.
+  Some `pd.read_sql` options change the pandas frame, for example `parse_dates` and `dtype`. On polars, they raise `EngineResourceError` when the user builds the resource.
+- A polars Postgres write sends chunks of 100,000 rows to the COPY of the pandas engine. The DELETE or TRUNCATE, all the chunks and the commit are in one
+  transaction, so a failed chunk keeps the old rows. Each chunk changes to pandas with the dtypes of the model first. The NULL rule and the text of
+  each value are thus those of the pandas engine. The Postgres type map of the two engines also accepts `datetime64[us]` and `datetime64[ms]` columns.
+- `key_column` (decision 4) is an option of the two engines. The pandas engine without it keeps the keys of the index. A polars Kafka resource without it, or
+  with a name that is not a column of the model, raises `EngineResourceError` when the user builds the resource.
+- A polars Kafka write sends chunks of 100,000 rows to the producer of the pandas engine, and the producer flushes once, after the last chunk. Each
+  chunk changes to pandas with the dtypes of the model first, so the user callables get the types of decision 7. A test sends a `Datetime("ns")` and a
+  `Duration("ns")` value through a custom serializer on the two engines and compares the bytes. The batches, `poll()` and `flush_timeout` are those of 11.1.0.
+- A polars Athena read runs the query through awswrangler with the options of the pandas engine, and `pl.from_pandas` gives the polars frame
+  (decision 8). The tests use a mock of awswrangler.
+- A polars Kafka read and a polars Athena write raise the `NotImplementedError` of the pandas engine.
+
 Change 26 is the floci fixture of decision 15. RND-25426 delivers it before phase 1, with the pandas integration tests. The polars S3 tests of phase 3 are its first polars users.
 
 Change 5 replaces the neutral dtype vocabulary of the first proposal. That vocabulary was for YAML schemas, which dynamicio 11.0 removed. A pandas repo declares
@@ -337,7 +364,10 @@ of the 4 pairs use it to compare frames.
 
 ## Consequences
 
-- A repo that does not call `configure()` gets the pandas engine. Its only change in behavior in 12.0 is the order of steps (decision 12).
+- A repo that does not call `configure()` gets the pandas engine. The pandas engine of 12.0 has 2 changes in behavior, both on writes:
+  - A write casts before it validates and computes metrics (decision 12).
+  - A schema column that is not in the frame raises `ColumnsDataTypeError` (change 15). The pandas engine of 11.x raised `KeyError`, so a caller that
+    catches `KeyError` must catch `ColumnsDataTypeError`.
 - A repo cannot use pandas for one resource and polars for another. A repo that needs both engines must split into two processes that share files.
 - The migrate command changes the resource definitions, the options and the models. It does not change the transformation code of the repo. A repo must change its
   own pandas code to polars before it moves.
