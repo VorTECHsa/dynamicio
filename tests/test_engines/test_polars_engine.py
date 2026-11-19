@@ -625,6 +625,35 @@ class TestValidate:
         io.validate_from_schema(io._apply_schema(frame))  # pylint: disable=protected-access
 
 
+class TestConfigUniqueName:
+    @pytest.mark.unit
+    def test_config_unique_with_one_name_is_one_group_of_one_column(self, polars_io, tmp_path):
+        class One(DataModel, dataset="pairs"):
+            a: int
+
+            class Config:
+                unique = "a"
+
+        class Listed(DataModel, dataset="pairs"):
+            a: int
+
+            class Config:
+                unique = ["a"]
+
+        # Given
+        frame = pl.DataFrame({"a": [1, 1, 2]})
+
+        # When
+        errors = []
+        for model in (One, Listed):
+            with pytest.raises(SchemaValidationError) as error:
+                polars_io(tmp_path, model).validate_from_schema(frame)
+            errors.append(error.value.message)
+
+        # Then
+        assert errors[0] == errors[1] == {"multiple_fields_uniqueness": "PAIRS: 2 failure(s) of multiple_fields_uniqueness, for example [1, 1]"}
+
+
 class TestLogMetrics:
     @pytest.mark.unit
     def test_the_metrics_are_the_lines_of_the_pandas_engine(self, polars_io, tmp_path):

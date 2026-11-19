@@ -80,8 +80,6 @@ class PolarsEngine(Engine):
             return PolarsAthena.read(io)
         if source == "kafka":
             return io._read_from_kafka(None)  # pylint: disable=protected-access
-        if source not in PolarsFiles.READ_SOURCES:
-            self.not_yet(f"read {source} resources")
         if source == "s3_path_prefix":
             return PolarsScans.scan(io).collect()
         return PolarsFiles.read(io)
@@ -105,8 +103,6 @@ class PolarsEngine(Engine):
             return
         if source == "athena":
             io._write_to_athena(frame)  # pylint: disable=protected-access
-        if source not in PolarsFiles.WRITE_SOURCES:
-            self.not_yet(f"write {source} resources")
         PolarsFiles.write(io, frame)
 
     def check_operation(self, io: "DynamicDataIO", operation: str) -> None:

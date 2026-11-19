@@ -84,6 +84,23 @@ class TestLazyOnPandas:
             EngineCheckIO.make(tmp_path).sink(pd.DataFrame({"a": [1]}))
 
     @pytest.mark.unit
+    @pytest.mark.parametrize("operation", ["scan", "sink"])
+    def test_the_lazy_members_of_the_engine_name_the_polars_engine(self, tmp_path, operation):
+        # Given
+        io, engine = EngineCheckIO.make(tmp_path), PandasEngine()
+        arguments = (io,) if operation == "scan" else (io, pd.DataFrame({"a": [1]}))
+
+        # When / Then
+        with pytest.raises(NotImplementedError, match=rf"{operation}\(\) needs the polars engine"):
+            getattr(engine, operation)(*arguments)
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("operation", [None, "read", "write"])
+    def test_an_eager_operation_passes_the_check(self, tmp_path, operation):
+        # When / Then
+        assert PandasEngine().check_operation(EngineCheckIO.make(tmp_path), operation) is None
+
+    @pytest.mark.unit
     def test_sink_of_a_polars_lazy_frame_on_pandas_is_a_wrong_frame_error(self, tmp_path):
         pl = pytest.importorskip("polars")
         from dynamicio.errors import WrongFrameError  # pylint: disable=import-outside-toplevel

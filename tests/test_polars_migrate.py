@@ -342,6 +342,37 @@ class TestModules:
 
         assert len(report["models"]) == 2
 
+    @pytest.mark.unit
+    def test_a_root_that_is_not_on_the_import_path_is_added(self, repo, monkeypatch):
+        # Given
+        package = Package.write(repo, {"orders": FULL_MODELS})
+        monkeypatch.setattr(sys, "path", [path for path in sys.path if path != str(repo)])
+
+        # When
+        report = migrate_to_polars(str(package), str(repo / "out.py"))
+
+        # Then
+        assert sys.path[0] == str(repo)
+        assert len(report["models"]) == 2
+
+    @pytest.mark.unit
+    def test_a_generated_model_that_differs_from_its_pandas_model_is_refused(self, repo):
+        # Given a polars model with another dtype than its pandas model
+        pandas_source = (
+            "from pandera.typing import Series\nfrom dynamicio.schema import DataModel, Field\n\n"
+            "class Plain(DataModel, dataset='plain'):\n    a: Series[int] = Field(nullable=True)\n"
+        )
+        package = Package.write(repo, {"plain": pandas_source})
+        pandas_model = importlib.import_module(f"{package.name}.plain").Plain
+        source = (
+            "import polars as pl\nfrom dynamicio.schema import Field\nfrom dynamicio.schema.polars import DataModel\n\n"
+            "class Plain(DataModel, dataset='plain'):\n    a: pl.Float64 = Field(nullable=True)\n"
+        )
+
+        # When / Then
+        with pytest.raises(ValueError, match=r"The polars model Plain is not equivalent to .*plain\.Plain"):
+            polars_migrate.PolarsMigration._verify_parity(source, [polars_migrate.PortedModel(pandas_model)])  # pylint: disable=protected-access
+
 
 class TestEngineContract:
     @pytest.mark.integration

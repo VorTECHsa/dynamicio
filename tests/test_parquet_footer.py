@@ -10,7 +10,7 @@ import pyarrow as pyarrow_module
 import pyarrow.parquet as pq
 import pytest
 import yaml
-from botocore.exceptions import IncompleteReadError, ResponseStreamingError
+from botocore.exceptions import ClientError, IncompleteReadError, ResponseStreamingError
 from pandera.typing import Series
 
 # Application Imports
@@ -300,3 +300,15 @@ class TestS3Tail:
         assert data == content
         assert calls[broken - 1] == calls[broken]
         assert closed == [True]
+
+    @pytest.mark.unit
+    def test_an_s3_error_other_than_an_empty_object_reaches_the_caller(self, monkeypatch):
+        # Given
+        def get_object(**_):
+            raise ClientError({"Error": {"Code": "AccessDenied", "Message": "denied"}}, "GetObject")
+
+        monkeypatch.setattr("dynamicio.mixins.with_s3._shared_s3_client", lambda: types.SimpleNamespace(get_object=get_object))
+
+        # When / Then
+        with pytest.raises(ClientError, match="AccessDenied"):
+            S3Tail(constants.MOCK_BUCKET, "blob")

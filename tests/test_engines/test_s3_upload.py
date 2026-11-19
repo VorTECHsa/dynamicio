@@ -7,7 +7,7 @@ import pytest
 from boto3.s3.transfer import TransferConfig
 from botocore.exceptions import ClientError, EndpointConnectionError
 
-from dynamicio.engines.s3_upload import S3Upload
+from dynamicio.engines.s3_upload import KeptOpen, S3Upload
 from tests import constants
 
 # The smallest part that S3 takes: an object of 2 parts and a bit stays small in a test
@@ -155,3 +155,21 @@ class TestS3Upload:
         # When / Then
         with pytest.raises(Exception, match="NoSuchBucket|does not exist"):
             S3Upload.upload(str(tmp_path / "data"), "missing-bucket", "data.parquet")
+
+
+class TestKeptOpen:
+    @pytest.mark.unit
+    def test_a_buffered_reader_reads_the_buffer_again_after_a_close(self):
+        # Given
+        buffer = io.BytesIO(b"abc" * 1000)
+        stream = KeptOpen(buffer)
+
+        # When
+        first = io.BufferedReader(stream).read()
+        stream.close()
+        stream.seek(0)
+        second = io.BufferedReader(stream).read()
+
+        # Then
+        assert first == second == b"abc" * 1000
+        assert not buffer.closed

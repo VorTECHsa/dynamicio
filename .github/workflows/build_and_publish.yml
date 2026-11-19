@@ -77,7 +77,16 @@ jobs:
         run: uv sync --locked
 
       - name: Run integration tests
-        run: uv run --frozen pytest -vv -m floci tests/integration
+        # The S3 scans and the Postgres and Kafka paths of the polars engine run only here, so this coverage goes to Codecov too.
+        # Codecov merges it with the unittests flag. The floci tests alone cover part of the package, so the threshold of .coveragerc applies to the codecov job only
+        run: uv run --frozen pytest -vv -m floci --cov=dynamicio --cov-branch --cov-report=xml --cov-fail-under=0 tests/integration
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.xml
+          flags: integration
 
   polars-demo:
     # The demo pipeline on the polars engine reads the inputs of the pandas demo and must match its expected outputs. The engine is a setting of the
