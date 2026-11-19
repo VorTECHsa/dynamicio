@@ -108,9 +108,19 @@ class OutputFiles:
             options.update(environment.expected.options)
         return options
 
-    @staticmethod
-    def read_file(path: str, file_type: str, **options: Any) -> pd.DataFrame:
-        """Read a file with plain pandas, so no schema or cast hides a difference. ``options`` go to the reader (``orient`` and ``lines`` only to JSON)."""
+    @classmethod
+    def read_file(cls, path: str, file_type: str, **options: Any) -> Any:
+        """Read a file with the plain readers of the engine of the process, so no schema or cast hides a difference.
+
+        ``options`` go to the reader (``orient`` and ``lines`` only to JSON). On the polars engine they are the arguments of the polars reader.
+
+        Raises:
+            ValueError: The engine has no reader of the file type, or of the JSON orient.
+        """
+        from dynamicio.engines import EngineSetting  # pylint: disable=import-outside-toplevel
+
+        if EngineSetting.current().name == "polars":
+            return cls.read_polars_file(path, file_type, **options)
         readers = {"parquet": pd.read_parquet, "csv": pd.read_csv, "json": pd.read_json, "hdf": pd.read_hdf}
         if file_type not in readers:
             raise ValueError(f"Unsupported file type {file_type!r} for {path}")
@@ -119,11 +129,30 @@ class OutputFiles:
                 options.pop(name, None)
         return readers[file_type](path, **options)
 
-    def read_generated(self) -> pd.DataFrame:
+    @staticmethod
+    def read_polars_file(path: str, file_type: str, **options: Any) -> Any:
+        """Read a file with the plain polars readers. A JSON file has the ``records`` orient, with ``lines`` for one record on each line.
+
+        Raises:
+            ValueError: The file type has no polars reader (``hdf``), or the JSON orient is not ``records``.
+        """
+        import polars as pl  # pylint: disable=import-outside-toplevel
+
+        orient, lines = options.pop("orient", "records"), options.pop("lines", False)
+        if file_type == "json":
+            if orient != "records":
+                raise ValueError(f"polars reads the JSON records orient only, and {path} has the orient {orient!r}")
+            return (pl.read_ndjson if lines else pl.read_json)(path, **options)
+        readers = {"parquet": pl.read_parquet, "csv": pl.read_csv}
+        if file_type not in readers:
+            raise ValueError(f"Unsupported file type {file_type!r} for {path} on the polars engine")
+        return readers[file_type](path, **options)
+
+    def read_generated(self) -> Any:
         """The output the task generated."""
         return self.read_file(self.generated_path, self._file_type(self.generated_path, use_expected=False), **self.read_options)
 
-    def read_expected(self) -> pd.DataFrame:
+    def read_expected(self) -> Any:
         """The reference output."""
         return self.read_file(self.expected_path, self._file_type(self.expected_path, use_expected=True), **self.read_options)
 

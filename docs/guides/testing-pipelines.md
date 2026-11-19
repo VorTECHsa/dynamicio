@@ -186,6 +186,26 @@ DYNAMICIO_UPDATE_EXPECTED=1 uv run pytest demo/tests/test_pipeline.py   # writes
 
 The end-to-end test above is `demo/tests/test_pipeline.py`; the sample data it runs on lives under `demo/tests/data`.
 
+### Testing on the polars engine
+
+The harness reads and compares the files with the engine of the process. On the polars engine, `check` reads the files with the plain polars readers
+and compares the frames with `polars.testing.assert_frame_equal`. A custom assertion then gets polars frames.
+
+- The polars engine reads parquet, CSV and JSON files. A JSON file has the `records` orient, with `lines` for one record on each line. An `hdf` file
+  and another JSON orient record a `ValueError` for the output.
+- The options under `expected.options` go to the polars reader, so they are polars arguments.
+- A polars frame has no index. `check_row_order=False` without `sort_by` thus compares the rows as a multiset, and polars sorts the 2 frames first.
+- A pandas frame against a polars frame fails the comparison.
+
+The pytest plugin of dynamicio adds the option `--dynamicio-engine=pandas|polars`. It calls `dynamicio.configure()` before the first test, so the same
+tests run on each engine:
+
+```shell
+pytest --dynamicio-engine=polars demo/tests
+```
+
+One process cannot change its engine. A repo thus runs one CI job for each engine.
+
 ### Recommended testing practices
 
 These are the patterns the harness is built for. They keep tests short, deterministic and the same everywhere, so a test reads like the one next to it.

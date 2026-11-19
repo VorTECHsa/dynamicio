@@ -40,6 +40,8 @@
 - feat: a fork of a process with the polars engine refuses the engine, because polars can deadlock in a fork. Its first read or write and `configure(engine="polars")` raise `EngineConfigurationError`, with a message that names `spawn` and `forkserver`. The fork gets a new engine lock. A fork of a pandas process does not change
 - feat: dynamicio does not set the number of polars threads, and `import dynamicio` does not import polars. `POLARS_MAX_THREADS` set after `import dynamicio` thus applies
 - feat: the `dynamicio[polars]` extra installs `polars>=2.1`
+- feat: `dynamicio.testharness` reads and compares the outputs with the engine of the process. On the polars engine it reads parquet, CSV and JSON records with the polars readers, and compares with `polars.testing.assert_frame_equal` under the same `Expectations`. A custom assertion gets polars frames. Without `sort_by`, `check_row_order=False` compares the rows of a polars frame as a multiset
+- feat: the pytest plugin adds the option `--dynamicio-engine=pandas|polars`, which calls `dynamicio.configure()` before the first test
 
 ## v11.1.0
 

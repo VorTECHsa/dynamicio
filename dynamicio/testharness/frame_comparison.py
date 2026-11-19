@@ -1,25 +1,18 @@
 """Compares two dataframes under a set of :class:`Expectations`."""
 
 import json
-from typing import Sequence
+from typing import Any, Sequence, Tuple
 
 import pandas as pd
 
-from dynamicio.testharness.expectations import Expectations
+from dynamicio.testharness.rule_comparison import RuleComparison
 
 
-class FrameComparison:
-    """Applies the rules of ``expectations`` to a generated and an expected frame and raises ``AssertionError`` on the first difference found."""
+class FrameComparison(RuleComparison):
+    """Applies the rules of ``expectations`` to a generated and an expected frame and raises ``AssertionError`` on the first difference found.
 
-    def __init__(self, expectations: Expectations):
-        self.expectations = expectations
-
-    @staticmethod
-    def _require_columns(df: pd.DataFrame, columns: Sequence[str], rule: str) -> None:
-        """Fail the comparison, instead of raising a ``KeyError`` that would abort the whole session, when a column a rule names is missing."""
-        missing = [column for column in columns if column not in df.columns]
-        if missing:
-            raise AssertionError(f"Columns {missing} named in `{rule}` are missing; the frame has {list(df.columns)}")
+    Two polars frames go to :class:`PolarsFrameComparison`, with the same rules.
+    """
 
     @staticmethod
     def _sort_list_columns(df: pd.DataFrame, columns: Sequence[str]) -> pd.DataFrame:
@@ -73,16 +66,25 @@ class FrameComparison:
             atol=rules.atol,
         )
 
-    def compare(self, actual: pd.DataFrame, expected: pd.DataFrame) -> None:
-        """Raise ``AssertionError`` if ``actual`` does not satisfy the expectations against ``expected``."""
-        try:
-            actual = self.prepare(actual)
-        except AssertionError as error:
-            raise AssertionError(f"actual output: {error}") from None
-        try:
-            expected = self.prepare(expected)
-        except AssertionError as error:
-            raise AssertionError(f"expected output: {error}") from None
+    @staticmethod
+    def is_polars(df: Any) -> bool:
+        """Whether a frame is a polars frame. It imports nothing, so a pandas comparison does not import polars."""
+        return type(df).__module__.split(".")[0] == "polars"
+
+    def compare(self, actual: Any, expected: Any) -> None:
+        """Raise ``AssertionError`` if ``actual`` does not satisfy the expectations against ``expected``.
+
+        A polars frame on one side and a pandas frame on the other side raise ``AssertionError``.
+        """
+        if self.is_polars(actual) or self.is_polars(expected):
+            from dynamicio.testharness.polars_frame_comparison import PolarsFrameComparison  # pylint: disable=import-outside-toplevel
+
+            PolarsFrameComparison(self.expectations).compare(actual, expected)
+            return
+        super().compare(actual, expected)
+
+    def _matched(self, actual: pd.DataFrame, expected: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """Assert that the prepared frames are equal, and return the frames that the assertions get."""
         try:
             self._assert_equal(actual, expected)
         except TypeError as error:
@@ -90,5 +92,4 @@ class FrameComparison:
                 raise
             actual, expected = self._stringify_unhashable(actual), self._stringify_unhashable(expected)
             self._assert_equal(actual, expected)
-        for assertion in self.expectations.assertions:
-            assertion(actual, expected)
+        return actual, expected
