@@ -1,27 +1,36 @@
-"""The polars engine. It checks frames and models, and has no I/O, cast, validations or metrics yet."""
+"""The polars engine. It checks frames and models, casts, validates and logs metrics. It has no I/O yet."""
 
-from typing import TYPE_CHECKING, Any, NoReturn
+import logging
+from typing import TYPE_CHECKING, Any, Dict, List, NoReturn, Tuple
 
 from dynamicio.engines.engine import Engine
 from dynamicio.engines.registry import Registry
+from dynamicio.errors import ColumnsDataTypeError, SchemaValidationError
 
 if TYPE_CHECKING:  # pragma: no cover
     from dynamicio.core import DynamicDataIO
 
+# The logger of the pandas cast, so that the cast messages of both engines go to one logger
+logger = logging.getLogger("dynamicio.core")
+
 
 class PolarsEngine(Engine):
-    """The engine of polars frames. This module does not import polars, so dynamicio imports without it."""
+    """The engine of polars frames. This module does not import polars, so dynamicio imports without it: the engine imports polars when it starts."""
 
     name = "polars"
     FOREIGN_FRAME_MODULES = ("pandas",)
 
     def __init__(self):
-        """Start with an empty registry: the polars validators and metrics come with the polars cast."""
-        self._registry = Registry({}, {})
+        """Hold the registries of the polars validators and metrics."""
+        # pylint: disable=import-outside-toplevel
+        from dynamicio.schema.polars_metrics import PolarsMetrics
+        from dynamicio.schema.polars_validations import PolarsValidations
+
+        self._registry = Registry(PolarsValidations.ALL, PolarsMetrics.ALL)
 
     @property
     def registry(self) -> Registry:
-        """The polars validators and metrics, none yet."""
+        """The polars validators and metrics, by the names of the pandas ones."""
         return self._registry
 
     def not_yet(self, operation: str) -> NoReturn:
@@ -45,17 +54,123 @@ class PolarsEngine(Engine):
         self.not_yet("sink")
 
     def select_columns(self, io: "DynamicDataIO", frame: Any) -> Any:
-        """Refuse: no polars column selection yet."""
-        self.not_yet("select columns")
+        """The schema columns of a frame, in the order of the frame. A polars frame does not change in place, so the caller's frame does not change."""
+        return frame.select([column for column in frame.collect_schema().names() if column in io.schema.column_names])
 
     def cast(self, io: "DynamicDataIO", frame: Any) -> Any:
-        """Refuse: no polars cast yet."""
-        self.not_yet("cast")
+        """A frame with the polars dtypes of the model, and float NaN changed to null (decision 3 of ADR 0010).
+
+        A ``DataFrame`` casts column by column, so a failed cast names its column. A ``LazyFrame`` gets the casts in its plan, and a failed cast raises
+        when the frame is collected. A string column casts to a ``Datetime`` with ``str.to_datetime``, as ``astype`` parses strings in pandas.
+
+        Raises:
+            ColumnsDataTypeError: A column is not in the schema, a schema column is not in the frame, or a column does not cast.
+        """
+        import polars as pl  # pylint: disable=import-outside-toplevel
+
+        found = frame.collect_schema()
+        casts = self.casts(io, found)
+        if isinstance(frame, pl.LazyFrame):
+            return frame.with_columns([expression for _, _, expression in casts])
+        for column, expected, expression in casts:
+            try:
+                frame = frame.with_columns(expression)
+            except (pl.exceptions.InvalidOperationError, pl.exceptions.ComputeError):
+                logger.exception(f"Tried casting column {io.name}['{column}'] to '{expected}' from '{found[column]}', but failed")
+                raise ColumnsDataTypeError() from None
+        return frame
+
+    def casts(self, io: "DynamicDataIO", found: Any) -> List[Tuple[str, Any, Any]]:
+        """The cast expression of each column to validate: ``(column, polars dtype, expression)``. A column with the dtype of the model only gets the null rule."""
+        import polars as pl  # pylint: disable=import-outside-toplevel
+
+        from dynamicio.schema.polars_dtypes import DtypeMap  # pylint: disable=import-outside-toplevel
+
+        columns, not_allowed = io._split_columns_to_validate_between_allowed_and_not(columns_to_validate=io._columns_to_validate())  # pylint: disable=protected-access
+        if not_allowed:
+            logger.error(f"The columns passed: {not_allowed} do not belong to the schema")
+            raise ColumnsDataTypeError()
+        missing = [column.name for column in columns if column.name not in found]
+        if missing:
+            logger.error(f"The columns {missing} of the schema of {io.name} are not in the frame")
+            raise ColumnsDataTypeError()
+
+        dtypes: Dict[str, Any] = DtypeMap.of_model(io._model)  # pylint: disable=protected-access
+        casts = []
+        for column in columns:
+            expected, current = dtypes[column.name], found[column.name]
+            expression = pl.col(column.name)
+            if current != expected or getattr(current, "time_zone", None) != getattr(expected, "time_zone", None):
+                if io.show_casting_warnings:
+                    logger.info(f"Expected: '{expected}' dtype for {io.name}['{column.name}'], found '{current}'")
+                expression = self.cast_expression(expression, current, expected)
+            if expected.is_float():
+                expression = expression.fill_nan(None)
+            casts.append((column.name, expected, expression))
+        return casts
+
+    @staticmethod
+    def cast_expression(expression: Any, current: Any, expected: Any) -> Any:
+        """The strict cast of an expression from a polars dtype to another. polars 2 does not cast a string to a datetime: it parses it."""
+        import polars as pl  # pylint: disable=import-outside-toplevel
+
+        if current == pl.String and isinstance(expected, pl.Datetime):
+            return expression.str.to_datetime(time_unit=expected.time_unit, time_zone=expected.time_zone, strict=True)
+        if current.is_float():
+            # NaN is the null of a float column: pandas casts it to <NA> of a nullable dtype, a strict polars cast refuses it
+            expression = expression.fill_nan(None)
+        return expression.cast(expected, strict=True)
 
     def validate(self, io: "DynamicDataIO", frame: Any) -> None:
-        """Refuse: no polars validations yet."""
-        self.not_yet("validate")
+        """Run the column validations and the dataframe-level Pandera checks in one ``collect_all``, and raise one ``SchemaValidationError`` for all failures.
+
+        Raises:
+            SchemaValidationError: One or more validations failed. The messages of each validation name are joined with ``"; "``, as on the pandas engine.
+            ColumnsDataTypeError: A cast in the plan of a ``LazyFrame`` failed when the validations collected it.
+        """
+        import polars as pl  # pylint: disable=import-outside-toplevel
+
+        pending = self.pending_validations(io, frame.lazy())
+        queries = [query for _, check in pending for query in check.queries]
+        try:
+            collected = pl.collect_all(queries) if queries else []
+        except (pl.exceptions.InvalidOperationError, pl.exceptions.ComputeError):
+            logger.exception(f"The validations of {io.name} could not collect the frame: a cast in its plan failed")
+            raise ColumnsDataTypeError() from None
+
+        failed_validations: Dict[str, List[str]] = {}
+        start = 0
+        for name, check in pending:
+            result = check.finish(collected[start : start + len(check.queries)])
+            start += len(check.queries)
+            if not result.valid:
+                failed_validations.setdefault(name, []).append(result.message)
+        if failed_validations:
+            raise SchemaValidationError({name: "; ".join(messages) for name, messages in failed_validations.items()})
+
+    def pending_validations(self, io: "DynamicDataIO", lazy: Any) -> List[Tuple[str, Any]]:
+        """The ``(validation name, PolarsValidations.Pending)`` of each column validation to apply, then of each dataframe-level Pandera check."""
+        from dynamicio.schema.polars_validations import PolarsValidations  # pylint: disable=import-outside-toplevel
+
+        pending: List[Tuple[str, Any]] = []
+        for column, column_validations in io.schema_validations.items():
+            for validation in column_validations:
+                if validation.apply:
+                    validator = PolarsValidations.pandera_check if "pandera_check" in validation.options else self.registry.validator(validation.name)
+                    pending.append((validation.name, validator(io.name, lazy, column, **validation.options)))
+        dataframe_validator = getattr(io, "_dataframe_validator", None)
+        if dataframe_validator is not None:
+            pending += list(PolarsValidations.dataframe_checks(io.name, lazy, lazy.collect_schema().names(), dataframe_validator).items())
+        return pending
 
     def log_metrics(self, io: "DynamicDataIO", frame: Any) -> None:
-        """Refuse: no polars metrics yet."""
-        self.not_yet("log metrics")
+        """Compute the metrics of all columns in one ``select``, then log each, in the order of the schema, as the pandas engine does."""
+        from dynamicio.schema.polars_metrics import PolarsMetrics  # pylint: disable=import-outside-toplevel
+
+        wanted = [(column, getattr(metric, "value", metric)) for column, column_metrics in io.schema_metrics.items() for metric in column_metrics]
+        if not wanted:
+            return
+        expressions = [self.registry.metric(metric)(column).alias(f"_dynamicio_metric_{index}") for index, (column, metric) in enumerate(wanted)]
+        values = frame.lazy().select(expressions).collect().row(0)
+        for (column, metric), value in zip(wanted, values):
+            PolarsMetrics.log(io.name, column, metric, value)

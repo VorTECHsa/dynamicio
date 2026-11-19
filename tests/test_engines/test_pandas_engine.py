@@ -43,9 +43,13 @@ class TestRegistry:
             Registry({}, {}).metric("missing")
 
     @pytest.mark.unit
-    def test_the_polars_registry_is_empty(self):
-        registry = PolarsEngine().registry
-        assert (dict(registry.validators), dict(registry.metrics)) == ({}, {})
+    def test_the_polars_registry_has_the_names_of_the_pandas_registry(self):
+        # Given
+        pandas_registry, polars_registry = PandasEngine().registry, PolarsEngine().registry
+
+        # Then
+        assert set(polars_registry.metrics) == set(pandas_registry.metrics)
+        assert set(polars_registry.validators) == {name for name in pandas_registry.validators if not name.startswith("_")}
 
 
 class TestEngineInterface:

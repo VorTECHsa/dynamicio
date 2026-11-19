@@ -45,6 +45,16 @@ reference documents the public classes and functions; names beginning with an un
 
 ::: dynamicio.engines.registry
 
+::: dynamicio.engines.polars_engine
+
+## Polars schemas
+
+::: dynamicio.schema.polars_dtypes
+
+::: dynamicio.schema.polars_validations
+
+::: dynamicio.schema.polars_metrics
+
 ## Errors
 
 ::: dynamicio.errors

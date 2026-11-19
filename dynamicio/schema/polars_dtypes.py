@@ -1,0 +1,139 @@
+"""The dtype map between pandas and polars (ADR 0010, decision 14).
+
+The map is many to one: ``int64`` and ``Int64`` both become ``Int64``, and ``object`` and ``string`` both become ``String``. A polars model keeps the pandas
+dtype of a column in the ``pandas_dtype`` key of its field metadata (``Field(nullable=False, pandas_dtype="Int64")``). A column without it takes the dtype of
+the fixed reverse map. The module needs polars, so only the polars paths of dynamicio import it.
+"""
+
+import re
+from typing import Any, Dict, Optional
+
+import polars as pl
+
+from dynamicio.schema.metadata import PANDAS_DTYPE_KEY
+
+
+class DtypeMap:
+    """The pairs of pandas and polars dtypes, in both directions. A dtype without a pair raises ``ValueError``."""
+
+    METADATA_KEY = PANDAS_DTYPE_KEY
+
+    INTEGERS = {
+        "int8": pl.Int8,
+        "int16": pl.Int16,
+        "int32": pl.Int32,
+        "int64": pl.Int64,
+        "uint8": pl.UInt8,
+        "uint16": pl.UInt16,
+        "uint32": pl.UInt32,
+        "uint64": pl.UInt64,
+    }
+    FLOATS = {"float32": pl.Float32, "float64": pl.Float64}
+    STRINGS = ("object", "str", "string", "string[python]", "string[pyarrow]")
+    SIMPLE = {"bool": pl.Boolean, "boolean": pl.Boolean, "category": pl.Categorical, **{name: pl.String for name in STRINGS}}
+    # polars has no second unit: a pandas `datetime64[s]` or `timedelta64[s]` has no pair
+    TIME_UNITS = ("ms", "us", "ns")
+    TEMPORAL = re.compile(r"^(?P<kind>datetime64|timedelta64)\[(?P<unit>\w+)(?:,\s*(?P<tz>[^\]]+))?\]$")
+
+    @classmethod
+    def polars_of(cls, pandas_dtype: str) -> pl.DataType:
+        """The polars dtype of a pandas dtype name.
+
+        Args:
+            pandas_dtype: A pandas dtype name, for example ``"Int64"``, ``"object"`` or ``"datetime64[ns, UTC]"``.
+
+        Returns:
+            The polars dtype. A ``category`` gives ``Categorical``: the values of an ``Enum`` come from the polars model only.
+
+        Raises:
+            ValueError: The pandas dtype has no polars pair.
+        """
+        name = pandas_dtype.strip()
+        # `int64` and `Int64`: the nullable integer is the same polars dtype
+        simple = cls.INTEGERS.get(name.lower()) or cls.FLOATS.get(name) or cls.SIMPLE.get(name)
+        if simple is not None:
+            return simple()
+        match = cls.TEMPORAL.match(name)
+        if match is not None and match["unit"] in cls.TIME_UNITS and not (match["kind"] == "timedelta64" and match["tz"]):
+            return pl.Datetime(match["unit"], match["tz"]) if match["kind"] == "datetime64" else pl.Duration(match["unit"])
+        raise ValueError(f"the pandas dtype {pandas_dtype!r} has no polars dtype in the dtype map of dynamicio")
+
+    @classmethod
+    def pandas_of(cls, polars_dtype: pl.DataType, has_nulls: bool = False) -> str:
+        """The pandas dtype name of a polars dtype, by the fixed reverse map.
+
+        Args:
+            polars_dtype: A polars dtype.
+            has_nulls: Whether the column holds a null. An integer or a boolean column with a null takes the nullable pandas dtype
+                (``Int64``, ``boolean``), because ``int64`` and ``bool`` cannot hold one.
+
+        Returns:
+            The pandas dtype name: ``String`` gives ``object``, ``Int64`` gives ``int64`` (``Int64`` with nulls), ``Enum`` gives ``category``.
+
+        Raises:
+            ValueError: The polars dtype has no pandas pair, for example ``Date``, ``List`` or ``Decimal``.
+        """
+        name = cls.reverse_name(polars_dtype)
+        if name is None:
+            raise ValueError(f"the polars dtype {polars_dtype} has no pandas dtype in the dtype map of dynamicio")
+        if has_nulls and name in cls.INTEGERS:
+            return f"UInt{name[4:]}" if name.startswith("uint") else f"Int{name[3:]}"
+        return "boolean" if has_nulls and name == "bool" else name
+
+    @classmethod
+    def reverse_name(cls, polars_dtype: pl.DataType) -> Optional[str]:
+        """The pandas dtype name of a polars dtype for a column without nulls, or None when the dtype has no pair."""
+        for name, dtype in {**cls.INTEGERS, **cls.FLOATS, "bool": pl.Boolean, "object": pl.String}.items():
+            if polars_dtype == dtype:
+                return name
+        if isinstance(polars_dtype, (pl.Categorical, pl.Enum)):
+            return "category"
+        if isinstance(polars_dtype, pl.Datetime):
+            zone = f", {polars_dtype.time_zone}" if polars_dtype.time_zone else ""
+            return f"datetime64[{polars_dtype.time_unit}{zone}]"
+        if isinstance(polars_dtype, pl.Duration):
+            return f"timedelta64[{polars_dtype.time_unit}]"
+        return None
+
+    @classmethod
+    def pairs(cls, pandas_dtype: str, polars_dtype: pl.DataType) -> bool:
+        """Whether a pandas dtype name is a pair of a polars dtype. Any ``category`` pairs with any ``Categorical`` or ``Enum``."""
+        try:
+            mapped = cls.polars_of(pandas_dtype)
+        except ValueError:
+            return False
+        if isinstance(mapped, pl.Categorical):
+            return isinstance(polars_dtype, (pl.Categorical, pl.Enum))
+        return bool(mapped == polars_dtype) and getattr(mapped, "time_zone", None) == getattr(polars_dtype, "time_zone", None)
+
+    @classmethod
+    def pandas_dtype_of_column(cls, model: type, column: Any) -> str:
+        """The pandas dtype of a column of a polars model: its ``pandas_dtype`` metadata, or the reverse map for a column without nulls.
+
+        Args:
+            model: The polars model, for the error message.
+            column: A ``pandera.polars`` column of the model.
+
+        Returns:
+            A pandas dtype name.
+
+        Raises:
+            ValueError: The polars dtype has no pandas pair, or the ``pandas_dtype`` metadata is not a pair of it.
+        """
+        polars_dtype = column.dtype.type
+        declared: Optional[str] = (column.metadata or {}).get(cls.METADATA_KEY)
+        if declared is None:
+            try:
+                return cls.pandas_of(polars_dtype)
+            except ValueError as error:
+                raise ValueError(
+                    f"{model.__name__}.{column.name}: {error}. Declare a dtype of the map: an integer, a float, Boolean, String, Categorical, Enum, Datetime or Duration"
+                ) from None
+        if not isinstance(declared, str) or not cls.pairs(declared, polars_dtype):
+            raise ValueError(f"{model.__name__}.{column.name}: pandas_dtype={declared!r} is not a pair of the polars dtype {polars_dtype}")
+        return declared
+
+    @staticmethod
+    def of_model(model: type) -> Dict[str, pl.DataType]:
+        """The polars dtype of each column of a polars model, by column name."""
+        return {name: column.dtype.type for name, column in model.to_schema().columns.items()}

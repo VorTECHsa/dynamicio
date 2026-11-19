@@ -149,7 +149,7 @@ def test_a_polars_model_compiles_like_a_pandas_model():
 
     schema = to_dataframe_schema(Frame)
 
-    assert schema.columns["a"].data_type == "Int64"
+    assert schema.columns["a"].data_type == "int64"  # the pandas pair of the polars Int64, by the reverse map
     assert {validation.name for validation in schema.columns["a"].validations} == {"has_no_null_values", "has_unique_values", "is_greater_than"}
 
 

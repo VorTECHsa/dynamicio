@@ -21,7 +21,7 @@ import pandas as pd
 
 from dynamicio.config.pydantic.table_schema import DataframeSchema
 from dynamicio.errors import DatasetNameNotFoundError
-from dynamicio.schema.metadata import METADATA_KEY, DynamicioMetadata
+from dynamicio.schema.metadata import METADATA_KEY, PANDAS_DTYPE_KEY, DynamicioMetadata
 
 
 class ModelCompiler:
@@ -92,9 +92,16 @@ class ModelCompiler:
             cls.check_name(model, cls.TABLE_NAME, declared)
         return declared
 
-    @staticmethod
-    def dtype(column: Any) -> str:
-        """The dtype a Pandera column declares, spelled as dynamicio casts to it."""
+    @classmethod
+    def dtype(cls, model: type, column: Any) -> str:
+        """The pandas dtype of a Pandera column: the declared dtype of a pandas model, the pair of the dtype map (decision 14 of ADR 0010) of a polars model."""
+        if cls.backend_of(model) == "polars":
+            # pylint: disable=import-outside-toplevel
+            from dynamicio.schema.polars_dtypes import DtypeMap
+
+            return DtypeMap.pandas_dtype_of_column(model, column)
+        if PANDAS_DTYPE_KEY in (column.metadata or {}):
+            raise ValueError(f"{model.__name__}.{column.name}: pandas_dtype is for a polars model only. A pandas model declares the pandas dtype as the type of the column")
         name = str(column.dtype)
         # Python `str` is whatever pandas makes of it: `object` before pandas 3, its `str` dtype after. Declare `string[pyarrow]` for a smaller column.
         return str(pd.Series([""]).dtype) if name == "str" else name
@@ -171,7 +178,7 @@ class ModelCompiler:
         #  logging for data that fails validation could differ from today's METRIC lines: add it only as an opt-in feature with its own tests.
         columns = {
             name: {
-                "type": cls.dtype(column),
+                "type": cls.dtype(model, column),
                 "validations": cls.validations_of(column),
                 "metrics": [metric.value for metric in cls.declared(column).metrics],
             }

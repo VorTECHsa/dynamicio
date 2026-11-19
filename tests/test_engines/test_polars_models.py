@@ -44,7 +44,7 @@ class TestPolarsDataModel:
 
         column = to_dataframe_schema(Measured).columns["value"]
 
-        assert column.data_type == "Float64"
+        assert column.data_type == "float64"
         assert [metric.value for metric in column.metrics] == ["Min", "Max"]
         assert {validation.name for validation in column.validations} == {"is_greater_than_or_equal", "is_lower_than_or_equal", "has_acceptable_percentage_of_nulls"}
 

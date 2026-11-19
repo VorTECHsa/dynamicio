@@ -101,6 +101,7 @@ nav:
       - Reading data: guides/reading-data.md
       - Writing data: guides/writing-data.md
       - Schemas and validation: guides/schemas-and-validation.md
+      - The polars engine: guides/polars-engine.md
       - Supported sources and formats: guides/sources-and-formats.md
       - Using asyncio: guides/asyncio.md
       - Testing pipelines locally: guides/testing-pipelines.md
