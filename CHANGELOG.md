@@ -1,5 +1,14 @@
 # Changelog
 
+## v12.0.0
+
+- feat: an engine is the dataframe library of a process. `DynamicDataIO` sends its read, write, cast, validations and metrics to the engine, in the same order as before. The pandas engine is the default and runs the code of 11.x, so a pandas process does not change and does not import polars. The engine classes are in `dynamicio.engines`
+- feat: `dynamicio.configure(engine="pandas" | "polars")` sets the engine. The first read or write fixes it and logs it once. After that, another engine raises `EngineConfigurationError`. An engine that dynamicio does not have also raises `EngineConfigurationError`, and the polars engine without polars installed raises `ImportError`
+- feat: the polars engine takes `pandera.polars` models and checks frames. Its read, write, cast, validations and metrics raise `NotImplementedError` in this release
+- feat: `dynamicio.schema.polars.DataModel` is the base class of a polars model, with the same `dataset` and `table` class keywords as `dynamicio.schema.DataModel`. `ModelCompiler` compiles a `pandera.polars` model. For now only the integer and float dtypes of polars compile, because the dtype check of `DataframeSchema` knows only the pandas names
+- feat: `DynamicDataIO.scan()` and `sink()` read and write a lazy frame. On the pandas engine they raise `NotImplementedError`, with a message that names the polars engine
+- feat: `ModelEngineMismatchError` for a model of the other engine, at the creation of an IO object and at each read and write. `WrongFrameError` for a frame of the other engine at `write()` and `sink()`, before any I/O. Both are also a `TypeError`, and `ModelEngineMismatchError` is also a `ValueError`, as the 11.x error of a polars model. A refused read or write does not fix the engine
+
 ## v11.1.0
 
 - fix: the checks for an IO class without `schema`, an IO class without a mixin for its resource type, and a URL that is not `s3://` raise `SchemaNotDeclaredError`, `MissingMixinError` and `InvalidS3UrlError`. They used `assert`, which `python -O` removes. Each error is also an `AssertionError`, so code that catches `AssertionError` does not change

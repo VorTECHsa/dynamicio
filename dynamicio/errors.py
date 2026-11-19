@@ -21,6 +21,9 @@ __all__ = [
     "SchemaNotDeclaredError",
     "MissingMixinError",
     "InvalidS3UrlError",
+    "EngineConfigurationError",
+    "ModelEngineMismatchError",
+    "WrongFrameError",
     "CASTING_WARNING_MSG",
     "NOTICE_MSG",
 ]
@@ -186,6 +189,21 @@ class InvalidS3UrlError(DynamicIOError, ValueError, AssertionError):
 
     It is a `ValueError`. It is also an `AssertionError`: earlier releases checked this with `assert`, and callers that catch `AssertionError` must not change.
     """
+
+
+class EngineConfigurationError(DynamicIOError, ValueError):
+    """Error raised when `dynamicio.configure()` gets an engine that dynamicio does not have, or a second engine after the first read or write.
+
+    The engine is one setting for the process. A read or write fixes it, so that all resources of a process read and write frames of one library.
+    """
+
+
+class ModelEngineMismatchError(DynamicIOError, TypeError, ValueError):
+    """Error raised when the Pandera model of an IO object is not for the engine of the process, for example a `pandera.polars` model on the pandas engine."""
+
+
+class WrongFrameError(DynamicIOError, TypeError):
+    """Error raised when `write()` gets a frame of the other engine, for example a polars frame on the pandas engine."""
 
 
 # Warning messages

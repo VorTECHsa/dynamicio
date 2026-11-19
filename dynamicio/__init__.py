@@ -18,6 +18,7 @@ with suppress(Exception):
 
 # Application Imports
 from dynamicio.core import DynamicDataIO
+from dynamicio.engines import configure
 from dynamicio.mixins import WithAthena, WithKafka, WithLocal, WithLocalBatch, WithPostgres, WithS3File, WithS3PathPrefix
 
 logger = logging.getLogger(__name__)

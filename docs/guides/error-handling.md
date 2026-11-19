@@ -16,6 +16,9 @@ first argument the error was raised with (`None` if there was none).
 | `SchemaNotDeclaredError` | An IO class does not set `schema`. It is both a `TypeError` and an `AssertionError` |
 | `MissingMixinError` | An IO class has no mixin that reads or writes the type of its resource. It is both a `TypeError` and an `AssertionError` |
 | `InvalidS3UrlError` | An S3 operation gets a URL that does not start with `s3://`. It is both a `ValueError` and an `AssertionError` |
+| `EngineConfigurationError` | `dynamicio.configure()` gets an engine that dynamicio does not have, or another engine after the first read or write. It is also a `ValueError` |
+| `ModelEngineMismatchError` | The Pandera model of an IO object is not for the engine of the process, for example a `pandera.polars` model on the pandas engine. It is also a `TypeError` and a `ValueError` |
+| `WrongFrameError` | `write()` or `sink()` gets a frame of the other engine, for example a polars frame on the pandas engine. It is also a `TypeError` |
 
 The full list, with docstrings, is in the [API reference](../reference/index.md#errors).
 

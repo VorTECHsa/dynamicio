@@ -71,6 +71,7 @@ dev = [
     "types-setuptools",
     "types-simplejson",
     "yamllint",
+    "polars>=2.1 ; python_full_version >= '3.11'",
 ]
 docs = [
     "mkdocs<2",

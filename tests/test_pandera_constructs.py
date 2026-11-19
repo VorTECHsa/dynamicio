@@ -10,7 +10,7 @@ from pandera.typing import Series
 from dynamicio import UnifiedIO
 from dynamicio.config import IOConfig
 from dynamicio.errors import SchemaValidationError
-from dynamicio.schema.models import to_dataframe_schema
+from dynamicio.schema.models import ModelCompiler, to_dataframe_schema
 
 
 @pytest.fixture
@@ -139,16 +139,27 @@ def test_a_column_option_dynamicio_cannot_honour_is_refused():
 
 
 @pytest.mark.unit
-def test_a_polars_model_is_refused():
+def test_a_polars_model_compiles_like_a_pandas_model():
     pl = pytest.importorskip("pandera.polars")
 
     class Frame(pl.DataFrameModel):
         __dataset_name__ = "frame"
 
-        a: int
+        a: int = pl.Field(gt=0, unique=True)
 
-    with pytest.raises(ValueError, match="pandas"):
-        to_dataframe_schema(Frame)
+    schema = to_dataframe_schema(Frame)
+
+    assert schema.columns["a"].data_type == "Int64"
+    assert {validation.name for validation in schema.columns["a"].validations} == {"has_no_null_values", "has_unique_values", "is_greater_than"}
+
+
+@pytest.mark.unit
+def test_a_model_of_another_library_is_refused():
+    class Frame:
+        __dataset_name__ = "frame"
+
+    with pytest.raises(ValueError, match="only pandas and polars"):
+        ModelCompiler.backend_of(Frame)
 
 
 @pytest.mark.unit

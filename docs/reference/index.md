@@ -37,6 +37,14 @@ reference documents the public classes and functions; names beginning with an un
 
 ::: dynamicio.mixins.utils
 
+## Engines
+
+::: dynamicio.engines.engine
+
+::: dynamicio.engines.engine_setting
+
+::: dynamicio.engines.registry
+
 ## Errors
 
 ::: dynamicio.errors

@@ -9,14 +9,15 @@ with ``__table_name__``; the dunders, because Pandera reserves public attributes
 
 Nothing in a model is dropped silently. Column checks that dynamicio has no validator for (``str_matches``, a custom ``@pa.check``) run as Pandera
 checks, and the dataframe-level parts (``@pa.dataframe_check``, ``Config.unique``, ``Config.ordered``, an index) run as a residual Pandera schema.
-Constructs that cannot be honoured raise ``ValueError`` naming them. The compiled ``DataframeSchema`` is the backend-neutral contract; this module only
-reads pandas models, so a polars model is refused and gets its own compiler when the polars backend lands.
+Constructs that cannot be honoured raise ``ValueError`` naming them. The compiled ``DataframeSchema`` is the backend-neutral contract. A ``pandera.pandas``
+and a ``pandera.polars`` model compile the same way, because ``Field`` gives both the same checks and metadata; the engine of the process decides which of
+the two an IO object takes.
 """
 
+import importlib
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
-import pandera.pandas as pa
 
 from dynamicio.config.pydantic.table_schema import DataframeSchema
 from dynamicio.errors import DatasetNameNotFoundError
@@ -42,6 +43,31 @@ class ModelCompiler:
 
     DATASET_NAME = "__dataset_name__"
     TABLE_NAME = "__table_name__"
+
+    # The module of the Pandera model class of each backend -> the name of the backend, which is also the name of its dynamicio engine
+    BACKENDS = {"pandera.api.pandas.model": "pandas", "pandera.api.polars.model": "polars"}
+
+    @classmethod
+    def backend_of(cls, model: type) -> str:
+        """The backend of a Pandera model, ``"pandas"`` or ``"polars"``, from its base class, without importing polars."""
+        for base in model.__mro__:
+            backend = cls.BACKENDS.get(base.__module__)
+            if backend is not None and base.__name__ == "DataFrameModel":
+                return backend
+        raise ValueError(f"{model.__name__}: only pandas and polars Pandera models are supported, got {', '.join(sorted({b.__module__ for b in model.__mro__}))}")
+
+    @classmethod
+    def pandera_of(cls, model: type) -> Any:
+        """The Pandera module of the backend of a model, ``pandera.pandas`` or ``pandera.polars``."""
+        return importlib.import_module(f"pandera.{cls.backend_of(model)}")
+
+    @classmethod
+    def name_model(cls, model: type, dataset: Optional[str], table: Optional[str]) -> None:
+        """Set the dataset and table names of a model from the class keywords of a ``DataModel`` of either backend."""
+        for attribute, value in ((cls.DATASET_NAME, dataset), (cls.TABLE_NAME, table)):
+            if value is not None:
+                cls.check_name(model, attribute, value)
+                setattr(model, attribute, value)
 
     @staticmethod
     def check_name(model: type, attribute: str, value: Any) -> None:
@@ -81,8 +107,7 @@ class ModelCompiler:
     @classmethod
     def check_supported(cls, model: type, schema: Any) -> None:
         """Fail on anything dynamicio would otherwise ignore, so a migrated rule is never silently lost."""
-        if not isinstance(schema, pa.DataFrameSchema):
-            raise ValueError(f"{model.__name__}: only pandas Pandera models are supported, got {type(schema).__module__}")
+        cls.backend_of(model)
         problems: List[str] = [f"Config.{name}" for name, unused in cls.SCHEMA_UNSUPPORTED if cls.is_used(getattr(schema, name, unused), unused)]
         if schema.strict is True:
             problems.append('Config.strict = True (dynamicio drops columns that are not in the schema before validating: use strict = "filter")')
@@ -91,14 +116,17 @@ class ModelCompiler:
         if problems:
             raise ValueError(f"{model.__name__}: dynamicio cannot honour {', '.join(problems)}")
 
-    @staticmethod
-    def dataframe_validator(model: type) -> Any:
-        """The dataframe-level part of a model (checks, `unique`, `ordered`, the index) as a Pandera schema, or None when it has none."""
+    @classmethod
+    def dataframe_validator(cls, model: type) -> Any:
+        """The dataframe-level part of a model (checks, `unique`, `ordered`, the index) as a Pandera schema of its backend, or None when it has none."""
         schema = model.to_schema()
-        if not (schema.checks or schema.unique or schema.ordered or schema.index is not None):
+        if not (schema.checks or schema.unique or schema.ordered or getattr(schema, "index", None) is not None):
             return None
-        columns = {name: pa.Column(nullable=True) for name in schema.columns} if schema.ordered else {}
-        return pa.DataFrameSchema(
+        pandera = cls.pandera_of(model)
+        columns = {name: pandera.Column(nullable=True) for name in schema.columns} if schema.ordered else {}
+        if cls.backend_of(model) == "polars":  # a polars frame has no index
+            return pandera.DataFrameSchema(columns, checks=schema.checks, unique=schema.unique, ordered=schema.ordered, report_duplicates=schema.report_duplicates, name=schema.name)
+        return pandera.DataFrameSchema(
             columns, checks=schema.checks, index=schema.index, unique=schema.unique, ordered=schema.ordered, report_duplicates=schema.report_duplicates, name=schema.name
         )
 
