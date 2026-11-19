@@ -198,13 +198,20 @@ and compares the frames with `polars.testing.assert_frame_equal`. A custom asser
 - A pandas frame against a polars frame fails the comparison.
 
 The pytest plugin of dynamicio adds the option `--dynamicio-engine=pandas|polars`. It calls `dynamicio.configure()` before the first test, so the same
-tests run on each engine:
+tests of a repo run on each engine:
 
 ```shell
-pytest --dynamicio-engine=polars demo/tests
+pytest --dynamicio-engine=polars tests
 ```
 
-One process cannot change its engine. A repo thus runs one CI job for each engine.
+One process cannot change its engine. A repo thus runs one pytest process, or one CI job, for each engine.
+
+The dynamicio repo turns the plugin off in its `addopts`, so its own runs give `-o addopts="-p no:warnings"` to turn it on. On the polars engine,
+the demo runs the tests of `demo/polars_pipeline` and leaves out `demo/tests`:
+
+```shell
+pytest -o addopts="-p no:warnings" --dynamicio-engine=polars demo
+```
 
 ### Recommended testing practices
 
