@@ -63,8 +63,9 @@ a file that the pandas engine refuses. Rule 2 does not include these cases, and 
    CSV and for JSON.
 2. A JSON file without records, as `DataFrame.to_json` writes a frame without rows. The pandas engine raises `KeyError`, and the polars engine gives a frame
    without rows with the columns of the model.
-3. A JSON epoch under a `Datetime` column with a time zone, in a column with a name that is not a date name. The pandas engine reads a naive `datetime64[ns]`
-   and cannot cast it. The polars engine reads a UTC instant.
+3. A JSON epoch under a `Datetime` or a `Duration` column. `pandas.read_json` converts only the columns with a date name, such as `created_at`, and gives a
+   naive `datetime64[ns]`. The cast of a column with a time zone then fails. Another column stays an integer, and the cast reads it in nanoseconds, so 1 ms
+   becomes 1 ns. The polars engine reads each epoch in `date_unit` and keeps the value. A column with a time zone gives a UTC instant.
 4. A CSV resource with `header: false` and `names`. The pandas reader raises `TypeError` for `header: false`, and the polars engine reads the file that the
    writer gives.
 
@@ -268,8 +269,8 @@ Phase 3 as built:
 - The readers are polars readers, and the cast of phase 2 then gives the dtypes of the model. A CSV column that is not a number or a Boolean reads as a string,
   so a value such as `007` keeps its text (exception 1 of rule 2). The cast parses the strings of a `Duration` with `pd.to_timedelta`, and the strings `True` and `False` of a
   `Boolean`. A `DataFrame` with a bad string raises `ColumnsDataTypeError`. A `LazyFrame` raises the polars `InvalidOperationError` when the caller collects it.
-- A JSON integer under a `Datetime` or `Duration` column of the model is an epoch in `date_unit`. The pandas engine of 11.1.0 reads an epoch column with a
-  name that is not a date name as a naive `datetime64[ns]`, and then cannot cast it to a column with a time zone. The polars engine reads it as a UTC instant.
+- A JSON integer under a `Datetime` or `Duration` column of the model is an epoch in `date_unit`. The pandas engine of 11.1.0 cannot cast a date name
+  column to a time zone, and casts the epoch of another column in nanoseconds. The polars engine keeps the value, and reads a UTC instant for a time zone.
   A JSON file without records, as pandas writes a frame without rows, reads as a frame without rows with the columns of the model. The pandas engine raises
   `KeyError` for this file. These are exceptions 2 and 3 of rule 2.
 - The option maps of decision 6 are in `PolarsOptions`. A resource has one set of options for its reads and its writes, so a file type accepts the options of
