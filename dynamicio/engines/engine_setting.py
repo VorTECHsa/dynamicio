@@ -42,11 +42,11 @@ class EngineSetting:
         """
         if engine not in cls.ENGINES:
             raise EngineConfigurationError(f"dynamicio has no engine {engine!r}: use one of {', '.join(cls.NAMES)}")
-        if engine == "polars" and importlib.util.find_spec("polars") is None:
-            raise ImportError('The polars engine needs polars: pip install "polars>=2.1"')
         with cls._lock:
-            if cls._frozen and engine != cls._name:
+            if cls._frozen and engine != cls._name:  # before the import check: installing polars cannot make this switch legal
                 raise EngineConfigurationError(f"The engine is {cls._name}, fixed by the first read or write. Call dynamicio.configure(engine={engine!r}) before it.")
+            if engine == "polars" and importlib.util.find_spec("polars") is None:
+                raise ImportError('The polars engine needs polars: pip install "polars>=2.1"')
             cls._name = engine
 
     @classmethod

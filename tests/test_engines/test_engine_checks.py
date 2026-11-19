@@ -196,6 +196,38 @@ class TestFrameCheck:
         assert PolarsEngine().is_frame(pl.LazyFrame()) and not PolarsEngine().is_frame(pd.DataFrame())
 
     @pytest.mark.unit
+    def test_a_subclass_of_a_polars_frame_on_the_pandas_engine_is_refused_before_any_write(self, tmp_path):
+        pl = pytest.importorskip("polars")
+
+        # Given
+        class AppFrame(pl.DataFrame):
+            pass
+
+        AppFrame.__module__ = "app.frames"
+        io = EngineCheckIO.make(tmp_path)
+
+        # When / Then
+        with pytest.raises(WrongFrameError, match="got a polars AppFrame on the pandas engine"):
+            io.write(AppFrame({"a": [1]}))
+        assert not (tmp_path / "data.csv").exists()
+        assert not EngineSetting._frozen  # pylint: disable=protected-access
+
+    @pytest.mark.unit
+    def test_a_subclass_of_a_pandas_frame_is_a_pandas_frame(self):
+        # Given
+        class AppFrame(pd.DataFrame):
+            pass
+
+        AppFrame.__module__ = "app.frames"
+
+        # When / Then
+        assert PandasEngine().is_frame(AppFrame({"a": [1]}))
+        assert not PolarsEngine().is_frame(AppFrame({"a": [1]}))
+        PandasEngine().check_frame(AppFrame({"a": [1]}))
+        with pytest.raises(WrongFrameError, match="got a pandas AppFrame on the polars engine"):
+            PolarsEngine().check_frame(AppFrame({"a": [1]}))
+
+    @pytest.mark.unit
     def test_a_write_of_a_non_frame_fails_as_before(self, tmp_path):
         with pytest.raises(AttributeError):
             EngineCheckIO.make(tmp_path).write({"a": [1]})

@@ -26,15 +26,20 @@ class Engine(abc.ABC):
     def registry(self) -> Registry:
         """The validators and metrics of the engine."""
 
+    @staticmethod
+    def libraries_of(frame: Any) -> Tuple[str, ...]:
+        """The top-level modules of the type of a frame and of its base classes, so that a subclass of a ``pandas`` or ``polars`` frame counts as one."""
+        return tuple(dict.fromkeys(base.__module__.split(".")[0] for base in type(frame).__mro__))
+
     def is_frame(self, frame: Any) -> bool:
-        """Whether a frame is of the library of this engine."""
-        return type(frame).__module__.split(".")[0] == self.name
+        """Whether a frame is of the library of this engine, or of a subclass of one of its frames."""
+        return self.name in self.libraries_of(frame)
 
     def check_frame(self, frame: Any) -> None:
-        """Refuse a frame of the other engine, before ``write()`` selects its columns."""
-        library = type(frame).__module__.split(".")[0]
-        if library in self.FOREIGN_FRAME_MODULES:
-            raise WrongFrameError(f"write() got a {library} {type(frame).__name__} on the {self.name} engine. Convert it, or configure the {library} engine.")
+        """Refuse a frame of the other engine, or of a subclass of one of its frames, before ``write()`` selects its columns."""
+        for library in self.libraries_of(frame):
+            if library in self.FOREIGN_FRAME_MODULES:
+                raise WrongFrameError(f"write() got a {library} {type(frame).__name__} on the {self.name} engine. Convert it, or configure the {library} engine.")
 
     def is_model(self, model: type) -> bool:
         """Whether a Pandera model is for the library of this engine."""

@@ -57,6 +57,17 @@ class TestConfigure:
 
         assert isinstance(EngineSetting.current(), PandasEngine)
 
+    @pytest.mark.unit
+    def test_a_switch_to_polars_after_the_first_use_without_polars_is_an_engine_configuration_error(self):
+        # Given
+        EngineSetting.use()
+
+        # When / Then
+        with patch("dynamicio.engines.engine_setting.importlib.util.find_spec", return_value=None) as find_spec:
+            with pytest.raises(EngineConfigurationError, match="fixed by the first read or write"):
+                dynamicio.configure(engine="polars")
+        find_spec.assert_not_called()
+
 
 class TestFreeze:
     @pytest.mark.unit
