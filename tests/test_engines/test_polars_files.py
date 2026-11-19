@@ -594,18 +594,27 @@ class TestResourceCheck:
         # Then
         assert not (tmp_path / "data.json").exists()
 
+    @staticmethod
+    def io_of(tmp_path, source, section, **options):
+        (tmp_path / "x.yaml").write_text(yaml.safe_dump({"X": {"LOCAL": {"type": source, source: section}}}))
+        return Files.polars(IOConfig(str(tmp_path / "x.yaml"), env_identifier="LOCAL", dynamic_vars=FilesIO).get(source_key="X"), Pair, **options)
+
     @pytest.mark.unit
-    def test_a_resource_that_is_not_a_file_is_not_read_or_written_yet(self, tmp_path):
+    def test_a_read_of_kafka_raises_the_error_of_the_pandas_engine(self, tmp_path):
         # Given
-        definition = {"X": {"LOCAL": {"type": "postgres", "postgres": {"db_host": "h", "db_port": "5432", "db_name": "d", "db_user": "u", "db_password": "p"}}}}
-        (tmp_path / "pg.yaml").write_text(yaml.safe_dump(definition))
-        config = IOConfig(str(tmp_path / "pg.yaml"), env_identifier="LOCAL", dynamic_vars=FilesIO).get(source_key="X")
-        io = Files.polars(config, Pair, sql_query="select 1")
+        io = self.io_of(tmp_path, "kafka", {"kafka_server": "localhost:9092", "kafka_topic": "t"}, key_column="a")
 
         # When / Then
-        with pytest.raises(NotImplementedError, match="does not read postgres resources yet"):
+        with pytest.raises(NotImplementedError, match="does not support reading from Kafka"):
             io.read()
-        with pytest.raises(NotImplementedError, match="does not write postgres resources yet"):
+
+    @pytest.mark.unit
+    def test_a_write_of_athena_raises_the_error_of_the_pandas_engine(self, tmp_path):
+        # Given
+        io = self.io_of(tmp_path, "athena", {"s3_output": "s3://bucket/out/"})
+
+        # When / Then
+        with pytest.raises(NotImplementedError, match="Athena does not support direct writes"):
             io.write(pl.DataFrame({"a": [1], "b": ["x"]}))
 
 

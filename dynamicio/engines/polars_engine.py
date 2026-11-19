@@ -45,23 +45,30 @@ class PolarsEngine(Engine):
         """Refuse a resource with a file type or an option that the polars engine cannot read or write (decision 6 of ADR 0010).
 
         Raises:
-            EngineResourceError: The file type or an option has no polars reader and writer, or a Postgres option has no polars equivalent.
+            EngineResourceError: The file type or an option has no polars reader and writer, a Postgres option has no polars equivalent,
+                or a Kafka resource has no ``key_column`` of its model.
         """
         # pylint: disable=import-outside-toplevel
         from dynamicio.engines.polars_files import PolarsFiles
+        from dynamicio.engines.polars_kafka import PolarsKafka
         from dynamicio.engines.polars_postgres import PolarsPostgres
 
-        if self.source_of(io) in PolarsPostgres.SOURCES:
+        source = self.source_of(io)
+        if source in PolarsPostgres.SOURCES:
             PolarsPostgres.check(io)
-            return
-        PolarsFiles.check(io)
+        elif source in PolarsKafka.SOURCES:
+            PolarsKafka.check(io)
+        else:
+            PolarsFiles.check(io)
 
     def read(self, io: "DynamicDataIO") -> Any:
-        """Read a ``local``, ``local_batch``, ``s3_file``, ``s3_path_prefix`` or ``postgres`` resource into a polars frame. Other resources are not read yet.
+        """Read a ``local``, ``local_batch``, ``s3_file``, ``s3_path_prefix``, ``postgres`` or ``athena`` resource into a polars frame.
 
-        A prefix read collects the scan of the prefix, so that the eager and the lazy reads of a prefix give the same frame.
+        A prefix read collects the scan of the prefix, so that the eager and the lazy reads of a prefix give the same frame. A Kafka read raises the
+        ``NotImplementedError`` of the pandas engine.
         """
         # pylint: disable=import-outside-toplevel
+        from dynamicio.engines.polars_athena import PolarsAthena
         from dynamicio.engines.polars_files import PolarsFiles
         from dynamicio.engines.polars_postgres import PolarsPostgres
         from dynamicio.engines.polars_scans import PolarsScans
@@ -69,6 +76,10 @@ class PolarsEngine(Engine):
         source = self.source_of(io)
         if source in PolarsPostgres.SOURCES:
             return PolarsPostgres.read(io)
+        if source in PolarsAthena.SOURCES:
+            return PolarsAthena.read(io)
+        if source == "kafka":
+            return io._read_from_kafka(None)  # pylint: disable=protected-access
         if source not in PolarsFiles.READ_SOURCES:
             self.not_yet(f"read {source} resources")
         if source == "s3_path_prefix":
@@ -76,15 +87,24 @@ class PolarsEngine(Engine):
         return PolarsFiles.read(io)
 
     def write(self, io: "DynamicDataIO", frame: Any) -> None:
-        """Write a polars frame to a ``local``, ``s3_file``, ``s3_path_prefix`` or ``postgres`` resource. Other resources are not written yet."""
+        """Write a polars frame to a ``local``, ``s3_file``, ``s3_path_prefix``, ``postgres`` or ``kafka`` resource.
+
+        An Athena write raises the ``NotImplementedError`` of the pandas engine.
+        """
         # pylint: disable=import-outside-toplevel
         from dynamicio.engines.polars_files import PolarsFiles
+        from dynamicio.engines.polars_kafka import PolarsKafka
         from dynamicio.engines.polars_postgres import PolarsPostgres
 
         source = self.source_of(io)
         if source in PolarsPostgres.SOURCES:
             PolarsPostgres.write(io, frame)
             return
+        if source in PolarsKafka.SOURCES:
+            PolarsKafka.write(io, frame)
+            return
+        if source == "athena":
+            io._write_to_athena(frame)  # pylint: disable=protected-access
         if source not in PolarsFiles.WRITE_SOURCES:
             self.not_yet(f"write {source} resources")
         PolarsFiles.write(io, frame)

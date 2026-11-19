@@ -13,7 +13,7 @@ engine imports it.
 
 import io as std_io
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, MutableMapping, Union
+from typing import TYPE_CHECKING, Any, Dict, Iterator, List, MutableMapping, Union
 
 import pandas as pd
 import polars as pl
@@ -259,3 +259,9 @@ class PolarsFiles:
         An integer column goes through a pandas nullable integer dtype, so a large integer next to a null keeps its value.
         """
         return frame.to_pandas(types_mapper=cls.NULLABLE_INTEGERS.get).astype(cls.pandas_dtypes(io, frame))
+
+    @classmethod
+    def to_pandas_chunks(cls, io: "DynamicDataIO", frame: pl.DataFrame, rows: int) -> Iterator[pd.DataFrame]:
+        """The pandas frames of the chunks of ``rows`` rows of a frame, one at a time. A frame without rows gives one chunk without rows, with the columns."""
+        for offset in range(0, max(frame.height, 1), rows):
+            yield cls.to_pandas(io, frame.slice(offset, rows))

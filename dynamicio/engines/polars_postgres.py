@@ -73,5 +73,4 @@ class PolarsPostgres:
     @classmethod
     def chunks(cls, io: "DynamicDataIO", frame: pl.DataFrame) -> Iterator[pd.DataFrame]:
         """The pandas frames of the chunks of a frame. A frame without rows gives one chunk without rows, so the COPY still names the columns."""
-        for offset in range(0, max(frame.height, 1), cls.CHUNK_ROWS):
-            yield PolarsFiles.to_pandas(io, frame.slice(offset, cls.CHUNK_ROWS))
+        return PolarsFiles.to_pandas_chunks(io, frame, cls.CHUNK_ROWS)
