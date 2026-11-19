@@ -89,7 +89,7 @@ removes the columns that the model does not declare, so the two engines give the
      and CI runs Python 3.11 to 3.14. dynamicio 11.x keeps Python 3.10.
    - The polars minimum is always the latest polars release when a dynamicio release ships (2.1.0 on 2026-11-17).
    - awswrangler needs pandas, so it moves to the `[pandas]` extra in v13. A v13 install with `[polars]` only has no Athena reads.
-   - Phase 7 records the v13 dependency list and an import test for each extra.
+   - Phase 7 adds an import test of an install without the `polars` extra. The v13 dependency list and an import test for each v13 extra are v13 work.
 3. The null rule. The polars engine changes float NaN to null when it reads and when it writes. The rule is always on and has no option. The pandas writer already
    stores NaN as null, so validators, metrics and files then agree across engines.
    - The cast of the polars engine applies the rule. Each float column of the model gets `fill_nan(None)`, so the validators and the metrics count a NaN as a null.
@@ -104,7 +104,7 @@ removes the columns that the model does not declare, so the two engines give the
    - `key_generator` stays on both engines. It gets the value of `key_column`, or the index on pandas.
 5. The CSV index. When `index` is not `False`, the polars CSV writer writes the same leading column as pandas. This column has an empty header and the row
    numbers 0 to n-1. The default of `index` is `True` on both engines, as in `DataFrame.to_csv`. The schema column selection removes this column at read time on both engines.
-   The migrate command writes `index` into each CSV resource definition.
+   The report of the migrate command lists each CSV resource definition without an `index` option.
    - The byte contract covers a pandas frame with the default `RangeIndex` only. A polars frame has no index, so the leading column has the row numbers.
    - A pandas frame with a named index writes the index name in the header. The polars equivalent is a normal first column with that name and `index: false`.
      These 2 writes give equal bytes.
@@ -359,6 +359,24 @@ Phase 6 as built:
   (decision 8). The tests use a mock of awswrangler.
 - A polars Kafka read and a polars Athena write raise the `NotImplementedError` of the pandas engine.
 
+Phase 7 as built:
+
+- polars can deadlock in a fork of a process that has used polars. A fork of a process with the polars engine and polars imported thus refuses the
+  engine. Its first read or write, and `dynamicio.configure(engine="polars")`, raise `EngineConfigurationError`. A fork on the pandas engine does not change.
+- dynamicio does not set `POLARS_MAX_THREADS`. polars reads it at its first import, and `import dynamicio` and `configure()` do not import polars.
+- `configure(engine="polars")` raises `ImportError` if polars is missing or older than 2.1, the minimum of the `polars` extra. The check reads the
+  version of the installed package, so it does not import polars. `dynamicio migrate --engine polars` runs the same check.
+- `FrameComparison` of `dynamicio.testharness` sends two polars frames to `PolarsFrameComparison`, with the same rules. A polars frame has no index, so
+  `check_row_order=False` without `sort_by` compares the rows as a multiset. The pytest option `--dynamicio-engine` calls `configure()` before the first test.
+- The tests of dynamicio set the engine for each test, and a fixture resets it after each test. The CI test job thus runs the tests of the two
+  engines in one run. A CI job runs the polars demo with `--dynamicio-engine=polars`.
+- An import test blocks the polars import in a new process. It checks the modules of dynamicio, the pandas engine and the CLI without polars. The
+  dependency-ranges CI jobs install dynamicio without the `polars` extra and check that polars is not installed.
+- `dynamicio migrate --engine polars` writes a polars model for each pandas model and a `POLARS_MIGRATION.md` report. The report lists the checks to port,
+  the refused resources and the CSV definitions without `index`. The command does not change the resource definitions, because PyYAML drops their comments.
+- `demo/polars_pipeline` is the pandas demo on the polars engine, with models from the migrate command. Its outputs are equal to the expected outputs
+  of the pandas demo, so the demo tests rule 2.
+
 Change 26 is the floci fixture of decision 15. RND-25426 delivers it before phase 1, with the pandas integration tests. The polars S3 tests of phase 3 are its first polars users.
 
 Change 5 replaces the neutral dtype vocabulary of the first proposal. That vocabulary was for YAML schemas, which dynamicio 11.0 removed. A pandas repo declares
@@ -372,8 +390,8 @@ of the 4 pairs use it to compare frames.
   - A schema column that is not in the frame raises `ColumnsDataTypeError` (change 15). The pandas engine of 11.x raised `KeyError`, so a caller that
     catches `KeyError` must catch `ColumnsDataTypeError`.
 - A repo cannot use pandas for one resource and polars for another. A repo that needs both engines must split into two processes that share files.
-- The migrate command changes the resource definitions, the options and the models. It does not change the transformation code of the repo. A repo must change its
-  own pandas code to polars before it moves.
+- The migrate command writes the polars models. Its report lists the resource definitions and the options to change, and the user changes them.
+  It does not change the transformation code of the repo. A repo must change its own pandas code to polars before it moves.
 - The polars engine cannot store a float NaN that is different from null. The pandas engine cannot do this today either.
 - The polars writer costs more than plain polars: it builds the pandas metadata, writes the CSV index column and keeps the 11.1.0 byte format. Rule 2 requires
   this cost. The success measure limits it.
