@@ -204,6 +204,30 @@ class TestS3Footer:
         assert len(calls) == 2 and calls[0] == f"bytes=-{S3Tail.TAIL_BYTES}" and calls[1].startswith("bytes=")
 
     @pytest.mark.unit
+    def test_an_object_replaced_between_the_ranged_gets_raises_the_client_error(self, moto_s3_bucket, tmp_path, monkeypatch):
+        # Given
+        table = pyarrow_module.table({"a": list(range(10))}).replace_schema_metadata({b"big": b"x" * (3 * S3Tail.TAIL_BYTES)})
+        pq.write_table(table, tmp_path / "data.parquet")
+        moto_s3_bucket.upload_file(str(tmp_path / "data.parquet"), constants.MOCK_BUCKET, "data.parquet")
+        pq.write_table(table.replace_schema_metadata({b"big": b"y" * (3 * S3Tail.TAIL_BYTES)}), tmp_path / "other.parquet")
+        calls: List[str] = []
+
+        def get_object(**arguments):
+            calls.append(arguments["Range"])
+            response = moto_s3_bucket.get_object(**arguments)
+            if len(calls) == 1:  # another writer replaces the object after the first ranged get
+                moto_s3_bucket.upload_file(str(tmp_path / "other.parquet"), constants.MOCK_BUCKET, "data.parquet")
+            return response
+
+        monkeypatch.setattr("dynamicio.mixins.with_s3._shared_s3_client", lambda: types.SimpleNamespace(get_object=get_object))
+        io = Footers.io(tmp_path, "s3_file", bucket=constants.MOCK_BUCKET, file_path="data.parquet")
+
+        # When / Then
+        with pytest.raises(ClientError, match="PreconditionFailed"):
+            io.footer()
+        assert len(calls) == 2
+
+    @pytest.mark.unit
     def test_an_object_smaller_than_the_tail_is_read_in_one_get(self, moto_s3_bucket, tmp_path):
         # Given
         Footers.frame(1).to_parquet(tmp_path / "data.parquet")
@@ -300,6 +324,41 @@ class TestS3Tail:
         assert data == content
         assert calls[broken - 1] == calls[broken]
         assert closed == [True]
+
+    @pytest.mark.unit
+    def test_an_object_replaced_after_the_first_get_raises_precondition_failed(self, moto_s3_bucket):
+        # Given
+        content = bytes(range(256)) * 1024
+        moto_s3_bucket.put_object(Bucket=constants.MOCK_BUCKET, Key="blob", Body=content)
+        tail = S3Tail(constants.MOCK_BUCKET, "blob")
+        moto_s3_bucket.put_object(Bucket=constants.MOCK_BUCKET, Key="blob", Body=content[::-1])
+
+        # When / Then
+        tail.seek(0)
+        with pytest.raises(ClientError, match="PreconditionFailed"):
+            tail.read()
+
+    @pytest.mark.unit
+    def test_each_get_after_the_first_sends_the_etag_of_the_first(self, moto_s3_bucket, monkeypatch):
+        # Given
+        content = bytes(range(256)) * 1024
+        etag = moto_s3_bucket.put_object(Bucket=constants.MOCK_BUCKET, Key="blob", Body=content)["ETag"]
+        calls: List[Dict[str, Any]] = []
+
+        def get_object(**arguments):
+            calls.append(arguments)
+            return moto_s3_bucket.get_object(**arguments)
+
+        monkeypatch.setattr("dynamicio.mixins.with_s3._shared_s3_client", lambda: types.SimpleNamespace(get_object=get_object))
+
+        # When
+        tail = S3Tail(constants.MOCK_BUCKET, "blob")
+        tail.seek(0)
+        data = tail.read()
+
+        # Then
+        assert data == content
+        assert "IfMatch" not in calls[0] and calls[1]["IfMatch"] == etag == tail.etag
 
     @pytest.mark.unit
     def test_an_s3_error_other_than_an_empty_object_reaches_the_caller(self, monkeypatch):

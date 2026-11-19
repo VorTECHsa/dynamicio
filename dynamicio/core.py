@@ -282,6 +282,7 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
         Raises:
             EngineResourceError: The resource is not a ``local`` or ``s3_file`` parquet file.
             FileNotFoundError: The file does not exist, and `missing_ok` is False. An S3 key raises ``S3KeyNotFoundError``.
+            botocore.exceptions.ClientError: ``PreconditionFailed``, if another writer replaces the S3 object between two ranged reads.
 
         Examples:
             >>> footer = big_orders.footer()
@@ -313,8 +314,7 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
 
         Raises:
             SchemaValidationError: if any of the validations failed. The `message` attribute of
-                the exception object is a `List[str]`, where each element is the name of a
-                validation that failed.
+                the exception object is a dict of the name of each failed validation to its details.
         """
         EngineSetting.current().validate(self, df)
         return self

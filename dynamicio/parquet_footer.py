@@ -43,6 +43,9 @@ class S3Tail(std_io.RawIOBase):
 
     pyarrow reads the footer of a parquet file from its end, so the first read gets the last ``TAIL_BYTES`` bytes and the size of the object. A read
     before the kept bytes gets the missing range and keeps it.
+
+    Each later ``GetObject`` sends the ``ETag`` of the first one in ``IfMatch``. An object that another writer replaces between two reads thus raises
+    the ``PreconditionFailed`` ``ClientError`` of S3, and the footer never mixes the bytes of two versions of the object.
     """
 
     TAIL_BYTES = 64 * 1024
@@ -50,12 +53,14 @@ class S3Tail(std_io.RawIOBase):
     def __init__(self, bucket: str, key: str):
         super().__init__()
         self.bucket, self.key = bucket, key
+        self.etag = None
         try:
             response, self.kept = self.get(f"bytes=-{self.TAIL_BYTES}")
         except ClientError as error:
             if error.response.get("Error", {}).get("Code") != "InvalidRange":  # an empty object has no last bytes
                 raise
             response, self.kept = {"ContentLength": 0}, b""
+        self.etag = response.get("ETag")
         self.size = int(response["ContentRange"].rsplit("/", 1)[1]) if "ContentRange" in response else response["ContentLength"]
         self.start = self.size - len(self.kept)
         self.position = 0
@@ -67,7 +72,8 @@ class S3Tail(std_io.RawIOBase):
         """
 
         def attempt() -> Tuple[dict, bytes]:
-            response = with_s3._shared_s3_client().get_object(Bucket=self.bucket, Key=self.key, Range=byte_range)  # pylint: disable=protected-access
+            arguments = {"Bucket": self.bucket, "Key": self.key, "Range": byte_range, **({"IfMatch": self.etag} if self.etag else {})}
+            response = with_s3._shared_s3_client().get_object(**arguments)  # pylint: disable=protected-access
             with contextlib.closing(response["Body"]) as body:
                 return response, body.read()
 

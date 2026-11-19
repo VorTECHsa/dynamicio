@@ -2,6 +2,7 @@
 import pyarrow as pyarrow_module
 import pyarrow.parquet as pq
 import pytest
+from botocore.exceptions import ClientError
 
 # Application Imports
 from dynamicio.engines import EngineSetting
@@ -51,6 +52,18 @@ class TestParquetFooterOnS3:
         # Then
         assert footer.metadata[b"big"] == b"x" * (2 * S3Tail.TAIL_BYTES)
         assert len(calls) == 2 and all(call.startswith("bytes=") for call in calls)
+
+    def test_an_object_replaced_after_the_first_get_raises_precondition_failed(self, floci, prefix):
+        # Given
+        client, key = floci.s3_client(), f"{prefix}/blob"
+        client.put_object(Bucket=floci.bucket, Key=key, Body=b"a" * (2 * S3Tail.TAIL_BYTES))
+        tail = S3Tail(floci.bucket, key)
+        client.put_object(Bucket=floci.bucket, Key=key, Body=b"b" * (2 * S3Tail.TAIL_BYTES))
+
+        # When / Then
+        tail.seek(0)
+        with pytest.raises(ClientError, match="PreconditionFailed"):
+            tail.read()
 
     def test_a_missing_key_raises_s3_key_not_found_error_and_missing_ok_gives_none(self, floci, prefix, tmp_path):
         # When / Then
