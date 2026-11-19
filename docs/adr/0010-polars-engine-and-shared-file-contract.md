@@ -8,7 +8,7 @@
 dynamicio reads and writes pandas frames only. pandas, pyarrow and awswrangler are hard dependencies, and `core.py` calls pandas in the read, write and validation steps.
 The mixins carry the transport: local files, local batch, S3 file, S3 prefix, Postgres, Kafka (write only) and Athena (read only).
 
-On one bon-voyage build shard, a polars build without dynamicio took 29.6 s and 12.1 GB peak memory. The pandas build with dynamicio took 86.0 s and 17.0 GB.
+On one build shard of a consumer repo, a polars build without dynamicio took 29.6 s and 12.1 GB peak memory. The pandas build with dynamicio took 86.0 s and 17.0 GB.
 The aim of v12 is to give that gain to dynamicio users and keep the dynamicio design. In that design, the user writes no I/O code. The resource definition and the
 Pandera model are the only interface. An eager polars read keeps the pandas memory profile, because it holds the full input and the full output in memory. The gain
 needs lazy reads that push the column and row filters down to S3, and streaming writes.
@@ -21,7 +21,7 @@ A probe on polars 2.1.0, pandas 2.3.3 and pyarrow 26.0.1 showed that a file from
 | pandas metadata | Present, with a `RangeIndex` | Absent | The reader guesses the dtypes |
 | Nullable `Int64` | `Int64` | `int64` with nulls | Reads as `float64` |
 | Nullable `boolean` | `boolean` | `bool` with nulls | Reads as `object` |
-| Timestamp unit | Unit of 10.x | polars default | The unit is different (bon-voyage #915) |
+| Timestamp unit | Unit of 10.x | polars default | The unit is different (a consumer repo found it) |
 
 The polars `metadata=` argument does not give a block that pandas reads. The pandas metadata must go through `arrow_schema=`.
 
@@ -32,7 +32,7 @@ The resource `options` go to pandas and awswrangler functions. Each reader and w
 `@allow_options(pd.read_csv)` in `with_local.py` and `@allow_options(wr.s3.read_parquet)` in `with_s3.py`. Many of these names do not exist in polars or have a
 different meaning there.
 
-Downstream repos read the files and Kafka messages that dynamicio writes. bon-voyage compares Kafka message hashes for its incremental publish, so a change of one
+Downstream repos read the files and Kafka messages that dynamicio writes. A consumer repo compares Kafka message hashes for its incremental publish, so a change of one
 byte in a message causes a full publish.
 
 ## Decision
@@ -71,9 +71,8 @@ removes the columns that the model does not declare, so the two engines give the
    - dynamicio logs the engine at the first read or write.
 2. pandas becomes optional in v13, with `dynamicio[pandas]` and `dynamicio[polars]` extras.
    - In v12, pandas stays a hard dependency and `dynamicio[polars]` adds `polars>=2.1`.
-   - polars 2.1 needs Python 3.11 or later, and dynamicio 11.x supports Python 3.10 to 3.14. Python 3.10 reaches its end of life in October 2026. Either 12.0.0
-     drops Python 3.10, or the `[polars]` extra has the marker `python_version >= "3.11"`. This decision is open. Phase 1 adds polars to the dev group with
-     that marker, and the polars tests skip on Python 3.10.
+   - polars 2.1 needs Python 3.11 or later, and Python 3.10 reaches its end of life in October 2026. dynamicio 12.0.0 needs Python 3.11 or later,
+     and CI runs Python 3.11 to 3.14. dynamicio 11.x keeps Python 3.10.
    - The polars minimum is always the latest polars release when a dynamicio release ships (2.1.0 on 2026-11-17).
    - awswrangler needs pandas, so it moves to the `[pandas]` extra in v13. A v13 install with `[polars]` only has no Athena reads.
    - Phase 7 records the v13 dependency list and an import test for each extra.
@@ -83,7 +82,7 @@ removes the columns that the model does not declare, so the two engines give the
    - The polars engine requires `key_column`, because a polars frame has no index. A polars Kafka resource without it raises an error when the user builds the resource.
      A row number is not a key: it is equal to the pandas key only when the pandas index is a `RangeIndex`.
    - The pandas engine also accepts `key_column`. Without it, the pandas engine uses the index, as in 11.x.
-   - The key column is not in the message value. This gives the same bytes as `set_index(key)` on pandas, which bon-voyage uses today.
+   - The key column is not in the message value. This gives the same bytes as `set_index(key)` on pandas, which a consumer repo uses today.
    - `key_generator` stays on both engines. It gets the value of `key_column`, or the index on pandas.
 5. The CSV index. When `index` is not `False`, the polars CSV writer writes the same leading column as pandas. This column has an empty header and the row
    numbers 0 to n-1. The default of `index` is `True` on both engines, as in `DataFrame.to_csv`. The schema column selection removes this column at read time on both engines.
@@ -165,7 +164,7 @@ schema declaration.
 
 ### Success measure
 
-The test is the bon-voyage build shard of the Context. On it, the 12.0 polars engine takes at most 10% more time and peak memory than the polars build
+The test is the build shard of the consumer repo in the Context. On it, the 12.0 polars engine takes at most 10% more time and peak memory than the polars build
 without dynamicio. The limits are 32.6 s and 13.3 GB.
 
 ### The 27 changes, in delivery order
@@ -174,12 +173,12 @@ Phases 1 to 7 are dynamicio 12.0.0.
 
 | Phase | Changes | Scope |
 |---|---|---|
-| 1 | 1 to 4 | Engine seam. An `Engine` abstract base class in `dynamicio.engines` with 16 members (read, scan, cast, validate, write, sink). `PandasEngine` calls the current code without a change in behavior. The pandas I/O code stays in the `dynamicio.mixins.*` modules in 12.x, so a patch of a module binding changes the code that runs. A test patches each binding that the dynamicio tests and bon-voyage patch. Each engine has a registry of validators and metrics with the same names. `ModelCompiler` accepts `pandera.polars` models and raises if the model type is not the engine type. `configure()`, the freeze and the wrong-frame error (decision 1). |
+| 1 | 1 to 4 | Engine seam. An `Engine` abstract base class in `dynamicio.engines` with 16 members (read, scan, cast, validate, write, sink). `PandasEngine` calls the current code without a change in behavior. The pandas I/O code stays in the `dynamicio.mixins.*` modules in 12.x, so a patch of a module binding changes the code that runs. A test patches each binding that the dynamicio tests and a consumer repo patch. Each engine has a registry of validators and metrics with the same names. `ModelCompiler` accepts `pandera.polars` models and raises if the model type is not the engine type. `configure()`, the freeze and the wrong-frame error (decision 1). |
 | 2 | 5 to 9 | Schema and null rule. The dtype map (decision 14). The null rule. polars validators and metrics that give the same results as pandas. Each is an expression, and all run in one `collect_all` with the Pandera data checks. |
 | 3 | 17, 18, 20, 26 | Eager codecs and the parquet contract. The pandas metadata through `arrow_schema=`. Footer details equal to 11.1.0: timestamp unit, row group size, snappy compression, coerced timestamps and INT96 reads. JSON (decision 9) and CSV (decision 5) bytes equal to 11.1.0. The option maps (decision 6). The polars S3 tests run against floci (decision 15). |
 | 4 | 10, 14, 16 | `scan()` returns a `LazyFrame`. It checks names and types with `collect_schema()` and adds the casts to the plan. polars reads S3 with a `credential_provider` from the boto3 session. A missing key raises the dynamicio error, so `missing_ok` applies. A prefix read lists the keys with boto3 and makes one `scan_parquet` call that keeps ADR 0002 and ADR 0004 (decision 13). |
 | 5 | 11, 12, 13, 15 | `sink()` runs all sinks in one `collect_all`. Writes go through a boto3 multipart upload (64 MiB parts, 4 in flight, ACL) that completes only on success and aborts on error. Both engines select columns, cast, validate and then compute metrics, in that order (decision 12). Both engines raise the same dynamicio errors. |
-| 6 | 19, 21, 22, 23 | A footer-only read and a sink from several scans that merges the pandas metadata of all parts (bon-voyage #913). Postgres COPY in chunks of 100k rows with the same NULL rule, tested on floci RDS. Kafka keys from decision 4 and row types from decision 7, with batches, `poll()` and a flush timeout, tested on the floci broker. Athena through awswrangler (decision 8). hdf and pickle resources raise on polars when the user builds the resource. |
+| 6 | 19, 21, 22, 23 | A footer-only read and a sink from several scans that merges the pandas metadata of all parts (a consumer repo needs it). Postgres COPY in chunks of 100k rows with the same NULL rule, tested on floci RDS. Kafka keys from decision 4 and row types from decision 7, with batches, `poll()` and a flush timeout, tested on the floci broker. Athena through awswrangler (decision 8). hdf and pickle resources raise on polars when the user builds the resource. |
 | 7 | 24, 25, 27 | No fork on polars, and `POLARS_MAX_THREADS` applies. `dynamicio.testharness` comparisons for each engine and the `--dynamicio-engine` option (decision 11). The `dynamicio[polars]` extra. CI runs all tests on both engines. The migrate command, one demo for each engine and the docs. |
 
 Phase 1 as built:
@@ -213,11 +212,11 @@ of the 4 pairs use it to compare frames.
   this cost. The success measure limits it.
 - The polars engine changes Kafka rows to pandas Python types (decision 7). This costs time on each message, and keeps custom serializers correct.
 - hdf, pickle and the JSON orients of decision 9 have no polars reader. A polars repo must move these resources to parquet or to `records` JSON first.
-- Tests that patch internals, such as bon-voyage patching `dynamicio.mixins.with_s3.wr.s3.read_json`, keep working in 12.x. The pandas I/O code stays in
+- Tests that patch internals, such as a consumer repo that patches `dynamicio.mixins.with_s3.wr.s3.read_json`, keep working in 12.x. The pandas I/O code stays in
   the `dynamicio.mixins.*` modules, so the code looks up `wr` in the module that the test patches. A re-export only does not give this, because a moved function
   looks up `wr` in its new module.
 
 ## References
 
-- Jira: the epic is RND-25348, the phases 1 to 7 are RND-25354, the floci integration tests are RND-25426 and the bon-voyage move is RND-25361.
+- Jira: the epic is RND-25348, the phases 1 to 7 are RND-25354, the floci integration tests are RND-25426 and the move of the first consumer repo is RND-25361.
 - dynamicio 11.1.0 bug fixes: PR #139.
