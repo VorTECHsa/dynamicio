@@ -5,7 +5,7 @@ temporary directory, so a page reads as a script. The examples use `LOCAL` resou
 
 The `Examples` of the docstrings in `DOCSTRINGS` run after the page that they name, in a copy of its namespace: they use the objects of the page,
 for example `orders`. A page that imports polars is skipped without polars. A page can set the engine of the process, so each page starts and ends on the pandas engine, not
-frozen. The polars validators and metrics that a page registers are removed after the page.
+frozen. The polars validators and metrics that a page registers, and the engines that it creates, are removed after the page.
 """
 
 import doctest
@@ -45,12 +45,17 @@ class TestDocsExamples:
 
     @staticmethod
     def keep_the_polars_registries(monkeypatch) -> None:
-        """Give each registry a copy for the page, so a validator or a metric of the page does not stay registered."""
+        """Give each registry a copy for the page, so a validator or a metric of the page does not stay registered.
+
+        An engine keeps the registries that it was created with, so the page also gets its own engine cache. An engine of the page thus does not stay
+        in the cache with the copies of the page.
+        """
         from dynamicio.schema.polars_metrics import PolarsMetrics  # pylint: disable=import-outside-toplevel
         from dynamicio.schema.polars_validations import PolarsValidations  # pylint: disable=import-outside-toplevel
 
         for registry in (PolarsValidations, PolarsMetrics):
             monkeypatch.setattr(registry, "ALL", dict(registry.ALL))
+        monkeypatch.setattr(EngineSetting, "_instances", {})
 
     @staticmethod
     def run_docstrings(names: list, namespace: dict) -> None:
