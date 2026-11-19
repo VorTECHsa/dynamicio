@@ -196,6 +196,9 @@ schema declaration.
       thus gives `Int64` or `boolean`, as `DataFrame.to_parquet` gives for a pandas column with a null. The rule applies to `write()`, to `sink()`
       and to the pandas frames of the CSV, JSON, Postgres and Kafka writers. A pandas read of the parquet file then gives the exact integers, also
       above 2**53. A pandas read of a CSV or JSON file infers `float64` for this column (exception 5 of rule 2).
+    - A pandas model of a numpy `int64` or `bool` column cannot hold a null. A pandas read of a polars file with a null in this column thus raises
+      `ColumnsDataTypeError`, as it does for a pandas file with a NaN in it. A repo with nulls in an integer or a Boolean column declares `Int64` or
+      `boolean` in its pandas model.
     - The contract covers the pandas dtypes of this reverse map only.
 15. Integration tests on both engines run against [floci](https://github.com/floci-io/floci), a local AWS emulator. One container gives S3, RDS with
     `postgres:16` and MSK with a Redpanda broker.
