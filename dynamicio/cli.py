@@ -128,7 +128,15 @@ def run_migrate(argv: Sequence[str]) -> None:
 
 
 def run_polars_migrate(path: str, output: str, scan: str) -> None:
-    """``dynamicio migrate --engine polars``: the pandas models at ``path`` to polars models, plus a report of the checks and resources to change."""
+    """``dynamicio migrate --engine polars``: the pandas models at ``path`` to polars models, plus a report of the checks and resources to change.
+
+    Examples:
+        Run it from the root of the repo, because it imports the modules of the models by their dotted name:
+
+        ```bash
+        dynamicio migrate --engine polars src/resources/schemas -o src/resources/polars_schemas --scan src/resources
+        ```
+    """
     EngineSetting.require_polars()
     from dynamicio.schema.polars_migrate import migrate_to_polars  # pylint: disable=import-outside-toplevel
 

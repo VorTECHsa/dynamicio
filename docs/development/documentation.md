@@ -24,8 +24,11 @@ Nothing needs credentials or network access to the services dynamicio talks to.
   `tests/test_docs_examples.py`. The blocks of a page run in order, in one namespace, in an empty directory. Use `LOCAL`
   resources only, so no example needs credentials. Blocks without the comment (S3, Postgres, Kafka, fragments) are not run, so keep them
   short and copy them from code that is.
-- **Only document what exists.** dynamicio executes on pandas. Polars is not supported; do not describe it as available,
-  and do not add benchmarks or performance claims that are not backed by an ADR.
+- **Docstring examples are tested.** The `>>>` examples of the docstrings in `DOCSTRINGS` of `tests/test_docs_examples.py` run
+  after the page that they name, with the objects of that page, for example `orders` of the polars guide. Add a docstring there
+  when you give it an `Examples:` section.
+- **Only document what exists.** dynamicio has a pandas engine and a polars engine (see [The polars engine](../guides/polars-engine.md)).
+  Do not add benchmarks or performance claims that are not backed by an ADR.
 - **No private details.** The documentation is public: no bucket names, hostnames, account ids or internal systems.
 - **Images** live in `docs/images/` and are referenced relatively. Check that nothing references an image before you delete it.
 

@@ -11,12 +11,23 @@ from dynamicio.schema.models import ModelCompiler
 
 
 class DataModel(pa.DataFrameModel):
-    """A ``pandera.polars`` ``DataFrameModel`` whose class keywords name the dataset, the same as ``dynamicio.schema.DataModel`` for pandas::
-
-        class Orders(DataModel, dataset="orders", table="orders_v2"):
-            order_id: int = Field(nullable=False, unique=True)
+    """A ``pandera.polars`` ``DataFrameModel`` whose class keywords name the dataset, the same as ``dynamicio.schema.DataModel`` for pandas.
 
     An IO object takes this model only when the engine of the process is polars (``dynamicio.configure(engine="polars")``).
+
+    Examples:
+        The columns use the polars dtypes. ``pandas_dtype`` gives the pandas dtype of a column in the files of the polars engine:
+
+        >>> from typing import Annotated
+        >>> import polars as pl
+        >>> from dynamicio.schema import Field
+        >>> from dynamicio.schema.polars import DataModel
+        >>> class Orders(DataModel, dataset="orders", table="orders_v2"):
+        ...     order_id: int = Field(nullable=False, unique=True)
+        ...     status: Annotated[pl.Enum, ["open", "closed"]] = Field(nullable=False)
+        ...     quantity: int = Field(nullable=True, pandas_dtype="Int64")
+        >>> Orders.to_schema().columns["quantity"].metadata
+        {'pandas_dtype': 'Int64'}
     """
 
     def __init_subclass__(cls, dataset: Optional[str] = None, table: Optional[str] = None):

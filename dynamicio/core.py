@@ -221,6 +221,13 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
 
         Raises:
             NotImplementedError: On the pandas engine, which has no lazy frame.
+
+        Examples:
+            A filter and a selection of the plan read only the row groups and the columns that they need:
+
+            >>> lazy = orders.scan()
+            >>> lazy.filter(pl.col("quantity") > 10).select("order_id").collect()["order_id"].to_list()
+            [3]
         """
         engine = EngineSetting.use(self._model, resource=self, operation="scan")
         try:
@@ -249,6 +256,16 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
             NotImplementedError: On the pandas engine, which has no lazy frame, and for a resource that the polars engine does not sink yet.
             ColumnsDataTypeError: A schema column is not in the frame, or a cast failed.
             SchemaValidationError: A validation failed. The destination does not change.
+
+        Examples:
+            Sink a filtered scan, then the parts of one frame:
+
+            >>> big_orders.sink(orders.scan().filter(pl.col("quantity") > 10))
+            >>> big_orders.read()["order_id"].to_list()
+            [3]
+            >>> big_orders.sink([orders.scan(), orders.scan().with_columns(pl.col("order_id") + 3)])
+            >>> big_orders.read()["order_id"].to_list()
+            [1, 2, 3, 4, 5, 6]
         """
         parts = tuple(df) if isinstance(df, (list, tuple)) else (df,)
         EngineSetting.use(self._model, parts, resource=self, operation="sink").sink(self, df)
@@ -265,6 +282,15 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
         Raises:
             EngineResourceError: The resource is not a ``local`` or ``s3_file`` parquet file.
             FileNotFoundError: The file does not exist, and `missing_ok` is False. An S3 key raises ``S3KeyNotFoundError``.
+
+        Examples:
+            >>> footer = big_orders.footer()
+            >>> footer.rows, footer.row_groups
+            (6, 1)
+            >>> str(footer.schema.field("created_at").type)
+            'timestamp[ms, tz=UTC]'
+            >>> b"pandas" in footer.metadata
+            True
         """
         try:
             return ParquetFooters.read(self)

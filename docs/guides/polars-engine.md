@@ -10,8 +10,11 @@ writes a `postgres` resource, reads an `athena` resource and writes a `kafka` re
 
 ## Set the engine
 
+The examples of this page are one script. The test suite runs them in order, in an empty directory, on `local` files.
+
 An engine is a setting of the process. Set it before the first read or write:
 
+<!-- doctest -->
 ```python
 import dynamicio
 
@@ -68,6 +71,7 @@ polars. Thus a value that the repo sets after `import dynamicio` and before the 
 A polars model is a `dynamicio.schema.polars.DataModel`. It has the same `dataset` and `table` class keywords as a pandas model, and its columns
 use the polars dtypes:
 
+<!-- doctest -->
 ```python
 from typing import Annotated
 
@@ -136,6 +140,71 @@ The readers are polars readers, and the engine then casts the frame to the model
 
 `write()` collects a `LazyFrame` before it writes the file.
 
+This example writes and reads a parquet file of the `Orders` model. The resource definitions have a second file, `big_orders.parquet`, for the
+examples of `sink()`:
+
+<!-- doctest -->
+```python
+import pathlib
+from datetime import datetime, timezone
+
+from dynamicio import UnifiedIO
+from dynamicio.config import IOConfig
+
+pathlib.Path("orders.yaml").write_text(
+    """
+ORDERS:
+  LOCAL:
+    type: local
+    local:
+      file_path: "[[ DATA_DIR ]]/orders.parquet"
+      file_type: parquet
+BIG_ORDERS:
+  LOCAL:
+    type: local
+    local:
+      file_path: "[[ DATA_DIR ]]/big_orders.parquet"
+      file_type: parquet
+"""
+)
+
+
+class Settings:
+    DATA_DIR = "."
+
+
+class OrdersIO(UnifiedIO):
+    schema = Orders
+
+
+config = IOConfig("orders.yaml", env_identifier="LOCAL", dynamic_vars=Settings)
+orders = OrdersIO(source_config=config.get(source_key="ORDERS"))
+orders.write(
+    pl.DataFrame(
+        {
+            "order_id": [1, 2, 3],
+            "price": [9.5, None, 3.25],
+            "status": ["open", "closed", "open"],
+            "created_at": [datetime(2026, 1, day, tzinfo=timezone.utc) for day in (1, 2, 3)],
+            "quantity": [4, None, 12],
+        }
+    )
+)
+
+frame = orders.read()
+assert frame.schema["quantity"] == pl.Int64
+assert orders.schema.columns["quantity"].data_type == "Int64"
+```
+
+The pandas engine reads the same file with the pandas dtypes of the model, for example `Int64` for `quantity`:
+
+<!-- doctest -->
+```python
+import pandas as pd
+
+assert pd.read_parquet("orders.parquet").dtypes["quantity"] == "Int64"
+```
+
 A parquet file of the polars engine goes to S3 in one `PutObject` up to 64 MiB, and in a multipart upload of 64 MiB parts above that, with 4 parts
 at a time. Each upload has the `bucket-owner-full-control` ACL. A failed part aborts the upload, so S3 keeps no part and the old object does not change.
 
@@ -147,9 +216,11 @@ delete the same old objects. A prefix read on the two engines does not read the 
 
 `scan()` gives a `LazyFrame` with the columns of the model and the casts of the model in its plan. Nothing is read before you collect it:
 
+<!-- doctest -->
 ```python
-lazy = io.scan()
-frame = lazy.filter(pl.col("a") > 10).select("b").collect()
+lazy = orders.scan()
+frame = lazy.filter(pl.col("quantity") > 10).select("order_id").collect()
+assert frame["order_id"].to_list() == [3]
 ```
 
 - A parquet or CSV scan uses `scan_parquet` or `scan_csv`. A filter or a selection then reads only the row groups and the columns that it needs.
@@ -198,8 +269,11 @@ The engine checks the resource when you make the IO object, and again at each re
 
 `sink()` writes a `LazyFrame` with the casts, the validations and the metrics of the model in one `pl.collect_all`:
 
+<!-- doctest -->
 ```python
-io.sink(io.scan().filter(pl.col("a") > 10))
+big_orders = OrdersIO(source_config=config.get(source_key="BIG_ORDERS"), apply_schema_validations=True, log_schema_metrics=True)
+big_orders.sink(orders.scan().filter(pl.col("quantity") > 10))
+assert big_orders.read()["order_id"].to_list() == [3]
 ```
 
 - A parquet sink to a `local` or an `s3_file` resource streams the rows to a temporary file. It then copies the row groups to a file with the arrow
@@ -212,8 +286,10 @@ io.sink(io.scan().filter(pl.col("a") > 10))
 
 `sink()` also takes a list or a tuple of lazy frames, the parts of one frame in their order:
 
+<!-- doctest -->
 ```python
-io.sink([io_a.scan(), io_b.scan()])
+big_orders.sink([orders.scan(), orders.scan().with_columns(pl.col("order_id") + 3)])
+assert big_orders.read()["order_id"].to_list() == [1, 2, 3, 4, 5, 6]
 ```
 
 Each part gets the schema columns and the casts of the model before the concatenation. The parts can thus have other types of a column, for example
@@ -223,9 +299,15 @@ Each part gets the schema columns and the casts of the model before the concaten
 
 `footer()` reads the footer of the parquet file of a `local` or an `s3_file` resource, without its rows:
 
+<!-- doctest -->
 ```python
-footer = io.footer()
-footer.rows, footer.row_groups, footer.schema, footer.metadata[b"pandas"]
+import json
+
+footer = big_orders.footer()
+assert (footer.rows, footer.row_groups) == (6, 1)
+assert str(footer.schema.field("created_at").type) == "timestamp[ms, tz=UTC]"
+pandas_dtypes = {column["name"]: column["numpy_type"] for column in json.loads(footer.metadata[b"pandas"])["columns"]}
+assert pandas_dtypes["quantity"] == "Int64"
 ```
 
 The read is the same on the two engines, and does not fix the engine. On S3 it reads the end of the object with ranged `GetObject` calls. A
@@ -237,6 +319,32 @@ file type raises `EngineResourceError`.
 A read runs the query of the pandas engine, so `sql_query` and `params` give the same rows. `params` has the style of the driver, for example
 `%(low)s`. The engine then casts the frame to the model. A `pd.read_sql` option that changes the frame, for example `dtype` or `parse_dates`,
 raises `EngineResourceError`, because the cast of the model gives the types.
+
+The Postgres, Kafka and Athena examples need a database, a broker or an AWS account, so the test suite does not run them. They use a
+`CLOUD` environment of the same `orders.yaml`:
+
+```yaml
+ORDERS_DB:
+  CLOUD:
+    type: "postgres"
+    postgres:
+      db_host: "[[ DB_HOST ]]"
+      db_port: "[[ DB_PORT ]]"
+      db_name: "[[ DB_NAME ]]"
+      db_user: "[[ DB_USER ]]"
+      db_password: "[[ DB_PASS ]]"
+```
+
+```python
+cloud = IOConfig("orders.yaml", env_identifier="CLOUD", dynamic_vars=Settings)
+large = OrdersIO(
+    source_config=cloud.get(source_key="ORDERS_DB"),
+    sql_query="SELECT * FROM orders WHERE quantity > %(low)s",
+    params={"low": 10},
+).read()
+```
+
+A write needs the `table` class keyword of the model, for example `class Orders(DataModel, dataset="orders", table="sales.orders")`.
 
 A write replaces the rows of the table with the COPY of the pandas engine, in one transaction:
 
@@ -257,7 +365,11 @@ WRITE_TO_KAFKA:
       kafka_server: "[[ KAFKA_SERVER ]]"
       kafka_topic: "[[ KAFKA_TOPIC ]]"
     options:
-      key_column: "key"
+      key_column: "order_id"
+```
+
+```python
+OrdersIO(source_config=cloud.get(source_key="WRITE_TO_KAFKA")).write(frame)
 ```
 
 - A polars frame has no index. A missing `key_column`, or a `key_column` that is not a column of the model, thus raises `EngineResourceError` at once.
@@ -272,6 +384,19 @@ A Kafka read raises the `NotImplementedError` of the pandas engine.
 A read runs the awswrangler query of the pandas engine with its options, and the engine casts the result to the model. The `chunksize` option raises
 the `ValueError` of the pandas engine. An Athena write raises the `NotImplementedError` of the pandas engine.
 
+```yaml
+ORDERS_ATHENA:
+  CLOUD:
+    type: athena
+    athena:
+      s3_output: "s3://[[ ATHENA_BUCKET ]]/dynamicio/"
+      database: sales
+```
+
+```python
+frame = OrdersIO(source_config=cloud.get(source_key="ORDERS_ATHENA"), query="SELECT * FROM orders").read()
+```
+
 ## Cast
 
 `_apply_schema()` casts a frame to the polars dtypes of the model:
@@ -285,6 +410,21 @@ the `ValueError` of the pandas engine. An Athena write raises the `NotImplemente
 - A schema column that is not in the frame, or a `columns` option with a column that is not in the schema, raises `ColumnsDataTypeError`.
 - With `show_casting_warnings=True`, each column that casts logs its found and its expected dtype.
 - The engine ignores `strict_dtype_check`.
+
+<!-- doctest -->
+```python
+from dynamicio.errors import ColumnsDataTypeError
+
+text = pl.DataFrame({"order_id": ["4"], "price": ["1.5"], "status": ["open"], "created_at": ["2026-02-01 10:00:00"], "quantity": [None]})
+assert orders._apply_schema(text).schema["created_at"] == pl.Datetime("ms", "UTC")
+
+try:
+    orders._apply_schema(text.with_columns(order_id=pl.lit("x")))
+except ColumnsDataTypeError as error:
+    print(f"order_id does not cast: {error!r}")
+else:
+    raise AssertionError("a text that is not a number cast to an integer")
+```
 
 ## Validations
 
@@ -306,7 +446,39 @@ group. As on the pandas engine, the entry gives the first group with repeated ro
 `is_in` accepts a null when the pandas `isin` accepts it. A null of a float column matches NaN only. A null of an integer or a Boolean column matches no
 value. A null of the other columns matches None or NaN.
 
-`PolarsValidations.validator` registers a polars validator, as `@validator` of `dynamicio.schema.validations` does for the pandas engine.
+A write with validations raises before it writes the file:
+
+<!-- doctest -->
+```python
+from dynamicio.errors import SchemaValidationError
+
+try:
+    big_orders.write(orders.read().with_columns(order_id=pl.lit(1)))
+except SchemaValidationError as error:
+    assert "has_unique_values" in str(error)
+else:
+    raise AssertionError("a repeated order_id passed the validations")
+assert big_orders.read().height == 6
+```
+
+`PolarsValidations.validator` registers a polars validator, as `@validator` of `dynamicio.schema.validations` does for the pandas engine. A validator
+returns a `PolarsValidations.Pending`: the lazy queries of its result, and a function that makes a `ValidationResult` of their collected frames. The engine
+collects the queries of all validators in one `pl.collect_all`:
+
+<!-- doctest -->
+```python
+from dynamicio.schema.polars_validations import PolarsValidations
+from dynamicio.schema.validations import ValidationResult
+
+
+@PolarsValidations.validator
+def is_even(dataset, frame, column):
+    def finish(frames):
+        odd = frames[0].item()
+        return ValidationResult(valid=odd == 0, message=f"{odd} cell values of {dataset}[{column}] are odd", value=odd)
+
+    return PolarsValidations.Pending((frame.select((pl.col(column) % 2 == 1).sum()),), finish)
+```
 
 ## Metrics
 
@@ -316,3 +488,13 @@ lines of the pandas engine. For an empty or an all-null column, `Min`, `Max`, `M
 
 `PolarsMetrics.metric("Name")` registers a polars metric, as a `Metric` subclass does for the pandas engine. A polars metric is a function of the
 column name that returns a polars expression with one value.
+
+<!-- doctest -->
+```python
+from dynamicio.schema.polars_metrics import PolarsMetrics
+
+
+@PolarsMetrics.metric("Median")
+def median(column):
+    return pl.col(column).median()
+```

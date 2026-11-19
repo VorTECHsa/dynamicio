@@ -6,6 +6,14 @@ no import of pytest: pytest calls the hooks below with its parser, its config an
 
 The option ``--dynamicio-engine=pandas|polars`` calls ``dynamicio.configure()`` before the first test, so one test suite runs on each engine. One process
 cannot change its engine, so CI runs one job for each engine.
+
+Examples:
+    Run the tests of a repo on each engine, in two processes:
+
+    ```bash
+    pytest --dynamicio-engine=pandas tests
+    pytest --dynamicio-engine=polars tests
+    ```
 """
 
 from dynamicio.testharness.session_report import SessionReport

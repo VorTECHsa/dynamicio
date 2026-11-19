@@ -87,6 +87,16 @@ def Field(  # pylint: disable=invalid-name,too-many-arguments,too-many-locals
         pandas_dtype: On a polars model only, the pandas dtype of the column, for example ``"Int64"`` for an ``Int64`` column that pandas reads as nullable.
             The polars engine writes it into the pandas metadata of its files. A column without it takes the dtype of the reverse map (``Int64`` gives ``int64``).
         pandera_options: Any other ``pa.Field`` argument (``alias``, ``coerce``, ``str_matches``, ``description`` ...).
+
+    Examples:
+        >>> from pandera.typing import Series
+        >>> from dynamicio.schema import DataModel, Field, Metric
+        >>> class Orders(DataModel, dataset="orders"):
+        ...     order_id: Series[int] = Field(nullable=False, unique=True, gt=0, metrics=[Metric.MIN, Metric.MAX])
+        ...     price: Series[float] = Field(nullable=True, ge=0, max_null_fraction=0.5)
+        ...     status: Series[str] = Field(nullable=False, isin=["open", "closed"])
+        >>> sorted(Orders.to_schema().columns)
+        ['order_id', 'price', 'status']
     """
     removed = sorted({"between", "include_lower", "include_upper"} & set(pandera_options))
     if removed:  # dynamicio 11.0.0 release candidates had them

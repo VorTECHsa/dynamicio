@@ -74,6 +74,19 @@ class WithKafka:
         >>>     {"key": "key-03", "value": {"bar": 1000, "baz": "ABC", "foo": "id_3", "id": "cm_3", "new_field": "new_value"}},
         >>> ]
 
+        The polars engine needs `key_column`, because a polars frame has no index. The column gives the keys, and is not in the values:
+
+        ```yaml
+        WRITE_TO_KAFKA:
+          CLOUD:
+            type: "kafka"
+            kafka:
+              kafka_server: "[[ KAFKA_SERVER ]]"
+              kafka_topic: "[[ KAFKA_TOPIC ]]"
+            options:
+              key_column: "key"
+        ```
+
     Note:
         The `__abstractmethods__ = frozenset()` is used to silence false positives from pylint,
         which might wrongly assume this class has abstract methods due to NotImplementedError.

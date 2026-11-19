@@ -53,6 +53,12 @@ class EngineSetting:
             EngineConfigurationError: If dynamicio has no engine of that name, or a read or write has already fixed another engine.
             ImportError: If the engine is polars and polars is not installed.
             EngineConfigurationError: If the engine is polars and the process is a fork of a process that imported polars.
+
+        Examples:
+            Call it in the package ``__init__.py`` of the repo, so that a spawned process also gets it:
+
+            >>> import dynamicio
+            >>> dynamicio.configure(engine="polars")
         """
         if engine not in cls.ENGINES:
             raise EngineConfigurationError(f"dynamicio has no engine {engine!r}: use one of {', '.join(cls.NAMES)}")
