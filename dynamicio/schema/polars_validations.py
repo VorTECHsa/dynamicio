@@ -64,7 +64,12 @@ class PolarsValidations:
 
     @staticmethod
     def has_unique_values(dataset: str, frame: pl.LazyFrame, column: str) -> "PolarsValidations.Pending":
-        """The non-null values that repeat, most frequent first and then in the order they first appear, as ``value_counts`` gives them in pandas."""
+        """The non-null values that repeat, most frequent first, as ``value_counts`` gives them in pandas.
+
+        Values with the same count are in the order they first appear. A ``Categorical`` or ``Enum`` column is a pandas ``category`` with sorted
+        categories, and pandas puts its values with the same count in the order of the categories.
+        """
+        categorical = isinstance(frame.collect_schema()[column], (pl.Categorical, pl.Enum))
         # The column is renamed first, so its name does not collide with the names of the row index and of the count
         duplicates = (
             frame.select(pl.col(column).alias("value"))
@@ -73,7 +78,7 @@ class PolarsValidations:
             .group_by("value")
             .agg(pl.len().alias("count"), pl.col("row").first())
             .filter(pl.col("count") > 1)
-            .sort(["count", "row"], descending=[True, False])
+            .sort(["count", pl.col("value").cast(pl.String) if categorical else "row"], descending=[True, False])
             .select("value")
         )
 

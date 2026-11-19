@@ -181,6 +181,22 @@ class TestCast:
         assert "a cast in its plan failed" in caplog.text
 
     @pytest.mark.unit
+    def test_a_lazy_frame_that_does_not_cast_raises_when_a_dataframe_check_is_made(self, polars_io, tmp_path, caplog):
+        class Checked(DataModel, dataset="checked"):
+            n: pl.Int8 = Field(nullable=False)
+
+            @pa_polars.dataframe_check
+            def small(cls, data):  # pylint: disable=no-self-argument
+                return data.lazyframe.select(pl.col("n") < 5)
+
+        io = polars_io(tmp_path, Checked)
+        cast = io._apply_schema(pl.LazyFrame({"n": ["1", "x"]}))  # pylint: disable=protected-access
+
+        with caplog.at_level(logging.ERROR, logger="dynamicio.core"), pytest.raises(ColumnsDataTypeError):
+            io.validate_from_schema(cast)
+        assert "The validations of CHECKED could not collect the frame: a cast in its plan failed" in caplog.text
+
+    @pytest.mark.unit
     def test_a_lazy_frame_that_does_not_cast_raises_when_its_metrics_are_logged(self, polars_io, tmp_path, caplog):
         io = polars_io(tmp_path)
         cast = io._apply_schema(pl.LazyFrame({"order_id": ["1", "x"], "price": [1.0, 2.0], "status": ["open", "open"]}))  # pylint: disable=protected-access

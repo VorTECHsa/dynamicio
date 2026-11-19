@@ -286,6 +286,16 @@ class TestValidatorEdgeCases:
         assert PolarsValidations.python_values(datetimes) == [pd.Timestamp(5, tz="UTC")]
 
     @pytest.mark.unit
+    @pytest.mark.parametrize("dtype", [pl.Categorical, pl.Enum(["c", "b", "a"])])
+    def test_has_unique_values_orders_the_categories_with_one_count_as_pandas_does(self, dtype):
+        values = ["b", "b", "c", "a", "a", "c", "d", "d", "d"] if dtype == pl.Categorical else ["b", "b", "c", "a", "a", "c"]
+        expected = validations.has_unique_values("d", pd.DataFrame({"x": pd.Series(values).astype("category")}), "x")
+
+        result = self.run(PolarsValidations.has_unique_values("d", pl.LazyFrame({"x": pl.Series(values, dtype=dtype)}), "x"))
+
+        assert (result.valid, result.message) == (False, expected.message)
+
+    @pytest.mark.unit
     def test_has_unique_values_reports_a_duplicated_nanosecond_duration_as_pandas_does(self):
         expected = validations.has_unique_values("d", pd.DataFrame({"x": pd.to_timedelta([1, 1], unit="ns")}), "x")
 

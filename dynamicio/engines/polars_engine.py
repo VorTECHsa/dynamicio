@@ -133,9 +133,10 @@ class PolarsEngine(Engine):
         """
         import polars as pl  # pylint: disable=import-outside-toplevel
 
-        pending = self.pending_validations(io, frame.lazy())
-        queries = [query for _, check in pending for query in check.queries]
         try:
+            # A check can collect a part of the plan when it is made, for example the schema of a column or a Pandera dataframe check
+            pending = self.pending_validations(io, frame.lazy())
+            queries = [query for _, check in pending for query in check.queries]
             collected = pl.collect_all(queries) if queries else []
         except (pl.exceptions.InvalidOperationError, pl.exceptions.ComputeError):
             self.logger().exception(f"The validations of {io.name} could not collect the frame: a cast in its plan failed")
