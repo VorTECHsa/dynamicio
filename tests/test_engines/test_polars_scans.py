@@ -138,6 +138,27 @@ class TestScanOfLocalFiles:
         assert result.to_dicts() == [{"a": 1, "b": "x"}, {"a": 2, "b": None}]
 
     @pytest.mark.unit
+    def test_quote_none_reaches_the_scan(self, tmp_path):
+        # Given
+        (tmp_path / "data.csv").write_text('a,b\n1,"literal"\n')
+
+        # When
+        result = Files.polars(Files.config(tmp_path, "csv", {"quoting": 3}), Pair).scan().collect()
+
+        # Then
+        assert result.to_dicts() == [{"a": 1, "b": '"literal"'}]
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("options", [{"escapechar": "\\"}, {"doublequote": False}])
+    def test_the_escape_options_that_polars_cannot_read_are_refused_before_a_scan(self, tmp_path, options):
+        # Given
+        (tmp_path / "data.csv").write_text("a,b\n1,x\n")
+
+        # When / Then
+        with pytest.raises(EngineResourceError, match="the polars engine reads"):
+            Files.polars(Files.config(tmp_path, "csv", options), Pair).scan()
+
+    @pytest.mark.unit
     def test_a_json_epoch_reads_as_a_utc_instant_in_a_scan(self, tmp_path):
         # Given
         (tmp_path / "data.json").write_text('[{"id": 1, "flag": true, "created_at": 1704067200000}]')
@@ -295,6 +316,8 @@ class TestWidestType:
             ([pl.Datetime("us"), pl.Datetime("ns")], pl.Datetime("ns")),
             ([pl.Datetime("ms", "UTC"), pl.Datetime("us", "UTC")], pl.Datetime("us", "UTC")),
             ([pl.Boolean, pl.Null, pl.Boolean], pl.Boolean),
+            ([pl.Duration("ms"), pl.Duration("ns")], pl.Duration("ns")),
+            ([pl.Duration("us"), pl.Null, pl.Duration("ms")], pl.Duration("us")),
         ],
     )
     def test_the_footer_types_give_the_type_of_pd_concat(self, dtypes, expected):
@@ -319,6 +342,120 @@ class TestWidestType:
 
         # Then
         assert "for the column 'c', which do not upcast to one type" in caplog.text
+
+
+class TestScanObjects:
+    """``scan_objects`` over local parquet files. The S3 arguments are empty, so the code of a prefix scan reads local paths."""
+
+    @staticmethod
+    def write(tmp_path, tables):
+        paths = []
+        for number, table in enumerate(tables):
+            path = tmp_path / f"{number}.parquet"
+            pq.write_table(table, path)
+            paths.append(str(path))
+        return paths
+
+    @staticmethod
+    def pandas_concat(paths):
+        return pd.concat([frame for frame in (pd.read_parquet(path) for path in paths) if len(frame)], ignore_index=True)
+
+    @pytest.fixture(autouse=True)
+    def local_arguments(self, monkeypatch):
+        monkeypatch.setattr(PolarsS3, "arguments", classmethod(lambda cls: {}))
+
+    @pytest.mark.unit
+    def test_an_empty_object_with_another_type_is_left_out_as_pd_concat_does(self, tmp_path):
+        # Given
+        paths = self.write(
+            tmp_path,
+            [pa.table({"a": pa.array([], pa.string()), "b": pa.array([], pa.string())}), pa.table({"a": pa.array([1, 2], pa.int64()), "b": ["x", "y"]})],
+        )
+
+        # When
+        result = PolarsScans.scan_objects(types.SimpleNamespace(name="x"), paths, "here", {"columns": ["a", "b"]}).collect()
+
+        # Then
+        assert result.schema == pl.Schema({"a": pl.Int64, "b": pl.String})
+        assert result.to_dicts() == [{"a": 1, "b": "x"}, {"a": 2, "b": "y"}]
+        assert result.to_pandas().equals(self.pandas_concat(paths))
+
+    @pytest.mark.unit
+    def test_empty_objects_only_keep_the_type_error(self, tmp_path, caplog):
+        # Given
+        paths = self.write(tmp_path, [pa.table({"a": pa.array([], pa.string())}), pa.table({"a": pa.array([], pa.int64())})])
+
+        # When / Then
+        with pytest.raises(ColumnsDataTypeError):
+            PolarsScans.scan_objects(types.SimpleNamespace(name="x"), paths, "here", {"columns": ["a"]})
+        assert "which do not upcast to one type" in caplog.text
+
+    @pytest.mark.unit
+    def test_a_non_empty_object_with_another_type_still_raises(self, tmp_path):
+        # Given
+        paths = self.write(tmp_path, [pa.table({"a": pa.array([], pa.int64())}), pa.table({"a": ["x"]}), pa.table({"a": pa.array([1], pa.int64())})])
+
+        # When / Then
+        with pytest.raises(ColumnsDataTypeError):
+            PolarsScans.scan_objects(types.SimpleNamespace(name="x"), paths, "here", {"columns": ["a"]})
+
+    @pytest.mark.unit
+    def test_an_empty_object_that_upcasts_still_counts(self, tmp_path):
+        # Given
+        paths = self.write(tmp_path, [pa.table({"a": pa.array([], pa.float64())}), pa.table({"a": pa.array([1], pa.int64())})])
+
+        # When
+        result = PolarsScans.scan_objects(types.SimpleNamespace(name="x"), paths, "here", {"columns": ["a"]}).collect()
+
+        # Then
+        assert result.schema == pl.Schema({"a": pl.Float64})
+        assert result["a"].to_list() == [1.0]
+
+    @pytest.mark.unit
+    def test_durations_of_several_units_read_in_the_finest_unit_in_the_listing_order(self, tmp_path):
+        # Given
+        units = ["ms", "ms", "ns", "us", "ms"]
+        paths = self.write(
+            tmp_path,
+            [pa.table({"n": [number], "d": pa.array([timedelta(milliseconds=number + 1)], pa.duration(unit))}) for number, unit in enumerate(units)],
+        )
+
+        # When
+        result = PolarsScans.scan_objects(types.SimpleNamespace(name="x"), paths, "here", {"columns": ["n", "d"]}).collect()
+
+        # Then
+        assert result.schema == pl.Schema({"n": pl.Int64, "d": pl.Duration("ns")})
+        assert result["n"].to_list() == [0, 1, 2, 3, 4]
+        assert result["d"].to_list() == [timedelta(milliseconds=number + 1) for number in range(5)]
+        assert result.to_pandas().equals(self.pandas_concat(paths))
+
+    @pytest.mark.unit
+    def test_a_filter_and_a_selection_reach_each_scan_of_the_duration_units(self, tmp_path):
+        # Given
+        paths = self.write(
+            tmp_path,
+            [pa.table({"n": [1, 2], "d": pa.array([timedelta(1), timedelta(2)], pa.duration("ms"))}), pa.table({"n": [3], "d": pa.array([timedelta(3)], pa.duration("ns"))})],
+        )
+
+        # When
+        result = PolarsScans.scan_objects(types.SimpleNamespace(name="x"), paths, "here", {"columns": ["n", "d"]}).filter(pl.col("n") > 1).select("d").collect()
+
+        # Then
+        assert result["d"].to_list() == [timedelta(2), timedelta(3)]
+
+    @pytest.mark.unit
+    def test_an_object_that_lacks_a_duration_column_gets_nulls_of_the_finest_unit(self, tmp_path):
+        # Given
+        paths = self.write(
+            tmp_path, [pa.table({"n": [1], "d": pa.array([timedelta(1)], pa.duration("ms"))}), pa.table({"n": [2]}), pa.table({"n": [3], "d": pa.array([None], pa.null())})]
+        )
+
+        # When
+        result = PolarsScans.scan_objects(types.SimpleNamespace(name="x"), paths, "here", {"columns": ["n", "d"]}).collect()
+
+        # Then
+        assert result.schema == pl.Schema({"n": pl.Int64, "d": pl.Duration("ms")})
+        assert result["d"].to_list() == [timedelta(1), None, None]
 
 
 class Sessions:

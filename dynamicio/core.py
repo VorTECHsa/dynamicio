@@ -222,7 +222,7 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
         Raises:
             NotImplementedError: On the pandas engine, which has no lazy frame.
         """
-        engine = EngineSetting.use(self._model, resource=self)
+        engine = EngineSetting.use(self._model, resource=self, operation="scan")
         try:
             frame = engine.scan(self)
         except FileNotFoundError as err:
@@ -251,7 +251,7 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
             SchemaValidationError: A validation failed. The destination does not change.
         """
         parts = tuple(df) if isinstance(df, (list, tuple)) else (df,)
-        EngineSetting.use(self._model, parts, resource=self).sink(self, df)
+        EngineSetting.use(self._model, parts, resource=self, operation="sink").sink(self, df)
 
     def footer(self) -> Optional[ParquetFooter]:
         """Read the footer of a parquet file without its rows: the arrow schema, the key-value metadata and the row count.

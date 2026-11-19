@@ -114,6 +114,24 @@ class TestMetricLog:
         assert [c.args for c in log_metric.call_args_list] == [("d", "x-a", "CountsPerLabel", 1), ("d", "x-b", "CountsPerLabel", 2)]
 
     @pytest.mark.unit
+    def test_counts_per_label_of_an_enum_has_the_categories_first_with_zero_counts(self):
+        dtype = pl.Enum(["c", "a", "b"])
+        counts = [{"label": "b", "x-count": 2}, {"label": "a", "x-count": 1}]
+
+        assert list(PolarsMetrics.counts_per_label("x", counts, dtype).items()) == [("x-c", 0), ("x-a", 1), ("x-b", 2)]
+
+    @pytest.mark.unit
+    def test_counts_per_label_of_many_enum_categories_matches_pandas_value_counts(self):
+        labels = [f"l{i}" for i in range(20_000)]
+        frame = pl.DataFrame({"x": pl.Series(labels[::2] * 2, dtype=pl.Enum(labels))})
+        counts = frame.select(PolarsMetrics.ALL["CountsPerLabel"]("x")).item().to_list()
+
+        result = PolarsMetrics.counts_per_label("x", counts, frame.schema["x"])
+
+        expected = frame.to_pandas()["x"].value_counts()
+        assert result == {"x-" + label: int(count) for label, count in expected.items()}
+
+    @pytest.mark.unit
     def test_a_patch_of_the_old_module_path_sees_the_polars_metrics(self):
         with patch("dynamicio.metrics.log_metric") as log_metric:
             PolarsMetrics.log("d", "x", "Max", 3)

@@ -18,7 +18,8 @@ import dynamicio
 dynamicio.configure(engine="polars")
 ```
 
-The first read or write fixes the engine. After that, `dynamicio.configure()` with another engine raises `EngineConfigurationError`.
+The first read or write fixes the engine. After that, `dynamicio.configure()` with another engine raises `EngineConfigurationError`. A read or a write
+that the engine refuses does not fix it, for example a `scan()` on the pandas engine.
 
 The polars engine needs polars 2.1 or later. Without polars, or with an older polars, `dynamicio.configure(engine="polars")` raises `ImportError`.
 This check reads the version of the installed package and does not import polars. Install polars with `pip install "dynamicio[polars]"`.
@@ -54,10 +55,10 @@ expected outputs of the pandas demo. Run its tests with `pytest -o addopts="-p n
 
 ## Processes and threads
 
-polars can deadlock in a fork of a process that has used polars. A fork of a process with the polars engine thus refuses the engine: its first read or
-write, and `dynamicio.configure(engine="polars")`, raise `EngineConfigurationError`. Start the processes with `spawn` or `forkserver`, for example
+polars can deadlock in a fork of a process that has used polars. A fork of a process that imported polars thus refuses the polars engine, also when the
+parent has the pandas engine. Its first polars read or write and `dynamicio.configure(engine="polars")` raise `EngineConfigurationError`. Start the processes with `spawn` or `forkserver`, for example
 `multiprocessing.get_context("spawn")`. A spawned process does not get the `configure()` call of its parent, so call `configure()` in the package
-`__init__.py` of the repo. A fork of a process with the pandas engine does not change.
+`__init__.py` of the repo. A fork can still use the pandas engine, and a fork of a process that did not import polars does not change.
 
 dynamicio does not set the number of polars threads. polars reads `POLARS_MAX_THREADS` when it is first imported, and `import dynamicio` does not import
 polars. Thus a value that the repo sets after `import dynamicio` and before the first read or write applies.
@@ -161,7 +162,9 @@ frame = lazy.filter(pl.col("a") > 10).select("b").collect()
 A parquet prefix is one scan of all its objects:
 
 - The engine reads the footer of each object. A column has the widest type of the footers, as `pd.concat` gives it, for example `Int64` for `Int32` and `Int64`, and `Float64` for an integer and a float. The scan upcasts the narrower objects.
+- `Datetime` columns with one time zone, and `Duration` columns, give the finest time unit. The objects with the same `Duration` units are one scan, and a cast gives the finest unit. The rows keep the order of the listing.
 - A pair of types that does not upcast, for example `String` and `Int64`, or `Int64` and `UInt64`, raises `ColumnsDataTypeError`.
+- When the types of a column do not upcast, the objects without rows do not count, as in the `pd.concat` of the pandas engine. The engine then reads the row count of each footer. If all the objects are empty, the types count.
 - An object that lacks a column gets nulls in it, with the warning of the pandas engine. A column that no object has raises the `ValueError` of the pandas engine.
 
 The S3 reads of polars use the credentials and the region of the boto3 session of dynamicio. polars refreshes the credentials when they expire. A boto3 endpoint that is not an AWS endpoint, for example a local S3 stack, also goes to polars.
@@ -170,7 +173,7 @@ The S3 reads of polars use the credentials and the region of the boto3 session o
 
 The `options` of a resource go beside its `local` or `s3` section. A file type accepts the options of its pandas reader and of its pandas writer. Examples are `sep`,
 `na_values` and `nrows` for CSV, and `compression` and `row_group_size` for parquet. The engine gives the read options to the polars reader with their polars names,
-for example `separator` for `sep`, and `decimal_comma` for `decimal: ","`.
+for example `separator` for `sep`, and `decimal_comma` for `decimal: ","`. `quoting: 3` (`QUOTE_NONE`) reads with no quote character, as pandas does.
 
 A CSV `names` option names the columns of the file, as on pandas. Without `header`, the first line is data. With `header: 0`, the names replace the
 names of the header line. A file with another number of columns raises the `SchemaError` of polars. pandas then makes an index of the first columns, or
@@ -183,6 +186,7 @@ The polars engine raises `EngineResourceError` for a resource that it cannot rea
 - the parquet `engine: fastparquet`, or `index: true`, because a polars frame has no index
 - a CSV `header` on a line other than the first, a `skiprows` that is not a number, or an encoding other than UTF-8
 - a CSV `na_values` map with null strings for each column, or a `decimal` mark other than `.` and `,`
+- a CSV `escapechar`, `doublequote: false`, or a `quoting` other than `QUOTE_MINIMAL`, `QUOTE_ALL`, `QUOTE_NONNUMERIC` and `QUOTE_NONE`. The pandas reader also applies these writer options, and the polars reader has no equivalent
 - a read of a CSV resource with `header: false` or `header: null` and without `names`. The pandas engine cannot read that file either. A write with `header: false` is accepted
 - a JSON orient other than records. The default orient is records on S3 and columns on a local file, so a local JSON resource must set `orient: records`.
 
@@ -213,7 +217,7 @@ io.sink([io_a.scan(), io_b.scan()])
 ```
 
 Each part gets the schema columns and the casts of the model before the concatenation. The parts can thus have other types of a column, for example
-`Int32` and `Int64`, or a column of nulls only. An empty list raises `ValueError`.
+`Int32` and `Int64`, or a column of nulls only. The parts can also have the columns in another order. An empty list raises `ValueError`.
 
 ## Footer
 

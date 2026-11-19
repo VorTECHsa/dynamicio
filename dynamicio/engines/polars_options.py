@@ -1,5 +1,6 @@
 """The option maps of the polars engine (decision 6 of ADR 0010): the 11.x option names of a file resource, and the polars arguments that they become."""
 
+import csv
 from typing import Any, Dict, Mapping, Optional
 
 from dynamicio.errors import EngineResourceError
@@ -95,6 +96,8 @@ class PolarsOptions:
     PREFIX = frozenset({"no_disk_space", "partition_cols", "mode", "allow_delete"})
 
     ENCODINGS = {"utf-8": "utf8", "utf8": "utf8", "UTF-8": "utf8"}
+    # The `quoting` values that the polars reader reads as `pandas.read_csv` does. QUOTE_NONE reads quotes as text, so the read has no quote character
+    CSV_QUOTING = (csv.QUOTE_MINIMAL, csv.QUOTE_ALL, csv.QUOTE_NONNUMERIC, csv.QUOTE_NONE)
     PANDAS_PARQUET_ENGINES = (None, "auto", "pyarrow")
 
     @classmethod
@@ -142,6 +145,13 @@ class PolarsOptions:
             raise EngineResourceError(f"the polars engine reads a decimal point or a decimal comma, not decimal={options['decimal']!r}")
         if "encoding" in options and options["encoding"] not in cls.ENCODINGS:
             raise EngineResourceError(f"the polars engine reads UTF-8 CSV files, not encoding={options['encoding']!r}")
+        # The pandas reader also applies these writer options. The polars reader has no escape character, and always reads a doubled quote as one quote
+        if options.get("escapechar") is not None:
+            raise EngineResourceError(f"the polars engine reads CSV files without an escape character, not escapechar={options['escapechar']!r}. Remove the escapechar option.")
+        if options.get("doublequote", True) is not True:
+            raise EngineResourceError("the polars engine reads a doubled quote character as one quote character, so it cannot read doublequote=False. Remove the doublequote option.")
+        if options.get("quoting", csv.QUOTE_MINIMAL) not in cls.CSV_QUOTING:
+            raise EngineResourceError(f"the polars engine reads CSV files with quoting QUOTE_MINIMAL, QUOTE_ALL, QUOTE_NONNUMERIC or QUOTE_NONE, not quoting={options['quoting']!r}")
 
     @classmethod
     def check_json(cls, source: str, options: Mapping[str, Any]) -> None:
@@ -165,6 +175,9 @@ class PolarsOptions:
             arguments["encoding"] = cls.ENCODINGS[arguments["encoding"]]
         if file_type == "csv" and options.get("decimal") == ",":
             arguments["decimal_comma"] = True
+        if file_type == "csv" and options.get("quoting") == csv.QUOTE_NONE:
+            # `quoting` is also a write option: QUOTE_NONE writes no quotes, and `pandas.read_csv` reads a quote character as text
+            arguments["quote_char"] = None
         return arguments
 
     @classmethod

@@ -59,9 +59,9 @@ class PolarsMetrics:
         Each entry is a ``{label, count}`` struct, read by position: the count field has the name of ``count_field``. The categories of an ``Enum`` that
         are not in the column have a count of 0, as the categories of a pandas ``category`` in ``value_counts``.
         """
-        found = dict(tuple(entry.values()) for entry in counts)
-        labels = list(dtype.categories) if isinstance(dtype, pl.Enum) else []
-        return {column + "-" + label: found.get(label, 0) for label in [*labels, *(label for label in found if label not in labels)]}
+        found = dict.fromkeys(dtype.categories if isinstance(dtype, pl.Enum) else [], 0)
+        found.update(tuple(entry.values()) for entry in counts)
+        return {column + "-" + label: count for label, count in found.items()}
 
     @staticmethod
     def count_field(column: str) -> str:

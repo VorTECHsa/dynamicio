@@ -7,6 +7,7 @@ reader of a JSON array, so a JSON scan reads the file with the eager reader of t
 A parquet prefix is one ``scan_parquet`` of all its objects that keeps ADR 0002 (decision 13 of ADR 0010):
 
 - The engine reads the footer of each object. The type of each column is the widest type of the footers, and the scan upcasts the narrower objects.
+  When the types of a column do not upcast, the objects without rows do not count, as in the ``pd.concat`` of the pandas engine.
 - An object that lacks a column gets nulls in it, with the warning of the pandas engine. A column that no object has raises ``ValueError``.
 """
 
@@ -30,7 +31,7 @@ class PolarsScans:
     """The ``scan()`` of the file resources: ``local``, ``local_batch``, ``s3_file`` and ``s3_path_prefix``."""
 
     SOURCES = ("local", "local_batch", "s3_file", "s3_path_prefix")
-    # The time units of a Datetime, from the coarsest to the finest
+    # The time units of a Datetime and a Duration, from the coarsest to the finest
     TIME_UNITS = ("ms", "us", "ns")
     WIDE_INTEGERS = (pl.Int128, pl.UInt128)
 
@@ -119,9 +120,45 @@ class PolarsScans:
         never_present = [column for column in requested if absent[column] == len(footers)]
         if never_present:
             raise ValueError(f"Columns {never_present} are missing from every parquet object under {source}")
-        schema = {column: cls.widest(io, column, [footer[column] for footer in footers if column in footer]) for column in requested}
+        if any(cls.upcast(column, cls.types_of(column, footers)) is None for column in requested):
+            rows = PolarsS3.row_counts(urls)
+            if any(rows) and not all(rows):
+                # An empty object gives no rows, so the scan leaves it out and its types do not count
+                urls, footers = [url for url, count in zip(urls, rows) if count], [footer for footer, count in zip(footers, rows) if count]
+        schema = {column: cls.widest(io, column, cls.types_of(column, footers)) for column in requested}
+        return cls.scan_runs(urls, footers, schema)
+
+    @staticmethod
+    def types_of(column: str, footers: List[pl.Schema]) -> List[Any]:
+        """The types of ``column`` in the footers that have it."""
+        return [footer[column] for footer in footers if column in footer]
+
+    @classmethod
+    def scan_runs(cls, urls: List[str], footers: List[pl.Schema], schema: Dict[str, Any]) -> pl.LazyFrame:
+        """The scan of the objects with ``schema``. The cast options of a scan do not upcast a ``Duration``, so the objects with the same duration units
+        are one scan, and a cast gives the finest unit. The scans keep the listing order of the objects."""
         cast_options = pl.ScanCastOptions(integer_cast=["upcast", "allow-float"], float_cast="upcast", datetime_cast="upcast", categorical_to_string="allow")
-        return pl.scan_parquet(urls, schema=schema, missing_columns="insert", extra_columns="ignore", cast_options=cast_options, hive_partitioning=False, **PolarsS3.arguments())
+        durations = [column for column, dtype in schema.items() if isinstance(dtype, pl.Duration)]
+        runs: List[Any] = []
+        for url, footer in zip(urls, footers):
+            units = {column: footer[column] for column in durations if column in footer}
+            if runs and runs[-1][1] == units:
+                runs[-1][0].append(url)
+            else:
+                runs.append(([url], units))
+        scans = [
+            pl.scan_parquet(
+                run_urls,
+                schema={**schema, **units},
+                missing_columns="insert",
+                extra_columns="ignore",
+                cast_options=cast_options,
+                hive_partitioning=False,
+                **PolarsS3.arguments(),
+            ).with_columns(pl.col(column).cast(schema[column]) for column in units if units[column] != schema[column])
+            for run_urls, units in runs
+        ]
+        return scans[0] if len(scans) == 1 else pl.concat(scans, how="vertical")
 
     @classmethod
     def widest(cls, io: "DynamicDataIO", column: str, dtypes: List[Any]) -> Any:
@@ -130,11 +167,23 @@ class PolarsScans:
         - A ``Null`` column, which pyarrow writes for a column of nulls only, takes the type of the other objects.
         - Integers give the integer type that holds them all, and integers and floats give ``Float64``.
         - ``String`` and ``Categorical`` give ``String``.
-        - ``Datetime`` columns with one time zone give the finest time unit.
+        - ``Datetime`` columns with one time zone give the finest time unit, and ``Duration`` columns give the finest time unit.
 
         Raises:
             ColumnsDataTypeError: The types do not upcast to one type, for example ``String`` and ``Int64``, or ``Int64`` and ``UInt64``.
         """
+        widest = cls.upcast(column, dtypes)
+        if widest is not None:
+            return widest
+        from dynamicio import core  # pylint: disable=import-outside-toplevel
+
+        kinds = list(dict.fromkeys(dtype for dtype in dtypes if dtype != pl.Null))
+        core.logger.error(f"The objects of {io.name} have the types {[str(kind) for kind in kinds]} for the column '{column}', which do not upcast to one type")
+        raise ColumnsDataTypeError()
+
+    @classmethod
+    def upcast(cls, column: str, dtypes: List[Any]) -> Any:  # pylint: disable=too-many-return-statements
+        """The type of ``widest``, or None if the types do not upcast to one type."""
         kinds = list(dict.fromkeys(dtype for dtype in dtypes if dtype != pl.Null))
         if not kinds:
             return pl.Null
@@ -151,7 +200,6 @@ class PolarsScans:
         elif all(isinstance(kind, pl.Datetime) for kind in kinds) and len({kind.time_zone for kind in kinds}) == 1:
             unit = max((kind.time_unit for kind in kinds), key=cls.TIME_UNITS.index)
             return pl.Datetime(unit, kinds[0].time_zone)
-        from dynamicio import core  # pylint: disable=import-outside-toplevel
-
-        core.logger.error(f"The objects of {io.name} have the types {[str(kind) for kind in kinds]} for the column '{column}', which do not upcast to one type")
-        raise ColumnsDataTypeError()
+        elif all(isinstance(kind, pl.Duration) for kind in kinds):
+            return pl.Duration(max((kind.time_unit for kind in kinds), key=cls.TIME_UNITS.index))
+        return None

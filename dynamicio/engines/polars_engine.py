@@ -109,13 +109,22 @@ class PolarsEngine(Engine):
             self.not_yet(f"write {source} resources")
         PolarsFiles.write(io, frame)
 
+    def check_operation(self, io: "DynamicDataIO", operation: str) -> None:
+        """Refuse a ``scan`` or a ``sink`` of a resource that the polars engine does not scan or sink yet."""
+        # pylint: disable=import-outside-toplevel
+        from dynamicio.engines.polars_scans import PolarsScans
+        from dynamicio.engines.polars_sinks import PolarsSinks
+
+        sources = {"scan": PolarsScans.SOURCES, "sink": PolarsSinks.SOURCES}.get(operation)
+        source = self.source_of(io)
+        if sources is not None and source not in sources:
+            self.not_yet(f"{operation} {source} resources")
+
     def scan(self, io: "DynamicDataIO") -> Any:
         """The ``LazyFrame`` of a ``local``, ``local_batch``, ``s3_file`` or ``s3_path_prefix`` resource. Other resources are not scanned yet."""
         from dynamicio.engines.polars_scans import PolarsScans  # pylint: disable=import-outside-toplevel
 
-        source = self.source_of(io)
-        if source not in PolarsScans.SOURCES:
-            self.not_yet(f"scan {source} resources")
+        self.check_operation(io, "scan")
         return PolarsScans.scan(io)
 
     def sink(self, io: "DynamicDataIO", frame: Any) -> None:
@@ -125,9 +134,7 @@ class PolarsEngine(Engine):
         """
         from dynamicio.engines.polars_sinks import PolarsSinks  # pylint: disable=import-outside-toplevel
 
-        source = self.source_of(io)
-        if source not in PolarsSinks.SOURCES:
-            self.not_yet(f"sink {source} resources")
+        self.check_operation(io, "sink")
         PolarsSinks.sink(self, io, frame)
 
     def select_columns(self, io: "DynamicDataIO", frame: Any) -> Any:

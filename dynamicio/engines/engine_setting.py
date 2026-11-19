@@ -38,7 +38,7 @@ class EngineSetting:
     _instances: Dict[str, Engine] = {}
     _forked: bool = False
     FORK_MESSAGE = (
-        "This process is a fork of a process with the polars engine, and polars can deadlock in a fork. "
+        "This process is a fork of a process that imported polars, and polars can deadlock in a fork. "
         'Start the processes with "spawn" or "forkserver", for example multiprocessing.get_context("spawn")'
     )
 
@@ -52,7 +52,7 @@ class EngineSetting:
         Raises:
             EngineConfigurationError: If dynamicio has no engine of that name, or a read or write has already fixed another engine.
             ImportError: If the engine is polars and polars is not installed.
-            EngineConfigurationError: If the engine is polars and the process is a fork of a process with the polars engine.
+            EngineConfigurationError: If the engine is polars and the process is a fork of a process that imported polars.
         """
         if engine not in cls.ENGINES:
             raise EngineConfigurationError(f"dynamicio has no engine {engine!r}: use one of {', '.join(cls.NAMES)}")
@@ -95,19 +95,21 @@ class EngineSetting:
         return cls.instance(cls._name)
 
     @classmethod
-    def use(cls, model: Optional[type] = None, frames: Tuple[Any, ...] = (), resource: Any = None) -> Engine:
+    def use(cls, model: Optional[type] = None, frames: Tuple[Any, ...] = (), resource: Any = None, operation: Optional[str] = None) -> Engine:
         """The engine of a read or write. The first call that passes the checks freezes the engine and logs its name.
 
         Args:
             model: The Pandera model of the IO object, checked against the engine.
             frames: The frames that the IO object writes, checked against the engine.
             resource: The IO object, whose file type and options are checked against the engine.
+            operation: ``"scan"`` or ``"sink"`` for a lazy operation on ``resource``, which the engine must have.
 
         Raises:
             ModelEngineMismatchError: If the model is not for the engine. The engine stays unfrozen, so ``configure()`` can still correct it.
             WrongFrameError: If a frame is of the other engine. The engine stays unfrozen.
             EngineResourceError: If the engine cannot read or write the resource. The engine stays unfrozen.
-            EngineConfigurationError: If the engine is polars and the process is a fork of a process with the polars engine.
+            NotImplementedError: If the engine has no ``operation`` for the resource. The engine stays unfrozen.
+            EngineConfigurationError: If the engine is polars and the process is a fork of a process that imported polars.
         """
         with cls._lock:
             cls._refuse_a_polars_fork(cls._name)
@@ -118,6 +120,8 @@ class EngineSetting:
                 engine.check_frame(frame)
             if resource is not None:
                 engine.check_resource(resource)
+                if operation is not None:
+                    engine.check_operation(resource, operation)
             if not cls._frozen:
                 cls._frozen = True
                 logger.info(f"dynamicio engine: {cls._name}")
@@ -138,9 +142,12 @@ class EngineSetting:
 
     @classmethod
     def after_fork_in_child(cls) -> None:
-        """Mark a fork of a process with the polars engine and polars imported. The fork gets a new lock, because a thread of the parent can hold the old one."""
+        """Mark a fork of a process that imported polars, with any engine: the fork has the polars thread pool of the parent, so it cannot use polars.
+
+        The fork can still use the pandas engine. The fork gets a new lock, because a thread of the parent can hold the old one.
+        """
         cls._lock = threading.RLock()
-        if cls._name == "polars" and "polars" in sys.modules:
+        if "polars" in sys.modules:
             cls._forked = True
 
 

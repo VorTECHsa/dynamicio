@@ -1,4 +1,5 @@
 # pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring
+import types
 import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -9,6 +10,7 @@ import pyarrow as pyarrow_module
 import pyarrow.parquet as pq
 import pytest
 import yaml
+from botocore.exceptions import IncompleteReadError, ResponseStreamingError
 from pandera.typing import Series
 
 # Application Imports
@@ -259,3 +261,42 @@ class TestS3Tail:
         assert tail.seek(5, 1) == 20 and tail.read(3) == content[20:23]
         assert tail.seek(len(content) + 10) == len(content) + 10 and tail.read(1) == b""
         assert tail.seek(-1) == 0 and tail.readable() and tail.seekable()
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "error", [ResponseStreamingError(error=ConnectionResetError("reset")), IncompleteReadError(actual_bytes=1, expected_bytes=2)], ids=["streaming", "incomplete"]
+    )
+    @pytest.mark.parametrize("broken", [1, 2], ids=["tail", "second-range"])
+    def test_a_body_that_breaks_while_it_is_read_repeats_the_ranged_get(self, moto_s3_bucket, monkeypatch, error, broken):
+        # Given
+        content = bytes(range(256)) * 1024
+        moto_s3_bucket.put_object(Bucket=constants.MOCK_BUCKET, Key="blob", Body=content)
+        calls, closed = [], []
+
+        class BrokenBody:
+            def read(self):
+                raise error
+
+            def close(self):
+                closed.append(True)
+
+        def get_object(**arguments):
+            calls.append(arguments["Range"])
+            response = moto_s3_bucket.get_object(**arguments)
+            if len(calls) == broken:
+                response["Body"] = BrokenBody()
+            return response
+
+        monkeypatch.setattr("dynamicio.mixins.with_s3._shared_s3_client", lambda: types.SimpleNamespace(get_object=get_object))
+        monkeypatch.setattr("dynamicio.mixins.with_s3._drop_shared_s3_client", lambda: None)
+        monkeypatch.setattr("dynamicio.mixins.with_s3._TRANSFER_BACKOFF_SECONDS", 0)
+
+        # When
+        tail = S3Tail(constants.MOCK_BUCKET, "blob")
+        tail.seek(0)
+        data = tail.read()
+
+        # Then
+        assert data == content
+        assert calls[broken - 1] == calls[broken]
+        assert closed == [True]

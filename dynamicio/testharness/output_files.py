@@ -134,7 +134,8 @@ class OutputFiles:
         """Read a file with the plain polars readers. A JSON file has the ``records`` orient, with ``lines`` for one record on each line.
 
         Raises:
-            ValueError: The file type has no polars reader (``hdf``), or the JSON orient is not ``records``.
+            ValueError: The file type has no polars reader (``hdf``), the JSON orient is not ``records``, or polars cannot read the file. The error of
+                polars is the cause of the ``ValueError``.
         """
         import polars as pl  # pylint: disable=import-outside-toplevel
 
@@ -142,11 +143,15 @@ class OutputFiles:
         if file_type == "json":
             if orient != "records":
                 raise ValueError(f"polars reads the JSON records orient only, and {path} has the orient {orient!r}")
-            return (pl.read_ndjson if lines else pl.read_json)(path, **options)
-        readers = {"parquet": pl.read_parquet, "csv": pl.read_csv}
-        if file_type not in readers:
-            raise ValueError(f"Unsupported file type {file_type!r} for {path} on the polars engine")
-        return readers[file_type](path, **options)
+            reader = pl.read_ndjson if lines else pl.read_json
+        else:
+            reader = {"parquet": pl.read_parquet, "csv": pl.read_csv}.get(file_type)
+            if reader is None:
+                raise ValueError(f"Unsupported file type {file_type!r} for {path} on the polars engine")
+        try:
+            return reader(path, **options)
+        except pl.exceptions.PolarsError as error:  # ExpectedOutputs.check() records a ValueError and checks the other outputs
+            raise ValueError(f"polars cannot read {path}: {error}") from error
 
     def read_generated(self) -> Any:
         """The output the task generated."""

@@ -32,6 +32,11 @@ class PandasEngine(Engine):
         """Refuse a lazy read or write, which only the polars engine has."""
         raise NotImplementedError(f'{method}() needs the polars engine: call dynamicio.configure(engine="polars") before the first read or write')
 
+    def check_operation(self, io: "DynamicDataIO", operation: str) -> None:
+        """Refuse ``scan`` and ``sink``: pandas has no lazy frame."""
+        if operation in ("scan", "sink"):
+            self.lazy_unsupported(operation)
+
     def scan(self, io: "DynamicDataIO") -> Any:
         """Refuse: pandas has no lazy frame."""
         self.lazy_unsupported("scan")

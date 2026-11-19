@@ -1,4 +1,6 @@
 # pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring
+import csv
+
 import pytest
 
 from dynamicio.engines.polars_options import PolarsOptions
@@ -99,6 +101,32 @@ class TestCsvOptions:
         with pytest.raises(EngineResourceError, match="reads UTF-8 CSV files, not encoding='latin-1'"):
             PolarsOptions.check("csv", "local", {"encoding": "latin-1"})
 
+    @pytest.mark.unit
+    def test_an_escape_character_is_refused(self):
+        with pytest.raises(EngineResourceError, match="without an escape character, not escapechar='\\\\\\\\'"):
+            PolarsOptions.check("csv", "local", {"escapechar": "\\"})
+
+    @pytest.mark.unit
+    def test_doublequote_false_is_refused(self):
+        with pytest.raises(EngineResourceError, match="cannot read doublequote=False"):
+            PolarsOptions.check("csv", "local", {"doublequote": False})
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("options", [{"escapechar": None}, {"doublequote": True}])
+    def test_the_default_escape_options_are_accepted(self, options):
+        PolarsOptions.check("csv", "local", options)
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("quoting", [csv.QUOTE_MINIMAL, csv.QUOTE_ALL, csv.QUOTE_NONNUMERIC, csv.QUOTE_NONE])
+    def test_the_quoting_values_that_polars_reads_as_pandas_are_accepted(self, quoting):
+        PolarsOptions.check("csv", "local", {"quoting": quoting})
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("quoting", [4, 5, "all"])
+    def test_another_quoting_value_is_refused(self, quoting):
+        with pytest.raises(EngineResourceError, match=f"not quoting={quoting!r}"):
+            PolarsOptions.check("csv", "local", {"quoting": quoting})
+
 
 class TestJsonOptions:
     @pytest.mark.unit
@@ -128,6 +156,15 @@ class TestReadArguments:
 
         # Then
         assert arguments == {"separator": ";", "n_rows": 5, "skip_rows": 1, "null_values": ["-"], "quote_char": "'", "comment_prefix": "#", "encoding": "utf8"}
+
+    @pytest.mark.unit
+    def test_quote_none_reads_without_a_quote_character(self):
+        assert PolarsOptions.read_arguments("csv", {"quoting": csv.QUOTE_NONE}) == {"quote_char": None}
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("quoting", [csv.QUOTE_MINIMAL, csv.QUOTE_ALL, csv.QUOTE_NONNUMERIC])
+    def test_another_quoting_value_keeps_the_quote_character(self, quoting):
+        assert not PolarsOptions.read_arguments("csv", {"quoting": quoting})
 
     @pytest.mark.unit
     def test_delimiter_is_the_separator(self):

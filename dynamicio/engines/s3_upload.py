@@ -8,6 +8,36 @@ from boto3.s3.transfer import TransferConfig
 from dynamicio.mixins import with_s3
 
 
+class KeptOpen(std_io.RawIOBase):
+    """A buffer that ``close()`` does not close. The boto3 ``PutObject`` of a small object closes its stream when it ends, also when it fails,
+    and the next attempt of the upload must read the buffer again."""
+
+    def __init__(self, buffer: std_io.BytesIO):
+        super().__init__()
+        self.buffer = buffer
+
+    def readable(self) -> bool:
+        return True
+
+    def seekable(self) -> bool:
+        return True
+
+    def read(self, size: int = -1) -> bytes:
+        return self.buffer.read(size)
+
+    def readinto(self, target) -> int:
+        return self.buffer.readinto(target)
+
+    def seek(self, offset: int, whence: int = std_io.SEEK_SET) -> int:
+        return self.buffer.seek(offset, whence)
+
+    def tell(self) -> int:
+        return self.buffer.tell()
+
+    def close(self) -> None:
+        """Leave the buffer open."""
+
+
 class S3Upload:
     """Upload a file or a buffer to one S3 key with the ``bucket-owner-full-control`` ACL.
 
@@ -38,6 +68,6 @@ class S3Upload:
                 client.upload_file(source, bucket, key, ExtraArgs={"ACL": cls.ACL}, Config=cls.CONFIG)
                 return
             source.seek(0)
-            client.upload_fileobj(source, bucket, key, ExtraArgs={"ACL": cls.ACL}, Config=cls.CONFIG)
+            client.upload_fileobj(KeptOpen(source), bucket, key, ExtraArgs={"ACL": cls.ACL}, Config=cls.CONFIG)
 
         with_s3._retry_transient(attempt, f"s3://{bucket}/{key}")  # pylint: disable=protected-access

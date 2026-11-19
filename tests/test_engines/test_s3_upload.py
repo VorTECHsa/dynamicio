@@ -124,6 +124,29 @@ class TestS3Upload:
         assert self.body(moto_s3_bucket, "data.parquet") == b"rows"
 
     @pytest.mark.unit
+    @pytest.mark.parametrize("operation, size, config", [("PutObject", 4, S3Upload.CONFIG), ("UploadPart", 2 * PART + 1, SMALL_PARTS)], ids=["put", "parts"])
+    def test_a_connection_that_breaks_in_the_transfer_uploads_the_buffer_again(self, moto_s3_bucket, operation, size, config):
+        # Given
+        content = bytes(range(256)) * (size // 256) + b"r" * (size % 256)
+        buffer, failures = io.BytesIO(content), []
+
+        def fail_once(**_):
+            if not failures:
+                failures.append(operation)
+                raise EndpointConnectionError(endpoint_url="https://s3")
+
+        moto_s3_bucket.meta.events.register(f"before-call.s3.{operation}", fail_once)
+
+        # When
+        with patch.object(S3Upload, "CONFIG", config), patch("dynamicio.mixins.with_s3.time.sleep"):
+            S3Upload.upload(buffer, constants.MOCK_BUCKET, "data.parquet")
+
+        # Then
+        assert failures == [operation]
+        assert self.body(moto_s3_bucket, "data.parquet") == content
+        assert not buffer.closed
+
+    @pytest.mark.unit
     @pytest.mark.usefixtures("moto_s3_bucket")
     def test_an_error_that_is_not_transient_is_not_repeated(self, tmp_path):
         # Given

@@ -1,4 +1,5 @@
 # pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring
+import csv
 import json
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -383,6 +384,31 @@ class TestCsvRead:
 
         # Then
         assert result.to_dicts() == [{"a": 1, "b": None}, {"a": 2, "b": "x;y"}]
+
+    @pytest.mark.unit
+    def test_quote_none_reads_the_quotes_as_text_as_pandas_does(self, tmp_path):
+        # Given
+        (tmp_path / "data.csv").write_text('a,b\n1,"literal"\n')
+        config = Files.config(tmp_path, "csv", {"quoting": csv.QUOTE_NONE, "index": False})
+
+        # When
+        result = Files.polars(config, Pair).read()
+
+        # Then
+        EngineSetting.reset("pandas")
+        assert result["b"].to_list() == ['"literal"'] == FilesIO(source_config=config, schema=PandasPair).read()["b"].tolist()
+
+    @pytest.mark.unit
+    def test_quote_none_writes_and_reads_back_the_quotes_of_a_value(self, tmp_path):
+        # Given
+        config = Files.config(tmp_path, "csv", {"quoting": csv.QUOTE_NONE, "index": False})
+        Files.polars(config, Pair).write(pl.DataFrame({"a": [1], "b": ['say "hi"']}))
+
+        # When
+        result = Files.polars(config, Pair).read()
+
+        # Then
+        assert result["b"].to_list() == ['say "hi"']
 
     @pytest.mark.unit
     def test_the_columns_that_the_model_does_not_declare_are_left_out(self, tmp_path):

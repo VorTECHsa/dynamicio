@@ -113,3 +113,10 @@ class PolarsS3:
         arguments = cls.arguments()
         with ThreadPoolExecutor(max_workers=cls.MAX_CONCURRENCY) as pool:
             return list(pool.map(lambda url: pl.scan_parquet(url, **arguments).collect_schema(), urls))
+
+    @classmethod
+    def row_counts(cls, urls: List[str]) -> List[int]:
+        """The number of rows of each parquet object, from its footer, in the order of the URLs."""
+        arguments = cls.arguments()
+        with ThreadPoolExecutor(max_workers=cls.MAX_CONCURRENCY) as pool:
+            return list(pool.map(lambda url: pl.scan_parquet(url, **arguments).select(pl.len()).collect().item(), urls))

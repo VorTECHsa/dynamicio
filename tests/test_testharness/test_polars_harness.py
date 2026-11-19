@@ -145,6 +145,18 @@ class TestPolarsFrameComparison:
             Frames.compare(frames[actual], frames[expected])
 
     @pytest.mark.unit
+    @pytest.mark.parametrize("base", [pl.DataFrame, pl.LazyFrame])
+    def test_subclasses_of_polars_frames_go_to_the_polars_comparison(self, base):
+        # Given
+        App = type("AppFrame", (base,), {"__module__": "app.frames"})
+        expected = App({"a": [1, 2], "b": ["x", "y"]})
+
+        # When / Then
+        Frames.compare(App({"b": ["y", "x"], "a": [2, 1]}), expected)
+        with pytest.raises(AssertionError):
+            Frames.compare(App({"a": [1, 3], "b": ["x", "y"]}), expected)
+
+    @pytest.mark.unit
     def test_a_pandas_comparison_does_not_import_polars(self):
         # When
         result = subprocess.run(
@@ -279,6 +291,41 @@ class TestPolarsExpectedOutputs:
         # Then
         assert not matched
         assert "parquet schema" in outputs.errors[0][1]
+
+
+class TestUnreadablePolarsOutputs:
+    @pytest.mark.unit
+    @pytest.mark.parametrize("source_key, body", [("OUT", b"not a parquet file"), ("JSON_RECORDS", b"[{not json")])
+    def test_an_unreadable_file_is_a_value_error_with_the_path_and_the_polars_cause(self, config, polars_engine, source_key, body):  # pylint: disable=unused-argument
+        # Given
+        files = OutputFiles(config, source_key, PARAMS if source_key == "OUT" else None)
+        with open(files.expected_path, "wb") as file:
+            file.write(body)
+
+        # When / Then
+        with pytest.raises(ValueError, match="polars cannot read") as error:
+            files.read_expected()
+        assert files.expected_path in str(error.value)
+        assert isinstance(error.value.__cause__, pl.exceptions.PolarsError)
+
+    @pytest.mark.unit
+    def test_an_unreadable_output_is_recorded_and_the_next_output_is_checked(self, config, polars_engine):  # pylint: disable=unused-argument
+        # Given
+        files = OutputFiles(config, "OUT", PARAMS)
+        with open(files.expected_path, "wb") as file:
+            file.write(b"not a parquet file")
+        pl.DataFrame({"a": [1]}).write_parquet(files.generated_path)
+        json_files = OutputFiles(config, "JSON_RECORDS")
+        pl.DataFrame({"a": [1]}).write_json(json_files.expected_path)
+        pl.DataFrame({"a": [1]}).write_json(json_files.generated_path)
+
+        # When
+        outputs = ExpectedOutputs()
+        first, second = outputs.check(config, "OUT", params=PARAMS), outputs.check(config, "JSON_RECORDS")
+
+        # Then
+        assert not first and second
+        assert outputs.errors[0][1].startswith("ValueError: polars cannot read")
 
 
 class FakeParser:

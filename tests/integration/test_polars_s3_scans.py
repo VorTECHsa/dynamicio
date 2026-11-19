@@ -2,7 +2,7 @@
 import io
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Annotated
 
 import pandas as pd
@@ -337,3 +337,34 @@ class TestPrefixTypes:
         with pytest.raises(ColumnsDataTypeError):
             Files.polars(config, Pair).scan()
         assert "which do not upcast to one type" in caplog.text
+
+    def test_an_empty_object_with_another_type_is_left_out_as_on_the_pandas_engine(self, floci, prefix, tmp_path):
+        # Given
+        Objects.put_table(floci, f"{prefix}/data/1.parquet", pa.table({"a": pa.array([], pa.string()), "b": pa.array([], pa.string())}))
+        Objects.put_table(floci, f"{prefix}/data/2.parquet", pa.table({"a": pa.array([1], pa.int64()), "b": ["x"]}))
+        config = Resources.s3_path_prefix(tmp_path, floci.bucket, f"{prefix}/data/")
+
+        # When
+        result = Files.polars(config, Pair).read()
+
+        # Then
+        assert result.to_dicts() == [{"a": 1, "b": "x"}]
+        assert result.to_pandas().equals(Objects.read_with_pandas(config))
+
+    def test_durations_of_several_units_read_in_the_unit_of_the_model(self, floci, prefix, tmp_path):
+        class Waits(DataModel, dataset="waits"):
+            n: int
+            wait: Annotated[pl.Duration, "ns"]
+
+        # Given
+        for number, unit in enumerate(["ms", "ns", "ms"]):
+            table = pa.table({"n": pa.array([number], pa.int64()), "wait": pa.array([timedelta(seconds=number + 1)], pa.duration(unit))})
+            Objects.put_table(floci, f"{prefix}/data/{number}.parquet", table)
+        config = Resources.s3_path_prefix(tmp_path, floci.bucket, f"{prefix}/data/")
+
+        # When
+        result = Files.polars(config, Waits).read()
+
+        # Then
+        assert result.schema == pl.Schema({"n": pl.Int64, "wait": pl.Duration("ns")})
+        assert result.to_dicts() == [{"n": number, "wait": timedelta(seconds=number + 1)} for number in range(3)]

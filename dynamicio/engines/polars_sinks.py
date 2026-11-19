@@ -69,7 +69,11 @@ class PolarsSinks:
         if not parts:
             raise ValueError(f"sink() of {io.name!r} got no parts")
         cast = [engine.cast(io, engine.schema_columns(io, part.lazy())) for part in parts]
-        return cast[0] if len(cast) == 1 else pl.concat(cast, how="vertical")
+        if len(cast) == 1:
+            return cast[0]
+        # A vertical concat needs the columns in the same positions, and each part keeps the column order of its input
+        order = cast[0].collect_schema().names()
+        return pl.concat([cast[0], *(part.select(order) for part in cast[1:])], how="vertical")
 
     @classmethod
     def sink_parquet(cls, engine: "PolarsEngine", io: "DynamicDataIO", lazy: pl.LazyFrame, options: MutableMapping[str, Any]) -> None:
@@ -92,7 +96,8 @@ class PolarsSinks:
         The same ``collect_all`` counts the rows, for the ``RangeIndex`` of the pandas metadata, and the categories of each ``Categorical`` column.
         """
         categorical = [column for column, dtype in lazy.collect_schema().items() if dtype == pl.Categorical]
-        shape = lazy.select(pl.len(), *[pl.col(column).drop_nulls().n_unique() for column in categorical])
+        # Each aggregate has its own alias, so a column of the model cannot have the name of another aggregate
+        shape = lazy.select(pl.len().alias("rows"), *[pl.col(column).drop_nulls().n_unique().alias(f"categories_{number}") for number, column in enumerate(categorical)])
         collected = cls.collect(engine, io, lazy, [lazy.sink_parquet(staged, compression=cls.STAGE_COMPRESSION, lazy=True), shape])
         height, *counts = collected[1].row(0)
         return PolarsParquet.arrow_schema(io, lazy.collect_schema(), height, dict(zip(categorical, counts)), index=options.get("index") is not False)

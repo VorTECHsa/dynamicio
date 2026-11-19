@@ -173,6 +173,44 @@ class TestFreeze:
             dynamicio.configure(engine="polars")
 
     @pytest.mark.unit
+    @pytest.mark.parametrize("operation", ["scan", "sink"])
+    def test_a_refused_lazy_operation_on_pandas_does_not_freeze_the_engine(self, tmp_path, operation):
+        pytest.importorskip("polars")
+
+        # Given
+        io = EngineCheckIO.make(tmp_path)
+
+        # When
+        with pytest.raises(NotImplementedError, match=rf'{operation}\(\) needs the polars engine: call dynamicio.configure\(engine="polars"\)'):
+            if operation == "scan":
+                io.scan()
+            else:
+                io.sink(pd.DataFrame({"a": [1]}))
+        dynamicio.configure(engine="polars")
+
+        # Then
+        assert isinstance(EngineSetting.current(), PolarsEngine)
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("operation, source", [("scan", "postgres"), ("sink", "kafka")])
+    def test_a_lazy_operation_that_polars_does_not_have_does_not_freeze_the_engine(self, monkeypatch, operation, source):
+        pytest.importorskip("polars")
+
+        # Given
+        EngineSetting.reset("polars")
+        monkeypatch.setattr(PolarsEngine, "check_resource", lambda self, io: None)
+        monkeypatch.setattr(PolarsEngine, "source_of", staticmethod(lambda io: source))
+        monkeypatch.setattr(PolarsEngine, "check_model", lambda self, model: None)
+
+        # When
+        with pytest.raises(NotImplementedError, match=f"the polars engine does not {operation} {source} resources yet"):
+            EngineSetting.use(resource=object(), operation=operation)
+        dynamicio.configure(engine="pandas")
+
+        # Then
+        assert isinstance(EngineSetting.current(), PandasEngine)
+
+    @pytest.mark.unit
     def test_creating_an_io_object_does_not_freeze_the_engine(self, tmp_path):
         pytest.importorskip("polars")
 

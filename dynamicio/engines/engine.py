@@ -56,6 +56,9 @@ class Engine(abc.ABC):
     def check_resource(self, io: "DynamicDataIO") -> None:
         """Refuse a resource that the engine cannot read or write. The pandas engine reads and writes each resource of 11.1.0."""
 
+    def check_operation(self, io: "DynamicDataIO", operation: str) -> None:
+        """Refuse a ``scan`` or a ``sink`` that the engine does not have for the resource, before the first read or write fixes the engine."""
+
     @staticmethod
     def source_of(io: "DynamicDataIO") -> str:
         """The name of the source of an IO object, as its mixin methods spell it (``_read_from_s3``)."""

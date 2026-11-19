@@ -5,6 +5,7 @@ from typing import Any, Sequence, Tuple
 
 import pandas as pd
 
+from dynamicio.engines.engine import Engine
 from dynamicio.testharness.rule_comparison import RuleComparison
 
 
@@ -68,8 +69,8 @@ class FrameComparison(RuleComparison):
 
     @staticmethod
     def is_polars(df: Any) -> bool:
-        """Whether a frame is a polars frame. It imports nothing, so a pandas comparison does not import polars."""
-        return type(df).__module__.split(".")[0] == "polars"
+        """Whether a frame is a polars frame, or of a subclass of one. It imports nothing, so a pandas comparison does not import polars."""
+        return "polars" in Engine.libraries_of(df)
 
     def compare(self, actual: Any, expected: Any) -> None:
         """Raise ``AssertionError`` if ``actual`` does not satisfy the expectations against ``expected``.

@@ -53,7 +53,7 @@ class Children:
         try:
             EngineSetting.use()
         except EngineConfigurationError as error:
-            return 0 if "fork of a process with the polars engine" in str(error) else 2
+            return 0 if "fork of a process that imported polars" in str(error) else 2
         return 3
 
     @staticmethod
@@ -73,6 +73,31 @@ class Children:
         """In a spawned process: configure the polars engine and make a frame with polars."""
         EngineSetting.configure("polars")
         return 0 if isinstance(EngineSetting.use(), PolarsEngine) and pl.DataFrame({"a": [1, 2]})["a"].sum() == 3 else 5
+
+    @staticmethod
+    def fails() -> int:
+        return 5
+
+    @staticmethod
+    def hangs() -> int:
+        time.sleep(600)
+        return 0
+
+    @staticmethod
+    def exit_with(function) -> None:
+        """The target of a spawned process: ``multiprocessing`` ignores the return value of a target, so the code of ``function`` is the exit code."""
+        sys.exit(function())
+
+    @classmethod
+    def spawn(cls, function) -> int:
+        process = multiprocessing.get_context("spawn").Process(target=cls.exit_with, args=(function,))
+        process.start()
+        process.join(cls.TIMEOUT)
+        if process.is_alive():
+            process.terminate()
+            process.join()
+            raise AssertionError("the spawned process did not end")
+        return process.exitcode
 
 
 class TestFork:
@@ -95,6 +120,16 @@ class TestFork:
 
         # When / Then
         assert Children.fork(Children.refuses_polars) == 0
+
+    @FORK
+    @pytest.mark.unit
+    def test_a_fork_of_a_pandas_process_that_imported_polars_refuses_the_polars_engine(self):
+        # Given polars imported and used, and the pandas engine, which is not fixed yet
+        assert pl.DataFrame({"a": [1]}).height == 1
+
+        # When / Then
+        assert Children.fork(Children.refuses_configure) == 0
+        assert Children.fork(Children.uses_pandas) == 0
 
     @FORK
     @pytest.mark.unit
@@ -178,13 +213,20 @@ class TestSpawn:
         EngineSetting.reset("polars")
         EngineSetting.use()
 
-        # When
-        process = multiprocessing.get_context("spawn").Process(target=Children.uses_polars)
-        process.start()
-        process.join(Children.TIMEOUT)
+        # When / Then
+        assert Children.spawn(Children.uses_polars) == 0
 
-        # Then
-        assert process.exitcode == 0
+    @pytest.mark.unit
+    def test_the_exit_code_of_a_spawned_process_is_the_code_of_its_function(self):
+        assert Children.spawn(Children.fails) == 5
+
+    @pytest.mark.unit
+    def test_a_spawned_process_that_does_not_end_is_stopped(self):
+        # Given
+        with patch.object(Children, "TIMEOUT", 0.5):
+            # When / Then
+            with pytest.raises(AssertionError, match="did not end"):
+                Children.spawn(Children.hangs)
 
 
 class TestPolarsMaxThreads:

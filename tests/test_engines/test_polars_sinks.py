@@ -153,6 +153,22 @@ class TestSinkGivesTheFileOfWrite:
         pd.testing.assert_frame_equal(pd.read_parquet(sunk), pd.read_parquet(written))
 
     @pytest.mark.unit
+    def test_a_categorical_column_named_len_or_rows_has_the_footer_of_write(self, tmp_path):
+        class Counted(DataModel, dataset="counted"):
+            len: pl.Categorical = Field(nullable=True)
+            rows: pl.Categorical = Field(nullable=True)
+
+        # Given
+        frame = pl.DataFrame({"len": pl.Series(["x", "y", "x"], dtype=pl.Categorical), "rows": pl.Series(["a", None, "a"], dtype=pl.Categorical)})
+
+        # When
+        written, sunk = Sinks.write_and_sink(tmp_path, "parquet", {}, frame, Counted)
+
+        # Then
+        assert Sinks.footer(sunk)[0].equals(Sinks.footer(written)[0], check_metadata=True)
+        pd.testing.assert_frame_equal(pd.read_parquet(sunk), pd.read_parquet(written))
+
+    @pytest.mark.unit
     def test_the_sink_reads_back_equal(self, tmp_path):
         # Given
         config = Files.config(tmp_path, "parquet")
@@ -528,6 +544,22 @@ class TestSinkOfParts:
 
         # Then
         assert parts.read_bytes() == whole.read_bytes()
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("file_type", ["parquet", "csv"])
+    def test_parts_with_the_columns_in_another_order_give_the_file_of_the_whole_frame(self, tmp_path, file_type):
+        # Given
+        whole, parts = tmp_path / f"whole.{file_type}", tmp_path / f"parts.{file_type}"
+        frames = [pl.LazyFrame({"a": [1, 2], "b": ["x", None]}), pl.LazyFrame({"b": [None, "y"], "a": [3, 4]}), pl.LazyFrame({"extra": [0], "b": ["z"], "a": [5]})]
+
+        # When
+        Files.polars(Files.config(tmp_path, file_type, file_path=str(whole)), Pair).write(self.whole())
+        Files.polars(Files.config(tmp_path, file_type, file_path=str(parts)), Pair).sink(frames)
+
+        # Then
+        assert parts.read_bytes() == whole.read_bytes() if file_type == "csv" else Sinks.footer(parts) == Sinks.footer(whole)
+        if file_type == "parquet":
+            pd.testing.assert_frame_equal(pd.read_parquet(parts), pd.read_parquet(whole))
 
     @pytest.mark.unit
     def test_one_part_is_the_sink_of_its_frame(self, tmp_path):

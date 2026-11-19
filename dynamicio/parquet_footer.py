@@ -4,8 +4,9 @@ The footer read is the same on the two engines. It reads a ``local`` file with p
 calls: one call gets the last ``TAIL_BYTES`` bytes, and a second call gets the rest of a footer that is larger than that.
 """
 
+import contextlib
 import io as std_io
-from typing import TYPE_CHECKING, Dict, NamedTuple
+from typing import TYPE_CHECKING, Dict, NamedTuple, Tuple
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -50,22 +51,27 @@ class S3Tail(std_io.RawIOBase):
         super().__init__()
         self.bucket, self.key = bucket, key
         try:
-            body = self.get(f"bytes=-{self.TAIL_BYTES}")
+            response, self.kept = self.get(f"bytes=-{self.TAIL_BYTES}")
         except ClientError as error:
             if error.response.get("Error", {}).get("Code") != "InvalidRange":  # an empty object has no last bytes
                 raise
-            body = {"ContentLength": 0, "Body": std_io.BytesIO(b"")}
-        self.size = int(body["ContentRange"].rsplit("/", 1)[1]) if "ContentRange" in body else body["ContentLength"]
-        self.kept = body["Body"].read()
+            response, self.kept = {"ContentLength": 0}, b""
+        self.size = int(response["ContentRange"].rsplit("/", 1)[1]) if "ContentRange" in response else response["ContentLength"]
         self.start = self.size - len(self.kept)
         self.position = 0
 
-    def get(self, byte_range: str) -> dict:
-        """The ``GetObject`` response of a byte range of the object, with the retries of transient S3 errors."""
-        return with_s3._retry_transient(  # pylint: disable=protected-access
-            lambda: with_s3._shared_s3_client().get_object(Bucket=self.bucket, Key=self.key, Range=byte_range),  # pylint: disable=protected-access
-            f"s3://{self.bucket}/{self.key}",
-        )
+    def get(self, byte_range: str) -> Tuple[dict, bytes]:
+        """The ``GetObject`` response of a byte range of the object and the bytes of its body, with the retries of transient S3 errors.
+
+        The body is read in the retried operation, so a connection that breaks while the body is read repeats the ranged request.
+        """
+
+        def attempt() -> Tuple[dict, bytes]:
+            response = with_s3._shared_s3_client().get_object(Bucket=self.bucket, Key=self.key, Range=byte_range)  # pylint: disable=protected-access
+            with contextlib.closing(response["Body"]) as body:
+                return response, body.read()
+
+        return with_s3._retry_transient(attempt, f"s3://{self.bucket}/{self.key}")  # pylint: disable=protected-access
 
     def readable(self) -> bool:
         return True
@@ -86,7 +92,7 @@ class S3Tail(std_io.RawIOBase):
         if self.position >= end:
             return b""
         if self.position < self.start:
-            self.kept = self.get(f"bytes={self.position}-{self.start - 1}")["Body"].read() + self.kept
+            self.kept = self.get(f"bytes={self.position}-{self.start - 1}")[1] + self.kept
             self.start = self.position
         data = self.kept[self.position - self.start : end - self.start]
         self.position = end
