@@ -71,6 +71,9 @@ removes the columns that the model does not declare, so the two engines give the
    - dynamicio logs the engine at the first read or write.
 2. pandas becomes optional in v13, with `dynamicio[pandas]` and `dynamicio[polars]` extras.
    - In v12, pandas stays a hard dependency and `dynamicio[polars]` adds `polars>=2.1`.
+   - polars 2.1 needs Python 3.11 or later, and dynamicio 11.x supports Python 3.10 to 3.14. Python 3.10 reaches its end of life in October 2026. Either 12.0.0
+     drops Python 3.10, or the `[polars]` extra has the marker `python_version >= "3.11"`. This decision is open. Phase 1 adds polars to the dev group with
+     that marker, and the polars tests skip on Python 3.10.
    - The polars minimum is always the latest polars release when a dynamicio release ships (2.1.0 on 2026-11-17).
    - awswrangler needs pandas, so it moves to the `[pandas]` extra in v13. A v13 install with `[polars]` only has no Athena reads.
    - Phase 7 records the v13 dependency list and an import test for each extra.
@@ -171,13 +174,27 @@ Phases 1 to 7 are dynamicio 12.0.0.
 
 | Phase | Changes | Scope |
 |---|---|---|
-| 1 | 1 to 4 | Engine seam. An `Engine` protocol with about 15 members (read, scan, cast, validate, write, sink). `PandasEngine` calls the current code without a change in behavior. The pandas I/O code stays in the `dynamicio.mixins.*` modules in 12.x, so a patch of a module binding changes the code that runs. A test patches each binding that the dynamicio tests and bon-voyage patch. Each engine has a registry of validators and metrics with the same names. `ModelCompiler` accepts `pandera.polars` models and raises if the model type is not the engine type. `configure()`, the freeze and the wrong-frame error (decision 1). |
+| 1 | 1 to 4 | Engine seam. An `Engine` abstract base class in `dynamicio.engines` with 16 members (read, scan, cast, validate, write, sink). `PandasEngine` calls the current code without a change in behavior. The pandas I/O code stays in the `dynamicio.mixins.*` modules in 12.x, so a patch of a module binding changes the code that runs. A test patches each binding that the dynamicio tests and bon-voyage patch. Each engine has a registry of validators and metrics with the same names. `ModelCompiler` accepts `pandera.polars` models and raises if the model type is not the engine type. `configure()`, the freeze and the wrong-frame error (decision 1). |
 | 2 | 5 to 9 | Schema and null rule. The dtype map (decision 14). The null rule. polars validators and metrics that give the same results as pandas. Each is an expression, and all run in one `collect_all` with the Pandera data checks. |
 | 3 | 17, 18, 20, 26 | Eager codecs and the parquet contract. The pandas metadata through `arrow_schema=`. Footer details equal to 11.1.0: timestamp unit, row group size, snappy compression, coerced timestamps and INT96 reads. JSON (decision 9) and CSV (decision 5) bytes equal to 11.1.0. The option maps (decision 6). The polars S3 tests run against floci (decision 15). |
 | 4 | 10, 14, 16 | `scan()` returns a `LazyFrame`. It checks names and types with `collect_schema()` and adds the casts to the plan. polars reads S3 with a `credential_provider` from the boto3 session. A missing key raises the dynamicio error, so `missing_ok` applies. A prefix read lists the keys with boto3 and makes one `scan_parquet` call that keeps ADR 0002 and ADR 0004 (decision 13). |
 | 5 | 11, 12, 13, 15 | `sink()` runs all sinks in one `collect_all`. Writes go through a boto3 multipart upload (64 MiB parts, 4 in flight, ACL) that completes only on success and aborts on error. Both engines select columns, cast, validate and then compute metrics, in that order (decision 12). Both engines raise the same dynamicio errors. |
 | 6 | 19, 21, 22, 23 | A footer-only read and a sink from several scans that merges the pandas metadata of all parts (bon-voyage #913). Postgres COPY in chunks of 100k rows with the same NULL rule, tested on floci RDS. Kafka keys from decision 4 and row types from decision 7, with batches, `poll()` and a flush timeout, tested on the floci broker. Athena through awswrangler (decision 8). hdf and pickle resources raise on polars when the user builds the resource. |
 | 7 | 24, 25, 27 | No fork on polars, and `POLARS_MAX_THREADS` applies. `dynamicio.testharness` comparisons for each engine and the `--dynamicio-engine` option (decision 11). The `dynamicio[polars]` extra. CI runs all tests on both engines. The migrate command, one demo for each engine and the docs. |
+
+Phase 1 as built:
+
+- An engine takes the IO object as an argument and has no state of its own. The pandas cast stays in `DynamicDataIO._has_valid_dtypes` in 12.x, so a test
+  that patches `dynamicio.core.logger` still sees the cast warnings. `_apply_schema`, `validate_from_schema` and `log_metrics_from_schema` stay on
+  `DynamicDataIO` and call the engine, so a patch of these methods still applies.
+- The base class of a polars model is `dynamicio.schema.polars.DataModel`. `dynamicio.schema` does not import it, so dynamicio imports without polars.
+- The model check runs when the user creates an IO object, and again at each read and write, because `configure()` can change the engine between them.
+  The checks run before the freeze, so a refused read or write does not fix the engine. `ModelEngineMismatchError` is also a `ValueError`, as the
+  11.x error of a polars model.
+- The frame check runs at `write()` and `sink()`, before any I/O. It compares the top-level module name of the type of the frame, so it imports no polars.
+- The dtype check of `DataframeSchema` knows only the pandas dtype names. In phase 1, only the integer and float columns of a polars model compile. Phase 2
+  (the dtype map of decision 14) adds the other polars dtypes.
+- The polars engine checks models and frames. Its I/O, cast, validations and metrics raise `NotImplementedError` until phases 2 to 6.
 
 Change 26 is the floci fixture of decision 15. RND-25426 delivers it before phase 1, with the pandas integration tests. The polars S3 tests of phase 3 are its first polars users.
 
