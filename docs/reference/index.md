@@ -47,6 +47,10 @@ reference documents the public classes and functions; names beginning with an un
 
 ::: dynamicio.engines.polars_engine
 
+::: dynamicio.engines.polars_sinks
+
+::: dynamicio.engines.s3_upload
+
 ## Polars schemas
 
 ::: dynamicio.schema.polars_dtypes
