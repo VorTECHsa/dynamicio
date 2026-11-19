@@ -229,6 +229,7 @@ assert frame["order_id"].to_list() == [3]
 - A failed cast raises when you collect the frame.
 - `scan()` does not validate the frame or log its metrics, because a lazy frame has no rows before you collect it. It logs a warning if the IO object asks for validations or metrics. Collect the frame and call `validate_from_schema`, or use `read()`.
 - A missing file or key raises the error of `read()`. With `missing_ok=True`, `scan()` returns `None`.
+- `scan()` reads a `local`, a `local_batch`, an `s3_file` or an `s3_path_prefix` resource. On another resource, for example `postgres`, it raises `NotImplementedError`.
 
 A parquet prefix is one scan of all its objects:
 
@@ -242,7 +243,7 @@ The S3 reads of polars use the credentials and the region of the boto3 session o
 
 ### Options
 
-The `options` of a resource go beside its `local` or `s3` section. A file type accepts the options of its pandas reader and of its pandas writer. Examples are `sep`,
+The `options` of a resource go beside its `local` or `s3` section. A file type accepts the options of its pandas reader and of its pandas writer that have a polars entry. Examples are `sep`,
 `na_values` and `nrows` for CSV, and `compression` and `row_group_size` for parquet. The engine gives the read options to the polars reader with their polars names,
 for example `separator` for `sep`, and `decimal_comma` for `decimal: ","`. `quoting: 3` (`QUOTE_NONE`) reads with no quote character, as pandas does.
 
@@ -253,15 +254,16 @@ adds columns of nulls.
 The polars engine raises `EngineResourceError` for a resource that it cannot read or write:
 
 - a file type other than parquet, CSV and JSON, for example `hdf`
-- an option that has no polars entry, for example `dtype` or `parse_dates`
+- an option that has no polars entry, for example `dtype`, `parse_dates` or the parquet `filters`. A polars read filters with `scan()` and `filter()`
 - the parquet `engine: fastparquet`, or `index: true`, because a polars frame has no index
 - a CSV `header` on a line other than the first, a `skiprows` that is not a number, or an encoding other than UTF-8
 - a CSV `na_values` map with null strings for each column, or a `decimal` mark other than `.` and `,`
 - a CSV `escapechar`, `doublequote: false`, or a `quoting` other than `QUOTE_MINIMAL`, `QUOTE_ALL`, `QUOTE_NONNUMERIC` and `QUOTE_NONE`. The pandas reader also applies these writer options, and the polars reader has no equivalent
 - a read of a CSV resource with `header: false` or `header: null` and without `names`. The pandas engine cannot read that file either. A write with `header: false` is accepted
-- a JSON orient other than records. The default orient is records on S3 and columns on a local file, so a local JSON resource must set `orient: records`.
+- a JSON orient other than records. The default orient is records on an `s3_file` resource and columns on the other resources. A `local` or an `s3_path_prefix` JSON resource must thus set `orient: records`.
 
-An `s3_path_prefix` resource also accepts `no_disk_space`, `partition_cols`, `mode` and `allow_delete`. The polars engine refuses them on the other resources.
+An `s3_path_prefix` resource also accepts `no_disk_space`, `partition_cols`, `mode` and `allow_delete`. The polars engine refuses `no_disk_space`, `partition_cols`
+and `allow_delete` on the other resources. On a CSV or a JSON file, `mode` is the file mode of the writer.
 
 The engine checks the resource when you make the IO object, and again at each read and write. Thus it also finds a change of the options after you make the IO object.
 
@@ -282,7 +284,7 @@ assert big_orders.read()["order_id"].to_list() == [3]
 - A CSV, a JSON or a prefix sink collects the frame and calls the writer of `write()`, so the bytes and the objects are equal.
 - A failed validation raises `SchemaValidationError`, and the file or the objects do not change. The metrics are logged only after the validations pass.
 - A failed cast in the plan, or a schema column that is not in the frame, raises `ColumnsDataTypeError`.
-- A `local_batch` resource has no writer, and `sink()` raises `NotImplementedError` on it.
+- `sink()` writes a `local`, an `s3_file` or an `s3_path_prefix` resource. On another resource, for example `local_batch` or `postgres`, it raises `NotImplementedError`.
 
 `sink()` also takes a list or a tuple of lazy frames, the parts of one frame in their order:
 
@@ -310,7 +312,9 @@ pandas_dtypes = {column["name"]: column["numpy_type"] for column in json.loads(f
 assert pandas_dtypes["quantity"] == "Int64"
 ```
 
-The read is the same on the two engines, and does not fix the engine. On S3 it reads the end of the object with ranged `GetObject` calls. A
+The read is the same on the two engines, and does not fix the engine. On S3 it reads the end of the object with ranged `GetObject` calls. Each
+call after the first sends the `ETag` of the first in `IfMatch`. If another writer replaces the object between two calls, S3 returns
+`PreconditionFailed`, and the read raises its `ClientError`. The footer thus never mixes two versions of the object. A
 missing file raises `FileNotFoundError`, or `S3KeyNotFoundError` on S3. With `missing_ok=True`, `footer()` returns `None`. Another resource or
 file type raises `EngineResourceError`.
 
@@ -399,7 +403,7 @@ frame = OrdersIO(source_config=cloud.get(source_key="ORDERS_ATHENA"), query="SEL
 
 ## Cast
 
-`_apply_schema()` casts a frame to the polars dtypes of the model:
+`read()`, `scan()`, `write()` and `sink()` cast a frame to the polars dtypes of the model:
 
 - A `DataFrame` casts one column at a time. A column that does not cast raises `ColumnsDataTypeError`, and the `dynamicio.core` logger names the column.
 - A `LazyFrame` gets the casts in its plan. A column that does not cast raises `ColumnsDataTypeError` when the validations or the caller collect the frame.

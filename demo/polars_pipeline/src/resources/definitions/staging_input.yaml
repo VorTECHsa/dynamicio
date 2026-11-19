@@ -8,13 +8,13 @@ FOO:
       file_path: "[[ DEMO_DATA ]]/input/foo.csv"
       file_type: "csv"
   DEV:
-    type: "s3"
+    type: "s3_file"
     s3: &foo_s3
       bucket: "[[ DEV_S3_INPUT_BUCKET ]]"
       file_path: "data/foo.parquet"
       file_type: "parquet"
   PROD:
-    type: "s3"
+    type: "s3_file"
     s3:
       <<: *foo_s3
       bucket: "[[ PROD_S3_INPUT_BUCKET ]]"

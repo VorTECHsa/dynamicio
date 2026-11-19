@@ -82,7 +82,8 @@ A raw `metadata={"dynamicio": {...}}` dict on a plain `pa.Field` is rejected wit
 
 The `columns` of a model are used to filter out undesired columns in an optimal manner. This happens on loading for `*.csv` and `*.parquet` files as well
 as when interacting with a database, and after loading for `*.h5` and `*.json`. Their dtypes are then validated: if types do not match, `dynamic(i/o)`
-attempts to cast them and issues a `WARNING`. If casting does not work either, it raises a `ColumnsDataTypeError`. Validations and metrics can be applied on loading or on writing out.
+casts them. With `show_casting_warnings=True`, it logs each cast. If the cast fails, or if a column of the model is not in the frame, it raises
+`ColumnsDataTypeError`. Validations and metrics can be applied on loading or on writing out.
 
 ### Plain Pandera models
 
@@ -106,9 +107,23 @@ Generate a Pandera model (a .py module) for each dataset
                         the path to the output directory for the generated models.
 ```
 
-The generated models carry the dtypes only: add validations, metrics and `table=` yourself.
+The generated models carry the dtypes only: add validations, metrics and `table=` yourself. The `migrate` subcommand is in the next section. Its
+options are in `dynamicio migrate --help`.
 
 ## Upgrading
+
+### From dynamicio 11 to 12
+
+Version 12 adds the polars engine. The pandas engine stays the default, and a pandas process does not import polars. Three changes can break a
+pandas project:
+
+1. dynamicio needs Python 3.11 or later.
+2. `write()` casts the frame before the validations and the metrics. A validator or a metric thus sees the columns with the dtypes of the model. Up to
+   11.x, it saw the frame of the caller, before the cast.
+3. A column of the model that is not in the frame raises `ColumnsDataTypeError`, on reads and writes. Up to 11.x, it raised `KeyError`. A CSV or
+   parquet read without the column still raises the error of its reader.
+
+To move a project to the polars engine, see [The polars engine](polars-engine.md#migrate-a-repo).
 
 ### From dynamicio 8 (YAML schemas) to 11
 

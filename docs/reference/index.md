@@ -5,6 +5,11 @@ reference documents the public classes and functions; names beginning with an un
 
 ## Core
 
+::: dynamicio
+    options:
+      members:
+        - UnifiedIO
+
 ::: dynamicio.core
 
 ## Resource definitions
@@ -47,6 +52,8 @@ reference documents the public classes and functions; names beginning with an un
 
 ::: dynamicio.engines.registry
 
+::: dynamicio.engines.pandas_engine
+
 ::: dynamicio.engines.polars_engine
 
 ::: dynamicio.engines.polars_sinks
@@ -64,6 +71,14 @@ reference documents the public classes and functions; names beginning with an un
 ::: dynamicio.schema.data_model
 
 ::: dynamicio.schema.field
+
+::: dynamicio.schema.metadata
+
+::: dynamicio.schema.models
+
+::: dynamicio.schema.validations
+
+::: dynamicio.schema.metrics
 
 ## Polars schemas
 
@@ -86,3 +101,7 @@ reference documents the public classes and functions; names beginning with an un
 ## Test harness
 
 ::: dynamicio.testharness
+
+::: dynamicio.testharness.polars_frame_comparison
+
+::: dynamicio.testharness.pytest_plugin

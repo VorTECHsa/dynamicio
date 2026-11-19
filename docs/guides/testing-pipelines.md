@@ -71,7 +71,8 @@ class TestPipeline:
             outputs.check_all(transform_output_config)  # FINAL_FOO and FINAL_BAR
 ```
 
-`check` reads the generated and the expected file with plain pandas (no schema or cast can hide a difference) and compares them under a set of
+`check` reads the generated and the expected file with the plain readers of the engine of the process, pandas or polars. No schema or cast can hide a
+difference. It compares them under a set of
 `Expectations`. An exception raised by the task itself is never masked by the report, and a missing generated or expected file is recorded as a failure
 like any other, so one broken output never hides the others.
 
@@ -139,7 +140,7 @@ reference. The report restores the visibility a hand-written list gave. If you p
 | `outputs.check_each(config, "KEY", {"table": [...], "shard": range(4)})` | `check` for every combination of the placeholder values, each reported by its own params |
 | `ExpectedOutputs.clear_each(config, "KEY", grid)` | `clear` for every combination of the placeholder values |
 | `ExpectedOutputs.clear_all(config)` | `clear` every output of the config that declares `expected`, so a stale file of an earlier run can not pass for a fresh one |
-| `ExpectedOutputs(environment="NAME")`, `outputs.check(..., environment="NAME")` | Run and check in that environment (see [Choosing the environment](#choosing-the-environment)); an unknown name is reported as a failure listing the defined ones |
+| `ExpectedOutputs(environment="NAME")`, `outputs.check(..., environment="NAME")` | Run and check in that environment (see [Choosing the environment](#choosing-the-environment)). An unknown name raises `ValueError` on entering `ExpectedOutputs`, and is reported as a failure that lists the defined ones in `check` |
 | `outputs.check(..., label="...")` | The name used in the report (default: the resource name, with `params`) |
 | `ExpectedOutputs(keep_files=True)` | Keep the generated files even when they match |
 | `ExpectedOutputs.clear(config, "KEY", ...)` | Remove leftovers of an earlier, interrupted run at the start of a test |

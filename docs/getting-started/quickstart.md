@@ -102,6 +102,6 @@ except SchemaValidationError as error:
 
 ## Moving to the cloud
 
-Add a `DEV` or `PROD` entry beside `LOCAL`, for example an `s3` block with `bucket`, `file_path` and `file_type`, and
-construct `IOConfig` with a different `env_identifier` (usually read from an environment variable). The task code does
+Add a `DEV` or `PROD` entry beside `LOCAL`, for example `type: "s3_file"` with an `s3` block of `bucket`, `file_path` and `file_type`.
+Then construct `IOConfig` with a different `env_identifier`, usually read from an environment variable. The task code does
 not change. Continue with [Resource definitions](../guides/resource-definitions.md).

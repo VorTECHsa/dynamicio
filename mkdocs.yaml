@@ -1,6 +1,6 @@
 ---
 site_name: dynamicio
-site_description: Configuration-driven I/O for pandas dataframes, with YAML resource definitions and Pandera schema models.
+site_description: Configuration-driven I/O for pandas and polars dataframes, with YAML resource definitions and Pandera schema models.
 # `site_url` is deliberately unset: Read the Docs supplies the canonical URL of each version it builds.
 repo_url: https://github.com/VorTECHsa/dynamicio
 repo_name: VorTECHsa/dynamicio

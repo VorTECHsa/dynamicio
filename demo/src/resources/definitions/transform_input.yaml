@@ -6,13 +6,13 @@ STAGED_FOO:
       file_path: "[[ TEST_RESOURCES ]]/data/raw/staged_foo.parquet"
       file_type: "parquet"
   DEV:
-    type: "s3"
+    type: "s3_file"
     s3: &foo_s3
       bucket: "[[ DEV_S3_OUTPUT_BUCKET ]]"
       file_path: "live/data/raw/staged_foo.parquet"
       file_type: "parquet"
   PROD:
-    type: "s3"
+    type: "s3_file"
     s3:
       <<: *foo_s3
       bucket: "[[ PROD_S3_OUTPUT_BUCKET ]]"
@@ -24,13 +24,13 @@ STAGED_BAR:
       file_path: "[[ TEST_RESOURCES ]]/data/raw/staged_bar.parquet"
       file_type: "parquet"
   DEV:
-    type: "s3"
+    type: "s3_file"
     s3: &bar_s3
       bucket: "[[ DEV_S3_OUTPUT_BUCKET ]]"
       file_path: "live/data/raw/staged_bar.parquet"
       file_type: "parquet"
   PROD:
-    type: "s3"
+    type: "s3_file"
     s3:
       <<: *bar_s3
       bucket: "[[ PROD_S3_OUTPUT_BUCKET ]]"

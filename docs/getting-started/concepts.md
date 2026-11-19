@@ -84,7 +84,7 @@ a different storage, sample files in a test) without editing the code on either 
 The behaviour worth remembering:
 
 - Validation and metrics are off unless the call passes `apply_schema_validations` / `log_schema_metrics`: without them a schema only selects and casts columns.
-- On read, dynamicio casts, then validates, then logs metrics. On write it keeps only the schema's columns, validates, logs metrics, then casts.
+- On read, dynamicio casts, then validates, then logs metrics. On write it keeps only the schema's columns, casts, then validates, then logs metrics. The two engines use this order.
 - A failed validation raises `dynamicio.errors.SchemaValidationError`; its `.message` is a dict of validation name to details, with every violation collected, not just the first.
 - Metrics are emitted as `METRIC` JSON log lines on the `dynamicio.metrics` logger, so they are easy to parse in your log dashboards.
 - See the [changelog](../changelog.md) for what changed between releases and the [architecture decisions](../adr/README.md) for the reasoning behind the larger ones.

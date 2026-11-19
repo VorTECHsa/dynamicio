@@ -4,7 +4,7 @@
 
 <img src="https://raw.githubusercontent.com/VorTECHsa/dynamicio/master/docs/images/logo-transparent.png" alt="dynamicio — Wrap your I/O" width="500"> <img src="https://raw.githubusercontent.com/VorTECHsa/dynamicio/master/docs/images/wrapped-panda.png" alt="The dynamicio panda mascot" width="100">
 
-**Keep your business logic independent of I/O.** dynamicio is the seam between your `pandas` code and the places your
+**Keep your business logic independent of I/O.** dynamicio is the seam between your `pandas` or `polars` code and the places your
 data lives: describe each dataset once in YAML, and your code just calls `read()` and `write()`.
 
 The same code reads a parquet file on your laptop, a CSV prefix on S3, a PostgreSQL table or an Athena query. You pick
@@ -24,7 +24,8 @@ arguments and which bucket a task reads this week.
   change was right. A `LOCAL` environment and expected outputs give it both, and production credentials never enter the loop.
 - **Contracts for your dataframes.** A [Pandera](https://pandera.readthedocs.io) model declares columns, dtypes and validations. Bad data
   fails at the boundary with every violation listed, not three steps later, and the same model can emit metrics.
-- **Pandas behaviour, not a new dialect.** Options in the YAML go to `pandas` / `awswrangler`, so what you know still applies.
+- **Library behavior, not a new dialect.** Options in the YAML go to `pandas` / `awswrangler` on the pandas engine, and to the polars readers and writers
+  on the polars engine, so what you know still applies.
 - **Sync and async.** Read and write from plain code or from `asyncio` services.
 
 ## Supported sources

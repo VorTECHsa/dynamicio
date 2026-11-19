@@ -6,10 +6,12 @@ first argument the error was raised with (`None` if there was none).
 | Error | Raised when |
 |---|---|
 | `SchemaValidationError` | A validation failed on read or write. `message` is a dict of validation name to details, with every violation collected |
-| `ColumnsDataTypeError` | A column cannot be cast to the dtype the schema declares |
+| `ColumnsDataTypeError` | A column cannot be cast to the dtype the schema declares, or a schema column is not in the frame. Up to 11.x, the pandas engine raised `KeyError` for a missing column. A CSV or parquet read without the column still raises the error of its reader |
 | `SchemaNotFoundError` | The IO class has no schema (for example `SCHEMA_FROM_ARGUMENT` without a `schema=` argument) |
-| `MissingSchemaDefinition` | The resource definition has no schema where one is required |
-| `InvalidDatasetTypeError` | `file_type` is not one of `parquet`, `json`, `csv`, `h5` |
+| `InvalidDatasetTypeError` | The `dynamicio` CLI gets a dataset file with an extension other than `json`, `parquet`, `h5` or `csv` |
+| `DatasetNameNotFoundError` | A model has no dataset name. Declare it with `class Orders(DataModel, dataset="orders")` |
+| `TableNameNotFoundError` | A model of a `postgres` resource has no table name. Declare it with `table="..."` in the class keywords |
+| `EngineResourceError` | The polars engine cannot read or write a resource, for example an `hdf` file or an option with no polars entry. A Kafka resource without `key_column` also raises it. See [The polars engine](polars-engine.md#options) |
 | `NoObjectsFoundError` | An S3 prefix (or a parquet `file_path` ending in `/`) holds no objects, or no file matches a `local_batch` source. It is both a `FileNotFoundError` and a `ValueError` |
 | `ObjectNotFoundError` | The S3 key of a `csv` or `json` `file_path` does not exist. It is both a `FileNotFoundError` and an awswrangler `NoFilesFound` |
 | `S3KeyNotFoundError` | The S3 key of a `parquet` or `hdf` `file_path` does not exist. It is both a `FileNotFoundError` and the botocore `ClientError` that S3 returned |
@@ -36,8 +38,8 @@ except SchemaValidationError as error:
         print(validation, details)
 ```
 
-On a write, dynamicio keeps only the schema's columns, validates, logs metrics, then casts. On a read it casts, then
-validates, then logs metrics.
+On a write, dynamicio keeps only the schema's columns, casts, then validates, then logs metrics. On a read it casts, then
+validates, then logs metrics. Up to 11.x, a pandas write validated and logged the metrics before the cast.
 
 ## Missing sources
 
