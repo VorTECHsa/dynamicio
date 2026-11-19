@@ -61,6 +61,7 @@ class S3Tail(std_io.RawIOBase):
         self.position = 0
 
     def get(self, byte_range: str) -> dict:
+        """The ``GetObject`` response of a byte range of the object, with the retries of transient S3 errors."""
         return with_s3._retry_transient(  # pylint: disable=protected-access
             lambda: with_s3._shared_s3_client().get_object(Bucket=self.bucket, Key=self.key, Range=byte_range),  # pylint: disable=protected-access
             f"s3://{self.bucket}/{self.key}",
@@ -118,6 +119,11 @@ class ParquetFooters:
 
     @classmethod
     def of_s3(cls, bucket: str, key: str) -> ParquetFooter:
+        """The footer of an S3 object, from ranged reads of its end.
+
+        Raises:
+            S3KeyNotFoundError: The key does not exist.
+        """
         s3_path = f"s3://{bucket}/{key}"
         try:
             tail = S3Tail(bucket, key)
@@ -130,4 +136,5 @@ class ParquetFooters:
 
     @staticmethod
     def of(file: pq.ParquetFile) -> ParquetFooter:
+        """The footer of an open parquet file."""
         return ParquetFooter(schema=file.schema_arrow, rows=file.metadata.num_rows, row_groups=file.metadata.num_row_groups)
