@@ -194,8 +194,10 @@ class TestFork:
         assert EngineSetting._lock is not old  # pylint: disable=protected-access
 
     @pytest.mark.unit
-    def test_a_fork_of_a_process_that_imported_polars_refuses_the_polars_engine(self):
-        # Given
+    def test_a_fork_of_a_process_that_imported_polars_refuses_the_polars_engine(self, monkeypatch):
+        # Given the engine of a parent process. The fork hook replaces the lock of the class, so monkeypatch gives the old lock back after the test
+        lock = EngineSetting._lock  # pylint: disable=protected-access
+        monkeypatch.setattr(EngineSetting, "_lock", lock)
         EngineSetting.reset("polars")
 
         # When
@@ -204,6 +206,7 @@ class TestFork:
         # Then
         with pytest.raises(EngineConfigurationError, match="fork"):
             EngineSetting.use()
+        assert EngineSetting._lock is not lock  # pylint: disable=protected-access
 
     @pytest.mark.unit
     def test_reset_clears_the_mark_of_a_fork(self):
