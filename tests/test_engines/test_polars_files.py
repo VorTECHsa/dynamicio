@@ -17,7 +17,7 @@ from dynamicio import UnifiedIO
 from dynamicio.config import IOConfig
 from dynamicio.core import SCHEMA_FROM_ARGUMENT
 from dynamicio.engines import EngineSetting
-from dynamicio.errors import EngineResourceError, NoObjectsFoundError
+from dynamicio.errors import ColumnsDataTypeError, EngineResourceError, NoObjectsFoundError
 from dynamicio.schema import Field
 
 pl = pytest.importorskip("polars")
@@ -694,6 +694,44 @@ class TestNullsOfANumpyDtype:
 
         # Then
         assert pd.read_parquet(tmp_path / "data.parquet").dtypes.astype(str).to_dict() == {"a": "int64", "b": "bool", "c": "uint8"}
+
+    @pytest.mark.unit
+    def test_a_pandas_model_of_a_nullable_dtype_reads_the_exact_values_on_the_pandas_engine(self, tmp_path):
+        class PandasNullable(pa.DataFrameModel):
+            __dataset_name__ = "nullable"
+
+            a: Series[pd.Int64Dtype] = pa.Field(nullable=True)
+            b: Series[pd.BooleanDtype] = pa.Field(nullable=True)
+            c: Series[pd.UInt8Dtype] = pa.Field(nullable=True)
+
+        # Given
+        Files.polars(Files.config(tmp_path, "parquet"), Nullable).write(self.frame())
+
+        # When
+        EngineSetting.reset("pandas")
+        result = FilesIO(source_config=Files.config(tmp_path, "parquet"), schema=PandasNullable).read()
+
+        # Then
+        assert result["a"].tolist() == [1, pd.NA, 2**60 + 1]
+        assert result["b"].tolist() == [True, pd.NA, False]
+
+    @pytest.mark.unit
+    def test_a_pandas_model_of_a_numpy_dtype_cannot_hold_the_null_on_the_pandas_engine(self, tmp_path):
+        class PandasNumpy(pa.DataFrameModel):
+            __dataset_name__ = "nullable"
+
+            a: Series[int] = pa.Field(nullable=True)
+
+        # Given a file of the polars engine, and the same column as a pandas engine writes it with a null: a float64 NaN
+        Files.polars(Files.config(tmp_path, "parquet"), Nullable).write(self.frame())
+        pd.DataFrame({"a": [1.0, None, 3.0]}).to_parquet(tmp_path / "pandas.parquet")
+        EngineSetting.reset("pandas")
+
+        # When / Then the pandas engine raises for the two files
+        for name in ("data.parquet", "pandas.parquet"):
+            config = Files.config(tmp_path, "parquet", file_path=str(tmp_path / name))
+            with pytest.raises(ColumnsDataTypeError):
+                FilesIO(source_config=config, schema=PandasNumpy).read()
 
     @pytest.mark.unit
     @pytest.mark.parametrize("file_type, options", [("csv", {"index": False}), ("json", {"orient": "records"})])
