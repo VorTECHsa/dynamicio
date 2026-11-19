@@ -264,6 +264,9 @@ Phase 3 as built:
   raise `NotImplementedError` until phases 4 to 6.
 - The CSV and JSON writers change the frame to pandas with the pandas dtypes of the model, and call the pandas writers of 11.1.0. Thus the bytes are equal by
   construction, and the tests compare them for each case on a local disk and on floci S3.
+  - The option `compression` goes to the pandas writer without a change. A gzip header has the time of the write and the file name.
+    The option `{"method": "gzip", "mtime": 0}` fixes the time. Without it, two gzip writes differ on one engine too.
+  - The byte contract thus covers the data after decompression. It covers the gzip bytes only for a fixed `mtime` and the same file name.
 - The parquet writer calls `pyarrow.parquet.write_table`, not the polars `write_parquet` with `arrow_schema=`. pyarrow makes the arrow types and the pandas
   metadata from an empty pandas frame with the dtypes of the model, as `DataFrame.to_parquet` does. The footer schema, the metadata and the SNAPPY compression
   are then equal to 11.1.0. A `category` column has the code width of pandas: `int8` below 127 categories, `int16` below 32767 and `int32` after that.
