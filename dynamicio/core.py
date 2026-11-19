@@ -17,6 +17,7 @@ from pandera.api.dataframe.model import DataFrameModel  # the base of the pandas
 from dynamicio.config.pydantic import DataframeSchema, IOEnvironment, SchemaColumn
 from dynamicio.engines.engine_setting import EngineSetting
 from dynamicio.errors import CASTING_WARNING_MSG, NOTICE_MSG, MissingMixinError, SchemaNotDeclaredError, SchemaNotFoundError, TableNameNotFoundError
+from dynamicio.parquet_footer import ParquetFooter, ParquetFooters
 from dynamicio.schema.models import dataframe_validator, to_dataframe_schema
 
 logger = logging.getLogger(__name__)
@@ -241,14 +242,37 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
         ``validate_from_schema`` or ``log_metrics_from_schema``.
 
         Args:
-            df: The lazy frame to write. A polars ``DataFrame`` is written as its lazy frame.
+            df: The lazy frame to write. A polars ``DataFrame`` is written as its lazy frame. A list or a tuple of frames is the parts of one frame, in
+                their order: each part gets the casts of the schema, and the sink concatenates them.
 
         Raises:
             NotImplementedError: On the pandas engine, which has no lazy frame, and for a resource that the polars engine does not sink yet.
             ColumnsDataTypeError: A schema column is not in the frame, or a cast failed.
             SchemaValidationError: A validation failed. The destination does not change.
         """
-        EngineSetting.use(self._model, (df,), resource=self).sink(self, df)
+        parts = tuple(df) if isinstance(df, (list, tuple)) else (df,)
+        EngineSetting.use(self._model, parts, resource=self).sink(self, df)
+
+    def footer(self) -> Optional[ParquetFooter]:
+        """Read the footer of a parquet file without its rows: the arrow schema, the key-value metadata and the row count.
+
+        The read is the same on the two engines, and does not fix the engine. A ``local`` file is read with pyarrow. An ``s3_file`` object is read with
+        ranged ``GetObject`` calls on its end.
+
+        Returns:
+            The footer. None if the file does not exist and `missing_ok` is True.
+
+        Raises:
+            EngineResourceError: The resource is not a ``local`` or ``s3_file`` parquet file.
+            FileNotFoundError: The file does not exist, and `missing_ok` is False. An S3 key raises ``S3KeyNotFoundError``.
+        """
+        try:
+            return ParquetFooters.read(self)
+        except FileNotFoundError as err:
+            if not self.missing_ok:
+                raise
+            logger.warning(f"Source {self.name!r} does not exist and missing_ok is set: returning None. ({err})")
+            return None
 
     def validate_from_schema(self, df: pd.DataFrame) -> "DynamicDataIO":
         """Validates a dataframe based on the validations present in its schema definition.

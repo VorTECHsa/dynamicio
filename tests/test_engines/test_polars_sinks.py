@@ -474,3 +474,138 @@ class TestBothEnginesRaiseTheSameErrors:
         # Then
         assert polars_error is polars_sink_error is pandas_error is expected
         assert not (tmp_path / "data.parquet").exists()
+
+
+class TestSinkOfParts:
+    @staticmethod
+    def parts() -> List[Any]:
+        return [
+            pl.LazyFrame({"a": pl.Series([1, 2], dtype=pl.Int32), "b": ["x", None]}),
+            pl.LazyFrame({"a": [3], "b": [None]}),
+            pl.DataFrame({"a": pl.Series([4, 5], dtype=pl.Int64), "b": ["y", "z"], "extra": [0.5, 1.5]}),
+        ]
+
+    @staticmethod
+    def whole() -> Any:
+        return pl.DataFrame({"a": [1, 2, 3, 4, 5], "b": ["x", None, None, "y", "z"]})
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("options", [{}, {"row_group_size": 2}, {"index": False}])
+    def test_the_parts_give_the_file_of_the_whole_frame(self, tmp_path, options):
+        # Given
+        whole, parts = tmp_path / "whole.parquet", tmp_path / "parts.parquet"
+
+        # When
+        Files.polars(Files.config(tmp_path, "parquet", options, file_path=str(whole)), Pair).write(self.whole())
+        Files.polars(Files.config(tmp_path, "parquet", options, file_path=str(parts)), Pair).sink(self.parts())
+
+        # Then
+        assert Sinks.footer(parts) == Sinks.footer(whole)
+        pd.testing.assert_frame_equal(pd.read_parquet(parts), pd.read_parquet(whole))
+
+    @pytest.mark.unit
+    def test_the_pandas_metadata_has_a_range_index_of_all_the_rows_and_the_types_of_the_model(self, tmp_path):
+        # Given
+        config = Files.config(tmp_path, "parquet")
+
+        # When
+        Files.polars(config, Pair).sink(self.parts())
+
+        # Then
+        metadata = pq.read_schema(str(tmp_path / "data.parquet")).pandas_metadata
+        assert metadata["index_columns"] == [{"kind": "range", "name": None, "start": 0, "stop": 5, "step": 1}]
+        assert [(column["name"], column["pandas_type"]) for column in metadata["columns"]] == [("a", "int64"), ("b", "unicode")]
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("file_type, options", [("csv", {}), ("json", {"orient": "records"})])
+    def test_text_parts_give_the_bytes_of_the_whole_frame(self, tmp_path, file_type, options):
+        # Given
+        whole, parts = tmp_path / f"whole.{file_type}", tmp_path / f"parts.{file_type}"
+
+        # When
+        Files.polars(Files.config(tmp_path, file_type, options, file_path=str(whole)), Pair).write(self.whole())
+        Files.polars(Files.config(tmp_path, file_type, options, file_path=str(parts)), Pair).sink(tuple(self.parts()))
+
+        # Then
+        assert parts.read_bytes() == whole.read_bytes()
+
+    @pytest.mark.unit
+    def test_one_part_is_the_sink_of_its_frame(self, tmp_path):
+        # Given
+        one, frame = tmp_path / "one.parquet", tmp_path / "frame.parquet"
+
+        # When
+        Files.polars(Files.config(tmp_path, "parquet", file_path=str(one)), Pair).sink([self.whole().lazy()])
+        Files.polars(Files.config(tmp_path, "parquet", file_path=str(frame)), Pair).sink(self.whole().lazy())
+
+        # Then
+        assert Sinks.footer(one) == Sinks.footer(frame)
+
+    @pytest.mark.unit
+    def test_a_failed_validation_in_a_later_part_leaves_the_old_file(self, tmp_path):
+        # Given
+        config = Files.config(tmp_path, "parquet")
+        (tmp_path / "data.parquet").write_bytes(b"old")
+        parts = [pl.LazyFrame({"a": [1], "b": ["x"]}), pl.LazyFrame({"a": [-1], "b": ["y"]})]
+
+        # When / Then
+        with pytest.raises(SchemaValidationError):
+            Files.polars(config, Checked, apply_schema_validations=True, log_schema_metrics=True).sink(parts)
+        assert (tmp_path / "data.parquet").read_bytes() == b"old"
+
+    @pytest.mark.unit
+    def test_the_metrics_cover_all_the_parts(self, tmp_path):
+        # Given
+        config = Files.config(tmp_path, "parquet")
+        parts = [pl.LazyFrame({"a": [1], "b": ["x"]}), pl.LazyFrame({"a": [7], "b": ["y"]})]
+
+        # When
+        sunk = Sinks.logged_metrics(lambda: Files.polars(config, Checked, log_schema_metrics=True).sink(parts))
+        written = Sinks.logged_metrics(lambda: Files.polars(config, Checked, log_schema_metrics=True).write(pl.DataFrame({"a": [1, 7], "b": ["x", "y"]})))
+
+        # Then
+        assert sunk == written
+
+    @pytest.mark.unit
+    def test_a_part_without_a_schema_column_raises_columns_data_type_error(self, tmp_path):
+        # Given
+        config = Files.config(tmp_path, "parquet")
+
+        # When / Then
+        with pytest.raises(ColumnsDataTypeError):
+            Files.polars(config, Pair).sink([pl.LazyFrame({"a": [1], "b": ["x"]}), pl.LazyFrame({"a": [2]})])
+        assert not (tmp_path / "data.parquet").exists()
+
+    @pytest.mark.unit
+    def test_no_parts_raise_value_error(self, tmp_path):
+        # When / Then
+        with pytest.raises(ValueError, match="got no parts"):
+            Files.polars(Files.config(tmp_path, "parquet"), Pair).sink([])
+
+    @pytest.mark.unit
+    def test_a_pandas_part_raises_wrong_frame_error(self, tmp_path):
+        # Given
+        WrongFrameError = pytest.importorskip("dynamicio.errors").WrongFrameError  # pylint: disable=invalid-name
+
+        # When / Then
+        with pytest.raises(WrongFrameError):
+            Files.polars(Files.config(tmp_path, "parquet"), Pair).sink([pl.LazyFrame({"a": [1], "b": ["x"]}), pd.DataFrame({"a": [2], "b": ["y"]})])
+        assert not (tmp_path / "data.parquet").exists()
+
+    @pytest.mark.unit
+    def test_parts_of_a_prefix_give_the_objects_of_the_whole_frame(self, moto_s3_bucket, tmp_path):
+        # Given
+        (tmp_path / "w").mkdir()
+        (tmp_path / "p").mkdir()
+        whole = Sinks.s3_config(tmp_path / "w", "s3_path_prefix", "parquet", {"partition_cols": ["b"]}, path_prefix="whole/")
+        parts = Sinks.s3_config(tmp_path / "p", "s3_path_prefix", "parquet", {"partition_cols": ["b"]}, path_prefix="parts/")
+        frame = self.whole().fill_null("n")
+
+        # When
+        Files.polars(whole, Pair).write(frame)
+        Files.polars(parts, Pair).sink([frame.head(2).lazy(), frame.tail(3).lazy()])
+
+        # Then
+        keys = sorted(item["Key"] for item in moto_s3_bucket.list_objects_v2(Bucket=constants.MOCK_BUCKET)["Contents"])
+        assert sorted(key.split("/", 1)[1].rsplit("/", 1)[0] for key in keys if key.startswith("parts/")) == ["b=n", "b=x", "b=y", "b=z"]
+        assert len([key for key in keys if key.startswith("parts/")]) == len([key for key in keys if key.startswith("whole/")])

@@ -42,14 +42,18 @@ class PolarsSinks:
 
     @classmethod
     def sink(cls, engine: "PolarsEngine", io: "DynamicDataIO", frame: Any) -> None:
-        """Write a frame with the casts, the validations and the metrics of the model in one ``collect_all``.
+        """Write a frame, or the parts of a frame, with the casts, the validations and the metrics of the model in one ``collect_all``.
+
+        A list or a tuple of frames is the parts of one frame, in their order. Each part gets the schema columns and the casts of the model, and the
+        sink then concatenates them. The parts can thus have other types of a column, for example ``Int32`` and ``Int64``, or a column of nulls only.
+        The pandas metadata of the file comes from the model, so it has the types of the model and a ``RangeIndex`` of all the rows.
 
         Raises:
-            ColumnsDataTypeError: A schema column is not in the frame, or a cast in the plan failed when the sink collected it.
+            ColumnsDataTypeError: A schema column is not in a part, or a cast in the plan failed when the sink collected it.
             SchemaValidationError: A validation failed. The destination does not change.
-            ValueError: The S3 key of a parquet file ends in ``/``, as on ``write()``.
+            ValueError: The S3 key of a parquet file ends in ``/``, as on ``write()``, or a list of parts is empty.
         """
-        lazy = engine.cast(io, engine.schema_columns(io, frame.lazy()))
+        lazy = cls.combined(engine, io, frame)
         source, section = PolarsFiles.source_of(io), PolarsFiles.section_of(io)
         options = dict(io.options)
         if get_file_type_value(section.file_type) != "parquet" or source == "s3_path_prefix":
@@ -57,6 +61,15 @@ class PolarsSinks:
             PolarsFiles.write(io, collected[0])
             return
         cls.sink_parquet(engine, io, lazy, options)
+
+    @classmethod
+    def combined(cls, engine: "PolarsEngine", io: "DynamicDataIO", frame: Any) -> pl.LazyFrame:
+        """The lazy frame of a frame, or the concatenation of the parts of a frame, each with the schema columns and the casts of the model."""
+        parts = list(frame) if isinstance(frame, (list, tuple)) else [frame]
+        if not parts:
+            raise ValueError(f"sink() of {io.name!r} got no parts")
+        cast = [engine.cast(io, engine.schema_columns(io, part.lazy())) for part in parts]
+        return cast[0] if len(cast) == 1 else pl.concat(cast, how="vertical")
 
     @classmethod
     def sink_parquet(cls, engine: "PolarsEngine", io: "DynamicDataIO", lazy: pl.LazyFrame, options: MutableMapping[str, Any]) -> None:
