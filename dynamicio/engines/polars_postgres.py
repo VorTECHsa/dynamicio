@@ -13,8 +13,8 @@ from sqlalchemy.exc import ProgrammingError
 
 from dynamicio.engines.polars_files import PolarsFiles
 from dynamicio.errors import EngineResourceError
-from dynamicio.mixins import utils
-from dynamicio.mixins.with_postgres import WithPostgres, session_for
+from dynamicio.mixins import utils, with_postgres
+from dynamicio.mixins.with_postgres import WithPostgres
 
 if TYPE_CHECKING:  # pragma: no cover
     from dynamicio.core import DynamicDataIO
@@ -48,7 +48,8 @@ class PolarsPostgres:
         """
         connection_string, table_schema, query, options = io._postgres_read_plan()  # pylint: disable=protected-access
         params = options.get("params")
-        with session_for(connection_string) as session:
+        # the module lookup lets a patch of `dynamicio.mixins.with_postgres.session_for` reach the polars read, as it reaches the pandas read
+        with with_postgres.session_for(connection_string) as session:
             try:
                 result = cls.execute(session.connection(), WithPostgres._statement(session, query), params)  # pylint: disable=protected-access
             except ProgrammingError as error:

@@ -12,6 +12,7 @@ JSON file and an ``s3_path_prefix`` resource collect the frame and go to the wri
 """
 
 import os
+import stat
 import tempfile
 from typing import TYPE_CHECKING, Any, Dict, List, MutableMapping
 
@@ -85,9 +86,20 @@ class PolarsSinks:
             staged, final = os.path.join(stage, "staged.parquet"), os.path.join(stage, "final.parquet")
             cls.rewrite(staged, final, cls.stage(engine, io, lazy, staged, options), options)
             if source == "local":
+                cls.keep_mode(final, target)
                 os.replace(final, target)
                 return
             PolarsFiles.upload(final, PolarsFiles.section_of(io).bucket, target)
+
+    @staticmethod
+    def keep_mode(final: str, target: str) -> None:
+        """Give the new file the mode of the file that it replaces. ``write()`` opens the old file and keeps its mode, so a file of the owner only stays so.
+        A new file has the mode of the umask, as a file of ``write()``."""
+        try:
+            mode = stat.S_IMODE(os.stat(target).st_mode)
+        except FileNotFoundError:
+            return
+        os.chmod(final, mode)
 
     @classmethod
     def stage(cls, engine: "PolarsEngine", io: "DynamicDataIO", lazy: pl.LazyFrame, staged: str, options: MutableMapping[str, Any]) -> pa.Schema:

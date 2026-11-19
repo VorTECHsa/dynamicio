@@ -1,6 +1,7 @@
 # pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring
 import io
 import os
+import stat
 from pathlib import Path
 from typing import Annotated, Any, Dict, List, Optional
 from unittest.mock import patch
@@ -278,6 +279,38 @@ class TestSinkValidationsAndMetrics:
 
         # Then
         assert pl.read_parquet(tmp_path / "data.parquet")["a"].to_list() == [2, 3]
+
+
+class TestSinkFileMode:
+    @pytest.mark.unit
+    @pytest.mark.parametrize("mode", [0o600, 0o640, 0o664])
+    def test_a_sink_over_a_file_keeps_its_mode_as_write_does(self, tmp_path, mode):
+        # Given
+        config = Files.config(tmp_path, "parquet")
+        target = tmp_path / "data.parquet"
+        Files.polars(config, Checked).write(pl.DataFrame({"a": [1], "b": ["old"]}))
+        os.chmod(target, mode)
+
+        # When
+        Files.polars(config, Checked).sink(pl.LazyFrame({"a": [2], "b": ["new"]}))
+
+        # Then
+        assert stat.S_IMODE(os.stat(target).st_mode) == mode
+        assert pl.read_parquet(target)["b"].to_list() == ["new"]
+
+    @pytest.mark.unit
+    def test_a_new_file_of_a_sink_has_the_mode_of_a_new_file_of_write(self, tmp_path):
+        # Given
+        (tmp_path / "w").mkdir()
+        (tmp_path / "s").mkdir()
+        frame = pl.DataFrame({"a": [1], "b": ["x"]})
+
+        # When
+        Files.polars(Files.config(tmp_path / "w", "parquet"), Checked).write(frame)
+        Files.polars(Files.config(tmp_path / "s", "parquet"), Checked).sink(frame.lazy())
+
+        # Then
+        assert stat.S_IMODE(os.stat(tmp_path / "s" / "data.parquet").st_mode) == stat.S_IMODE(os.stat(tmp_path / "w" / "data.parquet").st_mode)
 
 
 class TestSinkErrors:

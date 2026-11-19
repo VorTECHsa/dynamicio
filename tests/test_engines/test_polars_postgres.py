@@ -53,6 +53,23 @@ class TestCheck:
         assert io.options["parse_dates"] == ["created_at"]
 
 
+class TestConsumerPatches:
+    @pytest.mark.unit
+    def test_a_patch_of_the_session_of_the_pandas_mixin_reaches_the_polars_read(self, tmp_path):
+        # Given
+        io = Tables.polars(Resources.postgres(tmp_path, Stack), sql_query="SELECT id FROM pg")
+
+        # When
+        with patch("dynamicio.mixins.with_postgres.session_for") as session_for, patch.object(PolarsPostgres, "execute") as execute:
+            execute.return_value.keys.return_value = ["id"]
+            execute.return_value.fetchall.return_value = [(1,), (2,)]
+            frame = PolarsPostgres.read(io)
+
+        # Then
+        session_for.assert_called_once()
+        assert frame["id"].to_list() == [1, 2]
+
+
 class TestChunks:
     @pytest.mark.unit
     def test_the_chunks_cover_the_rows_in_order_with_the_pandas_dtypes_of_the_model(self, tmp_path):
