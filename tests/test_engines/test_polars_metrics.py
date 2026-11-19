@@ -81,6 +81,43 @@ class TestMetricParity:
                 self.assert_same((values, "float64", pl.Float64), metric)
 
 
+class TestUniqueCountsOfNulls:
+    """A pandas ``object`` column with ``None`` and NaN has 2 kinds of null, and ``Series.unique()`` counts both. A polars column has one null."""
+
+    @pytest.mark.unit
+    def test_a_pandas_object_column_with_none_and_nan_counts_two_nulls_and_polars_counts_one(self):
+        # Given
+        pandas_frame = pd.DataFrame({"x": pd.Series(["a", None, NAN], dtype=object)})
+        polars_frame = pl.from_pandas(pandas_frame)
+
+        # When
+        pandas_count = metrics.get_metric("UniqueCounts")("d", pandas_frame, "x").calculate_metric()
+        polars_count = polars_frame.select(PolarsMetrics.ALL["UniqueCounts"]("x")).item()
+
+        # Then
+        assert (pandas_count, polars_count) == (3, 2)
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("file_type", ["parquet", "csv"])
+    def test_a_file_of_that_column_gives_the_same_count_on_the_two_engines(self, tmp_path, file_type):
+        # Given
+        path = tmp_path / f"x.{file_type}"
+        frame = pd.DataFrame({"x": pd.Series(["a", None, NAN], dtype=object)})
+        if file_type == "parquet":
+            frame.to_parquet(path)
+        else:
+            frame.to_csv(path, index=False)
+
+        # When
+        pandas_frame = pd.read_parquet(path) if file_type == "parquet" else pd.read_csv(path)
+        polars_frame = pl.read_parquet(path) if file_type == "parquet" else pl.read_csv(path)
+        pandas_count = metrics.get_metric("UniqueCounts")("d", pandas_frame, "x").calculate_metric()
+        polars_count = polars_frame.select(PolarsMetrics.ALL["UniqueCounts"]("x")).item()
+
+        # Then
+        assert pandas_count == polars_count == 2
+
+
 class TestMetricLog:
     @pytest.mark.unit
     def test_the_metric_of_an_empty_column_logs_and_returns_nan(self):
