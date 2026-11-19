@@ -6,7 +6,7 @@ import glob
 import logging
 import os
 from threading import Lock
-from typing import Any, MutableMapping
+from typing import Any, List, MutableMapping
 
 import pandas as pd
 from fastparquet import ParquetFile, write
@@ -286,18 +286,13 @@ class WithLocalBatch(WithLocal):
 
     sources_config: LocalBatchDataEnvironment  # type: ignore
 
-    def _read_from_local_batch(self) -> pd.DataFrame:
-        """Reads a set of files for a specified file type, concatenates them and returns a dataframe.
-
-        Returns:
-            A concatenated dataframe composed of all files read through local_batch.
+    def _local_batch_files(self, options: MutableMapping[str, Any]) -> List[str]:
+        """The sorted files of a ``local_batch`` resource. The fields of its path template are taken out of ``options``.
 
         Raises:
             NoObjectsFoundError: If no file matches. It is a `FileNotFoundError` and a `ValueError`.
         """
         local_batch_config = self.sources_config.local
-        options = dict(self.options)
-
         file_type = get_file_type_value(local_batch_config.file_type)
         filtering_file_type = "h5" if file_type == "hdf" else file_type
 
@@ -315,6 +310,20 @@ class WithLocalBatch(WithLocal):
 
         if not files:
             raise NoObjectsFoundError(f"No {filtering_file_type} files found at {file_path}")
+        return files
+
+    def _read_from_local_batch(self) -> pd.DataFrame:
+        """Reads a set of files for a specified file type, concatenates them and returns a dataframe.
+
+        Returns:
+            A concatenated dataframe composed of all files read through local_batch.
+
+        Raises:
+            NoObjectsFoundError: If no file matches. It is a `FileNotFoundError` and a `ValueError`.
+        """
+        options = dict(self.options)
+        file_type = get_file_type_value(self.sources_config.local.file_type)
+        files = self._local_batch_files(options)
         # `glob` returns the paths with `file_path` in them: joining it again breaks a relative `file_path`
         dfs_to_concatenate = [getattr(self, f"_read_{file_type}_file")(file, self.schema, **options) for file in files]
         return pd.concat(dfs_to_concatenate).reset_index(drop=True)

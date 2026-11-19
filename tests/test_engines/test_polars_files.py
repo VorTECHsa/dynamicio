@@ -1,0 +1,609 @@
+# pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring
+import json
+import uuid
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Annotated, Any, Dict, Optional
+
+import pandas as pd
+import pandera.pandas as pa
+import pytest
+import yaml
+from pandera.typing import Series
+
+import dynamicio
+from dynamicio import UnifiedIO
+from dynamicio.config import IOConfig
+from dynamicio.core import SCHEMA_FROM_ARGUMENT
+from dynamicio.engines import EngineSetting
+from dynamicio.errors import EngineResourceError, NoObjectsFoundError
+from dynamicio.schema import Field
+
+pl = pytest.importorskip("polars")
+pq = pytest.importorskip("pyarrow.parquet")
+DataModel = pytest.importorskip("dynamicio.schema.polars").DataModel
+
+
+class Mixed(DataModel, dataset="mixed"):
+    id: int
+    price: float = Field(nullable=True)
+    name: str = Field(nullable=True)
+    flag: bool
+    created_at: Annotated[pl.Datetime, "ns", "UTC"] = Field(nullable=True)
+    n: int = Field(nullable=True, pandas_dtype="Int64")
+    label: pl.Categorical = Field(nullable=True)
+    wait: Annotated[pl.Duration, "ns"] = Field(nullable=True)
+
+
+class PandasMixed(pa.DataFrameModel):
+    __dataset_name__ = "mixed"
+
+    id: Series[int]
+    price: Series[float] = Field(nullable=True)
+    name: Series[str] = Field(nullable=True)
+    flag: Series[bool]
+    created_at: Series[Annotated[pd.DatetimeTZDtype, "ns", "UTC"]] = Field(nullable=True)
+    n: Series[pd.Int64Dtype] = Field(nullable=True)
+    label: Series[pd.CategoricalDtype] = Field(nullable=True)
+    wait: Series[pd.Timedelta] = Field(nullable=True)
+
+
+class Pair(DataModel, dataset="pair"):
+    a: int
+    b: str = Field(nullable=True)
+
+
+class PandasPair(pa.DataFrameModel):
+    __dataset_name__ = "pair"
+
+    a: Series[int]
+    b: Series[str] = Field(nullable=True)
+
+
+class FilesIO(UnifiedIO):
+    schema = SCHEMA_FROM_ARGUMENT
+
+
+class Files:
+    """The resources, frames and engine switches of the file tests. Each resource has its own YAML file: `IOConfig` keeps the definitions of a path."""
+
+    CASES = [
+        ("parquet", {}),
+        ("csv", {}),
+        ("csv", {"index": False}),
+        ("json", {"orient": "records"}),
+        ("json", {"orient": "records", "lines": True}),
+    ]
+
+    @staticmethod
+    def config(tmp_path: Path, file_type: str, options: Optional[Dict[str, Any]] = None, source: str = "local", **section: Any) -> Any:
+        section = section or {"file_path": str(tmp_path / f"data.{file_type}")}
+        environment: Dict[str, Any] = {"type": source, "local": {**section, "file_type": file_type}}
+        if options:
+            environment["options"] = options
+        path = tmp_path / f"definitions_{uuid.uuid4().hex}.yaml"
+        path.write_text(yaml.safe_dump({"X": {"LOCAL": environment}}))
+        return IOConfig(str(path), env_identifier="LOCAL", dynamic_vars=FilesIO).get(source_key="X")
+
+    @staticmethod
+    def frame() -> Any:
+        """A frame of each dtype, with nulls, a string that looks like a number, and times in milliseconds: the unit of `DataFrame.to_json`."""
+        return pl.DataFrame(
+            {
+                "id": [1, 2, 3],
+                "price": [1.5, None, 3.0],
+                "name": ["a", None, "007"],
+                "flag": [True, False, True],
+                "created_at": pl.Series([datetime(2024, 1, 1, tzinfo=timezone.utc), None, datetime(2024, 6, 1, 1, 2, 3, 456000, tzinfo=timezone.utc)], dtype=pl.Datetime("ns", "UTC")),
+                "n": [1, None, 3],
+                "label": pl.Series(["x", None, "y"], dtype=pl.Categorical),
+                "wait": pl.Series([timedelta(milliseconds=1), None, timedelta(days=1)], dtype=pl.Duration("ns")),
+            }
+        )
+
+    @staticmethod
+    def pandas_frame(config: Any) -> pd.DataFrame:
+        """The frame of `frame()` as the pandas engine casts it to `PandasMixed`."""
+        io = FilesIO(source_config=config, schema=PandasMixed)
+        dtypes = {name: column.data_type for name, column in io.schema.columns.items()}
+        return io._apply_schema(Files.frame().to_pandas().astype(dtypes))  # pylint: disable=protected-access
+
+    @staticmethod
+    def write_with_pandas(config: Any) -> None:
+        EngineSetting.reset("pandas")
+        FilesIO(source_config=config, schema=PandasMixed).write(Files.pandas_frame(config))
+
+    @staticmethod
+    def read_with_pandas(config: Any) -> pd.DataFrame:
+        EngineSetting.reset("pandas")
+        return FilesIO(source_config=config, schema=PandasMixed).read()
+
+    @staticmethod
+    def polars(config: Any, model: Any = Mixed, **options: Any) -> FilesIO:
+        EngineSetting.reset("polars")
+        return FilesIO(source_config=config, schema=model, **options)
+
+
+class TestRoundTrip:
+    @pytest.mark.unit
+    @pytest.mark.parametrize("file_type, options", Files.CASES)
+    def test_a_frame_that_the_polars_engine_writes_reads_back_equal(self, tmp_path, file_type, options):
+        # Given
+        config = Files.config(tmp_path, file_type, options)
+
+        # When
+        Files.polars(config).write(Files.frame())
+        result = Files.polars(config).read()
+
+        # Then
+        assert result.equals(Files.frame())
+        assert result.schema == Files.frame().schema
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("file_type, options", Files.CASES)
+    def test_the_bytes_equal_the_bytes_of_the_pandas_engine(self, tmp_path, file_type, options):
+        # Given
+        config = Files.config(tmp_path, file_type, options)
+        path = tmp_path / f"data.{file_type}"
+
+        # When
+        Files.polars(config).write(Files.frame())
+        polars_bytes = path.read_bytes()
+        Files.write_with_pandas(config)
+
+        # Then
+        assert polars_bytes == path.read_bytes()
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("file_type, options", Files.CASES[:3])
+    def test_the_pandas_engine_reads_the_file_as_its_own_frame(self, tmp_path, file_type, options):
+        # Given
+        config = Files.config(tmp_path, file_type, options)
+
+        # When
+        Files.polars(config).write(Files.frame())
+        result = Files.read_with_pandas(config)
+
+        # Then
+        pd.testing.assert_frame_equal(result, Files.pandas_frame(config))
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("file_type, options", Files.CASES)
+    def test_the_polars_engine_reads_a_file_of_the_pandas_engine(self, tmp_path, file_type, options):
+        # Given
+        config = Files.config(tmp_path, file_type, options)
+        Files.write_with_pandas(config)
+
+        # When
+        result = Files.polars(config).read()
+
+        # Then
+        assert result.equals(Files.frame())
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("file_type, options", Files.CASES)
+    def test_a_frame_without_rows_reads_back_without_rows(self, tmp_path, file_type, options):
+        # Given
+        config = Files.config(tmp_path, file_type, options)
+
+        # When
+        Files.polars(config, Pair).write(pl.DataFrame({"a": pl.Series([], dtype=pl.Int64), "b": pl.Series([], dtype=pl.String)}))
+        result = Files.polars(config, Pair).read()
+
+        # Then
+        assert result.height == 0
+        assert result.schema == pl.Schema({"a": pl.Int64, "b": pl.String})
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("file_type, options", Files.CASES)
+    def test_a_lazy_frame_is_written(self, tmp_path, file_type, options):
+        # Given
+        config = Files.config(tmp_path, file_type, options)
+
+        # When
+        Files.polars(config).write(Files.frame().lazy())
+
+        # Then
+        assert Files.polars(config).read().equals(Files.frame())
+
+
+class TestParquetFooter:
+    @staticmethod
+    def footers(tmp_path: Path, frame: Any, model: Any, pandas_frame: pd.DataFrame, pandas_model: Any, **options: Any):
+        config = Files.config(tmp_path, "parquet", options)
+        path = tmp_path / "data.parquet"
+        Files.polars(config, model).write(frame)
+        polars_file = pq.ParquetFile(str(path))
+        polars_schema, polars_metadata = polars_file.schema_arrow, polars_file.metadata
+        EngineSetting.reset("pandas")
+        FilesIO(source_config=config, schema=pandas_model).write(pandas_frame)
+        pandas_file = pq.ParquetFile(str(path))
+        return (polars_schema, polars_metadata), (pandas_file.schema_arrow, pandas_file.metadata)
+
+    @pytest.mark.unit
+    def test_the_footer_has_the_pandas_metadata_types_and_compression_of_the_pandas_engine(self, tmp_path):
+        # Given
+        config = Files.config(tmp_path, "parquet")
+
+        # When
+        (polars_schema, polars_metadata), (pandas_schema, pandas_metadata) = self.footers(tmp_path, Files.frame(), Mixed, Files.pandas_frame(config), PandasMixed)
+
+        # Then
+        assert polars_schema.equals(pandas_schema, check_metadata=True)
+        assert json.loads(polars_schema.metadata[b"pandas"]) == json.loads(pandas_schema.metadata[b"pandas"])
+        columns = range(polars_metadata.row_group(0).num_columns)
+        assert {polars_metadata.row_group(0).column(i).compression for i in columns} == {"SNAPPY"}
+        assert [polars_metadata.row_group(0).column(i).physical_type for i in columns] == [pandas_metadata.row_group(0).column(i).physical_type for i in columns]
+
+    @pytest.mark.unit
+    def test_the_compression_option_reaches_the_writer(self, tmp_path):
+        # Given
+        config = Files.config(tmp_path, "parquet", {"compression": "zstd"})
+
+        # When
+        Files.polars(config, Pair).write(pl.DataFrame({"a": [1], "b": ["x"]}))
+
+        # Then
+        assert pq.ParquetFile(str(tmp_path / "data.parquet")).metadata.row_group(0).column(0).compression == "ZSTD"
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("count", [1, 127, 128, 40000])
+    def test_the_category_codes_have_the_width_that_pandas_gives_them(self, tmp_path, count):
+        class Labels(DataModel, dataset="labels"):
+            label: pl.Categorical
+
+        class PandasLabels(pa.DataFrameModel):
+            __dataset_name__ = "labels"
+
+            label: Series[pd.CategoricalDtype]
+
+        # Given
+        values = [f"v{i:05d}" for i in range(count)]
+
+        # When
+        (polars_schema, _), (pandas_schema, _) = self.footers(
+            tmp_path, pl.DataFrame({"label": pl.Series(values, dtype=pl.Categorical)}), Labels, pd.DataFrame({"label": pd.Categorical(values)}), PandasLabels
+        )
+
+        # Then
+        assert polars_schema.field("label").type == pandas_schema.field("label").type
+        assert json.loads(polars_schema.metadata[b"pandas"])["columns"] == json.loads(pandas_schema.metadata[b"pandas"])["columns"]
+
+    @pytest.mark.unit
+    def test_an_enum_column_has_the_number_of_its_categories(self, tmp_path):
+        class Sizes(DataModel, dataset="sizes"):
+            size: Annotated[pl.Enum, ["s", "m", "l"]]
+
+        # Given
+        config = Files.config(tmp_path, "parquet")
+
+        # When
+        Files.polars(config, Sizes).write(pl.DataFrame({"size": pl.Series(["s", "s"], dtype=pl.Enum(["s", "m", "l"]))}))
+
+        # Then
+        metadata = json.loads(pq.read_schema(str(tmp_path / "data.parquet")).metadata[b"pandas"])
+        assert metadata["columns"][0]["metadata"]["num_categories"] == 3
+        assert Files.polars(config, Sizes).read()["size"].to_list() == ["s", "s"]
+
+    @pytest.mark.unit
+    def test_an_all_null_string_column_is_a_string_column(self, tmp_path):
+        # Given
+        config = Files.config(tmp_path, "parquet")
+
+        # When
+        Files.polars(config, Pair).write(pl.DataFrame({"a": [1, 2], "b": pl.Series([None, None], dtype=pl.String)}))
+
+        # Then
+        assert str(pq.read_schema(str(tmp_path / "data.parquet")).field("b").type) == "string"
+        assert Files.polars(config, Pair).read()["b"].to_list() == [None, None]
+        EngineSetting.reset("pandas")
+        assert FilesIO(source_config=config, schema=PandasPair).read()["b"].isna().tolist() == [True, True]
+
+    @pytest.mark.unit
+    def test_an_int96_timestamp_reads_as_the_datetime_of_the_model(self, tmp_path):
+        class Events(DataModel, dataset="events"):
+            created_at: Annotated[pl.Datetime, "ns", "UTC"]
+
+        # Given
+        config = Files.config(tmp_path, "parquet")
+        values = pd.Series([pd.Timestamp("2024-01-01 00:00:00.000000001", tz="UTC"), pd.Timestamp("2024-06-01 12:00:00", tz="UTC")])
+        pd.DataFrame({"created_at": values}).to_parquet(tmp_path / "data.parquet", use_deprecated_int96_timestamps=True)
+
+        # When
+        result = Files.polars(config, Events).read()
+
+        # Then
+        assert result.schema["created_at"] == pl.Datetime("ns", "UTC")
+        assert result["created_at"].to_pandas().tolist() == values.tolist()
+
+    @pytest.mark.unit
+    def test_the_columns_of_the_model_are_read_in_the_order_of_the_model(self, tmp_path):
+        # Given
+        config = Files.config(tmp_path, "parquet")
+        pd.DataFrame({"b": ["x"], "extra": [0], "a": [1]}).to_parquet(tmp_path / "data.parquet")
+
+        # When
+        result = Files.polars(config, Pair).read()
+
+        # Then
+        assert result.columns == ["a", "b"]
+        assert result.row(0) == (1, "x")
+
+
+class TestCsvRead:
+    @pytest.mark.unit
+    @pytest.mark.parametrize("null", ["", "NA", "N/A", "NaN", "null", "NULL", "None", "<NA>", "#N/A", "n/a", "nan", "-NaN"])
+    def test_the_null_strings_of_pandas_read_as_nulls(self, tmp_path, null):
+        # Given
+        (tmp_path / "data.csv").write_text(f"a,b\n1,{null}\n2,x\n")
+        config = Files.config(tmp_path, "csv")
+
+        # When
+        result = Files.polars(config, Pair).read()
+
+        # Then
+        assert result["b"].to_list() == [None, "x"]
+        EngineSetting.reset("pandas")
+        assert FilesIO(source_config=config, schema=PandasPair).read()["b"].isna().tolist() == [True, False]
+
+    @pytest.mark.unit
+    def test_a_string_that_looks_like_a_number_keeps_its_text(self, tmp_path):
+        # Given
+        (tmp_path / "data.csv").write_text("a,b\n1,007\n2,1e3\n")
+
+        # When
+        result = Files.polars(Files.config(tmp_path, "csv"), Pair).read()
+
+        # Then
+        assert result["b"].to_list() == ["007", "1e3"]
+
+    @pytest.mark.unit
+    def test_a_float_on_the_last_row_of_a_float_column_reads_as_a_float(self, tmp_path):
+        class Prices(DataModel, dataset="prices"):
+            price: float
+
+        # Given
+        (tmp_path / "data.csv").write_text("price\n" + "1\n" * 2000 + "2.5\n")
+
+        # When
+        result = Files.polars(Files.config(tmp_path, "csv"), Prices).read()
+
+        # Then
+        assert result["price"].tail(1).to_list() == [2.5]
+        assert result.schema["price"] == pl.Float64
+
+    @pytest.mark.unit
+    def test_the_read_options_reach_the_reader(self, tmp_path):
+        # Given
+        (tmp_path / "data.csv").write_text("# a comment\nskipped\na;b\n1;-\n2;'x;y'\n3;z\n")
+        config = Files.config(tmp_path, "csv", {"sep": ";", "na_values": "-", "quotechar": "'", "skiprows": 2, "nrows": 2})
+
+        # When
+        result = Files.polars(config, Pair).read()
+
+        # Then
+        assert result.to_dicts() == [{"a": 1, "b": None}, {"a": 2, "b": "x;y"}]
+
+    @pytest.mark.unit
+    def test_the_columns_that_the_model_does_not_declare_are_left_out(self, tmp_path):
+        # Given
+        (tmp_path / "data.csv").write_text(",b,extra,a\n0,x,9,1\n")
+
+        config = Files.config(tmp_path, "csv")
+
+        # When
+        result = Files.polars(config, Pair).read()
+
+        # Then
+        EngineSetting.reset("pandas")
+        assert result.columns == list(FilesIO(source_config=config, schema=PandasPair).read().columns)
+        assert result.select("a", "b").row(0) == (1, "x")
+
+
+class TestJsonRead:
+    @pytest.mark.unit
+    @pytest.mark.parametrize("unit, epoch", [("ms", 1704067200123), ("s", 1704067200), ("us", 1704067200123456), ("ns", 1704067200123456789)])
+    def test_an_epoch_reads_as_the_utc_instant_in_its_date_unit(self, tmp_path, unit, epoch):
+        class Events(DataModel, dataset="events"):
+            created_at: Annotated[pl.Datetime, "ns", "Europe/London"]
+
+        # Given
+        (tmp_path / "data.json").write_text(json.dumps([{"created_at": epoch}]))
+        config = Files.config(tmp_path, "json", {"orient": "records", "date_unit": unit})
+
+        # When
+        result = Files.polars(config, Events).read()
+
+        # Then
+        expected = pd.Timestamp(epoch, unit=unit, tz="UTC").tz_convert("Europe/London")
+        assert result["created_at"].to_pandas().tolist() == [expected]
+
+    @pytest.mark.unit
+    def test_an_epoch_of_a_naive_datetime_is_the_utc_wall_time(self, tmp_path):
+        class Events(DataModel, dataset="events"):
+            created_at: Annotated[pl.Datetime, "ns", None]
+
+        # Given
+        (tmp_path / "data.json").write_text(json.dumps([{"created_at": 1704067200000}]))
+
+        # When
+        result = Files.polars(Files.config(tmp_path, "json", {"orient": "records"}), Events).read()
+
+        # Then
+        assert result["created_at"].to_list() == [datetime(2024, 1, 1)]
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("unit, value, expected", [("ms", 1500, timedelta(seconds=1.5)), ("s", 2, timedelta(seconds=2)), ("ns", 7, pd.Timedelta(7))])
+    def test_an_integer_under_a_duration_column_is_a_duration_in_its_date_unit(self, tmp_path, unit, value, expected):
+        class Waits(DataModel, dataset="waits"):
+            wait: Annotated[pl.Duration, "ns"]
+
+        # Given
+        (tmp_path / "data.json").write_text(json.dumps([{"wait": value}]))
+        config = Files.config(tmp_path, "json", {"orient": "records", "date_unit": unit})
+
+        # When
+        result = Files.polars(config, Waits).read()
+
+        # Then
+        assert result["wait"].to_pandas().tolist() == [pd.Timedelta(expected)]
+
+    @pytest.mark.unit
+    def test_an_iso_string_under_a_datetime_column_is_parsed(self, tmp_path):
+        class Events(DataModel, dataset="events"):
+            created_at: Annotated[pl.Datetime, "ns", "UTC"]
+
+        # Given
+        (tmp_path / "data.json").write_text("\n".join(json.dumps({"created_at": value}) for value in ["2024-01-01T00:00:00Z", "2024-01-02T00:00:00Z"]))
+        config = Files.config(tmp_path, "json", {"orient": "records", "lines": True})
+
+        # When
+        result = Files.polars(config, Events).read()
+
+        # Then
+        assert result["created_at"].dt.day().to_list() == [1, 2]
+
+
+class TestLocalBatch:
+    @pytest.mark.unit
+    @pytest.mark.parametrize("file_type", ["parquet", "csv"])
+    def test_the_files_under_a_prefix_read_as_one_frame_in_sorted_order(self, tmp_path, file_type):
+        # Given
+        (tmp_path / "batch").mkdir()
+        for name, rows in (("2", {"a": [3], "b": ["z"]}), ("1", {"a": [1, 2], "b": ["x", None]})):
+            getattr(pd.DataFrame(rows), f"to_{file_type}")(tmp_path / "batch" / f"{name}.{file_type}", index=False)
+        config = Files.config(tmp_path, file_type, source="local_batch", path_prefix=f"{tmp_path}/batch/")
+
+        # When
+        result = Files.polars(config, Pair).read()
+
+        # Then
+        assert result.to_dicts() == [{"a": 1, "b": "x"}, {"a": 2, "b": None}, {"a": 3, "b": "z"}]
+
+    @pytest.mark.unit
+    def test_a_dynamic_file_path_takes_the_fields_of_its_template(self, tmp_path):
+        # Given
+        for run in ("a", "b"):
+            pd.DataFrame({"a": [1], "b": [run]}).to_csv(tmp_path / f"run_{run}.csv", index=False)
+        config = Files.config(tmp_path, "csv", source="local_batch", dynamic_file_path=f"{tmp_path}/run_{{run}}.csv")
+
+        # When
+        result = Files.polars(config, Pair, run="b").read()
+
+        # Then
+        assert result["b"].to_list() == ["b"]
+
+    @pytest.mark.unit
+    def test_a_file_that_misses_a_column_has_nulls_in_it(self, tmp_path):
+        # Given
+        (tmp_path / "batch").mkdir()
+        pd.DataFrame({"a": [1], "b": ["x"]}).to_csv(tmp_path / "batch" / "1.csv", index=False)
+        pd.DataFrame({"a": [2]}).to_csv(tmp_path / "batch" / "2.csv", index=False)
+        config = Files.config(tmp_path, "csv", source="local_batch", path_prefix=f"{tmp_path}/batch/")
+
+        # When
+        result = Files.polars(config, Pair).read()
+
+        # Then
+        assert result.to_dicts() == [{"a": 1, "b": "x"}, {"a": 2, "b": None}]
+
+    @pytest.mark.unit
+    def test_a_prefix_without_files_raises_no_objects_found(self, tmp_path):
+        # Given
+        (tmp_path / "batch").mkdir()
+        config = Files.config(tmp_path, "csv", source="local_batch", path_prefix=f"{tmp_path}/batch/")
+
+        # When / Then
+        with pytest.raises(NoObjectsFoundError):
+            Files.polars(config, Pair).read()
+
+    @pytest.mark.unit
+    def test_a_prefix_without_files_returns_none_with_missing_ok(self, tmp_path):
+        # Given
+        (tmp_path / "batch").mkdir()
+        config = Files.config(tmp_path, "csv", source="local_batch", path_prefix=f"{tmp_path}/batch/")
+
+        # When / Then
+        assert Files.polars(config, Pair, missing_ok=True).read() is None
+
+
+class TestMissingFile:
+    @pytest.mark.unit
+    @pytest.mark.parametrize("file_type, options", Files.CASES)
+    def test_a_missing_file_raises_file_not_found(self, tmp_path, file_type, options):
+        with pytest.raises(FileNotFoundError):
+            Files.polars(Files.config(tmp_path, file_type, options)).read()
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("file_type, options", Files.CASES)
+    def test_a_missing_file_returns_none_with_missing_ok(self, tmp_path, file_type, options):
+        assert Files.polars(Files.config(tmp_path, file_type, options), missing_ok=True).read() is None
+
+
+class TestResourceCheck:
+    @pytest.mark.unit
+    def test_a_file_type_without_a_polars_reader_is_refused_when_the_resource_is_built(self, tmp_path):
+        # Given
+        config = Files.config(tmp_path, "hdf", file_path=str(tmp_path / "data.h5"))
+
+        # When / Then
+        with pytest.raises(EngineResourceError, match="not hdf files"):
+            Files.polars(config)
+
+    @pytest.mark.unit
+    def test_an_option_from_the_code_is_checked(self, tmp_path):
+        with pytest.raises(EngineResourceError, match="no csv option dtype"):
+            Files.polars(Files.config(tmp_path, "csv"), dtype={"a": str})
+
+    @pytest.mark.unit
+    def test_the_fields_of_the_path_template_are_not_options(self, tmp_path):
+        # Given
+        config = Files.config(tmp_path, "csv", file_path=str(tmp_path / "data_{run}.csv"))
+
+        # When
+        Files.polars(config, Pair, run="x").write(pl.DataFrame({"a": [1], "b": ["y"]}))
+
+        # Then
+        assert (tmp_path / "data_x.csv").exists()
+        assert Files.polars(config, Pair, run="x").read().row(0) == (1, "y")
+
+    @pytest.mark.unit
+    def test_an_option_that_changes_after_the_build_is_refused_at_a_read_and_the_engine_stays_unfrozen(self, tmp_path):
+        # Given
+        io = Files.polars(Files.config(tmp_path, "csv"), Pair)
+        io.options["dtype"] = {"a": str}
+
+        # When
+        with pytest.raises(EngineResourceError, match="no csv option dtype"):
+            io.read()
+
+        # Then
+        dynamicio.configure(engine="pandas")
+        assert EngineSetting.current().name == "pandas"
+
+    @pytest.mark.unit
+    def test_an_option_that_changes_after_the_build_is_refused_before_the_file_is_written(self, tmp_path):
+        # Given
+        io = Files.polars(Files.config(tmp_path, "json", {"orient": "records"}), Pair)
+        io.options["orient"] = "columns"
+
+        # When
+        with pytest.raises(EngineResourceError, match="not columns"):
+            io.write(pl.DataFrame({"a": [1], "b": ["x"]}))
+
+        # Then
+        assert not (tmp_path / "data.json").exists()
+
+    @pytest.mark.unit
+    def test_a_resource_that_is_not_a_file_is_not_read_or_written_yet(self, tmp_path):
+        # Given
+        definition = {"X": {"LOCAL": {"type": "postgres", "postgres": {"db_host": "h", "db_port": "5432", "db_name": "d", "db_user": "u", "db_password": "p"}}}}
+        (tmp_path / "pg.yaml").write_text(yaml.safe_dump(definition))
+        config = IOConfig(str(tmp_path / "pg.yaml"), env_identifier="LOCAL", dynamic_vars=FilesIO).get(source_key="X")
+        io = Files.polars(config, Pair, sql_query="select 1")
+
+        # When / Then
+        with pytest.raises(NotImplementedError, match="does not read postgres resources yet"):
+            io.read()
+        with pytest.raises(NotImplementedError, match="does not write postgres resources yet"):
+            io.write(pl.DataFrame({"a": [1], "b": ["x"]}))

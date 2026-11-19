@@ -963,3 +963,22 @@ class TestBatchLocalSources:
 
         # Then
         pd.testing.assert_frame_equal(df, self.FRAME)
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("location", [{"path_prefix": "batch_{run}/"}, {"dynamic_file_path": "batch_{run}/*.parquet"}], ids=["path_prefix", "dynamic_file_path"])
+    def test_the_batch_files_are_sorted_and_the_template_fields_leave_the_options(self, tmp_path, location):
+        # Given
+        (tmp_path / "batch_x").mkdir()
+        for name in ("b", "a", "c"):
+            self.FRAME.to_parquet(tmp_path / "batch_x" / f"{name}.parquet")
+        (tmp_path / "batch_x" / "d.csv").write_text("")
+        location = {key: f"{tmp_path}/{value}" for key, value in location.items()}
+        io = ReadFromBatchLocalParquet(source_config=self.config(tmp_path, location))
+        options = {"run": "x", "columns": ["id"]}
+
+        # When
+        files = io._local_batch_files(options)  # pylint: disable=protected-access
+
+        # Then
+        assert files == [f"{tmp_path}/batch_x/{name}.parquet" for name in ("a", "b", "c")]
+        assert options == {"columns": ["id"]}

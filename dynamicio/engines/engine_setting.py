@@ -63,16 +63,18 @@ class EngineSetting:
         return cls.instance(cls._name)
 
     @classmethod
-    def use(cls, model: Optional[type] = None, frames: Tuple[Any, ...] = ()) -> Engine:
+    def use(cls, model: Optional[type] = None, frames: Tuple[Any, ...] = (), resource: Any = None) -> Engine:
         """The engine of a read or write. The first call that passes the checks freezes the engine and logs its name.
 
         Args:
             model: The Pandera model of the IO object, checked against the engine.
             frames: The frames that the IO object writes, checked against the engine.
+            resource: The IO object, whose file type and options are checked against the engine.
 
         Raises:
             ModelEngineMismatchError: If the model is not for the engine. The engine stays unfrozen, so ``configure()`` can still correct it.
             WrongFrameError: If a frame is of the other engine. The engine stays unfrozen.
+            EngineResourceError: If the engine cannot read or write the resource. The engine stays unfrozen.
         """
         with cls._lock:
             engine = cls.current()
@@ -80,6 +82,8 @@ class EngineSetting:
                 engine.check_model(model)
             for frame in frames:
                 engine.check_frame(frame)
+            if resource is not None:
+                engine.check_resource(resource)
             if not cls._frozen:
                 cls._frozen = True
                 logger.info(f"dynamicio engine: {cls._name}")

@@ -1,7 +1,8 @@
 # The polars engine
 
 The polars engine casts, validates and logs the metrics of polars frames. It has the validators and the metrics of the pandas engine, with the same
-names, messages and `METRIC` lines. In this release it does not read or write: `read()`, `write()`, `scan()` and `sink()` raise `NotImplementedError`.
+names, messages and `METRIC` lines. It reads and writes parquet, CSV and JSON files on a `local` or an `s3_file` resource, and reads a
+`local_batch` resource. In this release, `scan()`, `sink()` and the other resources raise `NotImplementedError`.
 
 [ADR 0010](https://github.com/VorTECHsa/dynamicio/pull/140) records the design. The ADR is not final and changes with each release of the engine.
 
@@ -64,6 +65,47 @@ of the table. To set a different pandas dtype, use `Field(pandas_dtype=...)`, fo
 string. The value must be a pair of the polars dtype of the column, else the model raises `ValueError` when it compiles. A pandas model does not accept
 `pandas_dtype`, because its column type is a pandas dtype.
 
+## Read and write files
+
+The polars engine reads and writes these resources:
+
+| Resource | Read | Write |
+|---|---|---|
+| `local` | parquet, CSV, JSON | parquet, CSV, JSON |
+| `local_batch` | parquet, CSV, JSON | no writer, as on the pandas engine |
+| `s3_file` | parquet, CSV, JSON | parquet, CSV, JSON |
+
+A file that the polars engine writes gives the same frame to the pandas engine of 11.1.0:
+
+- The CSV and JSON writers change the frame to pandas, with the pandas dtypes of the model, and call the pandas writers. The bytes are equal to the bytes of the pandas engine.
+- The parquet writer calls `pyarrow.parquet.write_table` with the arrow types and the pandas metadata that `DataFrame.to_parquet` gives. The compression is SNAPPY, as on pandas. A `category` column has the code width of pandas: `int8` below 127 categories, `int16` below 32767 and `int32` after that.
+
+The readers are polars readers, and the engine then casts the frame to the model:
+
+- A CSV file uses the null strings of `pandas.read_csv`. A column that is not a number or a Boolean reads as a string, so `007` keeps its text. The cast then parses the datetimes, the durations (for example `0 days 00:00:01`) and the Booleans (`True`, `False`, `true`, `false`, `TRUE`, `FALSE`).
+- A JSON file has the orient records, or JSON lines with `lines: true`. An integer under a `Datetime` or a `Duration` column is an epoch in `date_unit`, which is `ms` by default. An epoch of a `Datetime` with a time zone is a UTC instant. A file without records, as the pandas engine writes a frame without rows, reads as a frame without rows with the columns of the model.
+- A `local_batch` resource reads its files in sorted order. A file without a column of the model gives nulls in that column.
+- A missing local file raises `FileNotFoundError`. A missing S3 key raises `S3KeyNotFoundError` for parquet and `ObjectNotFoundError` for CSV and JSON, as on the pandas engine. With `missing_ok=True`, `read()` returns `None`.
+- An `s3_file` key that ends in `/` raises `NotImplementedError` at read. A parquet write to such a key raises `ValueError`, as on the pandas engine.
+
+`write()` collects a `LazyFrame` before it writes the file.
+
+### Options
+
+The `options` of a resource go beside its `local` or `s3` section. A file type accepts the options of its pandas reader and of its pandas writer. Examples are `sep`,
+`na_values` and `nrows` for CSV, and `compression` and `row_group_size` for parquet. The engine gives the read options to the polars reader with their polars names,
+for example `separator` for `sep`.
+
+The polars engine raises `EngineResourceError` for a resource that it cannot read or write:
+
+- a file type other than parquet, CSV and JSON, for example `hdf`
+- an option that has no polars entry, for example `dtype` or `parse_dates`
+- the parquet `engine: fastparquet`, or `index: true`, because a polars frame has no index
+- a CSV `header` on a line other than the first, a `skiprows` that is not a number, or an encoding other than UTF-8
+- a JSON orient other than records. The default orient is records on S3 and columns on a local file, so a local JSON resource must set `orient: records`.
+
+The engine checks the resource when you make the IO object, and again at each read and write. Thus it also finds a change of the options after you make the IO object.
+
 ## Cast
 
 `_apply_schema()` casts a frame to the polars dtypes of the model:
@@ -71,6 +113,7 @@ string. The value must be a pair of the polars dtype of the column, else the mod
 - A `DataFrame` casts one column at a time. A column that does not cast raises `ColumnsDataTypeError`, and the `dynamicio.core` logger names the column.
 - A `LazyFrame` gets the casts in its plan. A column that does not cast raises `ColumnsDataTypeError` when the validations or the caller collect the frame.
 - A string column parses to a `Datetime` with `str.to_datetime`, in the time unit and the time zone of the model.
+- A string column parses to a `Duration` with the parser of `pd.to_timedelta`, and to a `Boolean` from `True`, `False`, `true`, `false`, `TRUE` or `FALSE`. A `DataFrame` with another string raises `ColumnsDataTypeError`. A `LazyFrame` raises the polars `InvalidOperationError` when the caller collects it.
 - A float NaN becomes null. In pandas, NaN and None are the two missing values. In polars, null is the only missing value, so the validators of nulls
   count a NaN after the cast.
 - A schema column that is not in the frame, or a `columns` option with a column that is not in the schema, raises `ColumnsDataTypeError`.

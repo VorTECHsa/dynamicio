@@ -125,6 +125,7 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
 
         if not (hasattr(self, f"_read_from_{source_name}") or hasattr(self, f"_write_to_{source_name}")):
             raise MissingMixinError(f"No method '_read_from_{source_name}' or '_write_to_{source_name}'. Have you registered a mixin for {source_name}?")
+        EngineSetting.current().check_resource(self)
 
     REMOVED_DECLARATIONS = (
         "Dict schemas (`schema = {...}`, `schema_validations`, `schema_metrics`) and YAML schemas (`SCHEMA_FROM_FILE`) were removed in dynamicio 11: "
@@ -165,7 +166,7 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
         Returns:
             A pandas dataframe or an iterable. None if the source does not exist and `missing_ok` is True.
         """
-        engine = EngineSetting.use(self._model)  # checks the model again: `configure()` may have changed the engine since `__init__`
+        engine = EngineSetting.use(self._model, resource=self)  # checks the model again: `configure()` may have changed the engine since `__init__`
         try:
             df = engine.read(self)
         except FileNotFoundError as err:
@@ -197,7 +198,7 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
         Args:
             df: The data to be written
         """
-        engine = EngineSetting.use(self._model, (df,))
+        engine = EngineSetting.use(self._model, (df,), resource=self)
         df = engine.select_columns(self, df)
 
         if self.apply_schema_validations:
@@ -213,7 +214,7 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
         Raises:
             NotImplementedError: On the pandas engine, which has no lazy frame.
         """
-        return EngineSetting.use(self._model).scan(self)
+        return EngineSetting.use(self._model, resource=self).scan(self)
 
     def sink(self, df: Any) -> None:
         """Write a lazy frame to the source: a polars ``LazyFrame`` on the polars engine.
@@ -224,7 +225,7 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
         Raises:
             NotImplementedError: On the pandas engine, which has no lazy frame.
         """
-        EngineSetting.use(self._model, (df,)).sink(self, df)
+        EngineSetting.use(self._model, (df,), resource=self).sink(self, df)
 
     def validate_from_schema(self, df: pd.DataFrame) -> "DynamicDataIO":
         """Validates a dataframe based on the validations present in its schema definition.

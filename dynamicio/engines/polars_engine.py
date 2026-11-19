@@ -1,4 +1,4 @@
-"""The polars engine. It checks frames and models, casts, validates and logs metrics. It has no I/O yet."""
+"""The polars engine. It checks frames, models and resources, reads and writes files, casts, validates and logs metrics."""
 
 from typing import TYPE_CHECKING, Any, Dict, List, NoReturn, Tuple
 
@@ -40,13 +40,33 @@ class PolarsEngine(Engine):
         """Refuse an operation that the polars engine does not have yet."""
         raise NotImplementedError(f"the polars engine does not {operation} yet")
 
+    def check_resource(self, io: "DynamicDataIO") -> None:
+        """Refuse a file resource with a file type or an option that the polars engine cannot read or write (decision 6 of ADR 0010).
+
+        Raises:
+            EngineResourceError: The file type or an option has no polars reader and writer.
+        """
+        from dynamicio.engines.polars_files import PolarsFiles  # pylint: disable=import-outside-toplevel
+
+        PolarsFiles.check(io)
+
     def read(self, io: "DynamicDataIO") -> Any:
-        """Refuse: no polars reads yet."""
-        self.not_yet("read")
+        """Read a ``local``, ``local_batch`` or ``s3_file`` resource into a polars frame. Other resources are not read yet."""
+        from dynamicio.engines.polars_files import PolarsFiles  # pylint: disable=import-outside-toplevel
+
+        source = self.source_of(io)
+        if source not in PolarsFiles.SOURCES:
+            self.not_yet(f"read {source} resources")
+        return PolarsFiles.read(io)
 
     def write(self, io: "DynamicDataIO", frame: Any) -> None:
-        """Refuse: no polars writes yet."""
-        self.not_yet("write")
+        """Write a polars frame to a ``local`` or ``s3_file`` resource. Other resources are not written yet."""
+        from dynamicio.engines.polars_files import PolarsFiles  # pylint: disable=import-outside-toplevel
+
+        source = self.source_of(io)
+        if source not in PolarsFiles.SOURCES:
+            self.not_yet(f"write {source} resources")
+        PolarsFiles.write(io, frame.collect() if hasattr(frame, "collect") else frame)
 
     def scan(self, io: "DynamicDataIO") -> Any:
         """Refuse: no polars scans yet."""
@@ -117,12 +137,51 @@ class PolarsEngine(Engine):
         """The strict cast of an expression from a polars dtype to another. polars 2 does not cast a string to a datetime: it parses it."""
         import polars as pl  # pylint: disable=import-outside-toplevel
 
-        if current == pl.String and isinstance(expected, pl.Datetime):
-            return expression.str.to_datetime(time_unit=expected.time_unit, time_zone=expected.time_zone, strict=True)
+        if current == pl.String:
+            if isinstance(expected, pl.Datetime):
+                return expression.str.to_datetime(time_unit=expected.time_unit, time_zone=expected.time_zone, strict=True)
+            if isinstance(expected, pl.Duration):
+                # The text of a pandas timedelta, for example "0 days 00:00:01", as a CSV file of the pandas engine has it
+                return expression.map_batches(lambda series: PolarsEngine.parse_durations(series, expected), return_dtype=expected)
+            if expected == pl.Boolean:
+                return expression.map_batches(PolarsEngine.parse_booleans, return_dtype=pl.Boolean)
         if current.is_float():
             # NaN is the null of a float column: pandas casts it to <NA> of a nullable dtype, a strict polars cast refuses it
             expression = expression.fill_nan(None)
         return expression.cast(expected, strict=True)
+
+    # The strings of a Boolean column in a CSV file: pandas writes True and False, and `read_csv` in pandas also reads true and false
+    BOOLEANS = {"True": True, "False": False, "true": True, "false": False, "TRUE": True, "FALSE": False}
+
+    @classmethod
+    def parse_booleans(cls, series: Any) -> Any:
+        """The Boolean series of a string series. A string that is not a Boolean fails, as a strict cast does.
+
+        Raises:
+            InvalidOperationError: A string is not a Boolean.
+        """
+        import polars as pl  # pylint: disable=import-outside-toplevel
+
+        unknown = series.drop_nulls().filter(~series.drop_nulls().is_in(list(cls.BOOLEANS)))
+        if unknown.len():
+            raise pl.exceptions.InvalidOperationError(f"conversion from `str` to `bool` failed for the values {unknown.head(5).to_list()}")
+        return series.replace_strict(cls.BOOLEANS, default=None, return_dtype=pl.Boolean)
+
+    @staticmethod
+    def parse_durations(series: Any, expected: Any) -> Any:
+        """The ``Duration`` series of a string series, with the parser of ``pd.to_timedelta``. A string that is not a duration fails, as a strict cast does.
+
+        Raises:
+            InvalidOperationError: A string is not a duration.
+        """
+        import pandas as pd  # pylint: disable=import-outside-toplevel
+        import polars as pl  # pylint: disable=import-outside-toplevel
+
+        try:
+            parsed = pd.to_timedelta(series.to_pandas())
+        except ValueError as error:
+            raise pl.exceptions.InvalidOperationError(f"conversion from `str` to `{expected}` failed: {error}") from error
+        return pl.from_pandas(parsed).cast(expected, strict=True)
 
     def validate(self, io: "DynamicDataIO", frame: Any) -> None:
         """Run the column validations and the dataframe-level Pandera checks in one ``collect_all``, and raise one ``SchemaValidationError`` for all failures.

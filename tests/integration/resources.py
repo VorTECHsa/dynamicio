@@ -1,6 +1,8 @@
 # pylint: disable=missing-module-docstring, missing-function-docstring
+import json
 import types
 from pathlib import Path
+from typing import Optional
 
 # Application Imports
 from dynamicio.config import IOConfig
@@ -16,8 +18,10 @@ class Resources:
         return IOConfig(path_to_source_yaml=str(path), env_identifier="CLOUD", dynamic_vars=types.ModuleType("no_dynamic_vars")).get(source_key="R")
 
     @staticmethod
-    def s3_file(directory: Path, bucket: str, key: str, file_type: str):
-        return Resources.build(directory, f'    type: "s3_file"\n    s3:\n      bucket: "{bucket}"\n      file_path: "{key}"\n      file_type: "{file_type}"\n')
+    def s3_file(directory: Path, bucket: str, key: str, file_type: str, options: Optional[dict] = None):
+        # A JSON object is a YAML flow mapping
+        options_line = f"    options: {json.dumps(options)}\n" if options else ""
+        return Resources.build(directory, f'    type: "s3_file"\n    s3:\n      bucket: "{bucket}"\n      file_path: "{key}"\n      file_type: "{file_type}"\n{options_line}')
 
     @staticmethod
     def s3_path_prefix(directory: Path, bucket: str, prefix: str):

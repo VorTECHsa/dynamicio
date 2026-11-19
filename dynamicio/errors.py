@@ -206,6 +206,13 @@ class WrongFrameError(DynamicIOError, TypeError):
     """Error raised when `write()` gets a frame of the other engine, for example a polars frame on the pandas engine."""
 
 
+class EngineResourceError(DynamicIOError, ValueError):
+    """Error raised when the engine of the process cannot read or write a resource, for example an option that has no polars entry (decision 6 of ADR 0010).
+
+    The user gets it when the IO object is built, and again at each read and write, so that a `configure()` after the build cannot bypass the check.
+    """
+
+
 # Warning messages
 CASTING_WARNING_MSG = "Applying casting column: '{0}' to: 'type:{1}' from 'type:{2}' though not advised, as `dtypes`>1 for {0}, which may lead to data corruption!"
 NOTICE_MSG = "Keeping the {0} as is, may anyway cause I/O errors or data corruption issues especially when using `pandas.DataFrame.to_parquet` or `pandas.DataFrame.to_json`."

@@ -104,14 +104,18 @@ class TestModelCheck:
             EngineCheckIO.make(tmp_path, polars_model)
 
     @pytest.mark.unit
-    def test_the_polars_engine_takes_a_polars_model_and_has_no_reads_yet(self, tmp_path, polars_model):
+    def test_the_polars_engine_takes_a_polars_model_and_reads_back_its_frame(self, tmp_path, polars_model):
+        pl = pytest.importorskip("polars")
+
         # Given
         dynamicio.configure(engine="polars")
         io = EngineCheckIO.make(tmp_path, polars_model)
 
-        # When / Then
-        with pytest.raises(NotImplementedError, match="the polars engine does not read yet"):
-            io.read()
+        # When
+        io.write(pl.DataFrame({"a": [1, 2]}))
+
+        # Then
+        assert io.read().equals(pl.DataFrame({"a": [1, 2]}))
 
     @pytest.mark.unit
     def test_a_non_model_schema_argument_is_still_a_type_error(self, tmp_path):

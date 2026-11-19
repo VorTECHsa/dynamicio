@@ -253,6 +253,71 @@ class TestCast:
         assert math.isnan(orders["price"][1])
 
 
+class TestCastStrings:
+    """The casts of the strings that the pandas CSV and JSON writers give for durations and booleans."""
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("lazy", [False, True])
+    def test_a_string_column_parses_to_a_duration_as_pandas_to_timedelta_does(self, polars_io, tmp_path, lazy):
+        class Waits(DataModel, dataset="waits"):
+            wait: Annotated[pl.Duration, "ns"] = Field(nullable=True)
+
+        io = polars_io(tmp_path, Waits)
+        values = ["0 days 00:00:00.001000", "1 days 02:00:00", "0 days 00:00:00.000000001", None]
+        frame = pl.DataFrame({"wait": values})
+
+        cast = io._apply_schema(frame.lazy() if lazy else frame)  # pylint: disable=protected-access
+        cast = cast.collect() if lazy else cast
+
+        assert cast.schema["wait"] == pl.Duration("ns")
+        assert cast["wait"].to_pandas().tolist()[:3] == pd.to_timedelta(pd.Series(values[:3])).tolist()
+        assert cast["wait"].to_list()[3] is None
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("lazy", [False, True])
+    def test_a_string_that_is_not_a_duration_raises(self, polars_io, tmp_path, lazy):
+        class Waits(DataModel, dataset="waits"):
+            wait: Annotated[pl.Duration, "ns"]
+
+        io = polars_io(tmp_path, Waits)
+        frame = pl.DataFrame({"wait": ["soon"]})
+
+        # An eager cast raises at once. A lazy cast raises the polars error when the caller collects the frame.
+        with pytest.raises(pl.exceptions.InvalidOperationError if lazy else ColumnsDataTypeError):
+            cast = io._apply_schema(frame.lazy() if lazy else frame)  # pylint: disable=protected-access
+            if lazy:
+                cast.collect()
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("lazy", [False, True])
+    def test_a_string_column_parses_to_a_boolean_as_pandas_writes_it(self, polars_io, tmp_path, lazy):
+        class Flags(DataModel, dataset="flags"):
+            flag: bool = Field(nullable=True)
+
+        io = polars_io(tmp_path, Flags)
+        frame = pl.DataFrame({"flag": ["True", "False", "true", "false", "TRUE", "FALSE", None]})
+
+        cast = io._apply_schema(frame.lazy() if lazy else frame)  # pylint: disable=protected-access
+        cast = cast.collect() if lazy else cast
+
+        assert cast["flag"].to_list() == [True, False, True, False, True, False, None]
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("lazy", [False, True])
+    def test_a_string_that_is_not_a_boolean_raises(self, polars_io, tmp_path, lazy):
+        class Flags(DataModel, dataset="flags"):
+            flag: bool
+
+        io = polars_io(tmp_path, Flags)
+        frame = pl.DataFrame({"flag": ["True", "yes"]})
+
+        # An eager cast raises at once. A lazy cast raises the polars error when the caller collects the frame.
+        with pytest.raises(pl.exceptions.InvalidOperationError if lazy else ColumnsDataTypeError):
+            cast = io._apply_schema(frame.lazy() if lazy else frame)  # pylint: disable=protected-access
+            if lazy:
+                cast.collect()
+
+
 class TestValidate:
     @pytest.mark.unit
     @pytest.mark.parametrize("lazy", [False, True])

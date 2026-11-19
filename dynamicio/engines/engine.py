@@ -53,6 +53,9 @@ class Engine(abc.ABC):
                 f"{model.__name__} is a pandera.{backend} model, and the engine is {self.name}. Use a pandera.{self.name} model, or configure the {backend} engine."
             )
 
+    def check_resource(self, io: "DynamicDataIO") -> None:
+        """Refuse a resource that the engine cannot read or write. The pandas engine reads and writes each resource of 11.1.0."""
+
     @staticmethod
     def source_of(io: "DynamicDataIO") -> str:
         """The name of the source of an IO object, as its mixin methods spell it (``_read_from_s3``)."""
