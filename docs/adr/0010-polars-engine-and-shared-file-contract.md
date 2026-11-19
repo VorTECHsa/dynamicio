@@ -363,6 +363,8 @@ Phase 6 as built:
 - `footer()` reads the arrow schema, the key-value metadata and the row count of a `local` or `s3_file` parquet file, without its rows. An S3 read
   takes the last 64 KiB with one ranged `GetObject`, and a second ranged `GetObject` only for a larger footer. The read is the same on the two engines.
   It does not fix the engine, and `missing_ok` gives None for a missing file.
+  Each `GetObject` after the first sends the `ETag` of the first in `IfMatch`. If another writer replaces the object between two calls, S3 returns
+  `PreconditionFailed` and the read raises its `ClientError`. A footer thus never mixes the bytes of two versions of one object.
 - `sink()` takes a list of lazy frames as the parts of one frame. Each part gets the schema columns and the casts of the model, so the parts can have
   other types of a column. The pandas metadata comes from the model and has one `RangeIndex` for all the rows.
 - A polars Postgres read runs the statement as `pd.read_sql` runs it. A `str` query goes to the driver with `params` in the style of the driver, so a
