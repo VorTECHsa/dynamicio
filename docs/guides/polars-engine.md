@@ -21,6 +21,29 @@ dynamicio.configure(engine="polars")
 The first read or write fixes the engine. After that, `dynamicio.configure()` with another engine raises `EngineConfigurationError`. The polars
 engine needs polars 2.1 or later. Without polars, it raises `ImportError`. Install it with `pip install "dynamicio[polars]"`.
 
+## Migrate a repo
+
+`dynamicio migrate --engine polars` writes a polars model for each pandas model of a module or a package directory. Run it from the root of the repo,
+because it imports the modules by their dotted name:
+
+```bash
+dynamicio migrate --engine polars src/resources/schemas -o src/resources/polars_schemas --scan src/resources
+```
+
+An output that ends with `.py` gets all the models. Another output is a package directory with one module for each module of the pandas models. Each
+polars model has the dataset, the table, the dtypes, the validations, the metrics and the `Config` options of its pandas model. The command compiles
+each generated model and compares it with its pandas model. A difference, or a dtype without a polars pair, raises `ValueError`, and the command then
+writes no file. A field gets `pandas_dtype` when the reverse map of its polars dtype does not give its pandas dtype, for example `Int64` or `string`.
+
+The command also writes `POLARS_MIGRATION.md` next to the models. The report lists these items:
+
+- The Pandera checks to write again for polars: `str_matches`, a `@pa.check` and a `@pa.dataframe_check`. The polars models do not have them.
+- A model with an index. A polars frame has no index, so write the index as a column and declare it in the model.
+- The resource definitions under `--scan` that the polars engine refuses, for example an `hdf` file or a Kafka resource without `key_column`.
+- The CSV definitions without an `index` option. The polars engine writes the leading index column with the row numbers.
+
+The command does not change the resource definitions, the options that the code gives to an IO object, or the transformation code.
+
 ## Processes and threads
 
 polars can deadlock in a fork of a process that has used polars. A fork of a process with the polars engine thus refuses the engine: its first read or
