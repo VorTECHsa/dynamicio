@@ -55,15 +55,18 @@ The reference is the pandas engine of dynamicio 11.1.0. The bug fixes of 11.1.0 
 - The polars engine reads the files from the pandas engine, from 11.1.0 and from 10.x.
 - Each format passes the 4 pairs of writer engine and reader engine against the expected files.
 
-The polars reader differs from the 11.1.0 pandas reader for 3 kinds of file. In each case the polars engine keeps a value that the pandas engine loses, or reads
+The polars reader differs from the 11.1.0 pandas reader for 4 kinds of file. In each case the polars engine keeps a value that the pandas engine loses, or reads
 a file that the pandas engine refuses. Rule 2 does not include these cases, and the tests of the 4 pairs do not use them. Each case has its own test.
 
-1. A CSV string column without a string `dtype` option. The pandas reader infers the type, so `007` becomes the integer 7, and the cast gives `"7"`. The
-   polars reader keeps the text `007`. A repo that needs the same value on both engines sets a string `dtype` for the column on the pandas engine.
+1. A CSV or JSON string column without a string `dtype` option. The pandas reader infers the type, so `007` becomes the integer 7, and the cast gives `"7"`.
+   The polars reader keeps the text `007`. A repo that needs the same value on both engines sets a string `dtype` for the column on the pandas engine, for
+   CSV and for JSON.
 2. A JSON file without records, as `DataFrame.to_json` writes a frame without rows. The pandas engine raises `KeyError`, and the polars engine gives a frame
    without rows with the columns of the model.
 3. A JSON epoch under a `Datetime` column with a time zone, in a column with a name that is not a date name. The pandas engine reads a naive `datetime64[ns]`
    and cannot cast it. The polars engine reads a UTC instant.
+4. A CSV resource with `header: false` and `names`. The pandas reader raises `TypeError` for `header: false`, and the polars engine reads the file that the
+   writer gives.
 
 A pandas file can store a named index in its pandas metadata. pandas then gives the index back, and polars reads it as a normal column. The schema column selection
 removes the columns that the model does not declare, so the two engines give the same columns.
@@ -276,12 +279,36 @@ Phase 3 as built:
   and again at each read and write, so a `configure()` or a change of the options after the build cannot bypass it. The refusal of hdf and pickle also comes in
   this phase, and not in phase 6.
 - The CSV options that polars cannot apply raise `EngineResourceError`: a `na_values` map for each column, and a `decimal` mark other than `.` and `,`.
-  `decimal: ","` becomes `decimal_comma`. A read of a CSV resource without a header line also raises it, because the 11.1.0 pandas engine cannot read that
-  file either. A write with `header: false` is accepted.
+  `decimal: ","` becomes `decimal_comma`. A read of a CSV resource without a header line and without `names` also raises it, because the 11.1.0 pandas engine
+  cannot read that file either. `names` becomes `new_columns`. Without `header`, the first line is data, as on pandas. A write with `header: false` is accepted.
+- A file with another number of columns than `names` raises the polars `SchemaError`. pandas then makes an index of the first columns, or adds columns of
+  nulls. The polars engine refuses these files, and rule 2 does not include them.
 - The CSV and JSON writers change an integer column to a pandas nullable integer, so an integer above 2**53 next to a null keeps its value. A parquet write
   with `index: false` has the pandas metadata of `to_parquet(index=False)`. A write changes float NaN to null before its validations and metrics.
 - A missing S3 key raises the error of the pandas engine: `S3KeyNotFoundError` for parquet and `ObjectNotFoundError` for CSV and JSON. `missing_ok` applies.
   An `s3_file` key that ends in `/` raises `NotImplementedError` at read, and a parquet write to it raises the `ValueError` of the pandas engine.
+
+Phase 4 as built:
+
+- `scan()` gives a `LazyFrame` of `local`, `local_batch`, `s3_file` and `s3_path_prefix`. `DynamicDataIO.scan()` adds the casts of the model to its
+  plan, so a failed cast raises when the caller collects the frame. A schema column that no file has raises `ColumnsDataTypeError` at the scan.
+- A scan does not validate or log metrics, because a lazy frame has no rows before the caller collects it. The step order of decision 12 applies to
+  `read()` only. A scan with validations or metrics logs a warning. The caller collects the frame and calls `validate_from_schema`, or uses `read()`.
+- Parquet and CSV go to `scan_parquet` and `scan_csv`, so a filter or a selection reaches the scan (ADR 0004). polars has no lazy reader of a JSON array, so
+  a JSON scan reads the file with the eager reader and then calls `lazy()`. A CSV scan reads all rows for the types (`infer_schema_length=None`), as the
+  eager read does. Thus it reads the file twice. A CSV scan gives the columns in the order of the file, as the eager read and `usecols` on pandas do.
+- polars reads S3 with a `credential_provider` that gives the frozen credentials of the boto3 session of dynamicio, with their expiry. polars calls it again
+  after the expiry. The region comes from the boto3 client. A boto3 endpoint that is not an AWS endpoint, for example floci, also goes to polars.
+- A scan of one S3 object first does a ranged `GetObject` of 1 byte. A missing key then raises the dynamicio error at the scan, and `missing_ok` applies.
+  A missing bucket raises the botocore `ClientError`. An `s3_file` key that ends in `/` raises `NotImplementedError`.
+- A prefix lists its keys with boto3, with the filter of the pandas engine: no directory keys, and the pattern of `dynamic_file_path`. A prefix without
+  objects raises `NoObjectsFoundError`. The engine reads the parquet footer of each object, and the scan then reads the footers again. The type of a column is the
+  widest type of the footers, as `pd.concat` gives it, and the scan upcasts the narrower objects. A pair that does not upcast, for example `String` and
+  `Int64`, or `Int64` and `UInt64`, raises `ColumnsDataTypeError`. An object that lacks a column gets nulls, with the warning of the pandas engine.
+- `read()` of a prefix is `scan().collect()`, so the two reads give the same frame. A CSV or JSON prefix reads each object with the eager reader, as the
+  pandas engine does, and the engine calls `lazy()` on the concatenated frame.
+- A prefix write raises `NotImplementedError` until phase 5. The options `no_disk_space`, `partition_cols`, `mode` and `allow_delete` are accepted on a
+  prefix, and refused on the other resources.
 
 Change 26 is the floci fixture of decision 15. RND-25426 delivers it before phase 1, with the pandas integration tests. The polars S3 tests of phase 3 are its first polars users.
 
