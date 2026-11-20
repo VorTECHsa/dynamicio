@@ -972,7 +972,10 @@ class WithS3File:
 
         if _WRANGLER_ONLY_WRITE_PARQUET & kwargs.keys():
             names = utils.ParquetIndex.pop(kwargs)
-            WithS3File._write_s3_parquet_file_with_wrangler(df if names is None else utils.ParquetIndex.set_index(df, names), s3_path, **kwargs)
+            if names is not None:
+                # awswrangler writes no index by default, so the index of `index_columns` needs `index=True`
+                df, kwargs["index"] = utils.ParquetIndex.set_index(df, names), True
+            WithS3File._write_s3_parquet_file_with_wrangler(df, s3_path, **kwargs)
             return
         kwargs.pop("use_threads", None)
         fobj = io.BytesIO()
