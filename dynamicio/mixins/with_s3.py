@@ -894,11 +894,12 @@ class WithS3File:
             raise ObjectNotFoundError(f"No object found at {s3_path}") from err
 
     @staticmethod
-    @utils.allow_options([*utils.args_of(wr.s3.read_json, pd.read_json), "single_record"])
+    @utils.allow_options([*utils.args_of(wr.s3.read_json, pd.read_json), "single_record", utils.JsonIndex.OPTION])
     def _read_s3_json_file(s3_path: str, schema: DataframeSchema, **kwargs) -> pd.DataFrame:
         is_single_record = kwargs.pop("single_record", False)
         orient = kwargs.pop("orient", "records")
         lines = kwargs.pop("lines", False)  # pandas default; JSON-array files are what `pd.DataFrame.to_json(orient="records")` writes
+        index_column = utils.JsonIndex.pop(kwargs, orient, lines)
 
         if kwargs.get("convert_dates") is True:
             logger.warning("[s3-json-read] Ignoring 'convert_dates=True'. Handle datetime parsing post-read.")
@@ -909,7 +910,9 @@ class WithS3File:
         except NoFilesFound as err:
             raise ObjectNotFoundError(f"No object found at {s3_path}") from err
 
-        if is_single_record:
+        if index_column is not None:
+            raw_df = raw_df.reset_index(names=index_column)
+        elif is_single_record:
             # Re-wrap as a single dict row, mirroring the local JSON reader
             raw_df = pd.DataFrame([{raw_df.columns[0]: dict(zip(raw_df.index, raw_df.iloc[:, 0]))}])
 
@@ -1002,7 +1005,7 @@ class WithS3File:
         wr.s3.to_csv(df=df, path=s3_path, **kwargs)
 
     @staticmethod
-    @utils.allow_options(utils.args_of(wr.s3.to_json, pd.DataFrame.to_json))
+    @utils.allow_options([*utils.args_of(wr.s3.to_json, pd.DataFrame.to_json), utils.JsonIndex.OPTION])
     def _write_s3_json_file(df: pd.DataFrame, s3_path: str, **kwargs):
         if kwargs.pop("dataset", False):
             raise ValueError(
@@ -1015,6 +1018,9 @@ class WithS3File:
 
         user_orient = kwargs.pop("orient", "records")
         user_lines = kwargs.pop("lines", False)
+        index_column = utils.JsonIndex.pop(kwargs, user_orient, user_lines)
+        if index_column is not None:
+            df = df.set_index(index_column)
         # wrangler defaults to index=True, which pandas rejects for records/values; mirror pandas' own per-orient default.
         user_index = kwargs.pop("index", user_orient not in ("records", "values"))
 

@@ -612,10 +612,10 @@ class TestResourceCheck:
     def test_an_option_that_changes_after_the_build_is_refused_before_the_file_is_written(self, tmp_path):
         # Given
         io = Files.polars(Files.config(tmp_path, "json", {"orient": "records"}), Pair)
-        io.options["orient"] = "columns"
+        io.options["orient"] = "split"
 
         # When
-        with pytest.raises(EngineResourceError, match="not columns"):
+        with pytest.raises(EngineResourceError, match="not split"):
             io.write(pl.DataFrame({"a": [1], "b": ["x"]}))
 
         # Then
@@ -1034,3 +1034,115 @@ class TestListColumns:
         # Then
         assert pq.read_schema(tmp_path / "sink.parquet").equals(pq.read_schema(tmp_path / "write.parquet"), check_metadata=True)
         assert Files.polars(sink, Tagged).read().equals(self.frame())
+
+
+class Keyed(DataModel, dataset="keyed"):
+    key: str
+    n: int = Field(nullable=True, pandas_dtype="Int64")
+    created_at: Annotated[pl.Datetime, "ns", None] = Field(nullable=True)
+
+
+class PandasKeyed(pa.DataFrameModel):
+    __dataset_name__ = "keyed"
+
+    key: Series[str]
+    n: Series[pd.Int64Dtype] = Field(nullable=True)
+    created_at: Series[pd.Timestamp] = Field(nullable=True)
+
+
+class TestJsonIndexColumn:
+    """A JSON object with orient index or columns: its keys are the column `index_column` of the frame."""
+
+    @staticmethod
+    def frame() -> Any:
+        return pl.DataFrame(
+            {"key": ["data", "other"], "n": [1, None], "created_at": pl.Series([datetime(2026, 11, 3, 6, 0, 15), None], dtype=pl.Datetime("ns"))},
+        )
+
+    @staticmethod
+    def pandas_frame() -> pd.DataFrame:
+        return pd.DataFrame({"key": ["data", "other"], "n": pd.array([1, None], dtype="Int64"), "created_at": pd.to_datetime(["2026-11-03 06:00:15", None])})
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("orient", ["index", "columns"])
+    def test_the_bytes_equal_the_bytes_of_the_pandas_engine_and_read_back_equal(self, tmp_path, orient):
+        # Given
+        config = Files.config(tmp_path, "json", {"orient": orient, "index_column": "key"})
+        path = tmp_path / "data.json"
+
+        # When
+        Files.polars(config, Keyed).write(self.frame())
+        polars_bytes = path.read_bytes()
+        result = Files.polars(config, Keyed).read()
+        EngineSetting.reset("pandas")
+        FilesIO(source_config=config, schema=PandasKeyed).write(self.pandas_frame())
+
+        # Then
+        assert polars_bytes == path.read_bytes()
+        assert json.loads(polars_bytes) == json.loads(self.pandas_frame().set_index("key").to_json(orient=orient))
+        assert result.equals(self.frame())
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("orient", ["index", "columns"])
+    def test_the_pandas_engine_reads_the_keys_as_the_index_column(self, tmp_path, orient):
+        # Given
+        config = Files.config(tmp_path, "json", {"orient": orient, "index_column": "key"})
+        Files.polars(config, Keyed).write(self.frame())
+
+        # When
+        EngineSetting.reset("pandas")
+        result = FilesIO(source_config=config, schema=PandasKeyed).read()
+
+        # Then
+        pd.testing.assert_frame_equal(result, self.pandas_frame())
+
+    @pytest.mark.unit
+    def test_a_key_that_a_column_does_not_have_is_a_null(self, tmp_path):
+        # Given
+        (tmp_path / "data.json").write_text('{"n":{"a":1,"b":2},"created_at":{"a":1793685615000}}')
+        config = Files.config(tmp_path, "json", {"orient": "columns", "index_column": "key"})
+
+        # When
+        result = Files.polars(config, Keyed).read()
+
+        # Then
+        assert result.get_column("key").to_list() == ["a", "b"]
+        assert result.get_column("created_at").to_list() == [datetime(2026, 11, 3, 6, 0, 15), None]
+
+    @pytest.mark.unit
+    def test_the_keys_take_a_numeric_dtype_of_the_model(self, tmp_path):
+        class Numbered(DataModel, dataset="numbered"):
+            key: int
+            n: int
+
+        # Given
+        (tmp_path / "data.json").write_text('{"7":{"n":1},"8":{"n":2}}')
+        config = Files.config(tmp_path, "json", {"orient": "index", "index_column": "key"})
+
+        # When
+        result = Files.polars(config, Numbered).read()
+
+        # Then
+        assert result.equals(pl.DataFrame({"key": [7, 8], "n": [1, 2]}))
+
+    @pytest.mark.unit
+    def test_an_empty_object_is_a_frame_without_rows(self, tmp_path):
+        # Given
+        (tmp_path / "data.json").write_text("{}")
+        config = Files.config(tmp_path, "json", {"orient": "index", "index_column": "key"})
+
+        # When
+        result = Files.polars(config, Keyed).read()
+
+        # Then
+        assert result.height == 0
+        assert result.schema == pl.Schema({"key": pl.String, "n": pl.Int64, "created_at": pl.Datetime("ns")})
+
+    @pytest.mark.unit
+    def test_an_index_column_that_the_model_does_not_have_is_refused(self, tmp_path):
+        # Given
+        config = Files.config(tmp_path, "json", {"orient": "index", "index_column": "label"})
+
+        # When / Then
+        with pytest.raises(EngineResourceError, match="the index_column 'label' of .* is not a column of its model"):
+            Files.polars(config, Keyed)

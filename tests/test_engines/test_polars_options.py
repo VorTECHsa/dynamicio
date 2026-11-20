@@ -130,8 +130,8 @@ class TestCsvOptions:
 
 class TestJsonOptions:
     @pytest.mark.unit
-    def test_the_default_orient_of_a_local_file_is_columns_and_is_refused(self):
-        with pytest.raises(EngineResourceError, match="not columns. Set the orient option to records"):
+    def test_the_default_orient_of_a_local_file_is_columns_and_needs_an_index_column(self):
+        with pytest.raises(EngineResourceError, match="orient columns only with the index_column option"):
             PolarsOptions.check("json", "local", {})
 
     @pytest.mark.unit
@@ -139,10 +139,27 @@ class TestJsonOptions:
         PolarsOptions.check("json", "s3_file", {})
 
     @pytest.mark.unit
-    @pytest.mark.parametrize("orient", ["split", "index", "columns", "values", "table"])
-    def test_an_orient_other_than_records_is_refused(self, orient):
-        with pytest.raises(EngineResourceError, match=f"not {orient}"):
+    @pytest.mark.parametrize("orient", ["split", "values", "table"])
+    def test_an_orient_other_than_records_index_and_columns_is_refused(self, orient):
+        with pytest.raises(EngineResourceError, match=f"records, index or columns, not {orient}"):
             PolarsOptions.check("json", "s3_file", {"orient": orient})
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("orient", ["index", "columns"])
+    def test_orient_index_and_columns_need_an_index_column(self, orient):
+        with pytest.raises(EngineResourceError, match=f"orient {orient} only with the index_column option"):
+            PolarsOptions.check("json", "s3_file", {"orient": orient})
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("source, options", [("s3_file", {"orient": "index"}), ("s3_file", {"orient": "columns"}), ("local", {})])
+    def test_orient_index_and_columns_with_an_index_column_are_accepted(self, source, options):
+        PolarsOptions.check("json", source, {**options, "index_column": "key"})
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("options", [{"orient": "records"}, {"orient": "split"}, {"orient": "index", "lines": True}])
+    def test_an_index_column_of_another_orient_or_of_json_lines_is_refused(self, options):
+        with pytest.raises(EngineResourceError, match="the index_column option applies to orient index or columns without lines"):
+            PolarsOptions.check("json", "s3_file", {**options, "index_column": "key"})
 
 
 class TestReadArguments:

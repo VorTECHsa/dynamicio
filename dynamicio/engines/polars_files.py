@@ -80,7 +80,8 @@ class PolarsFiles:
         """Refuse the file type and the options of a file resource that the polars engine cannot read or write. Other resources are not checked.
 
         Raises:
-            EngineResourceError: The file type or an option has no polars reader and writer.
+            EngineResourceError: The file type or an option has no polars reader and writer, or the ``index_column`` of a JSON resource is not a column of
+                the model.
         """
         source = cls.source_of(io)
         if source not in cls.READ_SOURCES:
@@ -90,6 +91,9 @@ class PolarsFiles:
         file_type = get_file_type_value(cls.section_of(io).file_type)
         PolarsOptions.check(file_type, source, options)
         cls.check_lists(io, file_type)
+        index_column = options.get("index_column")
+        if index_column is not None and index_column not in io.schema.columns:
+            raise EngineResourceError(f"the index_column {index_column!r} of {io.name} is not a column of its model: the columns are {list(io.schema.columns)}")
 
     @staticmethod
     def check_lists(io: "DynamicDataIO", file_type: str) -> None:
@@ -195,14 +199,21 @@ class PolarsFiles:
     def read_json(cls, source: Source, io: "DynamicDataIO", options: MutableMapping[str, Any]) -> pl.DataFrame:
         """Read a JSON array of records, or JSON lines with ``lines: true``. An integer under a temporal column of the model is an epoch, as pandas writes it.
 
-        A file without records, as ``DataFrame.to_json`` writes a frame without rows, is a frame without rows that has the columns of the model.
+        A JSON object with orient index or columns becomes records, with its keys in the column ``index_column``. A key is a string, so the engine casts
+        the keys to a numeric dtype of the model, as ``pandas.read_json`` converts the keys of the index. A file without records, as ``DataFrame.to_json``
+        writes a frame without rows, is a frame without rows that has the columns of the model.
         """
         data = source.getvalue() if isinstance(source, std_io.BytesIO) else Path(source).read_bytes()
         dtypes = DtypeMap.of_model(io._model)  # pylint: disable=protected-access
-        if data.strip() in (b"", b"[]"):
+        if data.strip() in (b"", b"[]", b"{}"):
             return pl.DataFrame(schema=dtypes)
+        index_column = options.get("index_column")
+        if index_column is not None:
+            data = utils.JsonIndex.records(data, PolarsOptions.json_orient(cls.source_of(io), options), index_column)
         reader = pl.read_ndjson if options.get("lines", False) else pl.read_json
         frame = cls.schema_columns(reader(std_io.BytesIO(data), infer_schema_length=None), io)
+        if index_column is not None and dtypes[index_column].is_numeric():
+            frame = frame.with_columns(pl.col(index_column).cast(dtypes[index_column]))
         unit = options.get("date_unit", "ms")
         epochs = [
             cls.from_epoch(column, dtypes[column], unit) for column, dtype in frame.schema.items() if dtype.is_integer() and isinstance(dtypes[column], (pl.Datetime, pl.Duration))

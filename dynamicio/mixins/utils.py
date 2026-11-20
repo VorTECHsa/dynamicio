@@ -3,6 +3,7 @@
 # pylint: disable=no-member, protected-access, too-few-public-methods
 
 import inspect
+import json
 import logging
 import string
 import threading
@@ -161,3 +162,49 @@ def get_file_type_value(file_type: Union[str, Enum]) -> str:
         str: The value of the file type.
     """
     return file_type.value if isinstance(file_type, Enum) else file_type
+
+
+class JsonIndex:
+    """The `index_column` option of a JSON resource: the column that holds the row labels of a JSON object with orient `index` or `columns`.
+
+    `DataFrame.to_json` writes the index as the keys of these orients, and `pd.read_json` reads the keys back as the index. With `index_column`,
+    a read gives the keys as a column of that name, and a write takes the keys from that column. The file is that of the frame with
+    `set_index(index_column)`. The polars engine requires the option for these orients, because a polars frame has no index.
+    """
+
+    OPTION = "index_column"
+    ORIENTS = ("index", "columns")
+
+    @classmethod
+    def pop(cls, options: MutableMapping[str, Any], orient: Optional[str], lines: bool = False) -> Optional[str]:
+        """Remove `index_column` from the options of a JSON reader or writer, and return it.
+
+        Args:
+            options: The options of the reader or the writer. The method removes `index_column` from them.
+            orient: The orient of the file. None is the `columns` default of `pd.read_json` and `DataFrame.to_json`.
+            lines: Whether the file holds JSON lines.
+
+        Raises:
+            ValueError: `index_column` is not a string, or the orient is not `index` or `columns`, or `lines` is true.
+        """
+        index_column = options.pop(cls.OPTION, None)
+        if index_column is None:
+            return None
+        if not isinstance(index_column, str):
+            raise ValueError(f"`{cls.OPTION}` must be the name of a column, got {index_column!r}")
+        if (orient or "columns") not in cls.ORIENTS or lines:
+            raise ValueError(f"`{cls.OPTION}` applies to a JSON object with orient index or columns only, not to orient {orient!r} with lines={lines!r}")
+        return index_column
+
+    @staticmethod
+    def records(data: bytes, orient: str, index_column: str) -> bytes:
+        """The JSON records of a JSON object with orient `index` or `columns`. The key of each row goes in the column `index_column`, first.
+
+        Orient `columns` holds one object for each column. The rows are the keys of these objects, in the order of their first use, and a key that a
+        column does not have gives a null, as on pandas.
+        """
+        document = json.loads(data)
+        if orient == "columns":
+            keys = dict.fromkeys(key for values in document.values() for key in values)
+            document = {key: {column: values.get(key) for column, values in document.items()} for key in keys}
+        return json.dumps([{index_column: key, **row} for key, row in document.items()]).encode()

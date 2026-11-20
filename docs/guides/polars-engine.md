@@ -135,7 +135,7 @@ The readers are polars readers, and the engine then casts the frame to the model
 
 - A CSV file uses the null strings of `pandas.read_csv`. A column that is not a number or a Boolean reads as a string, so `007` keeps its text. The cast then parses the datetimes, the durations (for example `0 days 00:00:01`) and the Booleans (`True`, `False`, `true`, `false`, `TRUE`, `FALSE`).
 - A CSV file cannot hold a list. A CSV resource of a model with a `List` column raises `EngineResourceError` when the IO object is created. Use a parquet or a JSON file for it.
-- A JSON file has the orient records, or JSON lines with `lines: true`. An integer under a `Datetime` or a `Duration` column is an epoch in `date_unit`, which is `ms` by default. An epoch of a `Datetime` with a time zone is a UTC instant. A file without records, as the pandas engine writes a frame without rows, reads as a frame without rows with the columns of the model.
+- A JSON file has the orient records, or JSON lines with `lines: true`. A JSON object with the orient index or columns needs `index_column` (see [JSON keys](#json-keys)). An integer under a `Datetime` or a `Duration` column is an epoch in `date_unit`, which is `ms` by default. An epoch of a `Datetime` with a time zone is a UTC instant. A file without records, as the pandas engine writes a frame without rows, reads as a frame without rows with the columns of the model.
 - A `local_batch` resource reads its files in sorted order. A file without a column of the model gives nulls in that column.
 - A missing local file raises `FileNotFoundError`. A missing S3 key raises `S3KeyNotFoundError` for parquet and `ObjectNotFoundError` for CSV and JSON, as on the pandas engine. With `missing_ok=True`, `read()` returns `None`.
 - An `s3_path_prefix` resource reads all the objects under `path_prefix`, or the objects that match `dynamic_file_path`, in the order of the S3 listing, as on the pandas engine. Keys that end in `/` are left out. A prefix without objects raises `NoObjectsFoundError`.
@@ -263,7 +263,8 @@ The polars engine raises `EngineResourceError` for a resource that it cannot rea
 - a CSV `na_values` map with null strings for each column, or a `decimal` mark other than `.` and `,`
 - a CSV `escapechar`, `doublequote: false`, or a `quoting` other than `QUOTE_MINIMAL`, `QUOTE_ALL`, `QUOTE_NONNUMERIC` and `QUOTE_NONE`. The pandas reader also applies these writer options, and the polars reader has no equivalent
 - a read of a CSV resource with `header: false` or `header: null` and without `names`. The pandas engine cannot read that file either. A write with `header: false` is accepted
-- a JSON orient other than records. The default orient is records on an `s3_file` resource and columns on the other resources. A `local` or an `s3_path_prefix` JSON resource must thus set `orient: records`.
+- a JSON orient other than records, index and columns, and the orient index or columns without `index_column`. The default orient is records on an `s3_file` resource and columns on the other resources. A `local` or an `s3_path_prefix` JSON resource must thus set `orient: records` or `index_column`.
+- an `index_column` with a different orient or with `lines: true`, or an `index_column` that is not a column of the model
 
 An `s3_path_prefix` resource also accepts `no_disk_space`, `partition_cols`, `mode` and `allow_delete`. The polars engine refuses `no_disk_space`, `partition_cols`
 and `allow_delete` on the other resources. On a CSV or a JSON file, `mode` is the file mode of the writer.
@@ -359,6 +360,30 @@ A write replaces the rows of the table with the COPY of the pandas engine, in on
 - The NULL rule and the text of each value are those of the pandas engine. An empty string and a NaN are thus written as NULL.
 - A failed chunk rolls back the write, and the table keeps its old rows.
 - A polars `Datetime` column has the unit `us`. The pandas engine maps `datetime64[us]` and `datetime64[ms]` to a Postgres `timestamp`.
+
+## JSON keys
+
+`DataFrame.to_json` writes the index of a pandas frame as the keys of a JSON object with the orient index or columns. A polars frame has no index,
+so the option `index_column` names the column of the keys:
+
+```yaml
+REFERENCE_DATA:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/reference_data.json"
+      file_type: "json"
+    options:
+      orient: "index"
+      index_column: "label"
+```
+
+The file `{"data":{"timestamp":1614268643313,"release":"feb09"}}` then reads as one row, in which `label` is `data`.
+
+- A write takes the keys from the column. The file has the bytes of the pandas engine for the frame with `set_index(index_column)`.
+- A read gives the keys in the column. A key is a JSON string, so the engine casts it to a numeric dtype of the model.
+- The option works on the two engines. On the pandas engine, a read gives `reset_index(names=index_column)`.
+- An `index_column` that is not a column of the model raises `EngineResourceError` when the IO object is created. The orient records and JSON lines have no keys, so `index_column` with them raises `EngineResourceError` on the polars engine and `ValueError` on the pandas engine.
 
 ## Kafka
 

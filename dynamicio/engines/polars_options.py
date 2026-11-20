@@ -36,7 +36,7 @@ class PolarsOptions:
             "usecols": None,
             "decimal": None,
         },
-        "json": {"orient": None, "lines": None, "convert_dates": None},
+        "json": {"orient": None, "lines": None, "convert_dates": None, "index_column": None},
     }
 
     WRITE: Dict[str, frozenset] = {
@@ -89,7 +89,9 @@ class PolarsOptions:
                 "storage_options",
             }
         ),
-        "json": frozenset({"orient", "date_format", "double_precision", "force_ascii", "date_unit", "default_handler", "lines", "compression", "index", "indent", "mode"}),
+        "json": frozenset(
+            {"orient", "date_format", "double_precision", "force_ascii", "date_unit", "default_handler", "lines", "compression", "index", "indent", "mode", "index_column"}
+        ),
     }
 
     # The options of an `s3_path_prefix` resource for each file type: `no_disk_space` of the reads, and the options of the partitioned parquet writes
@@ -155,10 +157,29 @@ class PolarsOptions:
 
     @classmethod
     def check_json(cls, source: str, options: Mapping[str, Any]) -> None:
-        """Refuse a JSON orient other than records (decision 9 of ADR 0010). The default orient is records on S3 and columns on a local file, as on pandas."""
-        orient = options.get("orient", "records" if source == "s3_file" else "columns")
-        if orient != "records":
-            raise EngineResourceError(f"the polars engine reads and writes JSON with orient records, not {orient}. Set the orient option to records.")
+        """Refuse a JSON orient other than records, index and columns, and orient index or columns without ``index_column`` (decision 9 of ADR 0010).
+
+        The default orient is records on S3 and columns on a local file, as on pandas. The keys of orient index and columns are the index of a pandas
+        frame. A polars frame has no index, so the ``index_column`` option names the column of the keys.
+        """
+        orient = cls.json_orient(source, options)
+        index_column = options.get("index_column")
+        if orient == "records" and index_column is None:
+            return
+        if orient not in ("index", "columns") or options.get("lines", False):
+            if index_column is not None:
+                raise EngineResourceError(f"the index_column option applies to orient index or columns without lines, not to orient {orient}. Remove the index_column option.")
+            raise EngineResourceError(f"the polars engine reads and writes JSON with orient records, index or columns, not {orient}. Set the orient option to records.")
+        if not isinstance(index_column, str):
+            raise EngineResourceError(
+                f"the polars engine reads and writes JSON with orient {orient} only with the index_column option: a polars frame has no index to give the keys. "
+                "Set index_column to the column of the keys, or set the orient option to records."
+            )
+
+    @staticmethod
+    def json_orient(source: str, options: Mapping[str, Any]) -> str:
+        """The JSON orient of a resource: the ``orient`` option, or records on S3 and columns on a local file, as on pandas."""
+        return options.get("orient", "records" if source == "s3_file" else "columns")
 
     @classmethod
     def read_arguments(cls, file_type: str, options: Mapping[str, Any]) -> Dict[str, Any]:

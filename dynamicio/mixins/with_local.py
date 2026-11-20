@@ -115,7 +115,7 @@ class WithLocal:
         return pd.read_csv(file_path, **options)
 
     @staticmethod
-    @utils.allow_options([*utils.args_of(pd.read_json), *["single_record"]])
+    @utils.allow_options([*utils.args_of(pd.read_json), "single_record", utils.JsonIndex.OPTION])
     def _read_json_file(file_path: str, schema: DataframeSchema, **options: Any) -> pd.DataFrame:
         """Read a json file as a DataFrame using `pd.read_hdf`.
 
@@ -135,10 +135,13 @@ class WithLocal:
         # `convert_dates` is likewise left to pandas' own default (auto-detection) unless the caller
         # overrides it, since some callers rely on that auto-parsing for datetime columns.
         is_single_record = options.pop("single_record", False)
+        index_column = utils.JsonIndex.pop(options, options.get("orient"), options.get("lines", False))
         df = pd.read_json(file_path, **options)
 
+        if index_column is not None:
+            df = df.reset_index(names=index_column)
         # 🧼 Check if this is a single-record json file
-        if is_single_record:
+        elif is_single_record:
             # Re-wrap as single dict row — i.e., rehydrate the record
             df = pd.DataFrame([{df.columns[0]: dict(zip(df.index, df.iloc[:, 0]))}])
         elif (
@@ -218,7 +221,7 @@ class WithLocal:
         df.to_csv(file_path, **options)
 
     @staticmethod
-    @utils.allow_options(pd.DataFrame.to_json)
+    @utils.allow_options([*utils.args_of(pd.DataFrame.to_json), utils.JsonIndex.OPTION])
     def _write_json_file(df: pd.DataFrame, file_path: str, **options: Any):
         """Writes a JSON file using `df.to_json`.
 
@@ -228,9 +231,10 @@ class WithLocal:
         Args:
             df: A dataframe write out.
             file_path: The location where the file needs to be written.
-            options: Options relative to writing a json file.
+            options: Options relative to writing a json file. `index_column` names the column that gives the keys of orient `index` or `columns`.
         """
-        df.to_json(file_path, **options)
+        index_column = utils.JsonIndex.pop(options, options.get("orient"), options.get("lines", False))
+        (df if index_column is None else df.set_index(index_column)).to_json(file_path, **options)
 
     @staticmethod
     def _write_parquet_file(df: pd.DataFrame, file_path: str, **options: Any):
