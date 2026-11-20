@@ -178,9 +178,15 @@ schema declaration.
     | `category` | `Categorical`, or `Enum` when the model gives the values |
     | `datetime64[unit]`, `datetime64[unit, tz]` | `Datetime(unit)`, `Datetime(unit, time_zone)` |
     | `timedelta64[unit]` | `Duration(unit)` |
+    | `object` with lists | `List` of a polars dtype of this table, other than `Categorical` and `Enum` |
 
     The unit is `ms`, `us` or `ns`. polars has no second unit, so `datetime64[s]` and `timedelta64[s]` have no pair. A dtype that has no pair raises
-    `ValueError` when the polars engine compiles the model. Examples are `Date`, `Time`, `List`, `Struct` and `Decimal`.
+    `ValueError` when the polars engine compiles the model. Examples are `Date`, `Time`, `Struct`, `Decimal` and a `List` of `Categorical`.
+    - A pandas column of lists has the `object` dtype, as a column of strings has. The migrate command thus gives `String` to each `object` column, and
+      its report lists the `Series[object]` columns. The user declares `pl.List` of the item dtype for a column that holds lists.
+    - A parquet file of a `List` column has the list type of the item dtype and the pandas metadata that `DataFrame.to_parquet` gives for a list
+      column, also when each value is null. A `local_batch` read upcasts the `list<null>` type that pandas writes for a file of empty lists.
+    - A CSV file cannot hold a list. A CSV resource of a model with a `List` column raises `EngineResourceError` when the IO object is created.
 
     The map is many to one: `int64` and `Int64` both become `Int64`, and `object` and `string` both become `String`. The pandas metadata of a polars file
     (change 17) needs the pandas dtype of each column, so the polars model keeps it.
