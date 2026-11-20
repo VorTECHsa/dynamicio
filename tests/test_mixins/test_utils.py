@@ -5,11 +5,12 @@ import threading
 from enum import Enum
 from typing import Any
 
+import pandas as pd
 import pytest
 
 # Application Imports
 from dynamicio.config import IOConfig
-from dynamicio.mixins.utils import allow_options, args_of, get_file_type_value, get_string_template_field_names, pickle_protocol, resolve_template
+from dynamicio.mixins.utils import ParquetIndex, allow_options, args_of, get_file_type_value, get_string_template_field_names, pickle_protocol, resolve_template
 from tests import constants
 from tests.mocking.io import ReadS3CsvIO
 
@@ -244,3 +245,36 @@ class TestPickleProtocol:
         assert protocol_of_first == 3
         assert seen == [2]
         assert pickle.HIGHEST_PROTOCOL == original
+
+
+class TestParquetIndex:
+    @pytest.mark.unit
+    def test_pop_gives_the_level_name_of_each_column_in_the_order_of_the_levels(self):
+        # Given
+        options = {"index_columns": ["vessel_id", {"__index_level_1__": "event_id"}, {"__index_level_2__": None}], "compression": "snappy"}
+
+        # When
+        names = ParquetIndex.pop(options)
+
+        # Then
+        assert list(names.items()) == [("vessel_id", "vessel_id"), ("__index_level_1__", "event_id"), ("__index_level_2__", None)]
+        assert options == {"compression": "snappy"}
+
+    @pytest.mark.unit
+    def test_pop_without_the_option_gives_none(self):
+        assert ParquetIndex.pop({"compression": "snappy"}) is None
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("value", ["vessel_id", {"vessel_id": "v"}, [], [{"a": "x", "b": "y"}], ["a", {"a": "x"}], [1], [{"a": 1}]])
+    def test_pop_refuses_a_value_that_is_not_valid(self, value):
+        with pytest.raises(ValueError, match="must be a list"):
+            ParquetIndex.pop({"index_columns": value})
+
+    @pytest.mark.unit
+    def test_set_index_refuses_a_level_name_that_pyarrow_writes_in_another_field(self):
+        # Given
+        df = pd.DataFrame({"event_id": ["e1"], "other": ["e1"]})
+
+        # When / Then
+        with pytest.raises(ValueError, match="in the field '__index_level_0__'"):
+            ParquetIndex.set_index(df, {"other": "event_id"})

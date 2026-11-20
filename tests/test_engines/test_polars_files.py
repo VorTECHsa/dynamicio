@@ -288,7 +288,7 @@ class TestParquetFooter:
         assert Files.polars(config, Sizes).read()["size"].to_list() == ["s", "s"]
 
     @pytest.mark.unit
-    def test_an_all_null_string_column_is_a_string_column(self, tmp_path):
+    def test_an_all_null_string_column_has_the_null_type_of_pandas(self, tmp_path):
         # Given
         config = Files.config(tmp_path, "parquet")
 
@@ -296,8 +296,12 @@ class TestParquetFooter:
         Files.polars(config, Pair).write(pl.DataFrame({"a": [1, 2], "b": pl.Series([None, None], dtype=pl.String)}))
 
         # Then
-        assert str(pq.read_schema(str(tmp_path / "data.parquet")).field("b").type) == "string"
-        assert Files.polars(config, Pair).read()["b"].to_list() == [None, None]
+        footer = pq.read_schema(str(tmp_path / "data.parquet"))
+        expected = pa_types.Schema.from_pandas(pd.DataFrame({"a": [1, 2], "b": pd.Series([None, None], dtype="object")}))
+        assert footer.field("b").type == pa_types.null()
+        assert footer.equals(expected, check_metadata=True)
+        result = Files.polars(config, Pair).read()
+        assert result.schema["b"] == pl.String and result["b"].to_list() == [None, None]
         EngineSetting.reset("pandas")
         assert FilesIO(source_config=config, schema=PandasPair).read()["b"].isna().tolist() == [True, True]
 
@@ -957,7 +961,7 @@ class TestListColumns:
         assert json.loads(polars_schema.metadata[b"pandas"]) == json.loads(pandas_schema.metadata[b"pandas"])
 
     @pytest.mark.unit
-    def test_an_all_null_list_column_has_the_list_type_of_its_items(self, tmp_path):
+    def test_an_all_null_list_column_has_the_null_type_of_pandas(self, tmp_path):
         # Given
         config = Files.config(tmp_path, "parquet")
         frame = pl.DataFrame({"id": [1], "tags": [None], "counts": [None]}, schema={"id": pl.Int64, "tags": pl.List(pl.String), "counts": pl.List(pl.Int64)})
@@ -967,7 +971,10 @@ class TestListColumns:
 
         # Then
         schema = pq.ParquetFile(str(tmp_path / "data.parquet")).schema_arrow
-        assert [schema.field(name).type.value_type for name in ("tags", "counts")] == [pa_types.string(), pa_types.int64()]
+        assert [schema.field(name).type for name in ("tags", "counts")] == [pa_types.null(), pa_types.null()]
+        result = Files.polars(config, Tagged).read()
+        assert result.schema["tags"] == pl.List(pl.String) and result.schema["counts"] == pl.List(pl.Int64)
+        assert result["tags"].to_list() == [None] and result["counts"].to_list() == [None]
 
     @pytest.mark.unit
     def test_the_pandas_engine_reads_the_lists_of_a_polars_parquet_file(self, tmp_path):
@@ -1160,3 +1167,69 @@ class TestJsonIndexColumn:
         # When / Then
         with pytest.raises(EngineResourceError, match="the index_column 'label' of .* is not a column of its model"):
             Files.polars(config, Keyed)
+
+
+class Indexed(DataModel, dataset="indexed"):
+    vessel_id: str
+    event_id: str
+    note: str = Field(nullable=True)
+    index_level_1: str = Field(nullable=False, alias="__index_level_1__")
+
+
+class TestParquetIndexColumns:
+    OPTIONS = {"index_columns": ["vessel_id", {"__index_level_1__": "event_id"}]}
+
+    @staticmethod
+    def frame() -> pl.DataFrame:
+        return pl.DataFrame({"vessel_id": ["v1", "v2"], "event_id": ["e1", "e2"], "note": pl.Series([None, "x"], dtype=pl.String), "__index_level_1__": ["e1", "e2"]})
+
+    @pytest.mark.unit
+    def test_index_columns_give_the_file_of_a_pandas_frame_with_that_index(self, tmp_path):
+        # Given
+        config = Files.config(tmp_path, "parquet", self.OPTIONS)
+        indexed = self.frame().to_pandas().drop(columns="__index_level_1__").set_index(["vessel_id", "event_id"], drop=False).drop(columns="vessel_id")
+        indexed.to_parquet(tmp_path / "pandas.parquet")
+
+        # When
+        Files.polars(config, Indexed).write(self.frame())
+
+        # Then
+        footer = pq.read_schema(str(tmp_path / "data.parquet"))
+        assert footer.equals(pq.read_schema(str(tmp_path / "pandas.parquet")), check_metadata=True)
+        assert Files.polars(Files.config(tmp_path, "parquet"), Indexed).read().equals(self.frame())
+
+    @pytest.mark.unit
+    def test_the_pandas_engine_reads_the_index_of_index_columns(self, tmp_path):
+        # Given
+        Files.polars(Files.config(tmp_path, "parquet", self.OPTIONS), Indexed).write(self.frame())
+
+        # When
+        result = pd.read_parquet(tmp_path / "data.parquet")
+
+        # Then
+        assert result.index.names == ["vessel_id", "event_id"]
+        assert result.index.tolist() == [("v1", "e1"), ("v2", "e2")]
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("value", ["vessel_id", [], [{"vessel_id": "a", "event_id": "b"}], ["vessel_id", "vessel_id"], [1]])
+    def test_an_index_columns_value_that_is_not_valid_is_refused_when_the_resource_is_built(self, tmp_path, value):
+        with pytest.raises(EngineResourceError, match="index_columns"):
+            Files.polars(Files.config(tmp_path, "parquet", {"index_columns": value}), Indexed)
+
+    @pytest.mark.unit
+    def test_an_index_column_that_is_not_in_the_frame_is_refused(self, tmp_path):
+        # Given
+        config = Files.config(tmp_path, "parquet", {"index_columns": ["missing"]})
+
+        # When / Then
+        with pytest.raises(EngineResourceError, match="not columns of the frame"):
+            Files.polars(config, Indexed).write(self.frame())
+
+    @pytest.mark.unit
+    def test_an_index_column_with_another_name_than_its_field_is_refused(self, tmp_path):
+        # Given
+        config = Files.config(tmp_path, "parquet", {"index_columns": [{"vessel_id": None}]})
+
+        # When / Then
+        with pytest.raises(EngineResourceError, match="Name the column '__index_level_0__'"):
+            Files.polars(config, Indexed).write(self.frame())

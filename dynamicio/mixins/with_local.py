@@ -240,13 +240,16 @@ class WithLocal:
     def _write_parquet_file(df: pd.DataFrame, file_path: str, **options: Any):
         """Write a dataframe as a parquet file using `df.to_parquet`.
 
-        All `options` are passed directly to `df.to_parquet`.
+        All `options` but `index_columns` are passed directly to `df.to_parquet`. `index_columns` sets the index of the file (`utils.ParquetIndex`).
 
         Args:
             df: A dataframe write out.
             file_path: The location where the file needs to be written.
             options: Options relative to writing a parquet file.
         """
+        names = utils.ParquetIndex.pop(options)
+        if names is not None:
+            df = utils.ParquetIndex.set_index(df, names)
         if options.get("engine") == "fastparquet":
             return WithLocal.__write_with_fastparquet(df, file_path, **options)
         return WithLocal.__write_with_pyarrow(df, file_path, **options)

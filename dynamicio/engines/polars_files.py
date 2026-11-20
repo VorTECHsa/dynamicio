@@ -243,7 +243,7 @@ class PolarsFiles:
             getattr(io, f"_write_to_{source}")(cls.to_pandas(io, frame))
             return
         options = dict(io.options)
-        table = PolarsParquet.arrow_table(io, frame, index=options.get("index") is not False)
+        table = PolarsParquet.arrow_table(io, frame, options)
         target = cls.target_of(io, options)
         if source == "local":
             pq.write_table(table, target, **PolarsParquet.parquet_arguments(options))

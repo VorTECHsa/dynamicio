@@ -971,7 +971,8 @@ class WithS3File:
             raise ValueError("[s3-parquet] Parquet output path must be a file, not a directory (e.g., 's3://bucket/data.parquet').")
 
         if _WRANGLER_ONLY_WRITE_PARQUET & kwargs.keys():
-            WithS3File._write_s3_parquet_file_with_wrangler(df, s3_path, **kwargs)
+            names = utils.ParquetIndex.pop(kwargs)
+            WithS3File._write_s3_parquet_file_with_wrangler(df if names is None else utils.ParquetIndex.set_index(df, names), s3_path, **kwargs)
             return
         kwargs.pop("use_threads", None)
         fobj = io.BytesIO()

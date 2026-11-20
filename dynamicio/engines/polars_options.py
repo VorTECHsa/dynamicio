@@ -4,6 +4,7 @@ import csv
 from typing import Any, Dict, Mapping, Optional
 
 from dynamicio.errors import EngineResourceError
+from dynamicio.mixins.utils import ParquetIndex
 
 
 class PolarsOptions:
@@ -44,6 +45,7 @@ class PolarsOptions:
             {
                 "engine",
                 "index",
+                "index_columns",
                 "compression",
                 "compression_level",
                 "row_group_size",
@@ -124,11 +126,19 @@ class PolarsOptions:
 
     @classmethod
     def check_parquet(cls, _source: str, options: Mapping[str, Any]) -> None:
-        """Refuse fastparquet and a written index: a polars frame has no index."""
+        """Refuse fastparquet, a written index and an ``index_columns`` value that is not valid: a polars frame has no index.
+
+        ``index_columns`` names the columns that the file holds as its pandas index (``utils.ParquetIndex``), as a pandas frame with these columns as its
+        index writes them.
+        """
         if options.get("engine") not in cls.PANDAS_PARQUET_ENGINES:
             raise EngineResourceError(f"the polars engine writes parquet with pyarrow, not with {options['engine']}. Remove the engine option.")
         if options.get("index"):
-            raise EngineResourceError("a polars frame has no index, so the polars engine cannot write one. Remove the index option, or set it to false.")
+            raise EngineResourceError("a polars frame has no index, so the polars engine cannot write one. Remove the index option, or set it to false, or use index_columns.")
+        try:
+            ParquetIndex.pop(dict(options))
+        except ValueError as error:
+            raise EngineResourceError(str(error)) from error
 
     @classmethod
     def check_csv(cls, _source: str, options: Mapping[str, Any]) -> None:

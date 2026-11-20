@@ -106,11 +106,12 @@ class PolarsSinks:
         """Sink the rows to the staged file, with the validations and the metrics in the same ``collect_all``, and return the arrow schema of the file.
 
         The same ``collect_all`` counts the rows, for the ``RangeIndex`` of the pandas metadata, the categories of each ``Categorical`` column, and the
-        nulls of each integer or boolean column, for its pandas dtype.
+        nulls of each column, for the nullable pandas dtype of an integer or a boolean column and the ``null`` type of an ``object`` column of nulls.
         """
         schema = lazy.collect_schema()
         categorical = [column for column, dtype in schema.items() if dtype == pl.Categorical]
-        nullable = [column for column, dtype in schema.items() if dtype.is_integer() or dtype == pl.Boolean]
+        # The nulls of an integer or a boolean column give its pandas dtype, and a column of nulls only has the `null` type if its pandas dtype is `object`
+        nullable = list(schema.names())
         # Each aggregate has its own alias, so a column of the model cannot have the name of another aggregate
         shape = lazy.select(
             pl.len().alias("rows"),
@@ -119,8 +120,8 @@ class PolarsSinks:
         )
         collected = cls.collect(engine, io, lazy, [lazy.sink_parquet(staged, compression=cls.STAGE_COMPRESSION, lazy=True), shape])
         height, *aggregates = collected[1].row(0)
-        nulls = [column for column, count in zip(nullable, aggregates[len(categorical) :]) if count]
-        return PolarsParquet.arrow_schema(io, schema, height, dict(zip(categorical, aggregates)), index=options.get("index") is not False, nulls=nulls)
+        null_counts = dict(zip(nullable, aggregates[len(categorical) :]))
+        return PolarsParquet.arrow_schema(io, schema, height, dict(zip(categorical, aggregates)), options, null_counts=null_counts)
 
     @classmethod
     def collect(cls, engine: "PolarsEngine", io: "DynamicDataIO", lazy: pl.LazyFrame, queries: List[pl.LazyFrame]) -> List[pl.DataFrame]:

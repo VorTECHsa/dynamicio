@@ -45,7 +45,7 @@ writes no file. A field gets `pandas_dtype` when the reverse map of its polars d
 The command also writes `POLARS_MIGRATION.md` next to the models. The report lists these items:
 
 - The Pandera checks to write again for polars: `str_matches`, a `@pa.check` and a `@pa.dataframe_check`. The polars models do not have them.
-- A model with an index. A polars frame has no index, so write the index as a column and declare it in the model.
+- A model with an index. A polars frame has no index, so write the index as a column and declare it in the model. A parquet write with the `index_columns` option gives the file of the pandas index.
 - The `Series[object]` columns. Their polars models have the `String` dtype. Declare `pl.List` of the item dtype for a column that holds lists, for example `pl.List(pl.String)`.
 - The resource definitions under `--scan` that the polars engine refuses, for example an `hdf` file or a Kafka resource without `key_column`.
 - The CSV definitions without an `index` option. The polars engine writes the leading index column with the row numbers.
@@ -130,6 +130,13 @@ A file that the polars engine writes gives the same frame to the pandas engine o
 
 - The CSV and JSON writers change the frame to pandas, with the pandas dtypes of the model, and call the pandas writers. The bytes are equal to the bytes of the pandas engine.
 - The parquet writer calls `pyarrow.parquet.write_table` with the arrow types and the pandas metadata that `DataFrame.to_parquet` gives. The compression is SNAPPY, as on pandas. A `category` column has the code width of pandas: `int8` below 127 categories, `int16` below 32767 and `int32` after that.
+- An `object` column with rows that are all null has the `null` type and the pandas type `empty`, as `DataFrame.to_parquet` writes it. The polars engine reads the column back with the dtype of the model.
+- The `index_columns` write option names the columns that the file holds as its pandas index, in the order of the levels. The file is that of a pandas frame with `set_index` on these columns. A column name gives a level with that name. A mapping of one column to a level name, or to `null`, gives that level name. pyarrow writes a level without a name, or with the name of a column, in the field `__index_level_<n>__`, so the column of that level must have the name of its field. The option works on the two engines, and a read gives the fields as columns on the polars engine.
+
+```yaml
+options:
+  index_columns: [vessel_id, {__index_level_1__: event_id}]
+```
 
 The readers are polars readers, and the engine then casts the frame to the model:
 

@@ -154,6 +154,23 @@ class TestSinkGivesTheFileOfWrite:
         pd.testing.assert_frame_equal(pd.read_parquet(sunk), pd.read_parquet(written))
 
     @pytest.mark.unit
+    def test_index_columns_have_the_footer_of_write(self, tmp_path):
+        class Indexed(DataModel, dataset="indexed"):
+            vessel_id: str
+            note: str = Field(nullable=True)
+            index_level_0: int = Field(nullable=False, alias="__index_level_0__")
+
+        # Given
+        frame = pl.DataFrame({"vessel_id": ["v1", "v2"], "note": pl.Series([None, None], dtype=pl.String), "__index_level_0__": [4, 7]})
+
+        # When
+        written, sunk = Sinks.write_and_sink(tmp_path, "parquet", {"index_columns": [{"__index_level_0__": None}]}, frame, Indexed)
+
+        # Then
+        assert Sinks.footer(sunk)[0].equals(Sinks.footer(written)[0], check_metadata=True)
+        assert pd.read_parquet(sunk).index.tolist() == [4, 7]
+
+    @pytest.mark.unit
     def test_a_categorical_column_named_len_or_rows_has_the_footer_of_write(self, tmp_path):
         class Counted(DataModel, dataset="counted"):
             len: pl.Categorical = Field(nullable=True)

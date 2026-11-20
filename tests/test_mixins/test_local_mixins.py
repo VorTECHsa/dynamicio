@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
+import pyarrow.parquet as pq
 import pytest
 import yaml
 
@@ -982,3 +983,30 @@ class TestBatchLocalSources:
         # Then
         assert files == [f"{tmp_path}/batch_x/{name}.parquet" for name in ("a", "b", "c")]
         assert options == {"columns": ["id"]}
+
+
+class TestParquetIndexColumns:
+    @pytest.mark.unit
+    def test_index_columns_write_the_file_of_the_frame_with_that_index(self, tmp_path):
+        # Given
+        df = pd.DataFrame({"vessel_id": ["v1", "v2"], "event_id": ["e1", "e2"], "__index_level_1__": ["e1", "e2"]})
+        expected = df.drop(columns="__index_level_1__").set_index(["vessel_id", "event_id"], drop=False).drop(columns="vessel_id")
+        expected.to_parquet(tmp_path / "expected.parquet")
+
+        # When
+        dynamicio.mixins.with_local.WithLocal._write_parquet_file(
+            df, str(tmp_path / "data.parquet"), index_columns=["vessel_id", {"__index_level_1__": "event_id"}]
+        )  # pylint: disable=protected-access
+
+        # Then
+        assert pq.read_schema(tmp_path / "data.parquet").equals(pq.read_schema(tmp_path / "expected.parquet"), check_metadata=True)
+        pd.testing.assert_frame_equal(pd.read_parquet(tmp_path / "data.parquet"), expected)
+
+    @pytest.mark.unit
+    def test_index_columns_with_index_false_are_refused(self, tmp_path):
+        # Given
+        df = pd.DataFrame({"vessel_id": ["v1"]})
+
+        # When / Then
+        with pytest.raises(ValueError, match="index option cannot be false"):
+            dynamicio.mixins.with_local.WithLocal._write_parquet_file(df, str(tmp_path / "data.parquet"), index=False, index_columns=["vessel_id"])  # pylint: disable=protected-access
