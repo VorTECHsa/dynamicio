@@ -262,14 +262,51 @@ class TestPolarsOutputFiles:
         assert frame.to_dicts() == [{"a": 1, "b": "x"}, {"a": 2, "b": "y"}]
 
     @pytest.mark.unit
-    def test_a_json_orient_other_than_records_is_refused(self, config, polars_engine):  # pylint: disable=unused-argument
+    def test_a_json_object_without_index_column_is_refused(self, config, polars_engine):  # pylint: disable=unused-argument
         # Given
         files = OutputFiles(config, "JSON_INDEX")
         pd.DataFrame({"a": [1]}).to_json(files.expected_path, orient="index")
 
         # When / Then
-        with pytest.raises(ValueError, match="records orient only"):
+        with pytest.raises(ValueError, match="only with the option index_column"):
             files.read_expected()
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("orient", ["index", "columns"])
+    def test_a_json_object_gives_its_keys_in_the_index_column(self, config, polars_engine, orient):  # pylint: disable=unused-argument
+        # Given
+        files = OutputFiles(config, "JSON_INDEX_COLUMN")
+        pd.DataFrame({"a": [1, 2]}, index=["r1", "r2"]).to_json(files.generated_path, orient=orient)
+
+        # When
+        frame = OutputFiles.read_file(files.generated_path, "json", orient=orient, index_column="label")
+
+        # Then
+        assert frame.to_dicts() == [{"label": "r1", "a": 1}, {"label": "r2", "a": 2}]
+
+    @pytest.mark.unit
+    def test_the_index_column_of_the_resource_reaches_the_reader(self, config, polars_engine):  # pylint: disable=unused-argument
+        # Given
+        files = OutputFiles(config, "JSON_INDEX_COLUMN")
+        pd.DataFrame({"a": [1, 2]}, index=["r1", "r2"]).to_json(files.generated_path, orient="index")
+        files.promote_generated()
+
+        # When
+        generated, expected = files.read_generated(), files.read_expected()
+
+        # Then
+        assert files.read_options == {"orient": "index", "index_column": "label"}
+        assert generated.equals(expected) and generated.columns == ["label", "a"]
+
+    @pytest.mark.unit
+    def test_a_json_orient_other_than_records_index_and_columns_is_refused(self, polars_engine, tmp_path):  # pylint: disable=unused-argument
+        # Given
+        path = tmp_path / "split.json"
+        pd.DataFrame({"a": [1]}).to_json(path, orient="split")
+
+        # When / Then
+        with pytest.raises(ValueError, match="records, index and columns only"):
+            OutputFiles.read_file(str(path), "json", orient="split")
 
     @pytest.mark.unit
     @pytest.mark.parametrize("file_type", ["hdf", "txt"])

@@ -1,14 +1,17 @@
 """Locates, reads, removes and promotes the generated and expected files of one resource."""
 
+import io as std_io
 import os
 import shutil
 import string
+from pathlib import Path
 from typing import Any, List, Mapping, Optional
 
 import pandas as pd
 
 from dynamicio.config import IOConfig
 from dynamicio.config.pydantic.io_resources import FileType
+from dynamicio.mixins.utils import JsonIndex
 
 
 class OutputFiles:
@@ -21,7 +24,7 @@ class OutputFiles:
         environment: The environment to look the resource up in; by default the first one the resource definitions list.
     """
 
-    JSON_READ_OPTIONS = ("orient", "lines")
+    JSON_READ_OPTIONS = ("orient", "lines", "index_column")
 
     def __init__(self, config: IOConfig, source_key: str, params: Optional[Mapping[str, Any]] = None, environment: Optional[str] = None):
         self.config = config
@@ -101,7 +104,7 @@ class OutputFiles:
 
     @property
     def read_options(self) -> Mapping[str, Any]:
-        """Reader options for both files: the JSON ``orient`` and ``lines`` the resource is written with, overridden by ``expected.options``."""
+        """Reader options for both files: the JSON ``orient``, ``lines`` and ``index_column`` the resource is written with, overridden by ``expected.options``."""
         environment = self.resource
         options = {name: environment.options[name] for name in self.JSON_READ_OPTIONS if name in environment.options}
         if environment.expected:
@@ -112,7 +115,8 @@ class OutputFiles:
     def read_file(cls, path: str, file_type: str, **options: Any) -> Any:
         """Read a file with the plain readers of the engine of the process, so no schema or cast hides a difference.
 
-        ``options`` go to the reader (``orient`` and ``lines`` only to JSON). On the polars engine they are the arguments of the polars reader.
+        ``options`` go to the reader (``orient`` and ``lines`` only to JSON). On the polars engine they are the arguments of the polars reader. The pandas
+        reader gives the keys of a JSON object in the index, so it does not use ``index_column``.
 
         Raises:
             ValueError: The engine has no reader of the file type, or of the JSON orient.
@@ -124,6 +128,7 @@ class OutputFiles:
         readers = {"parquet": pd.read_parquet, "csv": pd.read_csv, "json": pd.read_json, "hdf": pd.read_hdf}
         if file_type not in readers:
             raise ValueError(f"Unsupported file type {file_type!r} for {path}")
+        options.pop("index_column", None)
         if file_type != "json":
             for name in OutputFiles.JSON_READ_OPTIONS:
                 options.pop(name, None)
@@ -133,16 +138,22 @@ class OutputFiles:
     def read_polars_file(path: str, file_type: str, **options: Any) -> Any:
         """Read a file with the plain polars readers. A JSON file has the ``records`` orient, with ``lines`` for one record on each line.
 
+        A JSON object with the orient ``index`` or ``columns`` needs ``index_column``: the keys of the object go in that column, as the polars engine reads them.
+
         Raises:
-            ValueError: The file type has no polars reader (``hdf``), the JSON orient is not ``records``, or polars cannot read the file. The error of
-                polars is the cause of the ``ValueError``.
+            ValueError: The file type has no polars reader (``hdf``), the JSON orient is not ``records``, ``index`` or ``columns``, a JSON object has no
+                ``index_column``, or polars cannot read the file. The error of polars is the cause of the ``ValueError``.
         """
         import polars as pl  # pylint: disable=import-outside-toplevel
 
-        orient, lines = options.pop("orient", "records"), options.pop("lines", False)
+        orient, lines, index_column = options.pop("orient", "records"), options.pop("lines", False), options.pop("index_column", None)
         if file_type == "json":
-            if orient != "records":
-                raise ValueError(f"polars reads the JSON records orient only, and {path} has the orient {orient!r}")
+            if orient in JsonIndex.ORIENTS and not lines:
+                if index_column is None:
+                    raise ValueError(f"polars reads the JSON orient {orient!r} of {path} only with the option index_column, the column of the keys of the object")
+                path = std_io.BytesIO(JsonIndex.records(Path(path).read_bytes(), orient, index_column))
+            elif orient != "records":
+                raise ValueError(f"polars reads the JSON orients records, index and columns only, and {path} has the orient {orient!r}")
             reader = pl.read_ndjson if lines else pl.read_json
         else:
             reader = {"parquet": pl.read_parquet, "csv": pl.read_csv}.get(file_type)

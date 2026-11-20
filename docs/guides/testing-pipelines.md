@@ -192,8 +192,9 @@ The end-to-end test above is `demo/tests/test_pipeline.py`; the sample data it r
 The harness reads and compares the files with the engine of the process. On the polars engine, `check` reads the files with the plain polars readers
 and compares the frames with `polars.testing.assert_frame_equal`. A custom assertion then gets polars frames.
 
-- The polars engine reads parquet, CSV and JSON files. A JSON file has the `records` orient, with `lines` for one record on each line. An `hdf` file
-  and another JSON orient record a `ValueError` for the output.
+- The polars engine reads parquet, CSV and JSON files. A JSON file has the `records` orient, with `lines` for one record on each line. A JSON
+  object with the orient `index` or `columns` needs the option `index_column` of the resource: the keys of the object go in that column. An `hdf`
+  file, another JSON orient, and a JSON object without `index_column` record a `ValueError` for the output.
 - The options under `expected.options` go to the polars reader, so they are polars arguments.
 - A polars frame has no index. `check_row_order=False` without `sort_by` thus compares the rows as a multiset, and polars sorts the 2 frames first.
 - A pandas frame against a polars frame fails the comparison.
