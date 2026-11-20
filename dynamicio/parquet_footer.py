@@ -148,5 +148,11 @@ class ParquetFooters:
 
     @staticmethod
     def of(file: pq.ParquetFile) -> ParquetFooter:
-        """The footer of an open parquet file."""
-        return ParquetFooter(schema=file.schema_arrow, rows=file.metadata.num_rows, row_groups=file.metadata.num_row_groups)
+        """The footer of an open parquet file.
+
+        The schema gets the key-value metadata of the file. The ``ARROW:schema`` key of a pyarrow file holds the metadata of the schema, but polars writes
+        the ``metadata`` of ``write_parquet`` only as key-value metadata of the file, outside ``ARROW:schema``.
+        """
+        metadata = {key: value for key, value in (file.metadata.metadata or {}).items() if key != b"ARROW:schema"}
+        schema = file.schema_arrow.with_metadata({**metadata, **(file.schema_arrow.metadata or {})}) if metadata else file.schema_arrow
+        return ParquetFooter(schema=schema, rows=file.metadata.num_rows, row_groups=file.metadata.num_row_groups)

@@ -97,6 +97,19 @@ class TestLocalFooter:
         assert footer.metadata == {b"as_of": b"2026-11-19"}
 
     @pytest.mark.unit
+    def test_the_footer_keeps_the_metadata_of_a_polars_file(self, tmp_path):
+        # Given
+        polars = pytest.importorskip("polars")
+        polars.DataFrame({"a": [1]}).write_parquet(tmp_path / "data.parquet", metadata={"as_of": "2026-11-19"})
+
+        # When
+        footer = Footers.io(tmp_path).footer()
+
+        # Then
+        assert footer.metadata == {b"as_of": b"2026-11-19"}
+        assert footer.schema.field("a").type == pyarrow_module.int64()
+
+    @pytest.mark.unit
     def test_a_file_without_metadata_gives_an_empty_dict(self, tmp_path):
         # Given
         pq.write_table(pyarrow_module.table({"a": [1]}), tmp_path / "data.parquet")
