@@ -37,6 +37,8 @@ class DtypeMap:
     TEMPORAL = re.compile(r"^(?P<kind>datetime64|timedelta64)\[(?P<unit>\w+)(?:,\s*(?P<tz>[^\]]+))?\]$")
     # A pandas column of lists has the dtype `object`, as `pd.read_parquet` gives a `list<...>` column
     LIST = "object"
+    # A pandas column of bools and None has the dtype `object`: `DataFrame.to_parquet` writes it as `bool`, and `pd.read_parquet` gives `object` back
+    BOOLEAN_OBJECT = "object"
 
     @classmethod
     def polars_of(cls, pandas_dtype: str) -> pl.DataType:
@@ -119,9 +121,14 @@ class DtypeMap:
 
     @classmethod
     def pairs(cls, pandas_dtype: str, polars_dtype: pl.DataType) -> bool:
-        """Whether a pandas dtype name is a pair of a polars dtype. Any ``category`` pairs with any ``Categorical`` or ``Enum``, and ``object`` with a ``List``."""
+        """Whether a pandas dtype name is a pair of a polars dtype.
+
+        Any ``category`` pairs with any ``Categorical`` or ``Enum``, and ``object`` with a ``List`` and with ``Boolean``, for a pandas column of bools and None.
+        """
         if isinstance(polars_dtype, pl.List):
             return pandas_dtype.strip() == cls.LIST and cls.reverse_name(polars_dtype) is not None
+        if polars_dtype == pl.Boolean and pandas_dtype.strip() == cls.BOOLEAN_OBJECT:
+            return True
         try:
             mapped = cls.polars_of(pandas_dtype)
         except ValueError:

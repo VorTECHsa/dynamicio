@@ -63,7 +63,8 @@ class PolarsParquet:
         """The arrow types and the pandas metadata that ``DataFrame.to_parquet`` gives for the pandas dtypes of the model.
 
         pyarrow makes the types and the metadata from an empty pandas frame with these dtypes. An empty ``object`` column has the ``null`` type there, and
-        an empty ``category`` column has no categories, so the engine gives them their string or list types and the number of categories of the frame.
+        an empty ``category`` column has no categories, so the engine gives them their string, list or ``bool`` types and the number of categories of the
+        frame.
 
         ``index=False`` gives the metadata of ``DataFrame.to_parquet(index=False)``, without an index. ``index_columns`` gives the fields and the
         metadata of the index of ``set_index`` (``utils.ParquetIndex``), after the other columns. Otherwise the metadata has the ``RangeIndex`` of the
@@ -107,6 +108,9 @@ class PolarsParquet:
         kind = field.type
         if pa.types.is_null(kind) and all_null:
             column["pandas_type"] = "empty"
+        elif pa.types.is_null(kind) and dtype == pl.Boolean:
+            kind = pa.bool_()
+            column["pandas_type"] = "bool"
         elif pa.types.is_null(kind) and isinstance(dtype, pl.List):
             kind = cls.list_type(dtype)
             column["pandas_type"] = pa.pandas_compat.get_logical_type(kind)

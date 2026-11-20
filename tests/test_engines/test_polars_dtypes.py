@@ -148,6 +148,9 @@ class TestPairs:
             ("string", pl.List(pl.String), False),
             ("object", pl.List(pl.Categorical), False),
             ("object", pl.List(pl.List(pl.String)), False),
+            ("object", pl.Boolean(), True),
+            ("boolean", pl.Boolean(), True),
+            ("object", pl.Int64(), False),
         ],
     )
     def test_a_pandas_dtype_pairs_with_its_polars_dtype_only(self, pandas_dtype, polars_dtype, expected):

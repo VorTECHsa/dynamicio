@@ -655,6 +655,26 @@ class Nullable(DataModel, dataset="nullable"):
     c: pl.UInt8 = Field(nullable=True)
 
 
+class Flagged(DataModel, dataset="flagged"):
+    flag: pl.Boolean = Field(nullable=True, pandas_dtype="object")
+
+
+class TestBooleanObjectColumn:
+    @pytest.mark.unit
+    def test_a_boolean_column_of_the_pandas_dtype_object_has_the_file_of_a_pandas_column_of_bools_and_none(self, tmp_path):
+        # Given
+        config = Files.config(tmp_path, "parquet")
+        pd.DataFrame({"flag": pd.Series([True, None, False], dtype="object")}).to_parquet(tmp_path / "pandas.parquet")
+
+        # When
+        Files.polars(config, Flagged).write(pl.DataFrame({"flag": [True, None, False]}))
+
+        # Then
+        assert pq.read_schema(str(tmp_path / "data.parquet")).equals(pq.read_schema(str(tmp_path / "pandas.parquet")), check_metadata=True)
+        assert pd.read_parquet(tmp_path / "data.parquet")["flag"].tolist() == [True, None, False]
+        assert Files.polars(config, Flagged).read()["flag"].to_list() == [True, None, False]
+
+
 class TestNullsOfANumpyDtype:
     """A column of a numpy integer or ``bool`` dtype with a null takes the nullable pandas dtype, as `DataFrame.to_parquet` gives it."""
 

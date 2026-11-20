@@ -113,7 +113,8 @@ pandas `datetime64[s]` has no pair.
 The compiled schema of a polars model (`io.schema.columns[name].data_type`) holds the pandas dtype. A column takes the pandas dtype "without nulls"
 of the table. To set a different pandas dtype, use `Field(pandas_dtype=...)`, for example `"Int64"` for a nullable integer or `"string[pyarrow]"` for a
 string. The value must be a pair of the polars dtype of the column, else the model raises `ValueError` when it compiles. A pandas model does not accept
-`pandas_dtype`, because its column type is a pandas dtype.
+`pandas_dtype`, because its column type is a pandas dtype. A `Boolean` column also pairs with `"object"`, the pandas dtype of a column of bools and
+`None`. A parquet file then has the `bool` type and the numpy type `object`, so a pandas reader gets `None` for a null, not `pd.NA`.
 
 ## Read and write files
 
