@@ -138,6 +138,8 @@ class PortedModel:
         self.model = model
         self.source = to_dataframe_schema(model)
         self.todos: List[str] = []
+        # `Series[str]` compiles to `object` too: only the Pandera dtype tells a column of `object` values, which can hold lists, from a column of strings
+        self.objects = [f"{model.__name__}.{name}" for name, column in model.to_schema().columns.items() if str(column.dtype) == DtypeMap.LIST]
         self.schema = self._without_checks()
         self.config = self._config()
 
@@ -265,8 +267,8 @@ class PolarsMigrationReport:
         return [f"## {title}", "", intro, ""] + ([f"- {line}" for line in lines] if lines else ["None."]) + [""]
 
     @classmethod
-    def render(cls, output: str, models: Sequence[str], todos: Sequence[str], resources: Mapping[str, Sequence[str]]) -> str:
-        """The report of the models at ``output``, the checks to port, and the findings of the resource definitions."""
+    def render(cls, output: str, models: Sequence[str], todos: Sequence[str], resources: Mapping[str, Sequence[str]], objects: Sequence[str] = ()) -> str:
+        """The report of the models at ``output``, the checks to port, the ``object`` columns, and the findings of the resource definitions."""
         lines = [
             "# Polars migration",
             "",
@@ -279,6 +281,11 @@ class PolarsMigrationReport:
             "",
         ]
         lines += cls.section("Checks to port", "These Pandera checks are pandas code. Write them again for polars.", todos)
+        lines += cls.section(
+            "Columns of the object dtype",
+            "The polars models give these columns the `String` dtype. If a column holds lists, declare `pl.List` of the item dtype, for example `pl.List(pl.String)`.",
+            objects,
+        )
         lines += cls.section(
             "Resource definitions that the polars engine refuses",
             "Change these definitions, or keep these resources on the pandas engine. The options that the code gives to an IO object are not in this list.",
@@ -342,12 +349,13 @@ class PolarsMigration:
 
         models = [model.label for ported in modules.values() for model in ported]
         todos = [todo for ported in modules.values() for model in ported for todo in model.todos]
+        objects = [column for ported in modules.values() for model in ported for column in model.objects]
         resources = ResourceReview.review(self.scan)
         directory = self.output if self.package else os.path.dirname(os.path.abspath(self.output))
         report_path = os.path.join(directory, self.REPORT)
         with open(report_path, "w", encoding="utf-8") as handle:
-            handle.write(PolarsMigrationReport.render(self.output, models, todos, resources))
-        return {"models": models, "module": self.output, "report": report_path, "todos": todos, **resources}
+            handle.write(PolarsMigrationReport.render(self.output, models, todos, resources, objects))
+        return {"models": models, "module": self.output, "report": report_path, "todos": todos, "objects": objects, **resources}
 
 
 def migrate_to_polars(path: str, output: str, scan: str = "", root: str = "") -> Dict[str, Any]:
@@ -358,7 +366,7 @@ def migrate_to_polars(path: str, output: str, scan: str = "", root: str = "") ->
 
     Returns:
         ``models`` (the dotted names of the pandas models), ``module``, ``report`` (the path of the report), ``todos`` (the checks to port),
-        ``refused`` and ``csv_index`` (the findings of the resource definitions under ``scan``).
+        ``objects`` (the ``object`` columns, which can hold lists), ``refused`` and ``csv_index`` (the findings of the resource definitions under ``scan``).
 
     Raises:
         ValueError: No pandas model is found, two models map to one polars model, a dtype or a validation has no polars equivalent, or a generated

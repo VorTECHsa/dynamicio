@@ -1,6 +1,7 @@
 """The dtype map between pandas and polars (ADR 0010, decision 14).
 
-The map is many to one: ``int64`` and ``Int64`` both become ``Int64``, and ``object`` and ``string`` both become ``String``. A polars model keeps the pandas
+The map is many to one: ``int64`` and ``Int64`` both become ``Int64``, and ``object`` and ``string`` both become ``String``. A ``List`` of a scalar dtype
+of the map pairs with ``object``, the pandas dtype of a column of lists, but ``object`` alone gives ``String``. A polars model keeps the pandas
 dtype of a column in the ``pandas_dtype`` key of its field metadata (``Field(nullable=False, pandas_dtype="Int64")``). A column without it takes the dtype of
 the fixed reverse map. The module needs polars, so only the polars paths of dynamicio import it.
 """
@@ -34,6 +35,8 @@ class DtypeMap:
     # polars has no second unit: a pandas `datetime64[s]` or `timedelta64[s]` has no pair
     TIME_UNITS = ("ms", "us", "ns")
     TEMPORAL = re.compile(r"^(?P<kind>datetime64|timedelta64)\[(?P<unit>\w+)(?:,\s*(?P<tz>[^\]]+))?\]$")
+    # A pandas column of lists has the dtype `object`, as `pd.read_parquet` gives a `list<...>` column
+    LIST = "object"
 
     @classmethod
     def polars_of(cls, pandas_dtype: str) -> pl.DataType:
@@ -71,7 +74,7 @@ class DtypeMap:
             The pandas dtype name: ``String`` gives ``object``, ``Int64`` gives ``int64`` (``Int64`` with nulls), ``Enum`` gives ``category``.
 
         Raises:
-            ValueError: The polars dtype has no pandas pair, for example ``Date``, ``List`` or ``Decimal``.
+            ValueError: The polars dtype has no pandas pair, for example ``Date``, ``Decimal`` or a ``List`` of ``Categorical``.
         """
         name = cls.reverse_name(polars_dtype)
         if name is None:
@@ -91,7 +94,12 @@ class DtypeMap:
 
     @classmethod
     def reverse_name(cls, polars_dtype: pl.DataType) -> Optional[str]:
-        """The pandas dtype name of a polars dtype for a column without nulls, or None when the dtype has no pair."""
+        """The pandas dtype name of a polars dtype for a column without nulls, or None when the dtype has no pair.
+
+        A ``List`` pairs with ``object`` when its items have a dtype of the map other than ``Categorical`` and ``Enum``. A ``List`` of lists has no pair.
+        """
+        if isinstance(polars_dtype, pl.List):
+            return cls.LIST if cls.is_list_item(polars_dtype.inner) else None
         for name, dtype in {**cls.INTEGERS, **cls.FLOATS, "bool": pl.Boolean, "object": pl.String}.items():
             if polars_dtype == dtype:
                 return name
@@ -105,8 +113,15 @@ class DtypeMap:
         return None
 
     @classmethod
+    def is_list_item(cls, polars_dtype: pl.DataType) -> bool:
+        """Whether a polars dtype can be the item dtype of a ``List`` column: a scalar dtype of the map other than ``Categorical`` and ``Enum``."""
+        return not isinstance(polars_dtype, (pl.List, pl.Categorical, pl.Enum)) and cls.reverse_name(polars_dtype) is not None
+
+    @classmethod
     def pairs(cls, pandas_dtype: str, polars_dtype: pl.DataType) -> bool:
-        """Whether a pandas dtype name is a pair of a polars dtype. Any ``category`` pairs with any ``Categorical`` or ``Enum``."""
+        """Whether a pandas dtype name is a pair of a polars dtype. Any ``category`` pairs with any ``Categorical`` or ``Enum``, and ``object`` with a ``List``."""
+        if isinstance(polars_dtype, pl.List):
+            return pandas_dtype.strip() == cls.LIST and cls.reverse_name(polars_dtype) is not None
         try:
             mapped = cls.polars_of(pandas_dtype)
         except ValueError:
@@ -136,7 +151,8 @@ class DtypeMap:
                 return cls.pandas_of(polars_dtype)
             except ValueError as error:
                 raise ValueError(
-                    f"{model.__name__}.{column.name}: {error}. Declare a dtype of the map: an integer, a float, Boolean, String, Categorical, Enum, Datetime or Duration"
+                    f"{model.__name__}.{column.name}: {error}. Declare a dtype of the map: an integer, a float, Boolean, String, Categorical, Enum, Datetime, Duration or a List of one of these "
+                    "other than Categorical and Enum"
                 ) from None
         if not isinstance(declared, str) or not cls.pairs(declared, polars_dtype):
             raise ValueError(f"{model.__name__}.{column.name}: pandas_dtype={declared!r} is not a pair of the polars dtype {polars_dtype}")

@@ -87,7 +87,22 @@ class PolarsFiles:
             return
         fields = {field for path in cls.paths_of(io) for field in utils.get_string_template_field_names(path)}
         options = {name: value for name, value in io.options.items() if name not in fields}
-        PolarsOptions.check(get_file_type_value(cls.section_of(io).file_type), source, options)
+        file_type = get_file_type_value(cls.section_of(io).file_type)
+        PolarsOptions.check(file_type, source, options)
+        cls.check_lists(io, file_type)
+
+    @staticmethod
+    def check_lists(io: "DynamicDataIO", file_type: str) -> None:
+        """Refuse a CSV resource of a model with a ``List`` column: a CSV cell holds text, and the pandas writer gives the ``repr`` of the list.
+
+        Raises:
+            EngineResourceError: The model has a ``List`` column and the file type is CSV.
+        """
+        if file_type != "csv" or io._model is None:  # pylint: disable=protected-access
+            return
+        lists = [name for name, dtype in DtypeMap.of_model(io._model).items() if isinstance(dtype, pl.List)]  # pylint: disable=protected-access
+        if lists:
+            raise EngineResourceError(f"a CSV file cannot hold the List columns {lists} of {io.name}. Use a parquet or a JSON file.")
 
     @classmethod
     def read(cls, io: "DynamicDataIO") -> pl.DataFrame:

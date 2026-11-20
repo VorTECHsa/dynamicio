@@ -319,6 +319,9 @@ class TestWidestType:
             ([pl.Boolean, pl.Null, pl.Boolean], pl.Boolean),
             ([pl.Duration("ms"), pl.Duration("ns")], pl.Duration("ns")),
             ([pl.Duration("us"), pl.Null, pl.Duration("ms")], pl.Duration("us")),
+            ([pl.List(pl.Null), pl.List(pl.String)], pl.List(pl.String)),
+            ([pl.List(pl.Int32), pl.List(pl.Int64)], pl.List(pl.Int64)),
+            ([pl.Null, pl.List(pl.String)], pl.List(pl.String)),
         ],
     )
     def test_the_footer_types_give_the_type_of_pd_concat(self, dtypes, expected):
@@ -334,6 +337,8 @@ class TestWidestType:
             [pl.Datetime("us", "UTC"), pl.Datetime("us")],
             [pl.Datetime("us"), pl.Date],
             [pl.Duration("us"), pl.Int64],
+            [pl.List(pl.String), pl.List(pl.Int64)],
+            [pl.List(pl.String), pl.String],
         ],
     )
     def test_types_that_do_not_upcast_raise_a_columns_data_type_error(self, dtypes, caplog):

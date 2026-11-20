@@ -20,6 +20,7 @@ pl = pytest.importorskip("polars")
 polars_migrate = pytest.importorskip("dynamicio.schema.polars_migrate")
 PolarsModelRenderer, PortedModel, ResourceReview = polars_migrate.PolarsModelRenderer, polars_migrate.PortedModel, polars_migrate.ResourceReview
 migrate_to_polars = polars_migrate.migrate_to_polars
+DtypeMap = pytest.importorskip("dynamicio.schema.polars_dtypes").DtypeMap
 
 FULL_MODELS = """
     from typing import Annotated
@@ -148,6 +149,25 @@ class TestModels:
         schema = generated.Orders.to_schema()
         assert schema.strict == "filter" and schema.coerce and schema.unique == ["order_id", "status"]
         assert "unit price" in schema.columns and generated.Orders.__table_name__ == "sales.orders"
+
+    @pytest.mark.unit
+    def test_an_object_column_becomes_a_string_column_and_the_report_lists_it_for_review(self, repo):
+        # Given
+        package = Package.write(
+            repo,
+            {
+                "tags": "from pandera.typing import Series\nfrom dynamicio.schema import DataModel, Field\n\n"
+                "class Tags(DataModel, dataset='tags'):\n    tags: Series[object] = Field(nullable=True)\n    name: Series[str] = Field(nullable=True)\n"
+            },
+        )
+
+        # When
+        report = migrate_to_polars(str(package), str(repo / "out.py"))
+
+        # Then
+        assert DtypeMap.of_model(Generated.load(repo / "out.py").Tags) == {"tags": pl.String, "name": pl.String}
+        assert report["objects"] == ["Tags.tags"]
+        assert "- Tags.tags" in (repo / "POLARS_MIGRATION.md").read_text()
 
     @pytest.mark.unit
     def test_the_generated_module_imports_only_what_it_uses(self, repo):
@@ -519,7 +539,7 @@ class TestCli:
         # Then
         out = capsys.readouterr().out
         assert "Wrote 2 polars models to" in out
-        assert "0 checks to port, 1 refused resources, 1 CSV resources without index." in out
+        assert "0 checks to port, 0 object columns to review, 1 refused resources, 1 CSV resources without index." in out
         report = (repo / "POLARS_MIGRATION.md").read_text()
         assert "- definitions.yaml: K.CLOUD: the polars engine needs the option key_column" in report and "- definitions.yaml: A.LOCAL" in report
 
@@ -534,4 +554,4 @@ class TestCli:
     def test_the_report_says_none_for_an_empty_section(self):
         report = polars_migrate.PolarsMigrationReport.render("out.py", ["a.B"], [], {"refused": [], "csv_index": []})
 
-        assert report.count("None.") == 3 and "wrote 1 polars models to `out.py`" in report
+        assert report.count("None.") == 4 and "wrote 1 polars models to `out.py`" in report

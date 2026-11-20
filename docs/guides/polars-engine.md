@@ -46,6 +46,7 @@ The command also writes `POLARS_MIGRATION.md` next to the models. The report lis
 
 - The Pandera checks to write again for polars: `str_matches`, a `@pa.check` and a `@pa.dataframe_check`. The polars models do not have them.
 - A model with an index. A polars frame has no index, so write the index as a column and declare it in the model.
+- The `Series[object]` columns. Their polars models have the `String` dtype. Declare `pl.List` of the item dtype for a column that holds lists, for example `pl.List(pl.String)`.
 - The resource definitions under `--scan` that the polars engine refuses, for example an `hdf` file or a Kafka resource without `key_column`.
 - The CSV definitions without an `index` option. The polars engine writes the leading index column with the row numbers.
 
@@ -104,8 +105,9 @@ dynamicio keeps a map between the pandas dtypes and the polars dtypes. Each colu
 | `Categorical`, `Enum` | `category` | `category` |
 | `Datetime` (`ms`, `us`, `ns`, with or without a time zone) | `datetime64[unit]` or `datetime64[unit, zone]` | the same |
 | `Duration` (`ms`, `us`, `ns`) | `timedelta64[unit]` | the same |
+| `List` of a dtype of this table, other than `Categorical` and `Enum` | `object` | `object` |
 
-A model with a different dtype raises `ValueError` when it compiles. Examples are `Date`, `List` and `Decimal`. polars has no second unit, so a
+A model with a different dtype raises `ValueError` when it compiles. Examples are `Date`, `Decimal`, `Struct` and a `List` of `Categorical`. polars has no second unit, so a
 pandas `datetime64[s]` has no pair.
 
 The compiled schema of a polars model (`io.schema.columns[name].data_type`) holds the pandas dtype. A column takes the pandas dtype "without nulls"
@@ -132,6 +134,7 @@ A file that the polars engine writes gives the same frame to the pandas engine o
 The readers are polars readers, and the engine then casts the frame to the model:
 
 - A CSV file uses the null strings of `pandas.read_csv`. A column that is not a number or a Boolean reads as a string, so `007` keeps its text. The cast then parses the datetimes, the durations (for example `0 days 00:00:01`) and the Booleans (`True`, `False`, `true`, `false`, `TRUE`, `FALSE`).
+- A CSV file cannot hold a list. A CSV resource of a model with a `List` column raises `EngineResourceError` when the IO object is created. Use a parquet or a JSON file for it.
 - A JSON file has the orient records, or JSON lines with `lines: true`. An integer under a `Datetime` or a `Duration` column is an epoch in `date_unit`, which is `ms` by default. An epoch of a `Datetime` with a time zone is a UTC instant. A file without records, as the pandas engine writes a frame without rows, reads as a frame without rows with the columns of the model.
 - A `local_batch` resource reads its files in sorted order. A file without a column of the model gives nulls in that column.
 - A missing local file raises `FileNotFoundError`. A missing S3 key raises `S3KeyNotFoundError` for parquet and `ObjectNotFoundError` for CSV and JSON, as on the pandas engine. With `missing_ok=True`, `read()` returns `None`.

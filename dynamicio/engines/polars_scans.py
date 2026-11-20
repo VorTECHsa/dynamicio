@@ -168,6 +168,7 @@ class PolarsScans:
         - Integers give the integer type that holds them all, and integers and floats give ``Float64``.
         - ``String`` and ``Categorical`` give ``String``.
         - ``Datetime`` columns with one time zone give the finest time unit, and ``Duration`` columns give the finest time unit.
+        - ``List`` columns give the ``List`` of the type of their items by these rules. pyarrow writes ``list<null>`` for a column of empty lists only.
 
         Raises:
             ColumnsDataTypeError: The types do not upcast to one type, for example ``String`` and ``Int64``, or ``Int64`` and ``UInt64``.
@@ -202,4 +203,7 @@ class PolarsScans:
             return pl.Datetime(unit, kinds[0].time_zone)
         elif all(isinstance(kind, pl.Duration) for kind in kinds):
             return pl.Duration(max((kind.time_unit for kind in kinds), key=cls.TIME_UNITS.index))
+        elif all(isinstance(kind, pl.List) for kind in kinds):
+            items = cls.upcast(column, [kind.inner for kind in kinds])
+            return None if items is None else pl.List(items)
         return None

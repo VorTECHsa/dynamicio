@@ -80,13 +80,31 @@ class TestPandasOf:
             (pl.Datetime("ns"), False, "datetime64[ns]"),
             (pl.Datetime("ms", "UTC"), False, "datetime64[ms, UTC]"),
             (pl.Duration("us"), False, "timedelta64[us]"),
+            (pl.List(pl.String), True, "object"),
+            (pl.List(pl.Int64), False, "object"),
+            (pl.List(pl.Datetime("us", "UTC")), False, "object"),
         ],
     )
     def test_a_polars_dtype_of_the_map_gives_its_pandas_dtype(self, polars_dtype, has_nulls, pandas_dtype):
         assert DtypeMap.pandas_of(polars_dtype, has_nulls=has_nulls) == pandas_dtype
 
     @pytest.mark.unit
-    @pytest.mark.parametrize("polars_dtype", [pl.Date(), pl.Time(), pl.List(pl.Int64), pl.Decimal(10, 2), pl.Struct({"a": pl.Int64}), pl.Binary(), pl.Null(), pl.Array(pl.Int8, 2)])
+    @pytest.mark.parametrize(
+        "polars_dtype",
+        [
+            pl.Date(),
+            pl.Time(),
+            pl.List(pl.Date),
+            pl.List(pl.Categorical),
+            pl.List(pl.Enum(["a"])),
+            pl.List(pl.List(pl.Int64)),
+            pl.Decimal(10, 2),
+            pl.Struct({"a": pl.Int64}),
+            pl.Binary(),
+            pl.Null(),
+            pl.Array(pl.Int8, 2),
+        ],
+    )
     def test_a_polars_dtype_without_a_pair_is_refused(self, polars_dtype):
         with pytest.raises(ValueError, match="has no pandas dtype in the dtype map of dynamicio"):
             DtypeMap.pandas_of(polars_dtype)
@@ -124,6 +142,12 @@ class TestPairs:
             ("datetime64[ms]", pl.Datetime("ns"), False),
             ("datetime64[s]", pl.Datetime("ms"), False),
             ("not a dtype", pl.String(), False),
+            ("object", pl.List(pl.String), True),
+            ("object", pl.List(pl.Int64), True),
+            (" object ", pl.List(pl.Float64), True),
+            ("string", pl.List(pl.String), False),
+            ("object", pl.List(pl.Categorical), False),
+            ("object", pl.List(pl.List(pl.String)), False),
         ],
     )
     def test_a_pandas_dtype_pairs_with_its_polars_dtype_only(self, pandas_dtype, polars_dtype, expected):

@@ -59,7 +59,7 @@ class PolarsParquet:
         """The arrow types and the pandas metadata that ``DataFrame.to_parquet`` gives for the pandas dtypes of the model.
 
         pyarrow makes the types and the metadata from an empty pandas frame with these dtypes. An empty ``object`` column has the ``null`` type there, and
-        an empty ``category`` column has no categories, so the engine gives them their string types and the number of categories of the frame.
+        an empty ``category`` column has no categories, so the engine gives them their string or list types and the number of categories of the frame.
 
         ``index=False`` gives the metadata of ``DataFrame.to_parquet(index=False)``, without an index. Otherwise the metadata has the ``RangeIndex`` of
         the frame, as ``DataFrame.to_parquet`` writes by default.
@@ -86,13 +86,22 @@ class PolarsParquet:
     def arrow_field(cls, field: pa.Field, column: Dict[str, Any], dtype: Any, counts: Dict[str, int]) -> pa.Field:
         """The arrow field of a column of the file, from the field of an empty pandas frame. The pandas metadata ``column`` changes in place."""
         kind = field.type
-        if pa.types.is_null(kind):
+        if pa.types.is_null(kind) and isinstance(dtype, pl.List):
+            kind = cls.list_type(dtype)
+            column["pandas_type"] = pa.pandas_compat.get_logical_type(kind)
+        elif pa.types.is_null(kind):
             kind = pa.string()
             column["pandas_type"] = "unicode"
         elif pa.types.is_dictionary(kind):
             count = len(dtype.categories) if isinstance(dtype, pl.Enum) else counts[field.name]
             kind, column["numpy_type"], column["metadata"]["num_categories"] = cls.categorical(count)
         return pa.field(field.name, kind)
+
+    @staticmethod
+    def list_type(dtype: pl.List) -> pa.DataType:
+        """The arrow type that ``DataFrame.to_parquet`` gives a pandas column of lists with the items of ``dtype``: a ``list<item>`` of ``string``, not of ``large_string``."""
+        item = pl.Series([], dtype=dtype.inner).to_arrow(compat_level=pl.CompatLevel.oldest()).type
+        return pa.list_(pa.string() if pa.types.is_large_string(item) else item)
 
     @classmethod
     def categorical(cls, count: int) -> Tuple[pa.DataType, str, int]:

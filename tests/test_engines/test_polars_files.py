@@ -22,6 +22,7 @@ from dynamicio.schema import Field
 
 pl = pytest.importorskip("polars")
 pq = pytest.importorskip("pyarrow.parquet")
+pa_types = pytest.importorskip("pyarrow")
 DataModel = pytest.importorskip("dynamicio.schema.polars").DataModel
 
 
@@ -898,3 +899,138 @@ class TestCsvOptions:
     def test_a_decimal_mark_that_is_not_a_point_or_a_comma_is_refused(self, tmp_path):
         with pytest.raises(EngineResourceError, match="decimal point or a decimal comma"):
             Files.polars(Files.config(tmp_path, "csv", {"decimal": "'"}), Pair)
+
+
+class Tagged(DataModel, dataset="tagged"):
+    id: int
+    tags: pl.List(pl.String) = Field(nullable=True)  # type: ignore[valid-type]
+    counts: pl.List(pl.Int64) = Field(nullable=True)  # type: ignore[valid-type]
+
+
+class PandasTagged(pa.DataFrameModel):
+    __dataset_name__ = "tagged"
+
+    id: Series[int]
+    tags: Series[object] = Field(nullable=True)
+    counts: Series[object] = Field(nullable=True)
+
+
+class TestListColumns:
+    @staticmethod
+    def frame() -> Any:
+        """A frame of list columns with a null, an empty list and a null item."""
+        return pl.DataFrame(
+            {"id": [1, 2, 3], "tags": [["a", "b"], None, []], "counts": [[1, None], [], None]},
+            schema={"id": pl.Int64, "tags": pl.List(pl.String), "counts": pl.List(pl.Int64)},
+        )
+
+    @staticmethod
+    def pandas_frame() -> pd.DataFrame:
+        return pd.DataFrame({"id": [1, 2, 3], "tags": [["a", "b"], None, []], "counts": [[1, None], [], None]})
+
+    @staticmethod
+    def as_lists(values: pd.Series) -> list:
+        """The cells of a pandas column of lists as Python lists: pyarrow reads a list cell as a numpy array."""
+        return [None if value is None else [None if pd.isna(item) else item for item in value] for value in values]
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("file_type, options", [("parquet", {}), ("json", {"orient": "records"}), ("json", {"orient": "records", "lines": True})])
+    def test_a_frame_of_list_columns_reads_back_equal(self, tmp_path, file_type, options):
+        # Given
+        config = Files.config(tmp_path, file_type, options)
+
+        # When
+        Files.polars(config, Tagged).write(self.frame())
+        result = Files.polars(config, Tagged).read()
+
+        # Then
+        assert result.equals(self.frame())
+        assert result.schema == self.frame().schema
+
+    @pytest.mark.unit
+    def test_the_parquet_footer_of_list_columns_is_the_footer_of_the_pandas_engine(self, tmp_path):
+        # When
+        (polars_schema, _), (pandas_schema, _) = TestParquetFooter.footers(tmp_path, self.frame(), Tagged, self.pandas_frame(), PandasTagged)
+
+        # Then
+        assert polars_schema.equals(pandas_schema, check_metadata=True)
+        assert json.loads(polars_schema.metadata[b"pandas"]) == json.loads(pandas_schema.metadata[b"pandas"])
+
+    @pytest.mark.unit
+    def test_an_all_null_list_column_has_the_list_type_of_its_items(self, tmp_path):
+        # Given
+        config = Files.config(tmp_path, "parquet")
+        frame = pl.DataFrame({"id": [1], "tags": [None], "counts": [None]}, schema={"id": pl.Int64, "tags": pl.List(pl.String), "counts": pl.List(pl.Int64)})
+
+        # When
+        Files.polars(config, Tagged).write(frame)
+
+        # Then
+        schema = pq.ParquetFile(str(tmp_path / "data.parquet")).schema_arrow
+        assert [schema.field(name).type.value_type for name in ("tags", "counts")] == [pa_types.string(), pa_types.int64()]
+
+    @pytest.mark.unit
+    def test_the_pandas_engine_reads_the_lists_of_a_polars_parquet_file(self, tmp_path):
+        # Given
+        config = Files.config(tmp_path, "parquet")
+        Files.polars(config, Tagged).write(self.frame())
+
+        # When
+        EngineSetting.reset("pandas")
+        result = FilesIO(source_config=config, schema=PandasTagged).read()
+
+        # Then
+        assert self.as_lists(result["tags"]) == [["a", "b"], None, []]
+        assert self.as_lists(result["counts"]) == [[1, None], [], None]
+
+    @pytest.mark.unit
+    def test_the_polars_engine_reads_the_lists_of_a_pandas_parquet_file(self, tmp_path):
+        # Given
+        config = Files.config(tmp_path, "parquet")
+        EngineSetting.reset("pandas")
+        FilesIO(source_config=config, schema=PandasTagged).write(self.pandas_frame())
+
+        # When
+        result = Files.polars(config, Tagged).read()
+
+        # Then
+        assert result.equals(self.frame())
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("options", [{}, {"index": False}])
+    def test_a_csv_resource_of_a_model_with_list_columns_is_refused_when_the_resource_is_built(self, tmp_path, options):
+        with pytest.raises(EngineResourceError, match=r"a CSV file cannot hold the List columns \['tags', 'counts'\] of"):
+            Files.polars(Files.config(tmp_path, "csv", options), Tagged)
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("operation", ["read", "scan"])
+    def test_a_batch_with_a_file_of_empty_lists_reads_as_the_list_type_of_the_model(self, tmp_path, operation):
+        # Given a file of empty lists, which pandas writes as list<null>, and a file of strings
+        (tmp_path / "batch").mkdir()
+        pd.DataFrame({"tags": [[], []]}).to_parquet(tmp_path / "batch" / "0.parquet")
+        pd.DataFrame({"tags": [["a"], None]}).to_parquet(tmp_path / "batch" / "1.parquet")
+        config = Files.config(tmp_path, "parquet", source="local_batch", path_prefix=f"{tmp_path}/batch/")
+
+        class Tags(DataModel, dataset="tags"):
+            tags: pl.List(pl.String) = Field(nullable=True)  # type: ignore[valid-type]
+
+        # When
+        io = Files.polars(config, Tags)
+        result = io.read() if operation == "read" else io.scan().collect()
+
+        # Then
+        assert result.schema == pl.Schema({"tags": pl.List(pl.String)})
+        assert result["tags"].to_list() == [[], [], ["a"], None]
+
+    @pytest.mark.unit
+    def test_a_sink_of_list_columns_has_the_footer_of_a_write(self, tmp_path):
+        # Given
+        write, sink = Files.config(tmp_path, "parquet", file_path=str(tmp_path / "write.parquet")), Files.config(tmp_path, "parquet", file_path=str(tmp_path / "sink.parquet"))
+
+        # When
+        Files.polars(write, Tagged).write(self.frame())
+        Files.polars(sink, Tagged).sink(self.frame().lazy())
+
+        # Then
+        assert pq.read_schema(tmp_path / "sink.parquet").equals(pq.read_schema(tmp_path / "write.parquet"), check_metadata=True)
+        assert Files.polars(sink, Tagged).read().equals(self.frame())
