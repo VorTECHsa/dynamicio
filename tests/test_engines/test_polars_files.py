@@ -1097,6 +1097,20 @@ class TestJsonIndexColumn:
         pd.testing.assert_frame_equal(result, self.pandas_frame())
 
     @pytest.mark.unit
+    @pytest.mark.parametrize("orient, document", [("index", '{"outer":{"key":"inner","n":1}}'), ("columns", '{"key":{"outer":"inner"},"n":{"outer":1}}')])
+    def test_a_column_of_the_name_of_the_index_column_is_refused_on_both_engines(self, tmp_path, orient, document):
+        # Given
+        (tmp_path / "data.json").write_text(document)
+        config = Files.config(tmp_path, "json", {"orient": orient, "index_column": "key"})
+
+        # When / Then
+        with pytest.raises(ValueError, match="cannot insert key, already exists"):
+            Files.polars(config, Keyed).read()
+        EngineSetting.reset("pandas")
+        with pytest.raises(ValueError, match="cannot insert key, already exists"):
+            FilesIO(source_config=config, schema=PandasKeyed).read()
+
+    @pytest.mark.unit
     def test_a_key_that_a_column_does_not_have_is_a_null(self, tmp_path):
         # Given
         (tmp_path / "data.json").write_text('{"n":{"a":1,"b":2},"created_at":{"a":1793685615000}}')

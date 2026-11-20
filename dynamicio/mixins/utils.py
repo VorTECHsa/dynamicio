@@ -202,9 +202,17 @@ class JsonIndex:
 
         Orient `columns` holds one object for each column. The rows are the keys of these objects, in the order of their first use, and a key that a
         column does not have gives a null, as on pandas.
+
+        Raises:
+            ValueError: The object has a column of the name `index_column`, as `reset_index(names=index_column)` raises on pandas. The key of a row
+                would otherwise replace the value of that column.
         """
         document = json.loads(data)
         if orient == "columns":
+            if index_column in document:
+                raise ValueError(f"cannot insert {index_column}, already exists: the JSON object has a column of the name of `{JsonIndex.OPTION}`")
             keys = dict.fromkeys(key for values in document.values() for key in values)
             document = {key: {column: values.get(key) for column, values in document.items()} for key in keys}
+        elif any(index_column in row for row in document.values()):
+            raise ValueError(f"cannot insert {index_column}, already exists: the JSON object has a column of the name of `{JsonIndex.OPTION}`")
         return json.dumps([{index_column: key, **row} for key, row in document.items()]).encode()
