@@ -282,6 +282,8 @@ Phase 3 as built:
 
 - The polars engine reads and writes parquet, CSV and JSON on `local` and `s3_file`, and reads `local_batch`. The other resources, `scan()` and `sink()`
   raise `NotImplementedError` until phases 4 to 6.
+- The resource type `s3` is a deprecated alias of `s3_file` on the two engines, with a `DeprecationWarning`. Up to 11.x, no mixin read or wrote
+  `s3`, so a resource of that type raised `MissingMixinError`. dynamicio 13 removes the alias.
 - The CSV and JSON writers change the frame to pandas with the pandas dtypes of the model, and call the pandas writers of 11.1.0. Thus the bytes are equal by
   construction, and the tests compare them for each case on a local disk and on floci S3.
   - The option `compression` goes to the pandas writer without a change. A gzip header has the time of the write and the file name.
