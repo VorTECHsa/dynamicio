@@ -81,6 +81,9 @@ removes the columns that the model does not declare, so the two engines give the
 - The parquet write option `index_columns` gives the index of `set_index()` to a file of each engine. It is a list of columns in level order. An item is a
   column name, or a mapping of one column to a level name or to `null`. The file then has the footer of `set_index(...).to_parquet()` on pandas. The
   columns of the model stay in the frame of a polars read, so a repo can keep the pandas index of an output file when it moves to polars.
+- Rule 2 does not cover the columns of `index_columns`. A pandas read gives them back as the index, and the pandas reader does not reset it. A pandas
+  model of the file thus does not declare these columns, as for a file of `set_index().to_parquet()` in 11.x. A polars read gives them as columns,
+  and a polars model declares the columns that it needs. The other columns give the same frame on the two engines.
 - `index_columns` with `index: false` raises `ValueError`, because pandas then writes no index. The awswrangler path of the pandas engine sets
   `index=True` for these columns, because awswrangler writes no index by default.
 
