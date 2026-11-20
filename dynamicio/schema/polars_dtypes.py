@@ -159,8 +159,8 @@ class DtypeMap:
                 return cls.pandas_of(polars_dtype)
             except ValueError as error:
                 raise ValueError(
-                    f"{model.__name__}.{column.name}: {error}. Declare a dtype of the map: an integer, a float, Boolean, String, Categorical, Enum, Datetime, Duration or a List of one of these "
-                    "other than Categorical and Enum"
+                    f"{model.__name__}.{column.name}: {error}. Declare a dtype of the map: an integer, a float, Boolean, String, Categorical, Enum, Datetime, Duration "
+                    "or a List of one of these other than Categorical and Enum"
                 ) from None
         if not isinstance(declared, str) or not cls.pairs(declared, polars_dtype):
             raise ValueError(f"{model.__name__}.{column.name}: pandas_dtype={declared!r} is not a pair of the polars dtype {polars_dtype}")

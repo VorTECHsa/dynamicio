@@ -143,7 +143,8 @@ def run_polars_migrate(path: str, output: str, scan: str) -> None:
     report = migrate_to_polars(path, output, scan)
     print(f"Wrote {len(report['models'])} polars models to {report['module']}: {', '.join(report['models'])}")
     print(
-        f"Wrote {report['report']}: {len(report['todos'])} checks to port, {len(report['objects'])} object columns to review, {len(report['refused'])} refused resources, {len(report['csv_index'])} CSV resources without index."
+        f"Wrote {report['report']}: {len(report['todos'])} checks to port, {len(report['objects'])} object columns to review, "
+        f"{len(report['refused'])} refused resources, {len(report['csv_index'])} CSV resources without index."
     )
 
 
