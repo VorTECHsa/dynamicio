@@ -151,6 +151,9 @@ class TestPairs:
             ("object", pl.Boolean(), True),
             ("boolean", pl.Boolean(), True),
             ("object", pl.Int64(), False),
+            ("object", pl.Datetime("ns"), True),
+            ("object", pl.Datetime("ms", "UTC"), True),
+            ("object", pl.Date(), False),
         ],
     )
     def test_a_pandas_dtype_pairs_with_its_polars_dtype_only(self, pandas_dtype, polars_dtype, expected):

@@ -675,6 +675,30 @@ class TestBooleanObjectColumn:
         assert Files.polars(config, Flagged).read()["flag"].to_list() == [True, None, False]
 
 
+class Stamped(DataModel, dataset="stamped"):
+    stamp: Annotated[pl.Datetime, "ns", None] = Field(nullable=True, pandas_dtype="object")
+
+
+class TestDatetimeObjectColumn:
+    OPTIONS = {"coerce_timestamps": "ms", "allow_truncated_timestamps": True}
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("values", [[datetime(2026, 1, 1, 12), None], [None, None]])
+    @pytest.mark.parametrize("operation", ["write", "sink"])
+    def test_a_datetime_column_of_the_pandas_dtype_object_has_the_file_of_a_pandas_column_of_timestamps_and_none(self, tmp_path, values, operation):
+        # Given
+        config = Files.config(tmp_path, "parquet", self.OPTIONS)
+        pd.DataFrame({"stamp": pd.Series([None if value is None else pd.Timestamp(value) for value in values], dtype="object")}).to_parquet(tmp_path / "pandas.parquet", **self.OPTIONS)
+        frame = pl.DataFrame({"stamp": values}, schema={"stamp": pl.Datetime("ns")})
+
+        # When
+        TestNullsOfANumpyDtype.store(Files.polars(config, Stamped), frame, operation)
+
+        # Then
+        assert pq.read_schema(str(tmp_path / "data.parquet")).equals(pq.read_schema(str(tmp_path / "pandas.parquet")), check_metadata=True)
+        assert Files.polars(config, Stamped).read()["stamp"].to_list() == values
+
+
 class TestNullsOfANumpyDtype:
     """A column of a numpy integer or ``bool`` dtype with a null takes the nullable pandas dtype, as `DataFrame.to_parquet` gives it."""
 

@@ -111,8 +111,8 @@ class PolarsParquet:
         elif pa.types.is_null(kind) and dtype == pl.Boolean:
             kind = pa.bool_()
             column["pandas_type"] = "bool"
-        elif pa.types.is_null(kind) and isinstance(dtype, pl.List):
-            kind = cls.list_type(dtype)
+        elif pa.types.is_null(kind) and isinstance(dtype, (pl.List, pl.Datetime)):
+            kind = cls.list_type(dtype) if isinstance(dtype, pl.List) else pl.Series([], dtype=dtype).to_arrow().type
             column["pandas_type"] = pa.pandas_compat.get_logical_type(kind)
         elif pa.types.is_null(kind):
             kind = pa.string()
