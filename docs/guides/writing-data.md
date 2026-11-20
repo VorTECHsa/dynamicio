@@ -23,7 +23,8 @@ Sinking data is done in a very similar way. You need to:
     StagedBar(source_config=staging_output_config.get(source_key="STAGED_BAR")).write(bar_df)
 ```
 
-Notice that you can pass all `pandas` options to write out, when for instance you are writing out `parquet`.
+On the pandas engine, the keyword arguments of the IO class go to the `pandas` writer, for example the options of a `parquet` write. The polars engine
+accepts only the options that have a polars entry (see [The polars engine](polars-engine.md#options)).
 
 `demo/src/config/constants.py`:
 ```python

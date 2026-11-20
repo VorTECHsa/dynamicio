@@ -4,6 +4,7 @@
 uv sync                          # dev environment from uv.lock
 uv run pytest                    # unit tests with mocked backends, plus the documentation examples
 uv run pytest demo/tests         # the demo pipeline
+uv run pytest -o addopts="-p no:warnings" --dynamicio-engine=polars demo   # the demo pipeline on the polars engine
 uv run pytest -m floci tests/integration   # S3, Postgres and Kafka on floci, needs Docker
 ```
 
@@ -31,7 +32,13 @@ make generate-docs                          # strict documentation build
   (`-m 'not floci'` in `pyproject.toml`), and the CI job `integration` runs them. Without Docker, they skip, and they fail when the environment variable `CI` is set.
   floci accepts a `DeleteObjects` call with more than 1000 keys, which S3 refuses, so the 1000-key batches stay a moto
   unit test. floci does not emulate Athena, so Athena stays a mock.
-- `tests/test_docs_examples.py`: runs the `<!-- doctest -->` examples of the documentation.
+- `tests/test_docs_examples.py`: runs the `<!-- doctest -->` examples of the documentation, and the `Examples` of the docstrings in its `DOCSTRINGS`.
+- The tests of the engines: each test sets the engine that it needs, and the engine is reset after it. One `pytest` run thus covers the pandas engine
+  and the polars engine.
+- `tests/test_install.py`: blocks the polars import in a new process, and checks that the modules of dynamicio, the pandas engine and the CLI
+  work without polars. The `dependency-ranges` CI jobs install dynamicio without the `polars` extra, and a step checks that polars is not installed.
+- `demo/polars_pipeline`: the demo pipeline on the polars engine. Its outputs are equal to the expected outputs of the pandas demo. The CI job
+  `polars-demo` runs it.
 - `tests/test_release_tools.py`: the tag, changelog and distribution checks of `.github/tools/release_tools.py`.
 - `demo/tests`: the demo pipeline end to end, using the test harness.
 

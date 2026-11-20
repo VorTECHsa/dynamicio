@@ -5,7 +5,6 @@ import os
 import sys
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
-import pandas as pd
 
 from dynamicio.config import IOConfig
 from dynamicio.testharness.environment_switch import EnvironmentSwitch
@@ -88,12 +87,12 @@ class ExpectedOutputs:  # pylint: disable=too-many-instance-attributes
             SessionReport.recorded.append(report)
 
     @staticmethod
-    def read_generated(config: IOConfig, source_key: str, params: Optional[Mapping[str, Any]] = None, environment: Optional[str] = None) -> pd.DataFrame:
+    def read_generated(config: IOConfig, source_key: str, params: Optional[Mapping[str, Any]] = None, environment: Optional[str] = None) -> Any:
         """The output the task generated for ``source_key``."""
         return OutputFiles(config, source_key, params, environment).read_generated()
 
     @staticmethod
-    def read_expected(config: IOConfig, source_key: str, params: Optional[Mapping[str, Any]] = None, environment: Optional[str] = None) -> pd.DataFrame:
+    def read_expected(config: IOConfig, source_key: str, params: Optional[Mapping[str, Any]] = None, environment: Optional[str] = None) -> Any:
         """The reference output declared for ``source_key``."""
         return OutputFiles(config, source_key, params, environment).read_expected()
 
@@ -122,7 +121,7 @@ class ExpectedOutputs:  # pylint: disable=too-many-instance-attributes
         for params in cls.combinations(grid):
             cls.clear(config, source_key, params=params, environment=environment)
 
-    def compare(self, actual: pd.DataFrame, expected: pd.DataFrame, name: str, expectations: Optional[Expectations] = None) -> bool:
+    def compare(self, actual: Any, expected: Any, name: str, expectations: Optional[Expectations] = None) -> bool:
         """Compare two frames, recording the failure under ``name`` instead of raising. Returns whether they matched."""
         try:
             FrameComparison(expectations or self.expectations).compare(actual, expected)

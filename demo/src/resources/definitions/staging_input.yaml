@@ -7,13 +7,13 @@ FOO:
       file_path: "[[ TEST_RESOURCES ]]/data/input/foo.csv"
       file_type: "csv"
   DEV:
-    type: "s3"
+    type: "s3_file"
     s3: &foo_s3
       bucket: "[[ DEV_S3_INPUT_BUCKET ]]"
       file_path: "data/foo.h5"
       file_type: "hdf"
   PROD:
-    type: "s3"
+    type: "s3_file"
     s3:
       <<: *foo_s3
       bucket: "[[ PROD_S3_INPUT_BUCKET ]]"

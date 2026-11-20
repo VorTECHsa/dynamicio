@@ -3000,3 +3000,19 @@ class TestIterS3Files:
 
         # Then
         assert sorted(fetched) == [b"first", b"second"]
+
+
+class TestWranglerParquetIndexColumns:
+    @pytest.mark.unit
+    def test_index_columns_with_a_wrangler_option_write_the_index(self):
+        # Given
+        df = pd.DataFrame({"id": [1, 2], "value": ["a", "b"]})
+
+        # When
+        with mock.patch("dynamicio.mixins.with_s3.wr.s3.to_parquet") as to_parquet:
+            dynamicio.mixins.with_s3.WithS3File._write_s3_parquet_file(df, "s3://bucket/data.parquet", index_columns=["id"], s3_additional_kwargs={})  # pylint: disable=protected-access
+
+        # Then
+        written = to_parquet.call_args.kwargs
+        assert written["index"] is True
+        assert written["df"].index.names == ["id"] and written["df"].columns.tolist() == ["value"]

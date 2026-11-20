@@ -2,12 +2,10 @@
 
 import dataclasses
 from dataclasses import dataclass
-from typing import Callable, Optional, Tuple
+from typing import Any, Callable, Optional, Tuple
 
-import pandas as pd
-
-FrameAssertion = Callable[[pd.DataFrame, pd.DataFrame], None]
-"""A custom check ``(actual, expected)`` that raises ``AssertionError`` when the output is not acceptable."""
+FrameAssertion = Callable[[Any, Any], None]
+"""A custom check ``(actual, expected)`` that raises ``AssertionError`` when the output is not acceptable. It gets the frames of the engine of the process."""
 
 
 @dataclass(frozen=True)

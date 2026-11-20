@@ -12,7 +12,7 @@ For example, suppose an `input.yaml` file, containing:
           file_path: "[[ TEST_RESOURCES ]]/data/input/some_csv_to_read.csv"
           file_type: "csv"
       CLOUD:
-        type: "s3"
+        type: "s3_file"
         s3:
           bucket: "[[ MOCK_BUCKET ]]"
           file_path: "[[ MOCK_KEY ]]"
@@ -42,7 +42,7 @@ would return:
                     },
                 },
                 "CLOUD": {
-                    "type": "s3",
+                    "type": "s3_file",
                     "s3": {
                         "bucket": "mock-bucket",
                         "file_path": "mock-key",

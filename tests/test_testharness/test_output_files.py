@@ -59,6 +59,14 @@ class TestOutputFiles:
         pd.testing.assert_frame_equal(files.read_generated(), frame)
 
     @pytest.mark.unit
+    def test_the_pandas_reader_gives_the_keys_of_a_json_object_in_the_index(self, config):
+        files = OutputFiles(config, "JSON_INDEX_COLUMN")
+        frame = pd.DataFrame({"a": [1, 2]}, index=["r1", "r2"])
+        frame.to_json(files.generated_path, orient="index")
+
+        pd.testing.assert_frame_equal(files.read_generated(), frame)
+
+    @pytest.mark.unit
     def test_expected_options_override_how_both_files_are_read(self, config):
         files = OutputFiles(config, "JSON_INDEX")
         frame = pd.DataFrame({"a": [1, 2]}, index=["r1", "r2"])

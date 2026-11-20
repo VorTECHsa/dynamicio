@@ -424,20 +424,33 @@ class Migration:
         """Names of the generated fields that carry a ``# TODO`` for the user to review."""
         return [line.split(" =")[0] for source in sources.values() for line in source.splitlines() if "# TODO" in line]
 
-    def _write(self, sources: Dict[str, str]) -> Dict[str, str]:
-        """Write the generated modules (a package directory, or the single output file) and return ``{path: source}`` of what was written."""
-        if self.package:
-            os.makedirs(self.output, exist_ok=True)
-            written = {os.path.join(self.output, f"{name}.py"): source for name, source in sources.items()}
-            init_path = os.path.join(self.output, "__init__.py")
+    INIT = '"""Pandera models of the datasets, one module per group of the former YAML schemas."""\n'
+
+    @staticmethod
+    def write_modules(output: str, sources: Mapping[str, str], init: str) -> Dict[str, str]:
+        """Write generated modules and return ``{path: source}`` of what was written.
+
+        Args:
+            output: A module (ends with ``.py``), which gets ``sources[""]``, or a package directory, which gets one ``<name>.py`` for each source.
+            sources: The source of each module, by module name.
+            init: The ``__init__.py`` of a new package directory. An existing one is kept.
+        """
+        if not output.endswith(".py"):
+            os.makedirs(output, exist_ok=True)
+            written = {os.path.join(output, f"{name}.py"): source for name, source in sources.items()}
+            init_path = os.path.join(output, "__init__.py")
             if not os.path.exists(init_path):
-                written[init_path] = '"""Pandera models of the datasets, one module per group of the former YAML schemas."""\n'
+                written[init_path] = init
         else:
-            written = {self.output: sources[""]}
+            written = {output: sources[""]}
         for file_path, source in written.items():
             with open(file_path, "w", encoding="utf-8") as handle:
                 handle.write(source)
         return written
+
+    def _write(self, sources: Dict[str, str]) -> Dict[str, str]:
+        """Write the generated modules (a package directory, or the single output file) and return ``{path: source}`` of what was written."""
+        return self.write_modules(self.output, sources, self.INIT)
 
     def run(self) -> Dict[str, Any]:
         """Run the migration; see :func:`migrate`."""

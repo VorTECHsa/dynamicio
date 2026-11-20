@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
+import pyarrow.parquet as pq
 import pytest
 import yaml
 
@@ -963,3 +964,49 @@ class TestBatchLocalSources:
 
         # Then
         pd.testing.assert_frame_equal(df, self.FRAME)
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("location", [{"path_prefix": "batch_{run}/"}, {"dynamic_file_path": "batch_{run}/*.parquet"}], ids=["path_prefix", "dynamic_file_path"])
+    def test_the_batch_files_are_sorted_and_the_template_fields_leave_the_options(self, tmp_path, location):
+        # Given
+        (tmp_path / "batch_x").mkdir()
+        for name in ("b", "a", "c"):
+            self.FRAME.to_parquet(tmp_path / "batch_x" / f"{name}.parquet")
+        (tmp_path / "batch_x" / "d.csv").write_text("")
+        location = {key: f"{tmp_path}/{value}" for key, value in location.items()}
+        io = ReadFromBatchLocalParquet(source_config=self.config(tmp_path, location))
+        options = {"run": "x", "columns": ["id"]}
+
+        # When
+        files = io._local_batch_files(options)  # pylint: disable=protected-access
+
+        # Then
+        assert files == [f"{tmp_path}/batch_x/{name}.parquet" for name in ("a", "b", "c")]
+        assert options == {"columns": ["id"]}
+
+
+class TestParquetIndexColumns:
+    @pytest.mark.unit
+    def test_index_columns_write_the_file_of_the_frame_with_that_index(self, tmp_path):
+        # Given
+        df = pd.DataFrame({"vessel_id": ["v1", "v2"], "event_id": ["e1", "e2"], "__index_level_1__": ["e1", "e2"]})
+        expected = df.drop(columns="__index_level_1__").set_index(["vessel_id", "event_id"], drop=False).drop(columns="vessel_id")
+        expected.to_parquet(tmp_path / "expected.parquet")
+
+        # When
+        dynamicio.mixins.with_local.WithLocal._write_parquet_file(
+            df, str(tmp_path / "data.parquet"), index_columns=["vessel_id", {"__index_level_1__": "event_id"}]
+        )  # pylint: disable=protected-access
+
+        # Then
+        assert pq.read_schema(tmp_path / "data.parquet").equals(pq.read_schema(tmp_path / "expected.parquet"), check_metadata=True)
+        pd.testing.assert_frame_equal(pd.read_parquet(tmp_path / "data.parquet"), expected)
+
+    @pytest.mark.unit
+    def test_index_columns_with_index_false_are_refused(self, tmp_path):
+        # Given
+        df = pd.DataFrame({"vessel_id": ["v1"]})
+
+        # When / Then
+        with pytest.raises(ValueError, match="index option cannot be false"):
+            dynamicio.mixins.with_local.WithLocal._write_parquet_file(df, str(tmp_path / "data.parquet"), index=False, index_columns=["vessel_id"])  # pylint: disable=protected-access

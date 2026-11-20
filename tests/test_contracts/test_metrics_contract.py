@@ -154,7 +154,7 @@ class TestLifecycleOrder:
         ):
             make_io(apply_schema_validations=True, log_schema_metrics=True).write(valid_df)
 
-        assert calls == ["validate", "metrics", "cast"]
+        assert calls == ["cast", "validate", "metrics"]
 
 
 @pytest.mark.unit

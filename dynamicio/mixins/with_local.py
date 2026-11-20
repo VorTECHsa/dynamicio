@@ -6,7 +6,7 @@ import glob
 import logging
 import os
 from threading import Lock
-from typing import Any, MutableMapping
+from typing import Any, List, MutableMapping
 
 import pandas as pd
 from fastparquet import ParquetFile, write
@@ -115,7 +115,7 @@ class WithLocal:
         return pd.read_csv(file_path, **options)
 
     @staticmethod
-    @utils.allow_options([*utils.args_of(pd.read_json), *["single_record"]])
+    @utils.allow_options([*utils.args_of(pd.read_json), "single_record", utils.JsonIndex.OPTION])
     def _read_json_file(file_path: str, schema: DataframeSchema, **options: Any) -> pd.DataFrame:
         """Read a json file as a DataFrame using `pd.read_hdf`.
 
@@ -135,10 +135,13 @@ class WithLocal:
         # `convert_dates` is likewise left to pandas' own default (auto-detection) unless the caller
         # overrides it, since some callers rely on that auto-parsing for datetime columns.
         is_single_record = options.pop("single_record", False)
+        index_column = utils.JsonIndex.pop(options, options.get("orient"), options.get("lines", False))
         df = pd.read_json(file_path, **options)
 
+        if index_column is not None:
+            df = df.reset_index(names=index_column)
         # 🧼 Check if this is a single-record json file
-        if is_single_record:
+        elif is_single_record:
             # Re-wrap as single dict row — i.e., rehydrate the record
             df = pd.DataFrame([{df.columns[0]: dict(zip(df.index, df.iloc[:, 0]))}])
         elif (
@@ -218,7 +221,7 @@ class WithLocal:
         df.to_csv(file_path, **options)
 
     @staticmethod
-    @utils.allow_options(pd.DataFrame.to_json)
+    @utils.allow_options([*utils.args_of(pd.DataFrame.to_json), utils.JsonIndex.OPTION])
     def _write_json_file(df: pd.DataFrame, file_path: str, **options: Any):
         """Writes a JSON file using `df.to_json`.
 
@@ -228,21 +231,25 @@ class WithLocal:
         Args:
             df: A dataframe write out.
             file_path: The location where the file needs to be written.
-            options: Options relative to writing a json file.
+            options: Options relative to writing a json file. `index_column` names the column that gives the keys of orient `index` or `columns`.
         """
-        df.to_json(file_path, **options)
+        index_column = utils.JsonIndex.pop(options, options.get("orient"), options.get("lines", False))
+        (df if index_column is None else df.set_index(index_column)).to_json(file_path, **options)
 
     @staticmethod
     def _write_parquet_file(df: pd.DataFrame, file_path: str, **options: Any):
         """Write a dataframe as a parquet file using `df.to_parquet`.
 
-        All `options` are passed directly to `df.to_parquet`.
+        All `options` but `index_columns` are passed directly to `df.to_parquet`. `index_columns` sets the index of the file (`utils.ParquetIndex`).
 
         Args:
             df: A dataframe write out.
             file_path: The location where the file needs to be written.
             options: Options relative to writing a parquet file.
         """
+        names = utils.ParquetIndex.pop(options)
+        if names is not None:
+            df = utils.ParquetIndex.set_index(df, names)
         if options.get("engine") == "fastparquet":
             return WithLocal.__write_with_fastparquet(df, file_path, **options)
         return WithLocal.__write_with_pyarrow(df, file_path, **options)
@@ -286,18 +293,13 @@ class WithLocalBatch(WithLocal):
 
     sources_config: LocalBatchDataEnvironment  # type: ignore
 
-    def _read_from_local_batch(self) -> pd.DataFrame:
-        """Reads a set of files for a specified file type, concatenates them and returns a dataframe.
-
-        Returns:
-            A concatenated dataframe composed of all files read through local_batch.
+    def _local_batch_files(self, options: MutableMapping[str, Any]) -> List[str]:
+        """The sorted files of a ``local_batch`` resource. The fields of its path template are taken out of ``options``.
 
         Raises:
             NoObjectsFoundError: If no file matches. It is a `FileNotFoundError` and a `ValueError`.
         """
         local_batch_config = self.sources_config.local
-        options = dict(self.options)
-
         file_type = get_file_type_value(local_batch_config.file_type)
         filtering_file_type = "h5" if file_type == "hdf" else file_type
 
@@ -315,6 +317,20 @@ class WithLocalBatch(WithLocal):
 
         if not files:
             raise NoObjectsFoundError(f"No {filtering_file_type} files found at {file_path}")
+        return files
+
+    def _read_from_local_batch(self) -> pd.DataFrame:
+        """Reads a set of files for a specified file type, concatenates them and returns a dataframe.
+
+        Returns:
+            A concatenated dataframe composed of all files read through local_batch.
+
+        Raises:
+            NoObjectsFoundError: If no file matches. It is a `FileNotFoundError` and a `ValueError`.
+        """
+        options = dict(self.options)
+        file_type = get_file_type_value(self.sources_config.local.file_type)
+        files = self._local_batch_files(options)
         # `glob` returns the paths with `file_path` in them: joining it again breaks a relative `file_path`
         dfs_to_concatenate = [getattr(self, f"_read_{file_type}_file")(file, self.schema, **options) for file in files]
         return pd.concat(dfs_to_concatenate).reset_index(drop=True)

@@ -65,7 +65,7 @@ FOO:
       file_path: "[[ TEST_RESOURCES ]]/data/input/foo.csv"
       file_type: "csv"
   DEV:
-    type: "s3"
+    type: "s3_file"
     s3:
       bucket: "[[ DEV_S3_INPUT_BUCKET ]]"
       file_path: "data/foo.h5"
@@ -128,7 +128,7 @@ import demo.src.config.environment
             },
         },
         "DEV": {
-            "type": "s3",
+            "type": "s3_file",
             "s3": {
                 "bucket": f"{demo.src.config.environment.DEV_S3_INPUT_BUCKET}",
                 "file_path": "data/foo.h5",
@@ -150,7 +150,7 @@ foo_io = staging_input_config.get(source_key="FOO")
 and with `env_identifier="DEV"`, the output would be:
 
 ```python
-"type": "s3",
+"type": "s3_file",
 "s3": {
     "bucket": f"{demo.src.config.environment.DEV_S3_INPUT_BUCKET}",
     "file_path": "data/foo.h5",

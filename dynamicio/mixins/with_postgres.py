@@ -8,7 +8,7 @@ import re
 import tempfile
 import threading
 from contextlib import contextmanager
-from typing import Any, Dict, Generator, MutableMapping, Optional, Tuple, Union
+from typing import Any, Dict, Generator, Iterable, MutableMapping, Optional, Tuple, Union
 
 import pandas as pd
 from sqlalchemy import BigInteger, Boolean, Column, Date, DateTime, Float, Integer, MetaData, String, Table, create_engine, text
@@ -58,6 +58,8 @@ _type_lookup = {
     "date": Date,
     "datetime": DateTime,
     "datetime64[ns]": DateTime,  # pandas datetime dtype
+    "datetime64[us]": DateTime,  # the default unit of a polars `Datetime`, and the unit of a Postgres `timestamp`
+    "datetime64[ms]": DateTime,
     # Optional extras
     "bigint": BigInteger,  # explicit large integer support
     "json": JSONB,  # optional if dealing with structured objects
@@ -115,15 +117,24 @@ class WithPostgres:
         Returns:
             DataFrame
         """
+        connection_string, table_schema, query, options = self._postgres_read_plan()
+        with session_for(connection_string) as session:
+            try:
+                return self._read_database(session, query, **options)
+            except ProgrammingError as error:
+                self._explain_missing_table(error, table_schema)
+                raise
+
+    def _postgres_connection_string(self) -> str:
         postgres_config = self.sources_config.postgres
-        db_user = postgres_config.db_user
-        db_password = postgres_config.db_password
-        db_host = postgres_config.db_host
-        db_port = postgres_config.db_port
-        db_name = postgres_config.db_name
+        return f"postgresql://{postgres_config.db_user}:{postgres_config.db_password}@{postgres_config.db_host}:{postgres_config.db_port}/{postgres_config.db_name}"
 
-        connection_string = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+    def _postgres_read_plan(self) -> Tuple[str, DataframeSchema, Union[str, Query], Dict[str, Any]]:
+        """The connection string, the table schema, the query and the reader options of a read on both engines. It logs the start of the read.
 
+        A `sql_query` option is the query, and names its own tables, so the model needs no table name. Without it, the query selects the model columns
+        of the `__table_name__` table.
+        """
         options = dict(self.options)
         sql_query = options.pop("sql_query", None)
 
@@ -133,13 +144,9 @@ class WithPostgres:
         else:
             table_schema = self._table_schema()
             query = Query(self._get_table_columns(self._generate_model_from_schema(table_schema)))
-        logger.info(f"[postgres] Started downloading table: {table_schema.table_name} from: {db_host}:{db_name}")
-        with session_for(connection_string) as session:
-            try:
-                return self._read_database(session, query, **options)
-            except ProgrammingError as error:
-                self._explain_missing_table(error, table_schema)
-                raise
+        postgres_config = self.sources_config.postgres
+        logger.info(f"[postgres] Started downloading table: {table_schema.table_name} from: {postgres_config.db_host}:{postgres_config.db_name}")
+        return self._postgres_connection_string(), table_schema, query, options
 
     @staticmethod
     def _explain_missing_table(error: ProgrammingError, table_schema: DataframeSchema) -> None:
@@ -207,39 +214,35 @@ class WithPostgres:
         Returns:
             DataFrame
         """
+        return pd.read_sql(sql=self._statement(session, query), con=session.get_bind(), **options)
+
+    @staticmethod
+    def _statement(session: SqlAlchemySession, query: Union[str, Query]) -> Any:
+        """The SQL of a query: a `str` as is, and a `Query` as a `text` clause with its values in the SQL."""
         if isinstance(query, Query):
             query = query.with_session(session).statement
 
         if hasattr(query, "compile"):
             # Required for compatibility with pandas >= 2.0
             query = text(str(query.compile(compile_kwargs={"literal_binds": True})))
+        return query
 
-        return pd.read_sql(sql=query, con=session.get_bind(), **options)
-
-    def _write_to_postgres(self, df: pd.DataFrame):
+    def _write_to_postgres(self, df: Union[pd.DataFrame, Iterable[pd.DataFrame]]):
         """Write a dataframe to postgres based on the {file_type} of the config_io configuration.
 
         Args:
-            df: The dataframe to be written
+            df: The dataframe to be written, or its chunks: the polars engine gives chunks, and all the chunks go to the table in one transaction.
         """
-        postgres_config = self.sources_config.postgres
-        db_user = postgres_config.db_user
-        db_password = postgres_config.db_password
-        db_host = postgres_config.db_host
-        db_port = postgres_config.db_port
-        db_name = postgres_config.db_name
-
-        connection_string = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
-
         table_schema = self._table_schema()
         model = self._generate_model_from_schema(table_schema)
 
-        logger.info(f"[postgres] Started uploading table: {table_schema.table_name} from: {db_host}:{db_name}")
-        self._write_model(connection_string, model, df, **self.options)
+        postgres_config = self.sources_config.postgres
+        logger.info(f"[postgres] Started uploading table: {table_schema.table_name} from: {postgres_config.db_host}:{postgres_config.db_name}")
+        self._write_model(self._postgres_connection_string(), model, df, **self.options)
 
     @staticmethod
     @utils.allow_options(["truncate_and_append", "create_table"])
-    def _write_model(connection_string: str, model: DeclarativeMeta, df: pd.DataFrame, truncate_and_append: bool = False, create_table: bool = False):
+    def _write_model(connection_string: str, model: DeclarativeMeta, df: Union[pd.DataFrame, Iterable[pd.DataFrame]], truncate_and_append: bool = False, create_table: bool = False):
         if not isinstance(create_table, bool):
             raise TypeError(f"create_table must be a bool, got {create_table!r}")
         with session_for(connection_string) as session:
@@ -262,13 +265,13 @@ class WithPostgres:
         table.create(session.connection(), checkfirst=True)
 
     @staticmethod
-    def _write_to_database(session: SqlAlchemySession, table: Table, df: pd.DataFrame, is_truncate_and_append: bool):
+    def _write_to_database(session: SqlAlchemySession, table: Table, df: Union[pd.DataFrame, Iterable[pd.DataFrame]], is_truncate_and_append: bool):
         """Write a dataframe to any database provided a session with a data model and a table name.
 
         Args:
             session: Generated from a data model and a table name
             table: The table to write to (its name and schema are quoted as Postgres needs, so `Orders` stays `Orders`)
-            df: The dataframe to be written out
+            df: The dataframe to be written out, or its chunks. Each chunk is one COPY, and the commit comes after the last chunk.
             is_truncate_and_append: If True, truncates the table with CASCADE and appends new rows (faster but destructive).
                                     If False (default), safely deletes all existing rows and then appends new rows.
                                     Use truncate only if you are certain views and FK constraints can be dropped or tolerated.
@@ -280,6 +283,15 @@ class WithPostgres:
         else:
             session.execute(text(f"DELETE FROM {table_name};"))
 
+        for frame in [df] if isinstance(df, pd.DataFrame) else df:
+            WithPostgres._copy(session, table_name, frame)
+
+        session.commit()
+
+    @staticmethod
+    def _copy(session: SqlAlchemySession, table_name: str, df: pd.DataFrame):
+        """Send the rows of a dataframe to a table with one COPY. An empty value is NULL, so an empty string and a missing value are both NULL."""
+        preparer = postgresql.dialect().identifier_preparer
         # Upload data using PostgreSQL's COPY FROM CSV mechanism for performance
         # `newline=""`: a text file without it reads a `\r` in a value back as `\n`, so COPY would get a different value.
         # `lineterminator="\r\n"`: with QUOTE_NONE, Python 3.10 escapes only the characters of the line terminator, so a `\r` in a value would end the line.
@@ -292,5 +304,3 @@ class WithPostgres:
             # `copy_from` quotes its table argument whole, so it cannot target `schema.table`: COPY names the table itself.
             columns = ", ".join(preparer.quote(str(column)) for column in df.columns)
             cur.copy_expert(f"COPY {table_name} ({columns}) FROM STDIN WITH (FORMAT text, NULL '')", temp_file)
-
-        session.commit()

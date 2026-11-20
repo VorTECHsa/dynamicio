@@ -5,11 +5,18 @@ reference documents the public classes and functions; names beginning with an un
 
 ## Core
 
+::: dynamicio
+    options:
+      members:
+        - UnifiedIO
+
 ::: dynamicio.core
 
 ## Resource definitions
 
 ::: dynamicio.config.io_config
+
+::: dynamicio.parquet_footer
 
 ## Backends
 
@@ -37,10 +44,64 @@ reference documents the public classes and functions; names beginning with an un
 
 ::: dynamicio.mixins.utils
 
+## Engines
+
+::: dynamicio.engines.engine
+
+::: dynamicio.engines.engine_setting
+
+::: dynamicio.engines.registry
+
+::: dynamicio.engines.pandas_engine
+
+::: dynamicio.engines.polars_engine
+
+::: dynamicio.engines.polars_sinks
+
+::: dynamicio.engines.polars_postgres
+
+::: dynamicio.engines.polars_kafka
+
+::: dynamicio.engines.polars_athena
+
+::: dynamicio.engines.s3_upload
+
+## Schemas
+
+::: dynamicio.schema.data_model
+
+::: dynamicio.schema.field
+
+::: dynamicio.schema.metadata
+
+::: dynamicio.schema.models
+
+::: dynamicio.schema.validations
+
+::: dynamicio.schema.metrics
+
+## Polars schemas
+
+::: dynamicio.schema.polars
+
+::: dynamicio.schema.polars_dtypes
+
+::: dynamicio.schema.polars_validations
+
+::: dynamicio.schema.polars_metrics
+
 ## Errors
 
 ::: dynamicio.errors
 
+## Command line
+
+::: dynamicio.cli
+
 ## Test harness
 
 ::: dynamicio.testharness
+
+::: dynamicio.testharness.polars_frame_comparison
+
+::: dynamicio.testharness.pytest_plugin

@@ -3,14 +3,13 @@ name = "dynamicio"
 dynamic = ["version", "readme"]  # version: from the git tag at build time (hatch-vcs); readme: README.md plus CHANGELOG.md (hatch-fancy-pypi-readme)
 description = "Panda's wrapper for IO operations"
 license = "Apache-2.0"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [
     { name = "Christos Hadjinikolis", email = "christos.hadjinikolis@gmail.com" },
     { name = "Radu Ghitescu", email = "radu.ghitescu@gmail.com" },
 ]
 keywords = ["data", "pandas", "io"]
 classifiers = [
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -33,6 +32,9 @@ dependencies = [
     "SQLAlchemy>=1.4.11",
     "tables>=3.10.1",
 ]
+
+[project.optional-dependencies]
+polars = ["polars>=2.1"]
 
 [project.urls]
 Documentation = "https://dynamicio.readthedocs.io/en/latest/"
@@ -71,6 +73,7 @@ dev = [
     "types-setuptools",
     "types-simplejson",
     "yamllint",
+    "polars>=2.1",
 ]
 docs = [
     "mkdocs<2",
@@ -110,7 +113,7 @@ default-groups = ["dev"]
 constraint-dependencies = ["pandas<3", "sqlalchemy<2.1"]
 
 [tool.black]
-target-version = ['py310']
+target-version = ['py311']
 line-length = 185
 include = '\.pyi?$'
 exclude = '''
