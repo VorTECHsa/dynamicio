@@ -78,6 +78,11 @@ removes the columns that the model does not declare, so the two engines give the
 - Rule 2 compares the columns of the frame. The pandas index is not part of the contract.
 - A pandas read keeps a named index, and a polars read removes it unless the model declares it as a column. A polars write then cannot give the index back.
 - A repo that needs an index value on both engines writes it as a column (`reset_index()`) and declares it in the model.
+- The parquet write option `index_columns` gives the index of `set_index()` to a file of each engine. It is a list of columns in level order. An item is a
+  column name, or a mapping of one column to a level name or to `null`. The file then has the footer of `set_index(...).to_parquet()` on pandas. The
+  columns of the model stay in the frame of a polars read, so a repo can keep the pandas index of an output file when it moves to polars.
+- `index_columns` with `index: false` raises `ValueError`, because pandas then writes no index. The awswrangler path of the pandas engine sets
+  `index=True` for these columns, because awswrangler writes no index by default.
 
 ### The 5 open decisions
 
@@ -201,6 +206,9 @@ schema declaration.
       `pa.Field(metadata={"pandas_dtype": "Int64"})` also works. The migrate command writes it for each field.
     - The pandas dtype of the metadata must be a pair of the polars dtype of the column, else the model raises `ValueError` when it compiles. Any
       `category` pairs with any `Categorical` or `Enum`. A datetime pairs only with the same unit and time zone.
+    - `object` also pairs with `Boolean` and with `Datetime`. A pandas column of bools and `None`, or of timestamps and `None`, has the dtype `object`.
+      `DataFrame.to_parquet` writes it with the `bool` or `timestamp` type and the numpy type `object`. A pandas read of the bool column gives `None`
+      for a null, and the nullable `boolean` gives `pd.NA`.
     - A pandas model with `pandas_dtype` raises `ValueError`, because the column type of a pandas model is its pandas dtype.
     - A polars model without this metadata uses a fixed reverse map. An integer gives its pandas name (`Int64` to `int64`). `String` gives `object`,
       `Boolean` gives `bool`, and `Categorical` and `Enum` give `category`. `Datetime` and `Duration` give `datetime64` and `timedelta64`, with the
@@ -325,6 +333,8 @@ Phase 3 as built:
   nulls. The polars engine refuses these files, and rule 2 does not include them.
 - The CSV and JSON writers change an integer column to a pandas nullable integer, so an integer above 2**53 next to a null keeps its value. A parquet write
   with `index: false` has the pandas metadata of `to_parquet(index=False)`. A write changes float NaN to null before its validations and metrics.
+- An `object` column of a parquet write with only nulls has the `null` type and the pandas type `empty`, as `DataFrame.to_parquet` writes it. A column
+  without rows keeps the string, list, bool or timestamp type of the model.
 - A missing S3 key raises the error of the pandas engine: `S3KeyNotFoundError` for parquet and `ObjectNotFoundError` for CSV and JSON. `missing_ok` applies.
   An `s3_file` key that ends in `/` raises `NotImplementedError` at read, and a parquet write to it raises the `ValueError` of the pandas engine.
 
