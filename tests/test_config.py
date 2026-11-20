@@ -6,6 +6,7 @@ import pytest
 import yaml
 
 from dynamicio.config.io_config import IOConfig, SafeDynamicResourceLoader
+from dynamicio.config.pydantic.io_resources import DataBackendType, S3DataEnvironment
 from tests import constants
 
 
@@ -114,3 +115,36 @@ class TestSchemaBlockInResourceDefinition:
 
         # Then
         assert "READ_FROM_S3_CSV" in config.config.bindings
+
+
+class TestS3TypeAlias:
+    """The deprecated resource type ``s3`` loads as ``s3_file``."""
+
+    @pytest.mark.unit
+    def test_an_s3_resource_loads_as_s3_file_with_one_deprecation_warning(self, tmp_path):
+        # Given
+        path = tmp_path / "resources.yaml"
+        path.write_text('R:\n  CLOUD:\n    type: "s3"\n    s3:\n      bucket: "b"\n      file_path: "k.parquet"\n      file_type: "parquet"\n')
+
+        # When
+        with pytest.warns(DeprecationWarning, match='"s3" is deprecated') as caught:
+            config = IOConfig(path_to_source_yaml=str(path), env_identifier="CLOUD", dynamic_vars=constants).get(source_key="R")
+
+        # Then
+        assert config.data_backend_type is DataBackendType.s3_file
+        assert isinstance(config, S3DataEnvironment)
+        assert config.s3.bucket == "b"
+        assert len([warning for warning in caught if issubclass(warning.category, DeprecationWarning)]) == 1
+
+    @pytest.mark.unit
+    def test_an_s3_file_resource_loads_without_a_deprecation_warning(self, tmp_path, recwarn):
+        # Given
+        path = tmp_path / "resources.yaml"
+        path.write_text('R:\n  CLOUD:\n    type: "s3_file"\n    s3:\n      bucket: "b"\n      file_path: "k.parquet"\n      file_type: "parquet"\n')
+
+        # When
+        config = IOConfig(path_to_source_yaml=str(path), env_identifier="CLOUD", dynamic_vars=constants).get(source_key="R")
+
+        # Then
+        assert config.data_backend_type is DataBackendType.s3_file
+        assert not [warning for warning in recwarn if issubclass(warning.category, DeprecationWarning)]

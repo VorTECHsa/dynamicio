@@ -123,6 +123,9 @@ pandas project:
 3. A column of the model that is not in the frame raises `ColumnsDataTypeError`, on reads and writes. Up to 11.x, it raised `KeyError`. A CSV or
    parquet read without the column still raises the error of its reader.
 
+The resource type `s3` is now a deprecated alias of `s3_file`, with a `DeprecationWarning`. Up to 11.x, a read or a write of an `s3` resource raised
+`MissingMixinError`.
+
 To move a project to the polars engine, see [The polars engine](polars-engine.md#migrate-a-repo).
 
 ### From dynamicio 8 (YAML schemas) to 11

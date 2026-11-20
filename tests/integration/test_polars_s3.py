@@ -34,6 +34,28 @@ class S3Bodies:
         return floci.s3_client().get_object(Bucket=floci.bucket, Key=key)["Body"].read()
 
 
+class TestPolarsS3TypeAlias:
+    """A resource of the deprecated type ``s3`` reads and writes as ``s3_file`` on the polars engine, also with the JSON orient of ``s3_file``."""
+
+    @pytest.mark.parametrize("file_type, options", CASES)
+    def test_an_s3_resource_writes_the_bytes_of_s3_file_and_reads_back_equal(self, floci, prefix, tmp_path, file_type, options):
+        # Given
+        (tmp_path / "alias").mkdir()
+        (tmp_path / "file").mkdir()
+        with pytest.warns(DeprecationWarning, match='"s3" is deprecated'):
+            alias = Resources.s3_file(tmp_path / "alias", floci.bucket, f"{prefix}/alias.{file_type}", file_type, options, type_name="s3")
+        config = Resources.s3_file(tmp_path / "file", floci.bucket, f"{prefix}/file.{file_type}", file_type, options)
+
+        # When
+        Files.polars(alias).write(Files.frame())
+        Files.polars(config).write(Files.frame())
+        result = Files.polars(alias).read()
+
+        # Then
+        assert S3Bodies.get(floci, f"{prefix}/alias.{file_type}") == S3Bodies.get(floci, f"{prefix}/file.{file_type}")
+        assert result.equals(Files.frame())
+
+
 class TestPolarsEngineOnS3:
     @pytest.mark.parametrize("file_type, options", CASES)
     def test_a_frame_written_to_s3_reads_back_equal(self, floci, prefix, tmp_path, file_type, options):

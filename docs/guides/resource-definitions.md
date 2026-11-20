@@ -122,6 +122,9 @@ The recommended structure is one input and one output definition per runner, as 
 and `PROD` in the demo), **the local one first**: the first environment listed is the default of the testing tools (see [Choosing the environment](testing-pipelines.md#choosing-the-environment)).
 Environment names are yours to choose: they are only the keys you select with `env_identifier`.
 
+An S3 object has the type `s3_file`. The older type `s3` is a deprecated alias of `s3_file`. dynamicio reads it as `s3_file` and gives a
+`DeprecationWarning`. dynamicio 13 removes `s3`.
+
 The definitions are plain YAML, so repetition can be removed with anchors: `&name` marks a block, `*name` reuses it, and `<<: *name` merges it with the keys
 written next to it taking precedence. In the demo, `PROD` reuses `DEV`'s `s3`, `postgres` and `kafka` blocks and Kafka `options`, overriding only the host or bucket.
 
