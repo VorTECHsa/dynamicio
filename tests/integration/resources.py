@@ -18,7 +18,7 @@ class Resources:
         return IOConfig(path_to_source_yaml=str(path), env_identifier="CLOUD", dynamic_vars=types.ModuleType("no_dynamic_vars")).get(source_key="R")
 
     @staticmethod
-    def s3_file(directory: Path, bucket: str, key: str, file_type: str, options: Optional[dict] = None, type_name: str = "s3_file"):
+    def s3_file(directory: Path, bucket: str, key: str, file_type: str, options: Optional[dict] = None, *, type_name: str = "s3_file"):
         """An S3 object resource. ``type_name="s3"`` gives the deprecated alias of ``s3_file``."""
         # A JSON object is a YAML flow mapping
         options_line = f"    options: {json.dumps(options)}\n" if options else ""
