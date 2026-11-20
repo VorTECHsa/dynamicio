@@ -24,6 +24,7 @@ __all__ = [
     "EngineConfigurationError",
     "ModelEngineMismatchError",
     "WrongFrameError",
+    "EngineResourceError",
     "CASTING_WARNING_MSG",
     "NOTICE_MSG",
 ]

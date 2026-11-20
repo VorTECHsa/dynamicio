@@ -1,7 +1,10 @@
 # pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring, too-many-public-methods, too-few-public-methods
+import inspect
+
 import pytest
 
 # Application Imports
+from dynamicio import errors
 from dynamicio.errors import (
     ColumnsDataTypeError,
     DataSourceError,
@@ -75,3 +78,17 @@ class TestErrors:
         # Then
         assert ex.message is None
         assert result_str == ""
+
+
+class TestErrorExports:
+
+    @pytest.mark.unit
+    def test_every_exception_of_the_module_is_in_all(self):
+        # Given
+        defined = {name for name, value in vars(errors).items() if inspect.isclass(value) and issubclass(value, Exception) and value.__module__ == errors.__name__}
+
+        # When
+        missing = defined - set(errors.__all__)
+
+        # Then
+        assert not missing
