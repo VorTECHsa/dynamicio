@@ -143,6 +143,8 @@ schema declaration.
    - A write gives the bytes of the pandas engine for the frame with `set_index(index_column)`. A read gives the keys in the column, and a numeric dtype of the
      model casts them.
    - The option works on the two engines. On the pandas engine, a read gives `reset_index(names=index_column)`. A repo can thus set the option before it moves.
+   - A read raises `ValueError` on the two engines when the JSON is not an object of objects, or when it has a column of the name of `index_column`. The
+     key of a row would otherwise replace the value of that column. The polars readers of `dynamicio.testharness` read these orients with `index_column` too.
    - The pandas orients `split`, `values` and `table` have no polars reader. A polars JSON resource with one of them, or with `index` or `columns` and without
      `index_column`, raises an error when the user builds the resource, as hdf and pickle do.
 10. On the pandas engine, `scan()` and `sink()` raise `NotImplementedError`. The message names the polars engine. pandas has no lazy frame, so these methods do
