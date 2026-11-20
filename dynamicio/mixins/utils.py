@@ -204,10 +204,12 @@ class JsonIndex:
         column does not have gives a null, as on pandas.
 
         Raises:
-            ValueError: The object has a column of the name `index_column`, as `reset_index(names=index_column)` raises on pandas. The key of a row
-                would otherwise replace the value of that column.
+            ValueError: The JSON is not an object of objects, or the object has a column of the name `index_column`, as `reset_index(names=index_column)`
+                raises on pandas. The key of a row would otherwise replace the value of that column.
         """
         document = json.loads(data)
+        if not isinstance(document, dict) or not all(isinstance(values, dict) for values in document.values()):
+            raise ValueError(f"a JSON file of orient {orient!r} must hold an object of objects, and this one holds a {type(document).__name__} of other values")
         if orient == "columns":
             if index_column in document:
                 raise ValueError(f"cannot insert {index_column}, already exists: the JSON object has a column of the name of `{JsonIndex.OPTION}`")

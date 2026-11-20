@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 import textwrap
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -297,6 +298,28 @@ class TestPolarsOutputFiles:
         # Then
         assert files.read_options == {"orient": "index", "index_column": "label"}
         assert generated.equals(expected) and generated.columns == ["label", "a"]
+
+    @pytest.mark.unit
+    def test_index_column_without_orient_reads_the_columns_orient_of_the_writer(self, config, polars_engine):  # pylint: disable=unused-argument
+        # Given
+        files = OutputFiles(config, "JSON_INDEX_COLUMN_DEFAULT_ORIENT")
+        pd.DataFrame({"a": [1, 2]}, index=["r1", "r2"]).to_json(files.generated_path)
+
+        # When
+        frame = files.read_generated()
+
+        # Then
+        assert frame.to_dicts() == [{"label": "r1", "a": 1}, {"label": "r2", "a": 2}]
+
+    @pytest.mark.unit
+    def test_a_json_of_another_shape_records_a_value_error(self, config, polars_engine):  # pylint: disable=unused-argument
+        # Given
+        files = OutputFiles(config, "JSON_INDEX_COLUMN")
+        Path(files.generated_path).write_text('[{"a": 1}]', encoding="utf-8")
+
+        # When / Then
+        with pytest.raises(ValueError, match="must hold an object of objects"):
+            files.read_generated()
 
     @pytest.mark.unit
     def test_a_json_orient_other_than_records_index_and_columns_is_refused(self, polars_engine, tmp_path):  # pylint: disable=unused-argument

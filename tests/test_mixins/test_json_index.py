@@ -39,6 +39,15 @@ class TestJsonIndexPop:
             JsonIndex.pop({"index_column": ["key"]}, "index")
 
 
+class TestJsonIndexRecords:
+    @pytest.mark.unit
+    @pytest.mark.parametrize("orient", ["index", "columns"])
+    @pytest.mark.parametrize("document", [b'[{"a": 1}]', b'{"r1": null}', b'{"r1": [1]}', b"1"])
+    def test_a_json_that_is_not_an_object_of_objects_raises_a_value_error(self, orient, document):
+        with pytest.raises(ValueError, match="must hold an object of objects"):
+            JsonIndex.records(document, orient, "key")
+
+
 class TestPandasJsonIndex:
     @staticmethod
     def schema(*columns: str) -> MagicMock:

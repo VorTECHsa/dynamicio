@@ -84,6 +84,16 @@ JSON_INDEX_COLUMN:
       index_column: "label"
     expected:
       path: "[[ ROOT ]]/expected/labels.json"
+JSON_INDEX_COLUMN_DEFAULT_ORIENT:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ ROOT ]]/default_labels.json"
+      file_type: "json"
+    options:
+      index_column: "label"
+    expected:
+      path: "[[ ROOT ]]/expected/default_labels.json"
 """
 
 PARAMS = {"day": "monday"}

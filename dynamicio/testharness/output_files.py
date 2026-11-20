@@ -139,14 +139,17 @@ class OutputFiles:
         """Read a file with the plain polars readers. A JSON file has the ``records`` orient, with ``lines`` for one record on each line.
 
         A JSON object with the orient ``index`` or ``columns`` needs ``index_column``: the keys of the object go in that column, as the polars engine reads them.
+        Without ``orient``, the orient is ``columns`` with ``index_column``, as the writer gives it, and ``records`` without it.
 
         Raises:
             ValueError: The file type has no polars reader (``hdf``), the JSON orient is not ``records``, ``index`` or ``columns``, a JSON object has no
-                ``index_column``, or polars cannot read the file. The error of polars is the cause of the ``ValueError``.
+                ``index_column``, the JSON is not an object of objects, or polars cannot read the file. The error of polars is the cause of the ``ValueError``.
         """
         import polars as pl  # pylint: disable=import-outside-toplevel
 
-        orient, lines, index_column = options.pop("orient", "records"), options.pop("lines", False), options.pop("index_column", None)
+        lines, index_column = options.pop("lines", False), options.pop("index_column", None)
+        # the writer of a JSON object with `index_column` and no orient gives the `columns` orient of `DataFrame.to_json`
+        orient = options.pop("orient", None) or ("columns" if index_column is not None else "records")
         if file_type == "json":
             if orient in JsonIndex.ORIENTS and not lines:
                 if index_column is None:
