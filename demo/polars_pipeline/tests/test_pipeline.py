@@ -94,7 +94,7 @@ class TestValidations:
         # Given a FOO file with a duplicate column_a
         foo = tmp_path / "foo.csv"
         pd.read_csv(staging_input_config.get(source_key="FOO").local.file_path, index_col=0).assign(column_a="id1").to_csv(foo)
-        config = staging_input_config.get(source_key="FOO")
+        config = staging_input_config.get(source_key="FOO").model_copy(deep=True)
         config.local.file_path = str(foo)
 
         # When / Then
