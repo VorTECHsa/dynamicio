@@ -138,8 +138,13 @@ schema declaration.
    - A test sends a value that ends in `.123456789` through a custom serializer on both engines and compares the bytes.
 8. Athena on polars. In v12, the polars engine reads Athena through awswrangler and changes the result to a polars frame inside the engine. The user gets a polars
    frame only. In v13, an install with `[polars]` only has no Athena reads unless a later ADR gives polars its own Athena reader.
-9. JSON on polars. The polars engine reads and writes the `records` orient, with and without `lines`. The pandas orients `split`, `index`, `columns`, `values` and
-   `table` have no polars reader. A polars JSON resource with one of them raises an error when the user builds the resource, as hdf and pickle do.
+9. JSON on polars. The polars engine reads and writes the `records` orient, with and without `lines`. It also reads and writes the `index` and `columns`
+   orients with the option `index_column`, the column of the keys of the JSON object. A pandas frame keeps these keys in its index, and a polars frame has no index.
+   - A write gives the bytes of the pandas engine for the frame with `set_index(index_column)`. A read gives the keys in the column, and a numeric dtype of the
+     model casts them.
+   - The option works on the two engines. On the pandas engine, a read gives `reset_index(names=index_column)`. A repo can thus set the option before it moves.
+   - The pandas orients `split`, `values` and `table` have no polars reader. A polars JSON resource with one of them, or with `index` or `columns` and without
+     `index_column`, raises an error when the user builds the resource, as hdf and pickle do.
 10. On the pandas engine, `scan()` and `sink()` raise `NotImplementedError`. The message names the polars engine. pandas has no lazy frame, so these methods do
     not return an eager frame under a lazy name.
 11. Tests on both engines. The pytest plugin of `dynamicio.testharness` (the `pytest11` entry point) adds an option `--dynamicio-engine=pandas|polars`.
@@ -435,7 +440,7 @@ of the 4 pairs use it to compare frames.
 - The polars writer costs more than plain polars: it builds the pandas metadata, writes the CSV index column and keeps the 11.1.0 byte format. Rule 2 requires
   this cost. The success measure limits it.
 - The polars engine changes Kafka rows to pandas Python types (decision 7). This costs time on each message, and keeps custom serializers correct.
-- hdf, pickle and the JSON orients of decision 9 have no polars reader. A polars repo must move these resources to parquet or to `records` JSON first.
+- hdf, pickle and the JSON orients `split`, `values` and `table` of decision 9 have no polars reader. A polars repo must move these resources to parquet or to `records` JSON first. A JSON resource with the orient `index` or `columns` needs `index_column`.
 - Tests that patch internals, such as a consumer repo that patches `dynamicio.mixins.with_s3.wr.s3.read_json`, keep working in 12.x. The pandas I/O code stays in
   the `dynamicio.mixins.*` modules, so the code looks up `wr` in the module that the test patches. A re-export only does not give this, because a moved function
   looks up `wr` in its new module.
