@@ -2,7 +2,7 @@
 [![codecov](https://codecov.io/gh/VorTECHsa/dynamicio/graph/badge.svg?token=McZFwD2QPh)](https://codecov.io/gh/VorTECHsa/dynamicio)
 [<img src="https://img.shields.io/badge/slack-@vortexa/dynamicio_public-purple.svg?logo=slack">](https://join.slack.com/share/enQtMzg2Nzk3ODY3MzEzNi0yNTU1ZmIyN2JkMGFhZjhhZWVjNzA2OWUzNWIyMjMyYmYzZmE4MzBjYWQ3YjdhNjU1MGU2NjFkNzMyZDllMzE2?raw=True)
 
-<img src="https://raw.githubusercontent.com/VorTECHsa/dynamicio/master/docs/images/logo-transparent.png" alt="dynamicio — Wrap your I/O" width="500"> <img src="https://raw.githubusercontent.com/VorTECHsa/dynamicio/master/docs/images/wrapped-panda.png" alt="The dynamicio panda mascot" width="100">
+<img src="https://raw.githubusercontent.com/VorTECHsa/dynamicio/master/docs/images/banner.png" alt="dynamicio, wrap your I/O: dataframes, contracts, one wrapper. The pandas panda and the polars bear share one table, checked by Pandera" width="900">
 
 **Keep your business logic independent of I/O.** dynamicio is the seam between your `pandas` or `polars` code and the places your
 data lives: describe each dataset once in YAML, and your code just calls `read()` and `write()`.

@@ -1,5 +1,7 @@
 # Why dynamicio
 
+![The pandas panda and the polars bear work on the same table](../images/pandas-and-polars.png){ width="600" }
+
 Business logic should not know where its data lives.
 
 A pipeline has two kinds of code. One kind decides things: it joins, filters, scores and aggregates. The other kind moves

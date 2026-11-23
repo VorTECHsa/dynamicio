@@ -1,5 +1,5 @@
 <div class="dynamicio-hero" markdown>
-![dynamicio, wrap your I/O](images/logo-transparent.png){ width="420" } ![The dynamicio panda mascot](images/wrapped-panda.png){ width="100" }
+![dynamicio, wrap your I/O: dataframes, contracts, one wrapper. The pandas panda and the polars bear share one table, checked by Pandera](images/banner.png){ width="900" }
 </div>
 
 # dynamicio

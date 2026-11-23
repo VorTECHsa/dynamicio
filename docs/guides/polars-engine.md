@@ -1,5 +1,7 @@
 # The polars engine
 
+![The pandas panda and the polars bear work on the same table](../images/pandas-and-polars.png){ width="600" }
+
 The polars engine casts, validates and logs the metrics of polars frames. It has the validators and the metrics of the pandas engine, with the same
 names, messages and `METRIC` lines. It reads, scans and writes parquet, CSV and JSON files on a `local` or an `s3_file` resource, and reads and
 scans a `local_batch` or an `s3_path_prefix` resource. It writes an `s3_path_prefix` resource, and `sink()` writes a `LazyFrame`. It reads and
