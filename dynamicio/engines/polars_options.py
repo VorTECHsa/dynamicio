@@ -4,7 +4,7 @@ import csv
 from typing import Any, Dict, Mapping, Optional
 
 from dynamicio.errors import EngineResourceError
-from dynamicio.mixins.utils import ParquetIndex
+from dynamicio.formats.parquet.index import ParquetIndex
 
 
 class PolarsOptions:
@@ -131,7 +131,7 @@ class PolarsOptions:
     def check_parquet(cls, _source: str, options: Mapping[str, Any]) -> None:
         """Refuse fastparquet, a written index and an ``index_columns`` value that is not valid: a polars frame has no index.
 
-        ``index_columns`` names the columns that the file holds as its pandas index (``utils.ParquetIndex``), as a pandas frame with these columns as its
+        ``index_columns`` names the columns that the file holds as its pandas index (``formats.parquet.index.ParquetIndex``), as a pandas frame with these columns as its
         index writes them.
         """
         if options.get("engine") not in cls.PANDAS_PARQUET_ENGINES:

@@ -10,7 +10,8 @@ import pytest
 
 # Application Imports
 from dynamicio.config import IOConfig
-from dynamicio.mixins.utils import ParquetIndex, allow_options, args_of, get_file_type_value, get_string_template_field_names, pickle_protocol, resolve_template
+from dynamicio.formats.parquet.index import ParquetIndex
+from dynamicio.mixins.utils import allow_options, args_of, get_file_type_value, get_string_template_field_names, pickle_protocol, resolve_template
 from tests import constants
 from tests.mocking.io import ReadS3CsvIO
 

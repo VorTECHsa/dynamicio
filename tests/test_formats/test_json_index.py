@@ -4,8 +4,8 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 
+from dynamicio.formats.json.index import JsonIndex
 from dynamicio.mixins import with_s3
-from dynamicio.mixins.utils import JsonIndex
 from dynamicio.mixins.with_local import WithLocal
 
 

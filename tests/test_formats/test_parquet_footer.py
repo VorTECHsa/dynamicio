@@ -19,7 +19,8 @@ from dynamicio.config import IOConfig
 from dynamicio.core import SCHEMA_FROM_ARGUMENT
 from dynamicio.engines import EngineSetting
 from dynamicio.errors import EngineResourceError, S3KeyNotFoundError
-from dynamicio.parquet_footer import ParquetFooter, S3Tail
+from dynamicio.formats.parquet.footer import ParquetFooter
+from dynamicio.transport.s3.tail import S3Tail
 from tests import constants
 
 

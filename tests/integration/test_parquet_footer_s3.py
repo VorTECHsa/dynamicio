@@ -8,9 +8,9 @@ from botocore.exceptions import ClientError
 from dynamicio.engines import EngineSetting
 from dynamicio.errors import S3KeyNotFoundError
 from dynamicio.mixins import with_s3
-from dynamicio.parquet_footer import S3Tail
+from dynamicio.transport.s3.tail import S3Tail
 from tests.integration.resources import Resources
-from tests.test_parquet_footer import FooterIO, Footers, Rows
+from tests.test_formats.test_parquet_footer import FooterIO, Footers, Rows
 
 pytestmark = [pytest.mark.integration, pytest.mark.floci]
 

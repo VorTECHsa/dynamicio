@@ -17,7 +17,8 @@ from pandera.api.dataframe.model import DataFrameModel  # the base of the pandas
 from dynamicio.config.pydantic import DataframeSchema, IOEnvironment, SchemaColumn
 from dynamicio.engines.engine_setting import EngineSetting
 from dynamicio.errors import CASTING_WARNING_MSG, NOTICE_MSG, MissingMixinError, SchemaNotDeclaredError, SchemaNotFoundError, TableNameNotFoundError
-from dynamicio.parquet_footer import ParquetFooter, ParquetFooters
+from dynamicio.formats.parquet.footer import ParquetFooter
+from dynamicio.formats.parquet.footers import ParquetFooters
 from dynamicio.schema.models import dataframe_validator, to_dataframe_schema
 
 logger = logging.getLogger(__name__)

@@ -38,6 +38,8 @@ from pandas import DataFrame, Series
 # Application Imports
 from dynamicio.config.pydantic import DataframeSchema, S3DataEnvironment, S3PathPrefixEnvironment
 from dynamicio.errors import InvalidS3UrlError, NoObjectsFoundError, ObjectNotFoundError, S3KeyNotFoundError
+from dynamicio.formats.json.index import JsonIndex
+from dynamicio.formats.parquet.index import ParquetIndex
 from dynamicio.mixins import utils, with_local
 from dynamicio.mixins.utils import get_file_type_value
 
@@ -894,12 +896,12 @@ class WithS3File:
             raise ObjectNotFoundError(f"No object found at {s3_path}") from err
 
     @staticmethod
-    @utils.allow_options([*utils.args_of(wr.s3.read_json, pd.read_json), "single_record", utils.JsonIndex.OPTION])
+    @utils.allow_options([*utils.args_of(wr.s3.read_json, pd.read_json), "single_record", JsonIndex.OPTION])
     def _read_s3_json_file(s3_path: str, schema: DataframeSchema, **kwargs) -> pd.DataFrame:
         is_single_record = kwargs.pop("single_record", False)
         orient = kwargs.pop("orient", "records")
         lines = kwargs.pop("lines", False)  # pandas default; JSON-array files are what `pd.DataFrame.to_json(orient="records")` writes
-        index_column = utils.JsonIndex.pop(kwargs, orient, lines)
+        index_column = JsonIndex.pop(kwargs, orient, lines)
 
         if kwargs.get("convert_dates") is True:
             logger.warning("[s3-json-read] Ignoring 'convert_dates=True'. Handle datetime parsing post-read.")
@@ -971,10 +973,10 @@ class WithS3File:
             raise ValueError("[s3-parquet] Parquet output path must be a file, not a directory (e.g., 's3://bucket/data.parquet').")
 
         if _WRANGLER_ONLY_WRITE_PARQUET & kwargs.keys():
-            names = utils.ParquetIndex.pop(kwargs)
+            names = ParquetIndex.pop(kwargs)
             if names is not None:
                 # awswrangler writes no index by default, so the index of `index_columns` needs `index=True`
-                df, kwargs["index"] = utils.ParquetIndex.set_index(df, names), True
+                df, kwargs["index"] = ParquetIndex.set_index(df, names), True
             WithS3File._write_s3_parquet_file_with_wrangler(df, s3_path, **kwargs)
             return
         kwargs.pop("use_threads", None)
@@ -1009,7 +1011,7 @@ class WithS3File:
         wr.s3.to_csv(df=df, path=s3_path, **kwargs)
 
     @staticmethod
-    @utils.allow_options([*utils.args_of(wr.s3.to_json, pd.DataFrame.to_json), utils.JsonIndex.OPTION])
+    @utils.allow_options([*utils.args_of(wr.s3.to_json, pd.DataFrame.to_json), JsonIndex.OPTION])
     def _write_s3_json_file(df: pd.DataFrame, s3_path: str, **kwargs):
         if kwargs.pop("dataset", False):
             raise ValueError(
@@ -1022,7 +1024,7 @@ class WithS3File:
 
         user_orient = kwargs.pop("orient", "records")
         user_lines = kwargs.pop("lines", False)
-        index_column = utils.JsonIndex.pop(kwargs, user_orient, user_lines)
+        index_column = JsonIndex.pop(kwargs, user_orient, user_lines)
         if index_column is not None:
             df = df.set_index(index_column)
         # wrangler defaults to index=True, which pandas rejects for records/values; mirror pandas' own per-orient default.

@@ -11,7 +11,7 @@ import pandas as pd
 
 from dynamicio.config import IOConfig
 from dynamicio.config.pydantic.io_resources import FileType
-from dynamicio.mixins.utils import JsonIndex
+from dynamicio.formats.json.index import JsonIndex
 
 
 class OutputFiles:

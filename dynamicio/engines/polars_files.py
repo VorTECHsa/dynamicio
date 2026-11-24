@@ -26,11 +26,12 @@ from dynamicio.engines.engine import Engine
 from dynamicio.engines.polars_options import PolarsOptions
 from dynamicio.engines.polars_parquet import PolarsParquet
 from dynamicio.engines.polars_s3 import PolarsS3
-from dynamicio.engines.s3_upload import S3Upload
 from dynamicio.errors import EngineResourceError
+from dynamicio.formats.json.index import JsonIndex
 from dynamicio.mixins import utils, with_s3
 from dynamicio.mixins.utils import get_file_type_value
 from dynamicio.schema.polars_dtypes import DtypeMap
+from dynamicio.transport.s3.upload import S3Upload
 
 if TYPE_CHECKING:  # pragma: no cover
     from dynamicio.core import DynamicDataIO
@@ -204,8 +205,8 @@ class PolarsFiles:
             return pl.DataFrame(schema=dtypes)
         index_column = options.get("index_column")
         if index_column is not None:
-            data = utils.JsonIndex.decompressed(data, cls.target_of(io, options), options.get("compression", "infer"))
-            data = utils.JsonIndex.records(data, PolarsOptions.json_orient(Engine.source_of(io), options), index_column)
+            data = JsonIndex.decompressed(data, cls.target_of(io, options), options.get("compression", "infer"))
+            data = JsonIndex.records(data, PolarsOptions.json_orient(Engine.source_of(io), options), index_column)
             if data.strip() == b"[]":  # orient columns writes a frame without rows as an empty object for each column
                 return pl.DataFrame(schema=dtypes)
         reader = pl.read_ndjson if options.get("lines", False) else pl.read_json

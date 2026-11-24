@@ -16,7 +16,23 @@ reference documents the public classes and functions; names beginning with an un
 
 ::: dynamicio.config.io_config
 
-::: dynamicio.parquet_footer
+## Formats
+
+::: dynamicio.formats.parquet.footer
+
+::: dynamicio.formats.parquet.footers
+
+::: dynamicio.formats.parquet.index
+
+::: dynamicio.formats.json.index
+
+## Transport
+
+::: dynamicio.transport.s3.tail
+
+::: dynamicio.transport.s3.upload
+
+::: dynamicio.transport.s3.kept_open
 
 ## Backends
 
@@ -63,8 +79,6 @@ reference documents the public classes and functions; names beginning with an un
 ::: dynamicio.engines.polars_kafka
 
 ::: dynamicio.engines.polars_athena
-
-::: dynamicio.engines.s3_upload
 
 ## Schemas
 

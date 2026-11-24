@@ -12,8 +12,9 @@ import pyarrow.parquet as pq
 from botocore.exceptions import ClientError, NoCredentialsError
 
 from dynamicio.errors import ObjectNotFoundError, S3KeyNotFoundError
+from dynamicio.formats.parquet.footers import ParquetFooters
 from dynamicio.mixins import with_s3
-from dynamicio.parquet_footer import ParquetFooters, S3Tail
+from dynamicio.transport.s3.tail import S3Tail
 
 
 class PolarsS3:

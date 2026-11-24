@@ -13,7 +13,7 @@ import pyarrow as pa
 
 from dynamicio.engines.polars_options import PolarsOptions
 from dynamicio.errors import EngineResourceError
-from dynamicio.mixins.utils import ParquetIndex
+from dynamicio.formats.parquet.index import ParquetIndex
 from dynamicio.schema.polars_dtypes import DtypeMap
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -67,7 +67,7 @@ class PolarsParquet:
         frame.
 
         ``index=False`` gives the metadata of ``DataFrame.to_parquet(index=False)``, without an index. ``index_columns`` gives the fields and the
-        metadata of the index of ``set_index`` (``utils.ParquetIndex``), after the other columns. Otherwise the metadata has the ``RangeIndex`` of the
+        metadata of the index of ``set_index`` (``formats.parquet.index.ParquetIndex``), after the other columns. Otherwise the metadata has the ``RangeIndex`` of the
         frame, as ``DataFrame.to_parquet`` writes by default.
 
         An ``object`` column with rows that are all null has the ``null`` type and the pandas type ``empty``, as ``DataFrame.to_parquet`` writes it.

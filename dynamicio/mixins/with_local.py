@@ -15,6 +15,8 @@ from pyarrow.parquet import read_table, write_table
 # Application Imports
 from dynamicio.config.pydantic import DataframeSchema, LocalBatchDataEnvironment, LocalDataEnvironment
 from dynamicio.errors import NoObjectsFoundError
+from dynamicio.formats.json.index import JsonIndex
+from dynamicio.formats.parquet.index import ParquetIndex
 from dynamicio.mixins import utils
 from dynamicio.mixins.utils import get_file_type_value
 
@@ -115,7 +117,7 @@ class WithLocal:
         return pd.read_csv(file_path, **options)
 
     @staticmethod
-    @utils.allow_options([*utils.args_of(pd.read_json), "single_record", utils.JsonIndex.OPTION])
+    @utils.allow_options([*utils.args_of(pd.read_json), "single_record", JsonIndex.OPTION])
     def _read_json_file(file_path: str, schema: DataframeSchema, **options: Any) -> pd.DataFrame:
         """Read a json file as a DataFrame using `pd.read_hdf`.
 
@@ -135,7 +137,7 @@ class WithLocal:
         # `convert_dates` is likewise left to pandas' own default (auto-detection) unless the caller
         # overrides it, since some callers rely on that auto-parsing for datetime columns.
         is_single_record = options.pop("single_record", False)
-        index_column = utils.JsonIndex.pop(options, options.get("orient"), options.get("lines", False))
+        index_column = JsonIndex.pop(options, options.get("orient"), options.get("lines", False))
         df = pd.read_json(file_path, **options)
 
         if index_column is not None:
@@ -221,7 +223,7 @@ class WithLocal:
         df.to_csv(file_path, **options)
 
     @staticmethod
-    @utils.allow_options([*utils.args_of(pd.DataFrame.to_json), utils.JsonIndex.OPTION])
+    @utils.allow_options([*utils.args_of(pd.DataFrame.to_json), JsonIndex.OPTION])
     def _write_json_file(df: pd.DataFrame, file_path: str, **options: Any):
         """Writes a JSON file using `df.to_json`.
 
@@ -233,23 +235,23 @@ class WithLocal:
             file_path: The location where the file needs to be written.
             options: Options relative to writing a json file. `index_column` names the column that gives the keys of orient `index` or `columns`.
         """
-        index_column = utils.JsonIndex.pop(options, options.get("orient"), options.get("lines", False))
+        index_column = JsonIndex.pop(options, options.get("orient"), options.get("lines", False))
         (df if index_column is None else df.set_index(index_column)).to_json(file_path, **options)
 
     @staticmethod
     def _write_parquet_file(df: pd.DataFrame, file_path: str, **options: Any):
         """Write a dataframe as a parquet file using `df.to_parquet`.
 
-        All `options` but `index_columns` are passed directly to `df.to_parquet`. `index_columns` sets the index of the file (`utils.ParquetIndex`).
+        All `options` but `index_columns` are passed directly to `df.to_parquet`. `index_columns` sets the index of the file (`ParquetIndex`).
 
         Args:
             df: A dataframe write out.
             file_path: The location where the file needs to be written.
             options: Options relative to writing a parquet file.
         """
-        names = utils.ParquetIndex.pop(options)
+        names = ParquetIndex.pop(options)
         if names is not None:
-            df = utils.ParquetIndex.set_index(df, names)
+            df = ParquetIndex.set_index(df, names)
         if options.get("engine") == "fastparquet":
             return WithLocal.__write_with_fastparquet(df, file_path, **options)
         return WithLocal.__write_with_pyarrow(df, file_path, **options)

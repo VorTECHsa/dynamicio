@@ -7,7 +7,8 @@ import pytest
 from boto3.s3.transfer import TransferConfig
 from botocore.exceptions import ClientError, EndpointConnectionError
 
-from dynamicio.engines.s3_upload import KeptOpen, S3Upload
+from dynamicio.transport.s3.kept_open import KeptOpen
+from dynamicio.transport.s3.upload import S3Upload
 from tests import constants
 
 # The smallest part that S3 takes: an object of 2 parts and a bit stays small in a test

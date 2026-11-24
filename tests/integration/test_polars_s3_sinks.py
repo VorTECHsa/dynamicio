@@ -16,10 +16,10 @@ pl = pytest.importorskip("polars")
 pq = pytest.importorskip("pyarrow.parquet")
 polars_files = pytest.importorskip("tests.test_engines.test_polars_files")
 polars_sinks = pytest.importorskip("tests.test_engines.test_polars_sinks")
-s3_upload = pytest.importorskip("tests.test_engines.test_s3_upload")
+s3_upload = pytest.importorskip("tests.test_transport.test_s3_upload")
 Files, FilesIO, Pair, PandasPair = polars_files.Files, polars_files.FilesIO, polars_files.Pair, polars_files.PandasPair
 Checked, Sinks = polars_sinks.Checked, polars_sinks.Sinks
-S3Upload = pytest.importorskip("dynamicio.engines.s3_upload").S3Upload
+S3Upload = pytest.importorskip("dynamicio.transport.s3.upload").S3Upload
 
 pytestmark = [pytest.mark.integration, pytest.mark.floci]
 

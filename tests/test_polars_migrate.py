@@ -17,9 +17,11 @@ from dynamicio.schema.migrate import SchemaComparison
 from dynamicio.schema.models import to_dataframe_schema
 
 pl = pytest.importorskip("polars")
-polars_migrate = pytest.importorskip("dynamicio.schema.polars_migrate")
-PolarsModelRenderer, PortedModel, ResourceReview = polars_migrate.PolarsModelRenderer, polars_migrate.PortedModel, polars_migrate.ResourceReview
-migrate_to_polars = polars_migrate.migrate_to_polars
+PolarsMigration = pytest.importorskip("dynamicio.schema.migrate.to_polars.migration").PolarsMigration
+PortedModel = pytest.importorskip("dynamicio.schema.migrate.to_polars.ported_model").PortedModel
+PolarsModelRenderer = pytest.importorskip("dynamicio.schema.migrate.to_polars.renderer").PolarsModelRenderer
+PolarsMigrationReport = pytest.importorskip("dynamicio.schema.migrate.to_polars.report").PolarsMigrationReport
+ResourceReview = pytest.importorskip("dynamicio.schema.migrate.to_polars.resource_review").ResourceReview
 DtypeMap = pytest.importorskip("dynamicio.schema.polars_dtypes").DtypeMap
 
 FULL_MODELS = """
@@ -136,7 +138,7 @@ class TestModels:
         package = Package.write(repo, {"orders": FULL_MODELS})
 
         # When
-        report = migrate_to_polars(str(package), str(repo / "polars_models.py"))
+        report = PolarsMigration.migrate(str(package), str(repo / "polars_models.py"))
 
         # Then
         assert report["models"] == [f"{package.name}.orders.Orders", f"{package.name}.orders.Plain"] and report["todos"] == []
@@ -162,7 +164,7 @@ class TestModels:
         )
 
         # When
-        report = migrate_to_polars(str(package), str(repo / "out.py"))
+        report = PolarsMigration.migrate(str(package), str(repo / "out.py"))
 
         # Then
         assert DtypeMap.of_model(Generated.load(repo / "out.py").Tags) == {"tags": pl.String, "name": pl.String}
@@ -181,7 +183,7 @@ class TestModels:
         )
 
         # When
-        migrate_to_polars(str(package), str(repo / "out.py"))
+        PolarsMigration.migrate(str(package), str(repo / "out.py"))
 
         # Then
         source = (repo / "out.py").read_text()
@@ -192,7 +194,7 @@ class TestModels:
     def test_the_generated_model_validates_a_polars_frame(self, repo):
         # Given
         package = Package.write(repo, {"orders": FULL_MODELS})
-        migrate_to_polars(str(package), str(repo / "out.py"))
+        PolarsMigration.migrate(str(package), str(repo / "out.py"))
         plain = Generated.load(repo / "out.py").Plain
 
         # When
@@ -231,7 +233,7 @@ class TestModels:
         )
 
         # When
-        report = migrate_to_polars(str(package), str(repo / "out.py"))
+        report = PolarsMigration.migrate(str(package), str(repo / "out.py"))
 
         # Then
         assert sorted(report["todos"]) == [
@@ -263,7 +265,7 @@ class TestModels:
 
         # When / Then
         with pytest.raises(ValueError, match=r"orders|odd\.Odd: the pandas dtype 'datetime64\[s, UTC\]' has no polars dtype"):
-            migrate_to_polars(str(package), str(repo / "out.py"))
+            PolarsMigration.migrate(str(package), str(repo / "out.py"))
         assert not (repo / "out.py").exists()
 
     @pytest.mark.unit
@@ -283,7 +285,7 @@ class TestModels:
         )
 
         # When
-        migrate_to_polars(str(package), str(repo / "out.py"))
+        PolarsMigration.migrate(str(package), str(repo / "out.py"))
 
         # Then
         source = (repo / "out.py").read_text()
@@ -304,7 +306,7 @@ class TestModules:
         (out / "__init__.py").write_text('"""Mine."""\n')
 
         # When
-        report = migrate_to_polars(str(package), str(out))
+        report = PolarsMigration.migrate(str(package), str(out))
 
         # Then
         assert sorted(p.name for p in out.iterdir()) == ["POLARS_MIGRATION.md", "__init__.py", "stage.py", "transform.py"]
@@ -319,7 +321,7 @@ class TestModules:
 
         # When / Then
         with pytest.raises(ValueError, match=r"one\.A and .*two\.A both map to the polars model A"):
-            migrate_to_polars(str(package), str(repo / "out.py"))
+            PolarsMigration.migrate(str(package), str(repo / "out.py"))
 
     @pytest.mark.unit
     def test_imported_and_polars_models_are_not_ported(self, repo):
@@ -335,7 +337,7 @@ class TestModules:
         )
 
         # When
-        report = migrate_to_polars(str(package), str(repo / "out.py"))
+        report = PolarsMigration.migrate(str(package), str(repo / "out.py"))
 
         # Then
         assert report["models"] == [f"{package.name}.base.A"]
@@ -345,20 +347,20 @@ class TestModules:
         package = Package.write(repo, {"empty": "X = 1\n"})
 
         with pytest.raises(ValueError, match="No pandas models found"):
-            migrate_to_polars(str(package), str(repo / "out.py"))
+            PolarsMigration.migrate(str(package), str(repo / "out.py"))
 
     @pytest.mark.unit
     def test_a_path_outside_the_root_is_refused(self, repo, tmp_path_factory):
         outside = tmp_path_factory.mktemp("outside")
 
         with pytest.raises(ValueError, match="run dynamicio migrate from the root of the repo"):
-            migrate_to_polars(str(outside), str(repo / "out.py"))
+            PolarsMigration.migrate(str(outside), str(repo / "out.py"))
 
     @pytest.mark.unit
     def test_one_module_file_can_be_the_path(self, repo):
         package = Package.write(repo, {"orders": FULL_MODELS})
 
-        report = migrate_to_polars(str(package / "orders.py"), str(repo / "out.py"))
+        report = PolarsMigration.migrate(str(package / "orders.py"), str(repo / "out.py"))
 
         assert len(report["models"]) == 2
 
@@ -369,7 +371,7 @@ class TestModules:
         monkeypatch.setattr(sys, "path", [path for path in sys.path if path != str(repo)])
 
         # When
-        report = migrate_to_polars(str(package), str(repo / "out.py"))
+        report = PolarsMigration.migrate(str(package), str(repo / "out.py"))
 
         # Then
         assert sys.path[0] == str(repo)
@@ -391,7 +393,7 @@ class TestModules:
 
         # When / Then
         with pytest.raises(ValueError, match=r"The polars model Plain is not equivalent to .*plain\.Plain"):
-            polars_migrate.PolarsMigration._verify_parity(source, [polars_migrate.PortedModel(pandas_model)])  # pylint: disable=protected-access
+            PolarsMigration._verify_parity(source, [PortedModel(pandas_model)])  # pylint: disable=protected-access
 
 
 class TestEngineContract:
@@ -413,7 +415,7 @@ class TestEngineContract:
                         t: Series[pd.Timestamp] = Field(nullable=False)
                     """},
         )
-        migrate_to_polars(str(package), str(repo / "out.py"))
+        PolarsMigration.migrate(str(package), str(repo / "out.py"))
         pandas_model, polars_model = importlib.import_module(f"{package.name}.m").M, Generated.load(repo / "out.py").M
         frame = pd.DataFrame({"n": pd.array([1, None], dtype="Int64"), "s": ["x", None], "t": pd.to_datetime(["2026-01-01", "2026-01-02"])})
         EngineSetting.reset("pandas")
@@ -552,6 +554,6 @@ class TestCli:
 
     @pytest.mark.unit
     def test_the_report_says_none_for_an_empty_section(self):
-        report = polars_migrate.PolarsMigrationReport.render("out.py", ["a.B"], [], {"refused": [], "csv_index": []})
+        report = PolarsMigrationReport.render("out.py", ["a.B"], [], {"refused": [], "csv_index": []})
 
         assert report.count("None.") == 4 and "wrote 1 polars models to `out.py`" in report
