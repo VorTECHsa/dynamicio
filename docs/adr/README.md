@@ -13,3 +13,4 @@ Number sequentially, never rewrite an accepted ADR (supersede it with a new one)
 | [0006](0006-expected-outputs-test-harness.md) | Test harness: expected outputs declared in resource definitions, `check_all` and the session report | Accepted |
 | [0007](0007-s3-io-performance-evidence.md) | S3 I/O performance evidence behind the boto3 decision | Accepted |
 | [0009](0009-pandera-models-as-the-only-schema-declaration.md) | Pandera models are the only schema declaration; typed metadata, `__dataset_name__` and `__table_name__` | Accepted (supersedes parts of 0005) |
+| [0010](0010-polars-engine-and-shared-file-contract.md) | A polars engine with one engine for each repo and a file contract that both engines share | Proposed |
