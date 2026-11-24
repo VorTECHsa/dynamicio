@@ -375,6 +375,10 @@ Phase 5 as built:
 - A parquet sink to one file streams the rows to the temporary file with lz4. pyarrow then copies its row groups to a second file with the arrow types,
   the pandas metadata and the options of `write()`. The same `collect_all` counts the rows and the categories of each `Categorical` column for that metadata.
   The file has the footer and the row groups of `write()`. Only one row group is in memory at a time.
+- pyarrow reads the temporary file without `pre_buffer`. With `pre_buffer`, `iter_batches` kept the compressed column chunks of the row groups that it
+  had read, and the copy of a file of 12M rows took 2.8 GiB of arrow memory, against 0.9 GiB without it (pyarrow 25.0.1). The bytes are the same.
+- A direct `sink_parquet` to the final file, without the copy, is about 5 times faster (1.4 s against 8.0 s for 12M rows). It is rejected: polars 2.1
+  writes the `large_string` and `large_list` arrow types, and its `arrow_schema` option refuses `string`. The arrow schema of the files would change.
 - A local file goes into place with `os.replace`, from a temporary directory in the directory of the file. An S3 file goes up with the upload of change 13.
 - A CSV or JSON sink and a prefix sink collect the frame and call the writer of `write()`. The bytes stay equal to 11.1.0, and the prefix writer of the
   pandas engine gives the same objects and deletes the same old objects for each `mode`. A prefix write thus no longer raises `NotImplementedError`.
