@@ -150,13 +150,16 @@ class PolarsSinks:
 
         The rows go in row groups of ``row_group_size`` rows, as ``pyarrow.parquet.write_table`` cuts a table, so only one row group is in memory at a time.
         A frame without rows gives one row group without rows, as ``write_table`` writes it.
+
+        The staged file is read without ``pre_buffer``. With it, ``iter_batches`` kept the compressed column chunks of the row groups that it had read, so
+        the memory grew with the size of the file: 2.8 GiB of arrow memory for a staged file of 12M rows, against 0.9 GiB without it (pyarrow 25.0.1).
         """
         arguments: Dict[str, Any] = PolarsParquet.parquet_arguments(options)
         rows = min(arguments.pop("row_group_size", None) or cls.ROW_GROUP_ROWS, cls.MAX_ROW_GROUP_ROWS)
         with pq.ParquetWriter(final, schema, **arguments) as writer:
             batches: List[pa.RecordBatch] = []
             buffered, written = 0, False
-            for batch in pq.ParquetFile(staged).iter_batches(batch_size=rows):
+            for batch in pq.ParquetFile(staged, pre_buffer=False).iter_batches(batch_size=rows):
                 batches.append(batch)
                 buffered += batch.num_rows
                 if buffered >= rows:

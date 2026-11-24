@@ -249,6 +249,20 @@ class TestSinkGivesTheFileOfWrite:
         assert not Sinks.stages(tmp_path)
 
 
+class TestSinkRewriteMemory:
+    @pytest.mark.unit
+    def test_the_staged_file_is_read_without_pre_buffer(self, tmp_path):
+        # Given
+        config = Files.config(tmp_path, "parquet")
+
+        # When
+        with patch("dynamicio.engines.polars_sinks.pq.ParquetFile", wraps=pq.ParquetFile) as parquet_file:
+            Files.polars(config).sink(Files.frame().lazy())
+
+        # Then
+        assert [call.kwargs.get("pre_buffer") for call in parquet_file.call_args_list] == [False]
+
+
 class TestSinkValidationsAndMetrics:
     @pytest.mark.unit
     def test_a_failed_validation_leaves_the_old_file_and_logs_no_metrics(self, tmp_path):
