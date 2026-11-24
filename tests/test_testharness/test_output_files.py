@@ -2,7 +2,9 @@
 import os
 
 import pandas as pd
+import polars as pl
 import pytest
+from polars.testing import assert_frame_equal
 
 from dynamicio.testharness import OutputFiles
 from tests.test_testharness.conftest import PARAMS
@@ -76,3 +78,17 @@ class TestOutputFiles:
         assert files.read_options == {"orient": "index"}
         pd.testing.assert_frame_equal(files.read_generated(), frame)
         pd.testing.assert_frame_equal(files.read_expected(), frame)
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("orient", ["index", "columns"])
+    @pytest.mark.parametrize("name, options", [("out.json.gz", {}), ("out.json", {"compression": "gzip"})], ids=["suffix", "option"])
+    def test_the_polars_reader_decompresses_a_json_object(self, tmp_path, orient, name, options):
+        # Given
+        path = str(tmp_path / name)
+        pd.DataFrame({"a": [1, 2]}, index=["r1", "r2"]).to_json(path, orient=orient, **options)
+
+        # When
+        result = OutputFiles.read_polars_file(path, "json", orient=orient, index_column="key", **options)
+
+        # Then
+        assert_frame_equal(result, pl.DataFrame({"key": ["r1", "r2"], "a": [1, 2]}))

@@ -28,7 +28,7 @@ class EngineCheckIO(UnifiedIO):
     def make(tmp_path: Path, model: Any = Positive, source_config: Optional[IOEnvironment] = None, **kwargs: Any) -> "EngineCheckIO":
         """An IO object with `model` as its schema, for `source_config`, or for `tmp_path/data.csv` when no `source_config` is given."""
         if source_config is None:
-            definition = {"X": {"LOCAL": {"type": "local", "local": {"file_path": str(tmp_path / "data.csv"), "file_type": "csv", "options": {"index": False}}}}}
+            definition = {"X": {"LOCAL": {"type": "local", "local": {"file_path": str(tmp_path / "data.csv"), "file_type": "csv"}, "options": {"index": False}}}}
             (tmp_path / "definitions.yaml").write_text(yaml.safe_dump(definition))
             source_config = IOConfig(str(tmp_path / "definitions.yaml"), env_identifier="LOCAL", dynamic_vars=EngineCheckIO).get(source_key="X")
         return EngineCheckIO(source_config=source_config, schema=model, **kwargs)

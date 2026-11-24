@@ -1183,6 +1183,37 @@ class TestJsonIndexColumn:
 
     @pytest.mark.unit
     @pytest.mark.parametrize("orient", ["index", "columns"])
+    @pytest.mark.parametrize("name, options", [("data.json.gz", {}), ("data.json", {"compression": "gzip"}), ("data.json.bz2", {})], ids=["suffix", "option", "bz2"])
+    def test_a_compressed_file_reads_back_equal(self, tmp_path, orient, name, options):
+        # Given
+        path = tmp_path / name
+        config = Files.config(tmp_path, "json", {"orient": orient, "index_column": "key", **options}, file_path=str(path))
+
+        # When
+        Files.polars(config, Keyed).write(self.frame())
+        result = Files.polars(config, Keyed).read()
+
+        # Then
+        assert path.read_bytes()[:2] != b'{"'
+        assert result.equals(self.frame())
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("orient", ["index", "columns"])
+    def test_a_frame_without_rows_reads_back_with_the_dtypes_of_the_model(self, tmp_path, orient):
+        # Given
+        config = Files.config(tmp_path, "json", {"orient": orient, "index_column": "key"})
+        empty = self.frame().clear()
+
+        # When
+        Files.polars(config, Keyed).write(empty)
+        result = Files.polars(config, Keyed).read()
+
+        # Then
+        assert result.equals(empty)
+        assert result.schema == empty.schema
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("orient", ["index", "columns"])
     def test_the_pandas_engine_reads_the_keys_as_the_index_column(self, tmp_path, orient):
         # Given
         config = Files.config(tmp_path, "json", {"orient": orient, "index_column": "key"})

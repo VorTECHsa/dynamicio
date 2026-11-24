@@ -2,11 +2,16 @@
 
 # pylint: disable=no-member, protected-access, too-few-public-methods
 
+import bz2
+import gzip
 import inspect
+import io
 import json
 import logging
+import lzma
 import string
 import threading
+import zipfile
 from contextlib import contextmanager
 from enum import Enum
 from functools import wraps
@@ -174,6 +179,33 @@ class JsonIndex:
 
     OPTION = "index_column"
     ORIENTS = ("index", "columns")
+    # The compression of each file suffix, as `compression="infer"` of `DataFrame.to_json` gives it
+    SUFFIXES = {".gz": "gzip", ".bz2": "bz2", ".xz": "xz", ".zip": "zip", ".zst": "zstd", ".tar": "tar"}
+    DECOMPRESSORS: Dict[str, Callable[[bytes], bytes]] = {"gzip": gzip.decompress, "bz2": bz2.decompress, "xz": lzma.decompress}
+
+    @classmethod
+    def decompressed(cls, data: bytes, path: str, compression: Any = "infer") -> bytes:
+        """The JSON text of a file that `DataFrame.to_json` wrote with the option `compression`, or with the compression of the suffix of `path`.
+
+        Args:
+            data: The bytes of the file.
+            path: The path or the S3 key of the file, for `compression="infer"`.
+            compression: The `compression` option of `DataFrame.to_json`: None, "infer", a method name, or a dict with the key "method".
+
+        Raises:
+            ValueError: The compression is not gzip, bz2, xz or zip.
+        """
+        method = compression.get("method", "infer") if isinstance(compression, dict) else compression
+        if method == "infer":
+            method = next((name for suffix, name in cls.SUFFIXES.items() if path.lower().endswith(suffix)), None)
+        if method is None:
+            return data
+        if method == "zip":
+            with zipfile.ZipFile(io.BytesIO(data)) as archive:
+                return archive.read(archive.namelist()[0])
+        if method not in cls.DECOMPRESSORS:
+            raise ValueError(f"a JSON file of orient index or columns reads with the compression gzip, bz2, xz or zip, and {path} has the compression {method!r}")
+        return cls.DECOMPRESSORS[method](data)
 
     @classmethod
     def pop(cls, options: MutableMapping[str, Any], orient: Optional[str], lines: bool = False) -> Optional[str]:

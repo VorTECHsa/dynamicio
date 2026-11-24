@@ -24,7 +24,7 @@ class OutputFiles:
         environment: The environment to look the resource up in; by default the first one the resource definitions list.
     """
 
-    JSON_READ_OPTIONS = ("orient", "lines", "index_column")
+    JSON_READ_OPTIONS = ("orient", "lines", "index_column", "compression")
 
     def __init__(self, config: IOConfig, source_key: str, params: Optional[Mapping[str, Any]] = None, environment: Optional[str] = None):
         self.config = config
@@ -104,7 +104,7 @@ class OutputFiles:
 
     @property
     def read_options(self) -> Mapping[str, Any]:
-        """Reader options for both files: the JSON ``orient``, ``lines`` and ``index_column`` the resource is written with, overridden by ``expected.options``."""
+        """Reader options for both files: the JSON ``orient``, ``lines``, ``index_column`` and ``compression`` the resource is written with, overridden by ``expected.options``."""
         environment = self.resource
         options = {name: environment.options[name] for name in self.JSON_READ_OPTIONS if name in environment.options}
         if environment.expected:
@@ -139,22 +139,24 @@ class OutputFiles:
         """Read a file with the plain polars readers. A JSON file has the ``records`` orient, with ``lines`` for one record on each line.
 
         A JSON object with the orient ``index`` or ``columns`` needs ``index_column``: the keys of the object go in that column, as the polars engine reads them.
-        Without ``orient``, the orient is ``columns`` with ``index_column``, as the writer gives it, and ``records`` without it.
+        Without ``orient``, the orient is ``columns`` with ``index_column``, as the writer gives it, and ``records`` without it. A JSON object decompresses
+        with ``compression`` or the suffix of the file, as ``DataFrame.to_json`` compresses it. polars decompresses a file of records itself.
 
         Raises:
             ValueError: The file type has no polars reader (``hdf``), the JSON orient is not ``records``, ``index`` or ``columns``, a JSON object has no
-                ``index_column``, the JSON is not an object of objects, or polars cannot read the file. The error of polars is the cause of the ``ValueError``.
+                ``index_column``, the JSON is not an object of objects, the compression of a JSON object is not gzip, bz2, xz or zip, or polars cannot
+                read the file. The error of polars is the cause of the ``ValueError``.
         """
         import polars as pl  # pylint: disable=import-outside-toplevel
 
-        lines, index_column = options.pop("lines", False), options.pop("index_column", None)
+        lines, index_column, compression = options.pop("lines", False), options.pop("index_column", None), options.pop("compression", "infer")
         # the writer of a JSON object with `index_column` and no orient gives the `columns` orient of `DataFrame.to_json`
         orient = options.pop("orient", None) or ("columns" if index_column is not None else "records")
         if file_type == "json":
             if orient in JsonIndex.ORIENTS and not lines:
                 if index_column is None:
                     raise ValueError(f"polars reads the JSON orient {orient!r} of {path} only with the option index_column, the column of the keys of the object")
-                path = std_io.BytesIO(JsonIndex.records(Path(path).read_bytes(), orient, index_column))
+                path = std_io.BytesIO(JsonIndex.records(JsonIndex.decompressed(Path(path).read_bytes(), path, compression), orient, index_column))
             elif orient != "records":
                 raise ValueError(f"polars reads the JSON orients records, index and columns only, and {path} has the orient {orient!r}")
             reader = pl.read_ndjson if lines else pl.read_json

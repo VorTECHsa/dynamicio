@@ -201,7 +201,8 @@ class PolarsFiles:
 
         A JSON object with orient index or columns becomes records, with its keys in the column ``index_column``. A key is a string, so the engine casts
         the keys to a numeric dtype of the model, as ``pandas.read_json`` converts the keys of the index. A file without records, as ``DataFrame.to_json``
-        writes a frame without rows, is a frame without rows that has the columns of the model.
+        writes a frame without rows, is a frame without rows that has the columns of the model. polars decompresses a file of records itself, and the
+        engine decompresses a JSON object with the ``compression`` option or the suffix of the file, as ``DataFrame.to_json`` compresses it.
         """
         data = source.getvalue() if isinstance(source, std_io.BytesIO) else Path(source).read_bytes()
         dtypes = DtypeMap.of_model(io._model)  # pylint: disable=protected-access
@@ -209,7 +210,10 @@ class PolarsFiles:
             return pl.DataFrame(schema=dtypes)
         index_column = options.get("index_column")
         if index_column is not None:
+            data = utils.JsonIndex.decompressed(data, cls.target_of(io, options), options.get("compression", "infer"))
             data = utils.JsonIndex.records(data, PolarsOptions.json_orient(cls.source_of(io), options), index_column)
+            if data.strip() == b"[]":  # orient columns writes a frame without rows as an empty object for each column
+                return pl.DataFrame(schema=dtypes)
         reader = pl.read_ndjson if options.get("lines", False) else pl.read_json
         frame = cls.schema_columns(reader(std_io.BytesIO(data), infer_schema_length=None), io)
         if index_column is not None and dtypes[index_column].is_numeric():

@@ -12,10 +12,16 @@ if TYPE_CHECKING:  # pragma: no cover
 class PolarsChecks:
     """Collect the queries of the validations and of the metrics, raise the failed validations and log the metric values. It does not import polars."""
 
-    @staticmethod
+    # The texts of the polars 2 errors of a failed strict cast, of a cast that polars does not support and of a datetime parse with no format.
+    # ``PolarsEngine.parse_booleans`` and ``PolarsEngine.parse_durations`` also raise "conversion from `str` ...".
+    CAST_FAILURES = ("conversion from `", "casting from ", "could not find an appropriate format to parse dates")
+
+    @classmethod
     @contextlib.contextmanager
-    def failed_casts(io: "DynamicDataIO", step: str) -> Iterator[None]:
+    def failed_casts(cls, io: "DynamicDataIO", step: str) -> Iterator[None]:
         """Raise ``ColumnsDataTypeError`` when a step collects a plan with a cast that fails, and log the polars error.
+
+        A polars error that is not a cast failure, for example a ``sum`` of a string column, keeps its type.
 
         Raises:
             ColumnsDataTypeError: A cast in the plan failed when the step collected it.
@@ -26,7 +32,9 @@ class PolarsChecks:
 
         try:
             yield
-        except (pl.exceptions.InvalidOperationError, pl.exceptions.ComputeError):
+        except (pl.exceptions.InvalidOperationError, pl.exceptions.ComputeError) as error:
+            if not any(text in str(error) for text in cls.CAST_FAILURES):
+                raise
             core.logger.exception(f"The {step} of {io.name} could not collect the frame: a cast in its plan failed")
             raise ColumnsDataTypeError() from None
 
