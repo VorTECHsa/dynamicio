@@ -122,6 +122,12 @@ jobs:
           - name: newest
             python-version: "3.14"
             install-args: --upgrade "pandas<3" "sqlalchemy<2.1"
+          - name: lowest, polars
+            # The floors of the polars extra (polars, pyarrow) and of pandera, with the polars-engine tests and the polars demo
+            python-version: "3.11"
+            install-args: "--resolution lowest-direct"
+            extras: "[polars]"
+            polars: true
     name: dependency-ranges (${{ matrix.name }})
     steps:
       - uses: actions/checkout@v4
@@ -134,18 +140,23 @@ jobs:
 
       - name: Install runtime dependencies (${{ matrix.name }})
         run: |
-          uv pip install ${{ matrix.install-args }} -e .
+          uv pip install ${{ matrix.install-args }} -e ".${{ matrix.extras }}"
           uv pip install pytest pytest-asyncio mock
 
       - name: Show resolved versions
         run: uv pip list
 
       - name: Check that polars is not installed
-        # These jobs install dynamicio without the polars extra, so the run proves that the pandas engine and the CLI work without polars
+        # The other jobs install dynamicio without the polars extra, so the run proves that the pandas engine and the CLI work without polars
+        if: ${{ !matrix.polars }}
         run: uv run --no-sync python -c "import importlib.util, sys; sys.exit(importlib.util.find_spec('polars') is not None)"
 
       - name: Run tests
         run: uv run --no-sync pytest -vv
+
+      - name: Run the demo on the polars engine
+        if: ${{ matrix.polars }}
+        run: uv run --no-sync pytest -vv -o addopts="-p no:warnings" --dynamicio-engine=polars demo
 
   codecov:
     runs-on: ubuntu-latest

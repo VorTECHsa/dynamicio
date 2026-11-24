@@ -36,7 +36,7 @@ make generate-docs                          # strict documentation build
 - The tests of the engines: each test sets the engine that it needs, and the engine is reset after it. One `pytest` run thus covers the pandas engine
   and the polars engine.
 - `tests/test_install.py`: blocks the polars import in a new process, and checks that the modules of dynamicio, the pandas engine and the CLI
-  work without polars. The `dependency-ranges` CI jobs install dynamicio without the `polars` extra, and a step checks that polars is not installed.
+  work without polars. The `dependency-ranges` CI jobs install dynamicio without the `polars` extra, and a step checks that polars is not installed. The `dependency-ranges (lowest, polars)` job is the exception: it installs the floors of the `polars` extra and runs the polars-engine tests and the polars demo.
 - `demo/polars`: the demo pipeline on the polars engine. Its `tests/data` is a copy of the data of `demo/pandas`, and its outputs are equal to the
   expected outputs of the pandas demo. The CI job
   `polars-demo` runs it.
