@@ -270,7 +270,7 @@ class WithKafka:
         "transactional.id",
     }
 
-    def _read_from_kafka(self, df: pd.DataFrame):
+    def _read_from_kafka(self):
         """Kafka is not ideal for reading files as part of batch ETL jobs. Raise NotImplementedError."""
         raise NotImplementedError("Dynamicio does not support reading from Kafka Topics.")
 

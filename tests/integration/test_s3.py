@@ -47,7 +47,7 @@ class TestS3TypeAlias:
     def test_an_s3_resource_writes_the_bytes_of_s3_file_and_reads_back_the_frame(self, floci, prefix, tmp_path, file_type):
         # Given
         (tmp_path / "alias").mkdir()
-        with pytest.warns(DeprecationWarning, match='"s3" is deprecated'):
+        with pytest.warns(FutureWarning, match='"s3" is deprecated'):
             alias = Resources.s3_file(tmp_path / "alias", floci.bucket, f"{prefix}/alias.{file_type}", file_type, type_name="s3")
         (tmp_path / "file").mkdir()
         config = Resources.s3_file(tmp_path / "file", floci.bucket, f"{prefix}/file.{file_type}", file_type)

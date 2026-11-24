@@ -22,6 +22,7 @@ import pyarrow.parquet as pq
 from botocore.exceptions import ClientError
 from pandas._libs.parsers import STR_NA_VALUES  # pylint: disable=no-name-in-module
 
+from dynamicio.engines.engine import Engine
 from dynamicio.engines.polars_options import PolarsOptions
 from dynamicio.engines.polars_parquet import PolarsParquet
 from dynamicio.engines.polars_s3 import PolarsS3
@@ -42,8 +43,6 @@ class PolarsFiles:
     """The polars readers and writers of the file resources: ``local``, ``local_batch`` and ``s3_file``."""
 
     SOURCES = ("local", "local_batch", "s3_file")
-    # The resources that the engine writes: an `s3_path_prefix` write goes to the prefix writer of the pandas engine
-    WRITE_SOURCES = (*SOURCES, "s3_path_prefix")
     # The resources that the engine checks and reads: an `s3_path_prefix` read is a scan of its objects
     READ_SOURCES = (*SOURCES, "s3_path_prefix")
     DURATION_UNITS = {"s": "seconds", "ms": "milliseconds", "us": "microseconds", "ns": "nanoseconds"}
@@ -59,15 +58,10 @@ class PolarsFiles:
         pa.uint64(): pd.UInt64Dtype(),
     }
 
-    @staticmethod
-    def source_of(io: "DynamicDataIO") -> str:
-        """The backend of an IO object."""
-        return io.sources_config.data_backend_type.value
-
     @classmethod
     def section_of(cls, io: "DynamicDataIO") -> Any:
         """The ``local`` or ``s3`` section of the resource definition of an IO object."""
-        return io.sources_config.s3 if cls.source_of(io) in ("s3_file", "s3_path_prefix") else io.sources_config.local
+        return io.sources_config.s3 if Engine.source_of(io) in ("s3_file", "s3_path_prefix") else io.sources_config.local
 
     @classmethod
     def paths_of(cls, io: "DynamicDataIO") -> List[str]:
@@ -83,7 +77,7 @@ class PolarsFiles:
             EngineResourceError: The file type or an option has no polars reader and writer, or the ``index_column`` of a JSON resource is not a column of
                 the model.
         """
-        source = cls.source_of(io)
+        source = Engine.source_of(io)
         if source not in cls.READ_SOURCES:
             return
         fields = {field for path in cls.paths_of(io) for field in utils.get_string_template_field_names(path)}
@@ -118,7 +112,7 @@ class PolarsFiles:
             S3KeyNotFoundError: The key of a parquet object does not exist.
             ObjectNotFoundError: The key of a CSV or JSON object does not exist.
         """
-        source, section = cls.source_of(io), cls.section_of(io)
+        source, section = Engine.source_of(io), cls.section_of(io)
         file_type = get_file_type_value(section.file_type)
         options = dict(io.options)
         if source == "local_batch":
@@ -211,7 +205,7 @@ class PolarsFiles:
         index_column = options.get("index_column")
         if index_column is not None:
             data = utils.JsonIndex.decompressed(data, cls.target_of(io, options), options.get("compression", "infer"))
-            data = utils.JsonIndex.records(data, PolarsOptions.json_orient(cls.source_of(io), options), index_column)
+            data = utils.JsonIndex.records(data, PolarsOptions.json_orient(Engine.source_of(io), options), index_column)
             if data.strip() == b"[]":  # orient columns writes a frame without rows as an empty object for each column
                 return pl.DataFrame(schema=dtypes)
         reader = pl.read_ndjson if options.get("lines", False) else pl.read_json
@@ -241,7 +235,7 @@ class PolarsFiles:
         A CSV or JSON frame, and the frame of an ``s3_path_prefix`` resource, go to the pandas writer of their source. The prefix writer of the pandas
         engine thus writes the same objects and deletes the same old objects for each ``mode``. A ``local_batch`` resource has no writer on either engine.
         """
-        source, section = cls.source_of(io), cls.section_of(io)
+        source, section = Engine.source_of(io), cls.section_of(io)
         file_type = get_file_type_value(section.file_type)
         if file_type != "parquet" or source in ("local_batch", "s3_path_prefix"):
             getattr(io, f"_write_to_{source}")(cls.to_pandas(io, frame))
@@ -263,7 +257,7 @@ class PolarsFiles:
         Raises:
             ValueError: The S3 key of a parquet file ends in ``/``, as on the pandas engine.
         """
-        source, section = cls.source_of(io), cls.section_of(io)
+        source, section = Engine.source_of(io), cls.section_of(io)
         path = utils.resolve_template(section.file_path, options)
         if source == "s3_file" and path.endswith("/"):
             raise ValueError("[s3-parquet] Parquet output path must be a file, not a directory (e.g., 's3://bucket/data.parquet').")

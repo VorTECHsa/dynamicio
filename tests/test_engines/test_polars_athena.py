@@ -130,3 +130,20 @@ class TestPolarsAthenaRead:
         # When / Then
         with pytest.raises(ValueError, match="'chunksize' option is not supported"):
             Queries.read("polars", Rows, Queries.result(), chunksize=10)
+
+
+class TestPolarsAthenaWrite:
+    @pytest.mark.unit
+    def test_a_write_calls_only_the_athena_writer_of_the_io(self):
+        # Given
+        EngineSetting.reset("polars")
+        io = FilesIO(source_config=Queries.config(), schema=Rows)
+        frame = pl.DataFrame({"id": [1], "price": [0.5], "name": ["a"], "flag": [True], "n": [1], "at": [datetime(2024, 1, 1)]})
+
+        # When
+        with patch.object(FilesIO, "_write_to_athena") as athena, patch("dynamicio.engines.polars_files.PolarsFiles.write") as files:
+            io.write(frame)
+
+        # Then
+        athena.assert_called_once()
+        files.assert_not_called()

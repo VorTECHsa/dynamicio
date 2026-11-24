@@ -20,6 +20,7 @@ import polars as pl
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from dynamicio.engines.engine import Engine
 from dynamicio.engines.polars_checks import PolarsChecks
 from dynamicio.engines.polars_files import PolarsFiles
 from dynamicio.engines.polars_parquet import PolarsParquet
@@ -55,7 +56,7 @@ class PolarsSinks:
             ValueError: The S3 key of a parquet file ends in ``/``, as on ``write()``, or a list of parts is empty.
         """
         lazy = cls.combined(engine, io, frame)
-        source, section = PolarsFiles.source_of(io), PolarsFiles.section_of(io)
+        source, section = Engine.source_of(io), PolarsFiles.section_of(io)
         options = dict(io.options)
         if get_file_type_value(section.file_type) != "parquet" or source == "s3_path_prefix":
             collected = cls.collect(engine, io, lazy, [lazy])
@@ -79,7 +80,7 @@ class PolarsSinks:
     @classmethod
     def sink_parquet(cls, engine: "PolarsEngine", io: "DynamicDataIO", lazy: pl.LazyFrame, options: MutableMapping[str, Any]) -> None:
         """Sink a parquet file of a ``local`` or ``s3_file`` resource to a temporary file, then move it into place or upload it."""
-        source, target = PolarsFiles.source_of(io), PolarsFiles.target_of(io, options)
+        source, target = Engine.source_of(io), PolarsFiles.target_of(io, options)
         # A local file is moved into place, so its temporary file is in the same directory, on the same file system
         directory = os.path.dirname(os.path.abspath(target)) if source == "local" else None
         with tempfile.TemporaryDirectory(prefix=cls.STAGE_PREFIX, dir=directory) as stage:

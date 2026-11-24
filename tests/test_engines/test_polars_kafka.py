@@ -312,3 +312,16 @@ class TestChunks:
 
         # Then
         assert lazy == eager and len(lazy) == 3
+
+
+class TestRead:
+    @pytest.mark.unit
+    @pytest.mark.parametrize("engine, model, options", [("pandas", PandasPlain, {}), ("polars", Plain, {"key_column": "key"})])
+    def test_a_kafka_read_raises_not_implemented_error_on_the_two_engines(self, tmp_path, engine, model, options):
+        # Given
+        EngineSetting.reset(engine)
+        io = FilesIO(source_config=Topics.config(tmp_path), schema=model, **options)
+
+        # When / Then
+        with pytest.raises(NotImplementedError, match="does not support reading from Kafka"):
+            io.read()

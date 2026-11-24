@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, MutableMapping, Optional
 
 import polars as pl
 
+from dynamicio.engines.engine import Engine
 from dynamicio.engines.polars_files import PolarsFiles
 from dynamicio.engines.polars_s3 import PolarsS3
 from dynamicio.errors import ColumnsDataTypeError, NoObjectsFoundError
@@ -47,7 +48,7 @@ class PolarsScans:
             ValueError: No object under a parquet prefix has a column of the schema.
             ColumnsDataTypeError: The objects under a parquet prefix have types of a column that do not upcast to one type.
         """
-        source, section = PolarsFiles.source_of(io), PolarsFiles.section_of(io)
+        source, section = Engine.source_of(io), PolarsFiles.section_of(io)
         file_type = get_file_type_value(section.file_type)
         options = dict(io.options)
         if source == "s3_path_prefix":

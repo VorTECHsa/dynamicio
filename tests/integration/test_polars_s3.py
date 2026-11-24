@@ -42,7 +42,7 @@ class TestPolarsS3TypeAlias:
         # Given
         (tmp_path / "alias").mkdir()
         (tmp_path / "file").mkdir()
-        with pytest.warns(DeprecationWarning, match='"s3" is deprecated'):
+        with pytest.warns(FutureWarning, match='"s3" is deprecated'):
             alias = Resources.s3_file(tmp_path / "alias", floci.bucket, f"{prefix}/alias.{file_type}", file_type, options, type_name="s3")
         config = Resources.s3_file(tmp_path / "file", floci.bucket, f"{prefix}/file.{file_type}", file_type, options)
 

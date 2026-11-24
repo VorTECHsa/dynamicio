@@ -12,6 +12,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from botocore.exceptions import ClientError
 
+from dynamicio.engines.engine import Engine
 from dynamicio.errors import EngineResourceError, S3KeyNotFoundError
 from dynamicio.mixins import utils, with_s3
 
@@ -119,7 +120,7 @@ class ParquetFooters:
             FileNotFoundError: A local file does not exist.
             S3KeyNotFoundError: The S3 key does not exist.
         """
-        source = io.sources_config.data_backend_type.value
+        source = Engine.source_of(io)
         section = (io.sources_config.s3 if source.startswith("s3") else io.sources_config.local) if source in cls.SOURCES else None
         file_type = utils.get_file_type_value(section.file_type) if section is not None else None
         if section is None or file_type != "parquet":

@@ -113,12 +113,12 @@ class IOEnvironment(BaseModel):
 
     @pydantic.validator("data_backend_type", pre=True)
     def _read_s3_as_s3_file(cls, value):
-        """Read the type ``s3`` as ``s3_file``, with a ``DeprecationWarning``.
+        """Read the type ``s3`` as ``s3_file``, with a ``FutureWarning``.
 
         No mixin has a reader or a writer for ``s3``, so a resource of that type raised ``MissingMixinError``. dynamicio 13 removes the alias.
         """
         if value in ("s3", DataBackendType.s3):
-            warnings.warn('The resource type "s3" is deprecated: use "s3_file". dynamicio 13 removes "s3".', DeprecationWarning, stacklevel=2)
+            warnings.warn('The resource type "s3" is deprecated: use "s3_file". dynamicio 13 removes "s3".', FutureWarning, stacklevel=2)
             return DataBackendType.s3_file
         return value
 
