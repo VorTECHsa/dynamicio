@@ -66,7 +66,7 @@ class PolarsScans:
         if path.endswith("/"):
             raise NotImplementedError(f"the polars engine does not read the objects under an S3 prefix yet: s3://{section.bucket}/{path}")
         PolarsS3.check_key(section.bucket, path, file_type)
-        return cls.scan_file(file_type, f"s3://{section.bucket}/{path}", io, options, PolarsS3.arguments())
+        return cls.scan_file(file_type, f"s3://{section.bucket}/{path}", io, options, PolarsS3.arguments(section.bucket))
 
     @staticmethod
     def scan_file(file_type: str, path: str, io: "DynamicDataIO", options: MutableMapping[str, Any], arguments: Optional[Dict[str, Any]] = None) -> pl.LazyFrame:
@@ -103,17 +103,17 @@ class PolarsScans:
         if not keys:
             raise NoObjectsFoundError(f"No objects found under {url}")
         with_s3.logger.info(f"[s3] Scanning {len(keys)} objects under {url}")
-        return cls.scan_objects(io, [f"s3://{section.bucket}/{key}" for key in keys], url, options)
+        return cls.scan_objects(io, section.bucket, [f"s3://{section.bucket}/{key}" for key in keys], url, options)
 
     @classmethod
-    def scan_objects(cls, io: "DynamicDataIO", urls: List[str], source: str, options: MutableMapping[str, Any]) -> pl.LazyFrame:
+    def scan_objects(cls, io: "DynamicDataIO", bucket: str, urls: List[str], source: str, options: MutableMapping[str, Any]) -> pl.LazyFrame:
         """One ``scan_parquet`` of the objects of a prefix, with an explicit schema from their footers (ADR 0002 and decision 13 of ADR 0010).
 
         Raises:
             ValueError: No object has a column of the schema.
             ColumnsDataTypeError: The footers have types of a column that do not upcast to one type.
         """
-        footers = PolarsS3.footers(urls)
+        footers, rows = (list(values) for values in zip(*PolarsS3.footers(urls)))
         requested = list(options.get("columns") or io.schema.column_names)
         absent = collections.Counter(column for footer in footers for column in requested if column not in footer)
         if absent:
@@ -121,13 +121,11 @@ class PolarsScans:
         never_present = [column for column in requested if absent[column] == len(footers)]
         if never_present:
             raise ValueError(f"Columns {never_present} are missing from every parquet object under {source}")
-        if any(cls.upcast(column, cls.types_of(column, footers)) is None for column in requested):
-            rows = PolarsS3.row_counts(urls)
-            if any(rows) and not all(rows):
-                # An empty object gives no rows, so the scan leaves it out and its types do not count
-                urls, footers = [url for url, count in zip(urls, rows) if count], [footer for footer, count in zip(footers, rows) if count]
+        if any(rows) and not all(rows) and any(cls.upcast(column, cls.types_of(column, footers)) is None for column in requested):
+            # An empty object gives no rows, so the scan leaves it out and its types do not count
+            urls, footers = [url for url, count in zip(urls, rows) if count], [footer for footer, count in zip(footers, rows) if count]
         schema = {column: cls.widest(io, column, cls.types_of(column, footers)) for column in requested}
-        return cls.scan_runs(urls, footers, schema)
+        return cls.scan_runs(bucket, urls, footers, schema)
 
     @staticmethod
     def types_of(column: str, footers: List[pl.Schema]) -> List[Any]:
@@ -135,7 +133,7 @@ class PolarsScans:
         return [footer[column] for footer in footers if column in footer]
 
     @classmethod
-    def scan_runs(cls, urls: List[str], footers: List[pl.Schema], schema: Dict[str, Any]) -> pl.LazyFrame:
+    def scan_runs(cls, bucket: str, urls: List[str], footers: List[pl.Schema], schema: Dict[str, Any]) -> pl.LazyFrame:
         """The scan of the objects with ``schema``. The cast options of a scan do not upcast a ``Duration``, so the objects with the same duration units
         are one scan, and a cast gives the finest unit. The scans keep the listing order of the objects."""
         cast_options = pl.ScanCastOptions(integer_cast=["upcast", "allow-float"], float_cast="upcast", datetime_cast="upcast", categorical_to_string="allow")
@@ -155,7 +153,7 @@ class PolarsScans:
                 extra_columns="ignore",
                 cast_options=cast_options,
                 hive_partitioning=False,
-                **PolarsS3.arguments(),
+                **PolarsS3.arguments(bucket),
             ).with_columns(pl.col(column).cast(schema[column]) for column in units if units[column] != schema[column])
             for run_urls, units in runs
         ]

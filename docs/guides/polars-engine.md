@@ -255,13 +255,13 @@ assert frame["order_id"].to_list() == [3]
 
 A parquet prefix is one scan of all its objects:
 
-- The engine reads the footer of each object. A column has the widest type of the footers, as `pd.concat` gives it, for example `Int64` for `Int32` and `Int64`, and `Float64` for an integer and a float. The scan upcasts the narrower objects.
+- Before the scan, the engine reads the footer of each object once, with one ranged `GetObject` call for a footer up to 64 KiB. It gets the schema and the row count together. A column has the widest type of the footers, as `pd.concat` gives it, for example `Int64` for `Int32` and `Int64`, and `Float64` for an integer and a float. The scan upcasts the narrower objects.
 - `Datetime` columns with one time zone, and `Duration` columns, give the finest time unit. The objects with the same `Duration` units are one scan, and a cast gives the finest unit. The rows keep the order of the listing.
 - A pair of types that does not upcast, for example `String` and `Int64`, or `Int64` and `UInt64`, raises `ColumnsDataTypeError`.
-- When the types of a column do not upcast, the objects without rows do not count, as in the `pd.concat` of the pandas engine. The engine then reads the row count of each footer. If all the objects are empty, the types count.
+- When the types of a column do not upcast, the objects without rows do not count, as in the `pd.concat` of the pandas engine. The engine uses the row count of each footer. If all the objects are empty, the types count.
 - An object that lacks a column gets nulls in it, with the warning of the pandas engine. A column that no object has raises the `ValueError` of the pandas engine.
 
-The S3 reads of polars use the credentials and the region of the boto3 session of dynamicio. polars refreshes the credentials when they expire. A boto3 endpoint that is not an AWS endpoint, for example a local S3 stack, also goes to polars.
+The S3 reads of polars use the credentials of the boto3 session of dynamicio. polars refreshes the credentials when they expire. boto3 follows the redirect of S3 to the region of a bucket, and polars does not. So for the public AWS endpoint, the engine gives polars the region of the bucket, from the `x-amz-bucket-region` header of one `HeadBucket` call per bucket. A bucket without that header takes the region of the boto3 client. A boto3 endpoint that is not an AWS endpoint, for example a local S3 stack, also goes to polars.
 
 ### Options
 

@@ -1,4 +1,5 @@
 # pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring
+import functools
 import logging
 import types
 from datetime import datetime, timedelta, timezone
@@ -368,7 +369,8 @@ class TestScanObjects:
 
     @pytest.fixture(autouse=True)
     def local_arguments(self, monkeypatch):
-        monkeypatch.setattr(PolarsS3, "arguments", classmethod(lambda cls: {}))
+        monkeypatch.setattr(PolarsS3, "arguments", classmethod(lambda cls, bucket: {}))
+        monkeypatch.setattr(PolarsS3, "footer", classmethod(lambda cls, path: PolarsS3.footer_of(pq.ParquetFile(path))))
 
     @pytest.mark.unit
     def test_an_empty_object_with_another_type_is_left_out_as_pd_concat_does(self, tmp_path):
@@ -379,12 +381,57 @@ class TestScanObjects:
         )
 
         # When
-        result = PolarsScans.scan_objects(types.SimpleNamespace(name="x"), paths, "here", {"columns": ["a", "b"]}).collect()
+        result = PolarsScans.scan_objects(types.SimpleNamespace(name="x"), "b", paths, "here", {"columns": ["a", "b"]}).collect()
 
         # Then
         assert result.schema == pl.Schema({"a": pl.Int64, "b": pl.String})
         assert result.to_dicts() == [{"a": 1, "b": "x"}, {"a": 2, "b": "y"}]
         assert result.to_pandas().equals(self.pandas_concat(paths))
+
+    @pytest.mark.unit
+    def test_each_footer_is_read_once(self, tmp_path, monkeypatch):
+        # Given
+        paths = self.write(tmp_path, [pa.table({"a": pa.array([], pa.string())}), pa.table({"a": pa.array([1, 2], pa.int64())})])
+        read = []
+        monkeypatch.setattr(PolarsS3, "footer", classmethod(lambda cls, path: read.append(path) or PolarsS3.footer_of(pq.ParquetFile(path))))
+
+        # When
+        result = PolarsScans.scan_objects(types.SimpleNamespace(name="x"), "b", paths, "here", {"columns": ["a"]}).collect()
+
+        # Then
+        assert read == paths
+        assert result["a"].to_list() == [1, 2]
+
+    @pytest.mark.unit
+    def test_the_footer_schema_is_the_schema_of_a_polars_scan(self, tmp_path):
+        # Given
+        table = pa.table(
+            {
+                "i8": pa.array([1], pa.int8()),
+                "u64": pa.array([1], pa.uint64()),
+                "f32": pa.array([1.5], pa.float32()),
+                "s": pa.array(["x"], pa.string()),
+                "ls": pa.array(["x"], pa.large_string()),
+                "cat": pa.array(["x"]).dictionary_encode(),
+                "null": pa.array([None], pa.null()),
+                "at": pa.array([1], pa.timestamp("ns", "UTC")),
+                "took": pa.array([1], pa.duration("us")),
+                "day": pa.array([1], pa.date32()),
+                "items": pa.array([[1]], pa.list_(pa.int64())),
+                "empty_items": pa.array([[]], pa.list_(pa.null())),
+                "struct": pa.array([{"k": 1}]),
+                "flag": pa.array([True]),
+                "price": pa.array([1], pa.decimal128(10, 2)),
+            }
+        )
+        path = self.write(tmp_path, [table])[0]
+
+        # When
+        schema, rows = PolarsS3.footer_of(pq.ParquetFile(path))
+
+        # Then
+        assert schema == pl.scan_parquet(path).collect_schema()
+        assert rows == 1
 
     @pytest.mark.unit
     def test_empty_objects_only_keep_the_type_error(self, tmp_path, caplog):
@@ -393,7 +440,7 @@ class TestScanObjects:
 
         # When / Then
         with pytest.raises(ColumnsDataTypeError):
-            PolarsScans.scan_objects(types.SimpleNamespace(name="x"), paths, "here", {"columns": ["a"]})
+            PolarsScans.scan_objects(types.SimpleNamespace(name="x"), "b", paths, "here", {"columns": ["a"]})
         assert "which do not upcast to one type" in caplog.text
 
     @pytest.mark.unit
@@ -403,7 +450,7 @@ class TestScanObjects:
 
         # When / Then
         with pytest.raises(ColumnsDataTypeError):
-            PolarsScans.scan_objects(types.SimpleNamespace(name="x"), paths, "here", {"columns": ["a"]})
+            PolarsScans.scan_objects(types.SimpleNamespace(name="x"), "b", paths, "here", {"columns": ["a"]})
 
     @pytest.mark.unit
     def test_an_empty_object_that_upcasts_still_counts(self, tmp_path):
@@ -411,7 +458,7 @@ class TestScanObjects:
         paths = self.write(tmp_path, [pa.table({"a": pa.array([], pa.float64())}), pa.table({"a": pa.array([1], pa.int64())})])
 
         # When
-        result = PolarsScans.scan_objects(types.SimpleNamespace(name="x"), paths, "here", {"columns": ["a"]}).collect()
+        result = PolarsScans.scan_objects(types.SimpleNamespace(name="x"), "b", paths, "here", {"columns": ["a"]}).collect()
 
         # Then
         assert result.schema == pl.Schema({"a": pl.Float64})
@@ -427,7 +474,7 @@ class TestScanObjects:
         )
 
         # When
-        result = PolarsScans.scan_objects(types.SimpleNamespace(name="x"), paths, "here", {"columns": ["n", "d"]}).collect()
+        result = PolarsScans.scan_objects(types.SimpleNamespace(name="x"), "b", paths, "here", {"columns": ["n", "d"]}).collect()
 
         # Then
         assert result.schema == pl.Schema({"n": pl.Int64, "d": pl.Duration("ns")})
@@ -444,7 +491,7 @@ class TestScanObjects:
         )
 
         # When
-        result = PolarsScans.scan_objects(types.SimpleNamespace(name="x"), paths, "here", {"columns": ["n", "d"]}).filter(pl.col("n") > 1).select("d").collect()
+        result = PolarsScans.scan_objects(types.SimpleNamespace(name="x"), "b", paths, "here", {"columns": ["n", "d"]}).filter(pl.col("n") > 1).select("d").collect()
 
         # Then
         assert result["d"].to_list() == [timedelta(2), timedelta(3)]
@@ -457,7 +504,7 @@ class TestScanObjects:
         )
 
         # When
-        result = PolarsScans.scan_objects(types.SimpleNamespace(name="x"), paths, "here", {"columns": ["n", "d"]}).collect()
+        result = PolarsScans.scan_objects(types.SimpleNamespace(name="x"), "b", paths, "here", {"columns": ["n", "d"]}).collect()
 
         # Then
         assert result.schema == pl.Schema({"n": pl.Int64, "d": pl.Duration("ms")})
@@ -466,9 +513,13 @@ class TestScanObjects:
 
 class Sessions:
     @staticmethod
-    def patch(monkeypatch, credentials, region="eu-west-1", endpoint="https://s3.eu-west-1.amazonaws.com"):
+    def patch(monkeypatch, credentials, region="eu-west-1", endpoint="https://s3.eu-west-1.amazonaws.com", head_bucket=None):
+        """Patch the shared boto3 session and client. ``head_bucket`` answers ``HeadBucket``, by default with the region of the client."""
         session = types.SimpleNamespace(get_credentials=lambda: credentials)
-        client = types.SimpleNamespace(meta=types.SimpleNamespace(region_name=region, endpoint_url=endpoint))
+        head_bucket = head_bucket or (lambda Bucket: {"ResponseMetadata": {"HTTPHeaders": {"x-amz-bucket-region": region}}})
+        client = types.SimpleNamespace(meta=types.SimpleNamespace(region_name=region, endpoint_url=endpoint), head_bucket=head_bucket)
+        # A new cache of the bucket regions for each test, which the monkeypatch removes after the test
+        monkeypatch.setattr(PolarsS3, "bucket_region", staticmethod(functools.lru_cache(maxsize=None)(PolarsS3.bucket_region.__wrapped__)))
         monkeypatch.setattr("dynamicio.mixins.with_s3._shared_boto3_session", lambda: session)
         monkeypatch.setattr("dynamicio.mixins.with_s3._shared_s3_client", lambda: client)
 
@@ -521,7 +572,7 @@ class TestS3Credentials:
         Sessions.patch(monkeypatch, Sessions.credentials(), endpoint=endpoint)
 
         # When
-        arguments = PolarsS3.arguments()
+        arguments = PolarsS3.arguments("b")
 
         # Then
         assert arguments["storage_options"] == {"aws_region": "eu-west-1"}
@@ -534,7 +585,7 @@ class TestS3Credentials:
         Sessions.patch(monkeypatch, Sessions.credentials(), region="", endpoint=endpoint)
 
         # When
-        options = PolarsS3.arguments()["storage_options"]
+        options = PolarsS3.arguments("b")["storage_options"]
 
         # Then
         assert options["aws_endpoint_url"] == endpoint
@@ -555,10 +606,69 @@ class TestS3Credentials:
         Sessions.patch(monkeypatch, Sessions.credentials(), endpoint=endpoint)
 
         # When
-        options = PolarsS3.arguments()["storage_options"]
+        options = PolarsS3.arguments("b")["storage_options"]
 
         # Then
         assert options == {"aws_region": "eu-west-1", "aws_endpoint_url": endpoint}
+
+
+class TestBucketRegion:
+    @staticmethod
+    def redirect(region):
+        """A ``HeadBucket`` of a bucket in another region: S3 answers 301 with the region of the bucket in a header."""
+        from botocore.exceptions import ClientError  # pylint: disable=import-outside-toplevel
+
+        def head_bucket(Bucket):  # pylint: disable=invalid-name, unused-argument
+            raise ClientError({"Error": {"Code": "301"}, "ResponseMetadata": {"HTTPStatusCode": 301, "HTTPHeaders": {"x-amz-bucket-region": region}}}, "HeadBucket")
+
+        return head_bucket
+
+    @pytest.mark.unit
+    def test_a_bucket_in_another_region_gives_its_region_to_polars(self, monkeypatch):
+        # Given
+        Sessions.patch(monkeypatch, Sessions.credentials(), head_bucket=self.redirect("us-east-1"))
+
+        # When
+        options = PolarsS3.arguments("b")["storage_options"]
+
+        # Then
+        assert options == {"aws_region": "us-east-1"}
+
+    @pytest.mark.unit
+    def test_a_bucket_without_a_region_header_takes_the_region_of_the_client(self, monkeypatch):
+        # Given
+        Sessions.patch(monkeypatch, Sessions.credentials(), head_bucket=lambda Bucket: {"ResponseMetadata": {"HTTPHeaders": {}}})
+
+        # When
+        options = PolarsS3.arguments("b")["storage_options"]
+
+        # Then
+        assert options == {"aws_region": "eu-west-1"}
+
+    @pytest.mark.unit
+    def test_the_region_of_a_bucket_is_asked_once(self, monkeypatch):
+        # Given
+        calls = []
+        answer = {"ResponseMetadata": {"HTTPHeaders": {"x-amz-bucket-region": "eu-west-2"}}}
+        Sessions.patch(monkeypatch, Sessions.credentials(), head_bucket=lambda Bucket: calls.append(Bucket) or answer)
+
+        # When
+        regions = [PolarsS3.arguments(bucket)["storage_options"]["aws_region"] for bucket in ("b", "b", "c")]
+
+        # Then
+        assert regions == ["eu-west-2"] * 3
+        assert calls == ["b", "c"]
+
+    @pytest.mark.unit
+    def test_another_endpoint_does_not_ask_the_region_of_the_bucket(self, monkeypatch):
+        # Given
+        Sessions.patch(monkeypatch, Sessions.credentials(), endpoint="http://localhost:4566", head_bucket=self.redirect("us-east-1"))
+
+        # When
+        options = PolarsS3.arguments("b")["storage_options"]
+
+        # Then
+        assert options["aws_region"] == "eu-west-1"
 
 
 class TestPrefixOptions:

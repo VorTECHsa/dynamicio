@@ -1,16 +1,19 @@
 """The S3 access of the polars engine. polars and boto3 use the credentials, the region and the endpoint of the one boto3 session of the process."""
 
 import fnmatch
+import functools
 import re
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, NoReturn, Optional, Tuple
 from urllib.parse import urlparse
 
 import polars as pl
+import pyarrow.parquet as pq
 from botocore.exceptions import ClientError, NoCredentialsError
 
 from dynamicio.errors import ObjectNotFoundError, S3KeyNotFoundError
 from dynamicio.mixins import with_s3
+from dynamicio.parquet_footer import ParquetFooters, S3Tail
 
 
 class PolarsS3:
@@ -40,21 +43,41 @@ class PolarsS3:
         expiry = getattr(credentials, "_expiry_time", None)
         return values, int(expiry.timestamp()) if expiry else None
 
-    @classmethod
-    def arguments(cls) -> Dict[str, Any]:
-        """The S3 arguments of a polars scan: the credentials, and the region and the endpoint of the shared boto3 client.
+    @staticmethod
+    @functools.lru_cache(maxsize=None)
+    def bucket_region(bucket: str) -> Optional[str]:
+        """The region of a bucket, from the ``x-amz-bucket-region`` header of ``HeadBucket``, or None if S3 does not give it. One call per bucket.
 
-        The endpoint goes to polars when it is not the public endpoint of a region, so polars reads the S3 that boto3 reads. Examples are
-        ``AWS_ENDPOINT_URL``, the ``endpoint_url`` of the AWS config, a VPC interface endpoint (``*.vpce.amazonaws.com``), and a FIPS or a dual-stack
-        endpoint. For the public endpoint, polars makes its own endpoint for the region of the bucket.
+        S3 gives the header with a 301 for a bucket in another region and with a 403, so the region does not need the ``GetBucketLocation`` permission.
+        """
+        try:
+            response = with_s3._shared_s3_client().head_bucket(Bucket=bucket)  # pylint: disable=protected-access
+        except ClientError as error:
+            response = error.response
+        return response.get("ResponseMetadata", {}).get("HTTPHeaders", {}).get("x-amz-bucket-region")
+
+    @classmethod
+    def arguments(cls, bucket: str) -> Dict[str, Any]:
+        """The S3 arguments of a polars scan of a bucket: the credentials, the region of the bucket, and the endpoint of the shared boto3 client.
+
+        boto3 follows the redirect of S3 to the region of a bucket, and polars does not. For the public endpoint, the region is the region of the
+        bucket, and polars makes its own endpoint for it. A bucket without a region header takes the region of the client.
+
+        Another endpoint goes to polars with the region of the client, so polars reads the S3 that boto3 reads. Examples are ``AWS_ENDPOINT_URL``,
+        the ``endpoint_url`` of the AWS config, a VPC interface endpoint (``*.vpce.amazonaws.com``), and a FIPS or a dual-stack endpoint.
         """
         client = with_s3._shared_s3_client()  # pylint: disable=protected-access
-        options = {"aws_region": client.meta.region_name} if client.meta.region_name else {}
+        region = client.meta.region_name
         endpoint = urlparse(client.meta.endpoint_url)
-        if not cls.DEFAULT_ENDPOINT.match(endpoint.hostname or ""):
+        options = {}
+        if cls.DEFAULT_ENDPOINT.match(endpoint.hostname or ""):
+            region = cls.bucket_region(bucket) or region
+        else:
             options["aws_endpoint_url"] = client.meta.endpoint_url
             if endpoint.scheme == "http":
                 options["aws_allow_http"] = "true"
+        if region:
+            options["aws_region"] = region
         return {"credential_provider": cls.credentials, "storage_options": options}
 
     @staticmethod
@@ -111,16 +134,20 @@ class PolarsS3:
                 keys.append(key)
         return keys
 
-    @classmethod
-    def footers(cls, urls: List[str]) -> List[pl.Schema]:
-        """The schema of the footer of each parquet object, in the order of the URLs. The threads read the footers at the same time."""
-        arguments = cls.arguments()
-        with ThreadPoolExecutor(max_workers=cls.MAX_CONCURRENCY) as pool:
-            return list(pool.map(lambda url: pl.scan_parquet(url, **arguments).collect_schema(), urls))
+    @staticmethod
+    def footer_of(file: pq.ParquetFile) -> Tuple[pl.Schema, int]:
+        """The polars schema and the number of rows of an open parquet file, from its footer."""
+        footer = ParquetFooters.of(file)
+        return pl.from_arrow(footer.schema.empty_table()).collect_schema(), footer.rows
 
     @classmethod
-    def row_counts(cls, urls: List[str]) -> List[int]:
-        """The number of rows of each parquet object, from its footer, in the order of the URLs."""
-        arguments = cls.arguments()
+    def footer(cls, url: str) -> Tuple[pl.Schema, int]:
+        """The polars schema and the number of rows of a parquet object, from one read of its footer: ``S3Tail`` gets the last 64 KiB in one call."""
+        bucket, key = with_s3._split_s3_url(url)  # pylint: disable=protected-access
+        return cls.footer_of(pq.ParquetFile(S3Tail(bucket, key)))
+
+    @classmethod
+    def footers(cls, urls: List[str]) -> List[Tuple[pl.Schema, int]]:
+        """The polars schema and the number of rows of each parquet object, in the order of the URLs. The threads read the footers at the same time."""
         with ThreadPoolExecutor(max_workers=cls.MAX_CONCURRENCY) as pool:
-            return list(pool.map(lambda url: pl.scan_parquet(url, **arguments).select(pl.len()).collect().item(), urls))
+            return list(pool.map(cls.footer, urls))
