@@ -326,12 +326,11 @@ class TestModules:
     @pytest.mark.unit
     def test_a_compatibility_alias_of_a_model_is_ported_once(self, repo):
         # Given
-        package = Package.write(
-            repo,
-            {
-                "orders": "from pandera.typing import Series\nfrom dynamicio.schema import DataModel, Field\n\nclass Orders(DataModel, dataset='orders'):\n    a: Series[int] = Field(nullable=True)\n\nLegacyOrders = Orders\n"
-            },
+        source = (
+            "from pandera.typing import Series\nfrom dynamicio.schema import DataModel, Field\n\n"
+            "class Orders(DataModel, dataset='orders'):\n    a: Series[int] = Field(nullable=True)\n\nLegacyOrders = Orders\n"
         )
+        package = Package.write(repo, {"orders": source})
 
         # When
         PolarsMigration.migrate(str(package), str(repo / "out.py"))
