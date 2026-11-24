@@ -143,6 +143,13 @@ options:
   index_columns: [vessel_id, {__index_level_1__: event_id}]
 ```
 
+- The `metadata` write option adds key-value pairs to the key-value metadata of a parquet file, for `write()` and `sink()`. Keys and values are strings. `footer().metadata` reads them as bytes. A key `pandas` or `ARROW:schema` raises `EngineResourceError`. The option is for the polars engine.
+
+```yaml
+options:
+  metadata: {as_of: "2026-11-24T10:00:00.123456"}
+```
+
 The readers are polars readers, and the engine then casts the frame to the model:
 
 - A CSV file uses the null strings of `pandas.read_csv`. A column that is not a number or a Boolean reads as a string, so `007` keeps its text. The cast then parses the datetimes, the durations (for example `0 days 00:00:01`) and the Booleans (`True`, `False`, `true`, `false`, `TRUE`, `FALSE`).

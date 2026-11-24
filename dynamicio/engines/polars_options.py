@@ -46,6 +46,7 @@ class PolarsOptions:
                 "engine",
                 "index",
                 "index_columns",
+                "metadata",
                 "compression",
                 "compression_level",
                 "row_group_size",
@@ -103,6 +104,8 @@ class PolarsOptions:
     # The `quoting` values that the polars reader reads as `pandas.read_csv` does. QUOTE_NONE reads quotes as text, so the read has no quote character
     CSV_QUOTING = (csv.QUOTE_MINIMAL, csv.QUOTE_ALL, csv.QUOTE_NONNUMERIC, csv.QUOTE_NONE)
     PANDAS_PARQUET_ENGINES = (None, "auto", "pyarrow")
+    # The keys of the file metadata that the engine writes itself: the pandas metadata and the arrow schema of the file
+    RESERVED_PARQUET_METADATA = ("pandas", "ARROW:schema")
 
     @classmethod
     def check(cls, file_type: str, source: str, options: Mapping[str, Any]) -> None:
@@ -139,6 +142,18 @@ class PolarsOptions:
             ParquetIndex.pop(dict(options))
         except ValueError as error:
             raise EngineResourceError(str(error)) from error
+        cls.check_parquet_metadata(options.get("metadata"))
+
+    @classmethod
+    def check_parquet_metadata(cls, metadata: Any) -> None:
+        """Refuse a ``metadata`` write option that is not a dict of strings, or that has a key that the engine writes itself."""
+        if metadata is None:
+            return
+        if not isinstance(metadata, Mapping) or not all(isinstance(key, str) and isinstance(value, str) for key, value in metadata.items()):
+            raise EngineResourceError("the metadata option of a parquet write is a dict of str keys and str values")
+        reserved = sorted(key for key in metadata if key in cls.RESERVED_PARQUET_METADATA)
+        if reserved:
+            raise EngineResourceError(f"the metadata option of a parquet write cannot set {', '.join(reserved)}, which the engine writes itself")
 
     @classmethod
     def check_csv(cls, _source: str, options: Mapping[str, Any]) -> None:

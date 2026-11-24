@@ -171,6 +171,24 @@ class TestSinkGivesTheFileOfWrite:
         assert pd.read_parquet(sunk).index.tolist() == [4, 7]
 
     @pytest.mark.unit
+    def test_the_metadata_option_gives_sink_and_write_the_same_key_value_metadata(self, tmp_path):
+        # Given
+        frame = pl.DataFrame({"vessel_id": ["v1", "v2"]})
+
+        class Vessels(DataModel, dataset="vessels"):
+            vessel_id: str
+
+        # When
+        written, sunk = Sinks.write_and_sink(tmp_path, "parquet", {"metadata": {"as_of": "2026-11-24T10:00:00.123456"}}, frame, Vessels)
+
+        # Then
+        for path in (written, sunk):
+            file_metadata = pq.ParquetFile(str(path)).metadata.metadata
+            assert file_metadata[b"as_of"] == b"2026-11-24T10:00:00.123456"
+            assert b"pandas" in file_metadata
+        assert Sinks.footer(sunk)[0].equals(Sinks.footer(written)[0], check_metadata=True)
+
+    @pytest.mark.unit
     def test_a_categorical_column_named_len_or_rows_has_the_footer_of_write(self, tmp_path):
         class Counted(DataModel, dataset="counted"):
             len: pl.Categorical = Field(nullable=True)

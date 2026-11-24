@@ -31,7 +31,7 @@ class PolarsParquet:
     @staticmethod
     def parquet_arguments(options: MutableMapping[str, Any]) -> Dict[str, Any]:
         """The arguments of ``pyarrow.parquet.write_table`` from the parquet write options of a resource."""
-        return {name: value for name, value in PolarsOptions.write_options("parquet", options).items() if name not in ("engine", "index", ParquetIndex.OPTION)}
+        return {name: value for name, value in PolarsOptions.write_options("parquet", options).items() if name not in ("engine", "index", "metadata", ParquetIndex.OPTION)}
 
     @classmethod
     def arrow_table(cls, io: "DynamicDataIO", frame: pl.DataFrame, options: MutableMapping[str, Any]) -> pa.Table:
@@ -97,7 +97,7 @@ class PolarsParquet:
             metadata["column_indexes"] = cls.COLUMN_INDEXES
         nulls = {column for column, count in null_counts.items() if height and count == height}
         fields = [cls.arrow_field(field, column, schema[field.name], counts, field.name in nulls) for field, column in zip(arrow, metadata["columns"])]
-        return pa.schema(fields, metadata={b"pandas": json.dumps(metadata).encode()})
+        return pa.schema(fields, metadata={**{key.encode(): value.encode() for key, value in (options.get("metadata") or {}).items()}, b"pandas": json.dumps(metadata).encode()})
 
     @classmethod
     def arrow_field(cls, field: pa.Field, column: Dict[str, Any], dtype: Any, counts: Dict[str, int], all_null: bool = False) -> pa.Field:

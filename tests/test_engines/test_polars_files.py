@@ -238,6 +238,38 @@ class TestParquetFooter:
         assert [polars_metadata.row_group(0).column(i).physical_type for i in columns] == [pandas_metadata.row_group(0).column(i).physical_type for i in columns]
 
     @pytest.mark.unit
+    def test_the_metadata_option_is_in_the_footer_of_the_file(self, tmp_path):
+        # Given
+        config = Files.config(tmp_path, "parquet", {"metadata": {"as_of": "2026-11-24T10:00:00.123456"}})
+
+        # When
+        Files.polars(config, Pair).write(pl.DataFrame({"a": [1], "b": ["x"]}))
+
+        # Then
+        footer = FilesIO(source_config=config, schema=Pair).footer()
+        assert footer.metadata[b"as_of"] == b"2026-11-24T10:00:00.123456"
+        assert b"pandas" in footer.metadata
+        assert footer.rows == 1
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize(
+        "metadata, message",
+        [
+            ({"pandas": "x"}, "cannot set pandas"),
+            ({"ARROW:schema": "x"}, "cannot set ARROW:schema"),
+            ({"as_of": 1}, "dict of str keys and str values"),
+            ("as_of", "dict of str keys and str values"),
+        ],
+    )
+    def test_the_metadata_option_refuses_a_value_that_is_not_valid(self, tmp_path, metadata, message):
+        # Given
+        config = Files.config(tmp_path, "parquet", {"metadata": metadata})
+
+        # When / Then
+        with pytest.raises(EngineResourceError, match=message):
+            Files.polars(config, Pair).write(pl.DataFrame({"a": [1], "b": ["x"]}))
+
+    @pytest.mark.unit
     def test_the_compression_option_reaches_the_writer(self, tmp_path):
         # Given
         config = Files.config(tmp_path, "parquet", {"compression": "zstd"})
