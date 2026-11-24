@@ -34,7 +34,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-polars = ["polars>=2.1"]
+polars = ["polars>=2.1", "pyarrow>=25"]
 
 [project.urls]
 Documentation = "https://dynamicio.readthedocs.io/en/latest/"

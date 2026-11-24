@@ -1037,6 +1037,22 @@ class TestListColumns:
         assert json.loads(polars_schema.metadata[b"pandas"]) == json.loads(pandas_schema.metadata[b"pandas"])
 
     @pytest.mark.unit
+    def test_a_list_column_with_a_null_row_that_has_items_reads_back_equal(self, tmp_path):
+        # Given a null row that keeps the items of its list, as `when().then()` gives it
+        config = Files.config(tmp_path, "parquet")
+        frame = pl.DataFrame(
+            {"id": [1, 2, 3], "tags": [["a"], ["b"], ["c"]], "counts": [[1], [2], [3]]}, schema={"id": pl.Int64, "tags": pl.List(pl.String), "counts": pl.List(pl.Int64)}
+        )
+        frame = frame.with_columns(pl.when(pl.col("id") != 2).then(pl.col(name)).alias(name) for name in ("tags", "counts"))
+        assert frame["tags"].to_arrow().offsets.to_pylist() == [0, 1, 2, 3]
+
+        # When
+        Files.polars(config, Tagged).write(frame)
+
+        # Then
+        assert Files.polars(config, Tagged).read().equals(frame)
+
+    @pytest.mark.unit
     def test_an_all_null_list_column_has_the_null_type_of_pandas(self, tmp_path):
         # Given
         config = Files.config(tmp_path, "parquet")

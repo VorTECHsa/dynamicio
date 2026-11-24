@@ -101,7 +101,8 @@ class TestConfigure:
         with open(Path(__file__).parents[2] / "pyproject.toml", "rb") as file:
             extra = tomllib.load(file)["project"]["optional-dependencies"]["polars"]
 
-        assert extra == [f"polars>={'.'.join(str(part) for part in EngineSetting.POLARS_MINIMUM)}"]
+        # pyarrow 25 writes a list column of polars with a null row that has items, and the parquet writer of pyarrow 24 refuses it
+        assert extra == [f"polars>={'.'.join(str(part) for part in EngineSetting.POLARS_MINIMUM)}", "pyarrow>=25"]
 
     @pytest.mark.unit
     def test_a_switch_to_polars_after_the_first_use_without_polars_is_an_engine_configuration_error(self):
