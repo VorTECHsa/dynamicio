@@ -11,7 +11,7 @@ dynamicio still runs the validations and emits the metrics.
 ```python
 from pandera.typing import Series
 
-from demo.src.config.environment import LOWER_THAN_LIMIT
+from demo.pandas.src.config.environment import LOWER_THAN_LIMIT
 from dynamicio.schema import DataModel, Field, Metric
 
 

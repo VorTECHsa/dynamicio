@@ -89,7 +89,7 @@ jobs:
           flags: integration
 
   polars-demo:
-    # The demo pipeline on the polars engine reads the inputs of the pandas demo and must match its expected outputs. The engine is a setting of the
+    # The demo pipeline on the polars engine (demo/polars) reads a copy of the inputs of the pandas demo and must match its expected outputs. The engine is a setting of the
     # process, so this run is apart from the test job. The option of the dynamicio pytest plugin sets the engine, and `-o addopts=` turns the plugin on.
     runs-on: ubuntu-latest
     steps:

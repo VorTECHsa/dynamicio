@@ -8,9 +8,9 @@ An example can be found in the second of the two demo tasks, namely, the `transf
 import asyncio
 import logging
 
-from demo.src import transform_input_config, transform_output_config
-from demo.src.resources.io import InputIO, StagedBar, StagedFoo
-from demo.src.resources.schemas.processed import FinalBar, FinalFoo
+from demo.pandas.src import transform_input_config, transform_output_config
+from demo.pandas.src.resources.io import InputIO, StagedBar, StagedFoo
+from demo.pandas.src.resources.schemas.processed import FinalBar, FinalFoo
 
 logger = logging.getLogger(__name__)
 

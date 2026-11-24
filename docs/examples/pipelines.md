@@ -1,7 +1,8 @@
 # Pipelines
 
-The [`demo/`](https://github.com/VorTECHsa/dynamicio/tree/master/demo) directory of the repository is a runnable
-two-task pipeline (staging, then transform) with its own tests. It reads `foo` from S3 and `bar` from Postgres in
+The [`demo/`](https://github.com/VorTECHsa/dynamicio/tree/master/demo) directory of the repository has a runnable
+two-task pipeline (staging, then transform) for each engine: `demo/pandas` and `demo/polars`. Each one has its own
+configs, resource definitions, models, sample data and tests. It reads `foo` from S3 and `bar` from Postgres in
 `DEV` and `PROD`, and from sample files in `LOCAL`.
 
 <figure markdown>
@@ -21,7 +22,8 @@ To run its tests from a checkout:
 
 ```shell
 uv sync
-uv run pytest demo/tests
+uv run pytest demo/pandas/tests
+uv run pytest -o addopts="-p no:warnings" --dynamicio-engine=polars demo/polars
 ```
 
 For the reasoning behind larger design choices, such as how S3 is accessed or how schemas are declared, see the

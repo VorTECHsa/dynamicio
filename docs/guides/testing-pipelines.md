@@ -55,8 +55,8 @@ import asyncio
 
 import pytest
 
-from demo.src import staging_output_config, transform_output_config
-from demo.src.runners import staging, transform
+from demo.pandas.src import staging_output_config, transform_output_config
+from demo.pandas.src.runners import staging, transform
 from dynamicio.testharness import ExpectedOutputs
 
 
@@ -118,7 +118,7 @@ with ExpectedOutputs(session) as outputs:
 them. The harness therefore says it, for passing runs as well as failing ones. At the end of the session it prints:
 
 ```
-2 matched, 0 failed  [demo/tests/runners/test_staging.py::TestStaging::test_staging_writes_the_staged_foo_and_bar_datasets]
+2 matched, 0 failed  [demo/pandas/tests/runners/test_staging.py::TestStaging::test_staging_writes_the_staged_foo_and_bar_datasets]
   ✓ STAGED_FOO  10 rows x 4 columns, as staged_foo.parquet
   ✓ STAGED_BAR  10 rows x 4 columns, as staged_bar.parquet
 ```
@@ -182,10 +182,10 @@ finds, reads, removes and promotes the files of one resource.
 When a change of output is intended, regenerate the reference files instead of editing them by hand:
 
 ```shell
-DYNAMICIO_UPDATE_EXPECTED=1 uv run pytest demo/tests/test_pipeline.py   # writes the generated outputs over the expected files; review the diff
+DYNAMICIO_UPDATE_EXPECTED=1 uv run pytest demo/pandas/tests/test_pipeline.py   # writes the generated outputs over the expected files; review the diff
 ```
 
-The end-to-end test above is `demo/tests/test_pipeline.py`; the sample data it runs on lives under `demo/tests/data`.
+The end-to-end test above is `demo/pandas/tests/test_pipeline.py`; the sample data it runs on lives under `demo/pandas/tests/data`.
 
 ### Testing on the polars engine
 
@@ -209,7 +209,7 @@ pytest --dynamicio-engine=polars tests
 One process cannot change its engine. A repo thus runs one pytest process, or one CI job, for each engine.
 
 The dynamicio repo turns the plugin off in its `addopts`, so its own runs give `-o addopts="-p no:warnings"` to turn it on. On the polars engine,
-the demo runs the tests of `demo/polars_pipeline` and leaves out `demo/tests`:
+the demo runs the tests of `demo/polars` and leaves out `demo/pandas/tests`:
 
 ```shell
 pytest -o addopts="-p no:warnings" --dynamicio-engine=polars demo

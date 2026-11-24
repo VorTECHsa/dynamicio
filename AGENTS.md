@@ -27,7 +27,7 @@ uv run black --check dynamicio tests       # line length 185; `uv run black dyna
 uv run flake8 --verbose dynamicio tests    # import order (I100) failures have blocked a release before
 uv run pylint -v dynamicio tests           # must stay 10.00/10
 uv run yamllint -v dynamicio tests
-uv run pytest -vv                          # also: uv run pytest demo/tests
+uv run pytest -vv                          # also: uv run pytest demo/pandas/tests
 ```
 
 `make check-linting`, `make run-tests` and `make generate-docs` wrap the same commands. Pre-commit hooks run the linters

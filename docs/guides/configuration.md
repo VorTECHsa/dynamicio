@@ -88,7 +88,7 @@ src
 ├── __init__.py
 ```
 
-which allows it to be automatically loaded on call of any module within the `demo.src` package.
+which allows it to be automatically loaded on call of any module within the `demo.pandas.src` package.
 
 ```python
 """Set config IOs."""
@@ -97,8 +97,8 @@ __all__ = ["staging_input_config", "staging_output_config", "transform_input_con
 import logging
 import os
 
-from demo.src.config import environment
-from demo.src.config.environment import ENVIRONMENT, RESOURCES
+from demo.pandas.src.config import environment
+from demo.pandas.src.config.environment import ENVIRONMENT, RESOURCES
 from dynamicio.config import IOConfig
 
 logging.basicConfig(level=logging.INFO)
@@ -116,21 +116,21 @@ On loading, `IOConfig` will load the respective configs for all resources in the
 for `FOO`:
 
 ```python
-import demo.src.config.environment
+import demo.pandas.src.config.environment
 
 {
     "FOO": {
         "LOCAL": {
             "type": "local",
             "local": {
-                "file_path": f"{demo.src.config.environment.TEST_RESOURCES}/data/input/foo.csv",
+                "file_path": f"{demo.pandas.src.config.environment.TEST_RESOURCES}/data/input/foo.csv",
                 "file_type": "csv",
             },
         },
         "DEV": {
             "type": "s3_file",
             "s3": {
-                "bucket": f"{demo.src.config.environment.DEV_S3_INPUT_BUCKET}",
+                "bucket": f"{demo.pandas.src.config.environment.DEV_S3_INPUT_BUCKET}",
                 "file_path": "data/foo.h5",
                 "file_type": "hdf"
             }
@@ -152,7 +152,7 @@ and with `env_identifier="DEV"`, the output would be:
 ```python
 "type": "s3_file",
 "s3": {
-    "bucket": f"{demo.src.config.environment.DEV_S3_INPUT_BUCKET}",
+    "bucket": f"{demo.pandas.src.config.environment.DEV_S3_INPUT_BUCKET}",
     "file_path": "data/foo.h5",
     "file_type": "hdf"
 }
