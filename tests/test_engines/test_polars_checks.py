@@ -1,11 +1,12 @@
 # pylint: disable=missing-module-docstring, missing-class-docstring, missing-function-docstring
 from types import SimpleNamespace
 
-import polars as pl
 import pytest
 
 from dynamicio.engines.polars_checks import PolarsChecks
 from dynamicio.errors import ColumnsDataTypeError
+
+pl = pytest.importorskip("polars")
 
 
 class TestFailedCasts:

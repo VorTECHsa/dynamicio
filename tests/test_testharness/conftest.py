@@ -63,6 +63,16 @@ CSV_WITH_JSON_REFERENCE:
     expected:
       path: "[[ ROOT ]]/expected/mixed.json"
       file_type: "json"
+CSV_GZIP:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ ROOT ]]/out.csv"
+      file_type: "csv"
+    expected:
+      path: "[[ ROOT ]]/expected/out.csv"
+      options:
+        compression: "gzip"
 JSON_INDEX:
   LOCAL:
     type: "local"

@@ -252,3 +252,11 @@ class MixedCaseAthena(pa.DataFrameModel):
     IsActive: Series[bool] = pa.Field(nullable=True)
     Amount: Series[float] = pa.Field(nullable=True)
     CreatedOn: Series[pa.DateTime] = pa.Field(nullable=True)
+
+
+class IndexedEvents(pa.DataFrameModel):
+    __dataset_name__ = "indexed_events"
+
+    vessel_id: Series[object] = pa.Field(nullable=True)
+    index_level_1: Series[object] = pa.Field(nullable=True, alias="__index_level_1__")
+    value: Series[int] = pa.Field(nullable=True)

@@ -115,7 +115,7 @@ class OutputFiles:
     def read_file(cls, path: str, file_type: str, **options: Any) -> Any:
         """Read a file with the plain readers of the engine of the process, so no schema or cast hides a difference.
 
-        ``options`` go to the reader (``orient`` and ``lines`` only to JSON). On the polars engine they are the arguments of the polars reader. The pandas
+        ``options`` go to the reader (``orient`` and ``lines`` to JSON, ``compression`` to JSON and CSV). On the polars engine they are the arguments of the polars reader. The pandas
         reader gives the keys of a JSON object in the index, so it does not use ``index_column``.
 
         Raises:
@@ -131,7 +131,8 @@ class OutputFiles:
         options.pop("index_column", None)
         if file_type != "json":
             for name in OutputFiles.JSON_READ_OPTIONS:
-                options.pop(name, None)
+                if not (file_type == "csv" and name == "compression"):  # pandas reads a compressed CSV with `compression`
+                    options.pop(name, None)
         return readers[file_type](path, **options)
 
     @staticmethod

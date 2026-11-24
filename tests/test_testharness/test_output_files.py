@@ -2,9 +2,7 @@
 import os
 
 import pandas as pd
-import polars as pl
 import pytest
-from polars.testing import assert_frame_equal
 
 from dynamicio.testharness import OutputFiles
 from tests.test_testharness.conftest import PARAMS
@@ -69,6 +67,19 @@ class TestOutputFiles:
         pd.testing.assert_frame_equal(files.read_generated(), frame)
 
     @pytest.mark.unit
+    def test_the_pandas_reader_reads_a_csv_with_the_compression_of_the_expected_options(self, config):
+        # Given
+        files = OutputFiles(config, "CSV_GZIP")
+        frame = pd.DataFrame({"a": [1, 2], "b": ["x", "y"]})
+        frame.to_csv(files.generated_path, index=False, compression="gzip")
+
+        # When
+        generated = files.read_generated()
+
+        # Then
+        pd.testing.assert_frame_equal(generated, frame)
+
+    @pytest.mark.unit
     def test_expected_options_override_how_both_files_are_read(self, config):
         files = OutputFiles(config, "JSON_INDEX")
         frame = pd.DataFrame({"a": [1, 2]}, index=["r1", "r2"])
@@ -83,6 +94,9 @@ class TestOutputFiles:
     @pytest.mark.parametrize("orient", ["index", "columns"])
     @pytest.mark.parametrize("name, options", [("out.json.gz", {}), ("out.json", {"compression": "gzip"})], ids=["suffix", "option"])
     def test_the_polars_reader_decompresses_a_json_object(self, tmp_path, orient, name, options):
+        pl = pytest.importorskip("polars")
+        from polars.testing import assert_frame_equal  # pylint: disable=import-outside-toplevel
+
         # Given
         path = str(tmp_path / name)
         pd.DataFrame({"a": [1, 2]}, index=["r1", "r2"]).to_json(path, orient=orient, **options)
