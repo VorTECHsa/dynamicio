@@ -13,7 +13,7 @@ from pandera.typing import Series
 
 import dynamicio
 from dynamicio.engines import EngineSetting
-from dynamicio.errors import ColumnsDataTypeError, SchemaValidationError
+from dynamicio.errors import ColumnsDataTypeError, EngineResourceError, SchemaValidationError
 from dynamicio.schema import Field, Metric, metrics
 from tests.test_engines.ios import EngineCheckIO
 
@@ -652,6 +652,40 @@ class TestConfigUniqueName:
 
         # Then
         assert errors[0] == errors[1] == {"multiple_fields_uniqueness": "PAIRS: 2 failure(s) of multiple_fields_uniqueness, for example [1, 1]"}
+
+
+class TestCheckRegistered:
+    """A validation or a metric of the model with no polars implementation fails when the IO object is built, before a read loads the data."""
+
+    @pytest.mark.unit
+    def test_a_validation_without_a_polars_validator_raises_engine_resource_error(self, polars_io, tmp_path, monkeypatch):
+        # Given
+        monkeypatch.delitem(pytest.importorskip("dynamicio.schema.polars_validations").PolarsValidations.ALL, "has_unique_values")
+
+        # When / Then
+        with pytest.raises(EngineResourceError, match="no validation 'has_unique_values' \\(register it with PolarsValidations.validator\\)"):
+            polars_io(tmp_path, apply_schema_validations=True)
+
+    @pytest.mark.unit
+    def test_a_metric_without_a_polars_metric_raises_engine_resource_error(self, polars_io, tmp_path, monkeypatch):
+        # Given
+        monkeypatch.delitem(pytest.importorskip("dynamicio.schema.polars_metrics").PolarsMetrics.ALL, "Min")
+
+        # When / Then
+        with pytest.raises(EngineResourceError, match="no metric 'Min' \\(register it with PolarsMetrics.metric\\)"):
+            polars_io(tmp_path, log_schema_metrics=True)
+
+    @pytest.mark.unit
+    def test_an_io_object_that_does_not_validate_or_log_metrics_is_built(self, polars_io, tmp_path, monkeypatch):
+        # Given
+        monkeypatch.delitem(pytest.importorskip("dynamicio.schema.polars_metrics").PolarsMetrics.ALL, "Min")
+        monkeypatch.delitem(pytest.importorskip("dynamicio.schema.polars_validations").PolarsValidations.ALL, "has_unique_values")
+
+        # When
+        io = polars_io(tmp_path)
+
+        # Then
+        assert io.schema_metrics
 
 
 class TestLogMetrics:

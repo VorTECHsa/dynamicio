@@ -512,6 +512,9 @@ else:
 assert big_orders.read().height == 6
 ```
 
+An IO object with `apply_schema_validations=True` raises `EngineResourceError` when it is built if a validation of its model has no polars validator. With
+`log_schema_metrics=True`, a metric with no polars metric gives the same error. Register the polars counterpart before you build the IO object.
+
 `PolarsValidations.validator` registers a polars validator, as `@validator` of `dynamicio.schema.validations` does for the pandas engine. A validator
 returns a `PolarsValidations.Pending`: the lazy queries of its result, and a function that makes a `ValidationResult` of their collected frames. The engine
 collects the queries of all validators in one `pl.collect_all`:

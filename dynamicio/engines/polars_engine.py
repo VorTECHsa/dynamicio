@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, NoReturn, Optional, Tuple
 from dynamicio.engines.engine import Engine
 from dynamicio.engines.polars_checks import PolarsChecks
 from dynamicio.engines.registry import Registry
-from dynamicio.errors import ColumnsDataTypeError
+from dynamicio.errors import ColumnsDataTypeError, EngineResourceError
 
 if TYPE_CHECKING:  # pragma: no cover
     from dynamicio.core import DynamicDataIO
@@ -46,7 +46,7 @@ class PolarsEngine(Engine):
 
         Raises:
             EngineResourceError: The file type or an option has no polars reader and writer, a Postgres option has no polars equivalent,
-                or a Kafka resource has no ``key_column`` of its model.
+                a Kafka resource has no ``key_column`` of its model, or a validation or a metric to apply has no polars implementation.
         """
         # pylint: disable=import-outside-toplevel
         from dynamicio.engines.polars_files import PolarsFiles
@@ -60,6 +60,26 @@ class PolarsEngine(Engine):
             PolarsKafka.check(io)
         else:
             PolarsFiles.check(io)
+        self._check_registered(io)
+
+    def _check_registered(self, io: "DynamicDataIO") -> None:
+        """Refuse a validation or a metric to apply that has no polars implementation, before a read loads the data.
+
+        The pandas engine reads the live registries of ``@validator`` and ``Metric``. A consumer validator or metric needs a polars
+        counterpart: ``PolarsValidations.validator`` or ``PolarsMetrics.metric``.
+
+        Raises:
+            EngineResourceError: A validation or a metric of the model has no polars implementation.
+        """
+        missing = []
+        if io.apply_schema_validations:
+            names = {validation.name for validations in io.schema_validations.values() for validation in validations if validation.apply and "pandera_check" not in validation.options}
+            missing += [f"validation {name!r} (register it with PolarsValidations.validator)" for name in sorted(names - set(self.registry.validators))]
+        if io.log_schema_metrics:
+            names = {getattr(metric, "value", metric) for metrics in io.schema_metrics.values() for metric in metrics}
+            missing += [f"metric {name!r} (register it with PolarsMetrics.metric)" for name in sorted(names - set(self.registry.metrics))]
+        if missing:
+            raise EngineResourceError(f"{io.name}: the polars engine has no {', '.join(missing)}")
 
     def read(self, io: "DynamicDataIO") -> Any:
         """Read a ``local``, ``local_batch``, ``s3_file``, ``s3_path_prefix``, ``postgres`` or ``athena`` resource into a polars frame.
