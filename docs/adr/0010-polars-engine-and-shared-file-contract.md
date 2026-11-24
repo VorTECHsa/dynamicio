@@ -351,12 +351,13 @@ Phase 4 as built:
   a JSON scan reads the file with the eager reader and then calls `lazy()`. A CSV scan reads all rows for the types (`infer_schema_length=None`), as the
   eager read does. Thus it reads the file twice. A CSV scan gives the columns in the order of the file, as the eager read and `usecols` on pandas do.
 - polars reads S3 with a `credential_provider` that gives the frozen credentials of the boto3 session of dynamicio, with their expiry. polars calls it again
-  after the expiry. The region comes from the boto3 client. Each boto3 endpoint other than the public endpoint of a region (`s3.amazonaws.com` and
+  after the expiry. The region is the region of the bucket, from `HeadBucket` and cached for each bucket, so a bucket in another region than the
+  boto3 client reads as it does on the pandas engine. Each boto3 endpoint other than the public endpoint of a region (`s3.amazonaws.com` and
   `s3.<region>.amazonaws.com`) goes to polars. Examples are floci, a VPC interface endpoint, a FIPS endpoint and a dual-stack endpoint.
 - A scan of one S3 object first does a ranged `GetObject` of 1 byte. A missing key then raises the dynamicio error at the scan, and `missing_ok` applies.
   A missing bucket raises the botocore `ClientError`. An `s3_file` key that ends in `/` raises `NotImplementedError`.
 - A prefix lists its keys with boto3, with the filter of the pandas engine: no directory keys, and the pattern of `dynamic_file_path`. A prefix without
-  objects raises `NoObjectsFoundError`. The engine reads the parquet footer of each object, and the scan then reads the footers again. The type of a column is the
+  objects raises `NoObjectsFoundError`. The engine reads the parquet footer of each object once, and the row counts come from the same footers. The scan has an explicit schema, so it reads only the metadata of the objects. The type of a column is the
   widest type of the footers, as `pd.concat` gives it, and the scan upcasts the narrower objects. A pair that does not upcast, for example `String` and
   `Int64`, or `Int64` and `UInt64`, raises `ColumnsDataTypeError`. An object that lacks a column gets nulls, with the warning of the pandas engine.
 - `read()` of a prefix is `scan().collect()`, so the two reads give the same frame. A CSV or JSON prefix reads each object with the eager reader, as the
@@ -432,7 +433,13 @@ Phase 7 as built:
 - The tests of dynamicio set the engine for each test, and a fixture resets it after each test. The CI test job thus runs the tests of the two
   engines in one run. A CI job runs the polars demo with `--dynamicio-engine=polars`.
 - An import test blocks the polars import in a new process. It checks the modules of dynamicio, the pandas engine and the CLI without polars. The
-  dependency-ranges CI jobs install dynamicio without the `polars` extra and check that polars is not installed.
+  dependency-ranges CI jobs install dynamicio without the `polars` extra and check that polars is not installed. A further job installs the lowest direct
+  versions of the `polars` extra (polars 2.1.0, pyarrow 25.0.0, pandera 0.34.1, pydantic 1.9.2) and runs the unit tests and the polars demo, so the floors
+  are the oldest versions that CI proves.
+- The engine checks the validation and metric names of a model against the polars registry when the user creates the IO object. A name without a polars
+  implementation raises `EngineResourceError` at construction, and not a `KeyError` at the first read or write. The `s3` resource type is a deprecated alias of `s3_file`.
+- Each module has one class, named for its responsibility: `formats.parquet` (`ParquetFooter`, `ParquetFooters`, `ParquetIndex`), `formats.json.index`
+  (`JsonIndex`), `transport.s3` (`S3Tail`, `S3Upload`, `KeptOpen`) and `schema.migrate.to_polars` (the renderer, the report and `PolarsMigration`).
 - `dynamicio migrate --engine polars` writes a polars model for each pandas model and a `POLARS_MIGRATION.md` report. The report lists the checks to port,
   the refused resources and the CSV definitions without `index`. The command does not change the resource definitions, because PyYAML drops their comments.
 - `demo/polars_pipeline` is the pandas demo on the polars engine, with models from the migrate command. Its outputs are equal to the expected outputs
