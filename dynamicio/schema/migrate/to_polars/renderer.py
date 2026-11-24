@@ -1,7 +1,7 @@
 """The source of a polars model for the ``DataframeSchema`` of a pandas model."""
 
+import ast
 from typing import Any, Mapping, Optional, Sequence
-
 
 from dynamicio.config.pydantic.table_schema import DataframeSchema
 from dynamicio.schema.migrate import ModelRenderer, SchemaComparison
@@ -12,6 +12,7 @@ class PolarsModelRenderer(ModelRenderer):
     """Renders the ``DataframeSchema`` of a pandas model as the source of a polars ``DataModel`` with the same columns, validations and metrics."""
 
     MODULE_NAMES = ModelRenderer.MODULE_NAMES | {"Annotated", "pl"}
+    IMPORTED_NAMES = frozenset({"Annotated", "DataModel", "Field", "Metric", "pl"})
     MIGRATED = "Migrated from the pandas model {name}."
 
     @staticmethod
@@ -35,9 +36,30 @@ class PolarsModelRenderer(ModelRenderer):
             return None
         return pandas_dtype
 
+    @staticmethod
+    def check_literal_arguments(field: str, column: str) -> None:
+        """Check that the arguments of a rendered ``Field`` are literals, so that the generated module needs no import for them.
+
+        Raises:
+            ValueError: A bound or a member of ``isin`` has no literal source, for example a ``datetime`` or a ``Timestamp``.
+        """
+        call = ast.parse(field, mode="eval").body
+        for argument in call.keywords:
+            if argument.arg != "metrics":
+                try:
+                    ast.literal_eval(argument.value)
+                except ValueError:
+                    raise ValueError(f"Column {column!r}: the value of {argument.arg} has no literal source ({ast.unparse(argument.value)}): port this check by hand") from None
+
     @classmethod
     def polars_class_source(cls, schema: DataframeSchema, class_name: str, config: Mapping[str, Any], docstring: str) -> str:
-        """The source of one polars ``DataModel`` class for ``schema``, with the ``Config`` options of the pandas model in ``config``."""
+        """The source of one polars ``DataModel`` class for ``schema``, with the ``Config`` options of the pandas model in ``config``.
+
+        Raises:
+            ValueError: The class name is a name that the generated module imports, or a bound has no literal source.
+        """
+        if class_name in cls.IMPORTED_NAMES:
+            raise ValueError(f"the model name {class_name} shadows a name that the generated module imports: rename the model")
         keywords = f"dataset={schema.name!r}" + (f", table={schema.table_name!r}" if schema.table_name else "")
         lines = [f"class {class_name}(DataModel, {keywords}):", f'    """{docstring}"""', ""]
         for name, column in schema.columns.items():
@@ -49,6 +71,7 @@ class PolarsModelRenderer(ModelRenderer):
             if attribute != name:
                 arguments.append(f"alias={name!r}")
             field = cls.render_field(column)
+            cls.check_literal_arguments(field, name)
             if arguments:
                 field = field[:-1] + ", " + ", ".join(arguments) + ")"
             lines.append(f"    {attribute}: {cls.polars_dtype_source(column.data_type)} = {field}")

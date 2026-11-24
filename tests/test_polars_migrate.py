@@ -324,6 +324,47 @@ class TestModules:
             PolarsMigration.migrate(str(package), str(repo / "out.py"))
 
     @pytest.mark.unit
+    def test_a_compatibility_alias_of_a_model_is_ported_once(self, repo):
+        # Given
+        package = Package.write(
+            repo,
+            {
+                "orders": "from pandera.typing import Series\nfrom dynamicio.schema import DataModel, Field\n\nclass Orders(DataModel, dataset='orders'):\n    a: Series[int] = Field(nullable=True)\n\nLegacyOrders = Orders\n"
+            },
+        )
+
+        # When
+        PolarsMigration.migrate(str(package), str(repo / "out.py"))
+
+        # Then
+        assert (repo / "out.py").read_text().count("class Orders(") == 1
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("name", ["Metric", "Field", "DataModel", "Annotated", "pl"])
+    def test_a_model_named_like_an_import_of_the_generated_module_is_refused(self, repo, name):
+        # Given
+        source = (
+            f"from pandera.typing import Series\nfrom dynamicio.schema import DataModel as Base, Field as F\n\nclass {name}(Base, dataset='x'):\n    a: Series[int] = F(nullable=True)\n"
+        )
+        package = Package.write(repo, {"named": source})
+
+        # When / Then
+        with pytest.raises(ValueError, match=rf"{name} shadows a name that the generated module imports"):
+            PolarsMigration.migrate(str(package), str(repo / "out.py"))
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("value", ["datetime.datetime(2026, 1, 1)", "Timestamp('2026-01-01')"])
+    def test_a_bound_without_a_literal_source_is_refused(self, value):
+        # When / Then
+        with pytest.raises(ValueError, match="no literal source"):
+            PolarsModelRenderer.check_literal_arguments(f"Field(nullable=True, greater_than={value})", "when")
+
+    @pytest.mark.unit
+    def test_literal_bounds_and_metrics_are_accepted(self):
+        # When / Then
+        PolarsModelRenderer.check_literal_arguments("Field(nullable=False, greater_than=0, isin=['a', 'b'], metrics=[Metric.MIN])", "a")
+
+    @pytest.mark.unit
     def test_imported_and_polars_models_are_not_ported(self, repo):
         # Given
         package = Package.write(

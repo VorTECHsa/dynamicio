@@ -42,7 +42,7 @@ class PandasModels:
             for value in vars(module).values()
             if inspect.isclass(value) and issubclass(value, pa.DataFrameModel) and value.__module__ == module.__name__ and value is not pa.DataFrameModel
         ]
-        return [model for model in models if ModelCompiler.backend_of(model) == "pandas"]
+        return [model for model in dict.fromkeys(models) if ModelCompiler.backend_of(model) == "pandas"]  # an alias (``Old = New``) is one model
 
     @classmethod
     def find(cls, path: str, root: str) -> Dict[str, List[type]]:
