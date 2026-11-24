@@ -391,6 +391,9 @@ Phase 6 as built:
 - `footer()` reads the arrow schema, the key-value metadata and the row count of a `local` or `s3_file` parquet file, without its rows. An S3 read
   takes the last 64 KiB with one ranged `GetObject`, and a second ranged `GetObject` only for a larger footer. The read is the same on the two engines.
   It does not fix the engine, and `missing_ok` gives None for a missing file.
+- The `metadata` parquet write option of the polars engine adds str-to-str pairs to the key-value metadata of the file, for `write()` and `sink()`.
+  `footer().metadata` reads them. The keys `pandas` and `ARROW:schema` raise `EngineResourceError`, because the engine writes them. A consumer can thus
+  put a build time in a part file without a write outside dynamicio.
   Each `GetObject` after the first sends the `ETag` of the first in `IfMatch`. If another writer replaces the object between two calls, S3 returns
   `PreconditionFailed` and the read raises its `ClientError`. A footer thus never mixes the bytes of two versions of one object.
 - `sink()` takes a list of lazy frames as the parts of one frame. Each part gets the schema columns and the casts of the model, so the parts can have
@@ -418,6 +421,8 @@ Phase 7 as built:
 - dynamicio does not set `POLARS_MAX_THREADS`. polars reads it at its first import, and `import dynamicio` and `configure()` do not import polars.
 - `configure(engine="polars")` raises `ImportError` if polars is missing or older than 2.1, the minimum of the `polars` extra. The check reads the
   version of the installed package, so it does not import polars. `dynamicio migrate --engine polars` runs the same check.
+- The `polars` extra requires pyarrow 25 or later. pyarrow 24 cannot write a polars list column with a null row that has items, for example
+  the output of `pl.when(cond).then(list_col)`. It raises `ArrowNotImplementedError`. pyarrow 25 writes the row as null, and a test reads it back.
 - `FrameComparison` of `dynamicio.testharness` sends two polars frames to `PolarsFrameComparison`, with the same rules. A polars frame has no index, so
   `check_row_order=False` without `sort_by` compares the rows as a multiset. The pytest option `--dynamicio-engine` calls `configure()` before the first test.
 - The tests of dynamicio set the engine for each test, and a fixture resets it after each test. The CI test job thus runs the tests of the two
