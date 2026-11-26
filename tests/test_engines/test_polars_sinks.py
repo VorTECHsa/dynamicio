@@ -10,7 +10,6 @@ import pandas as pd
 import pytest
 
 from dynamicio.engines import EngineSetting
-from dynamicio.engines.polars_sinks import PolarsSinks
 from dynamicio.errors import ColumnsDataTypeError, SchemaValidationError
 from dynamicio.schema import Field, Metric
 from tests import constants
@@ -18,6 +17,7 @@ from tests import constants
 pl = pytest.importorskip("polars")
 pq = pytest.importorskip("pyarrow.parquet")
 DataModel = pytest.importorskip("dynamicio.schema.polars").DataModel
+PolarsSinks = pytest.importorskip("dynamicio.engines.polars_sinks").PolarsSinks
 polars_files = pytest.importorskip("tests.test_engines.test_polars_files")
 Files, FilesIO, Mixed, Pair = polars_files.Files, polars_files.FilesIO, polars_files.Mixed, polars_files.Pair
 
