@@ -5,7 +5,7 @@
 import logging
 import math
 import time
-from typing import Any, Callable, Mapping, MutableMapping, Optional
+from typing import Any, Callable, Iterable, Mapping, MutableMapping, Optional, Union
 
 import pandas as pd  # type: ignore
 import simplejson
@@ -24,6 +24,8 @@ class WithKafka:
     Options (keyword arguments of `write`, or `options` in the resource definition):
 
     - Standard: keyword arguments passed to the producer constructor (see `KafkaProducer.DEFAULT_CONFIG.keys()`).
+    - `key_column: str`: the column that gives the message keys. The column is not in the message values, so the bytes are those of a frame with
+      `set_index(key_column)`. Without it, the index of the dataframe gives the keys. The polars engine requires it, because a polars frame has no index.
     - `key_generator: Callable[[Any, Mapping], T]`: defines the keying policy to be used for sending keyed-messages to Kafka. It is a `Callable` that takes a
       `tuple(idx, row)` and returns a string that will serve as the message's key, invoked prior to serialising the key. It defaults to the dataframe's index
       (which may not be composed of unique values or string type keys). It goes hand in hand with the default `key-serialiser`, which assumes that the keys
@@ -72,6 +74,19 @@ class WithKafka:
         >>>     {"key": "key-03", "value": {"bar": 1000, "baz": "ABC", "foo": "id_3", "id": "cm_3", "new_field": "new_value"}},
         >>> ]
 
+        The polars engine needs `key_column`, because a polars frame has no index. The column gives the keys, and is not in the values:
+
+        ```yaml
+        WRITE_TO_KAFKA:
+          CLOUD:
+            type: "kafka"
+            kafka:
+              kafka_server: "[[ KAFKA_SERVER ]]"
+              kafka_topic: "[[ KAFKA_TOPIC ]]"
+            options:
+              key_column: "key"
+        ```
+
     Note:
         The `__abstractmethods__ = frozenset()` is used to silence false positives from pylint,
         which might wrongly assume this class has abstract methods due to NotImplementedError.
@@ -91,7 +106,7 @@ class WithKafka:
     __value_serializer: Optional[Callable[[Mapping[Any, Any]], bytes]] = None
 
     # N.B.: Please refer to https://github.com/confluentinc/librdkafka/blob/master/CONFIGURATION.md and update this config in case of a major release change.
-    DYNAMICIO_OPTIONS = {"key_generator", "document_transformer", "key_serializer", "value_serializer", "flush_timeout"}  # options of the write, not of the producer
+    DYNAMICIO_OPTIONS = {"key_column", "key_generator", "document_transformer", "key_serializer", "value_serializer", "flush_timeout"}  # options of the write, not of the producer
 
     VALID_CONFIG_KEYS = {
         "acks",
@@ -255,18 +270,18 @@ class WithKafka:
         "transactional.id",
     }
 
-    def _read_from_kafka(self, df: pd.DataFrame):
+    def _read_from_kafka(self):
         """Kafka is not ideal for reading files as part of batch ETL jobs. Raise NotImplementedError."""
         raise NotImplementedError("Dynamicio does not support reading from Kafka Topics.")
 
-    def _write_to_kafka(self, df: pd.DataFrame) -> None:
+    def _write_to_kafka(self, df: Union[pd.DataFrame, Iterable[pd.DataFrame]]) -> None:
         """Given a dataframe where each row is a message to be sent to a Kafka Topic, iterate through all rows and send them to a Kafka topic.
 
          The topic is defined in `self.sources_config["kafka"]` and using a kafka producer, which is flushed at the
          end of this process.
 
         Args:
-            df: A dataframe where each row is a message to be sent to a Kafka Topic.
+            df: A dataframe where each row is a message to be sent to a Kafka Topic, or the chunks of one. The producer flushes once, after the last chunk.
         """
         self.populate_cls_attributes()
 
@@ -320,40 +335,55 @@ class WithKafka:
         }
         return Producer(**self.__kafka_config)
 
-    def _send_messages(self, df: pd.DataFrame, topic: str) -> None:
-        logger.debug(f"Sending {len(df)} messages to Kafka topic: {topic}.")
-        messages = df.reset_index(drop=True).to_dict("records")
+    def _send_messages(self, df: Union[pd.DataFrame, Iterable[pd.DataFrame]], topic: str) -> None:
         flush_timeout = self.options.get("flush_timeout")
         # checked before the first message: a TypeError after the queue holds messages would leave them to the cached producer, and a retry would send them twice
         if flush_timeout is not None and (isinstance(flush_timeout, bool) or not isinstance(flush_timeout, (int, float)) or flush_timeout < 0 or math.isnan(flush_timeout)):
             raise ValueError(f"`flush_timeout` must be a number of seconds of 0 or more, got {flush_timeout!r}")  # confluent-kafka takes a negative timeout as no timeout
+        key_column = self.options.get("key_column")
+        if key_column is not None and not isinstance(key_column, str):
+            raise ValueError(f"`key_column` must be the name of a column, got {key_column!r}")
 
-        for idx, message in zip(df.index.values, messages):
+        for frame in [df] if isinstance(df, pd.DataFrame) else df:
+            self._send_frame(frame, topic, key_column, flush_timeout)
+        self._flush(topic, flush_timeout)
+
+    def _send_frame(self, df: pd.DataFrame, topic: str, key_column: Optional[str], flush_timeout: Optional[float]) -> None:
+        """Queue one message for each row of a frame. The keys come from `key_column`, or from the index without it."""
+        logger.debug(f"Sending {len(df)} messages to Kafka topic: {topic}.")
+        if key_column is None:
+            keys, values = df.index.values, df
+        elif key_column in df.columns:
+            keys, values = df[key_column].values, df.drop(columns=key_column)  # the values of `set_index(key_column)`, so the keys have the same types
+        else:
+            raise ValueError(f"The `key_column` {key_column!r} is not a column of the frame: the columns are {list(df.columns)}")
+        messages = values.reset_index(drop=True).to_dict("records")
+
+        for idx, message in zip(keys, messages):
             key = self.__key_generator(idx, message)
             transformed_message = self.__document_transformer(message)
-            serialized_key = self.__key_serializer(key)
-            serialized_value = self.__value_serializer(transformed_message)
-
-            waiting_since, fewest_queued = None, None
-            while True:
-                try:
-                    self.__producer.produce(topic=topic, key=serialized_key, value=serialized_value, on_delivery=self._on_delivery)
-                    break
-                except BufferError as error:  # the local queue is full: wait for deliveries to make room, then send the message again
-                    queued = len(self.__producer)
-                    if queued == 0:
-                        raise BufferError(
-                            f"The message with key {key!r} does not fit in the empty local queue of the producer: increase `queue.buffering.max.kbytes` or make the message smaller"
-                        ) from error
-                    # progress is a smaller queue: `poll` also counts error events, and a broker that refuses connections gives one on each retry
-                    if waiting_since is None or queued < fewest_queued:
-                        waiting_since, fewest_queued = time.monotonic(), queued
-                    if flush_timeout is not None and time.monotonic() - waiting_since >= flush_timeout:
-                        raise TimeoutError(f"The local queue of the producer for Kafka topic {topic} had no room for {flush_timeout}s: no message was delivered") from error
-                    self.__producer.poll(1 if flush_timeout is None else min(1, flush_timeout))
+            self._produce(topic, key, self.__key_serializer(key), self.__value_serializer(transformed_message), flush_timeout)
             self.__producer.poll(0)  # serve the delivery callbacks, so a failed delivery raises during the write and not only at the flush
 
-        self._flush(topic, flush_timeout)
+    def _produce(self, topic: str, key: Any, serialized_key: Optional[bytes], serialized_value: bytes, flush_timeout: Optional[float]) -> None:
+        """Queue one message, and wait for room in a full local queue. Raise `TimeoutError` after `flush_timeout` seconds with no delivery."""
+        waiting_since, fewest_queued = None, None
+        while True:
+            try:
+                self.__producer.produce(topic=topic, key=serialized_key, value=serialized_value, on_delivery=self._on_delivery)
+                break
+            except BufferError as error:  # the local queue is full: wait for deliveries to make room, then send the message again
+                queued = len(self.__producer)
+                if queued == 0:
+                    raise BufferError(
+                        f"The message with key {key!r} does not fit in the empty local queue of the producer: increase `queue.buffering.max.kbytes` or make the message smaller"
+                    ) from error
+                # progress is a smaller queue: `poll` also counts error events, and a broker that refuses connections gives one on each retry
+                if waiting_since is None or queued < fewest_queued:
+                    waiting_since, fewest_queued = time.monotonic(), queued
+                if flush_timeout is not None and time.monotonic() - waiting_since >= flush_timeout:
+                    raise TimeoutError(f"The local queue of the producer for Kafka topic {topic} had no room for {flush_timeout}s: no message was delivered") from error
+                self.__producer.poll(1 if flush_timeout is None else min(1, flush_timeout))
 
     def _flush(self, topic: str, flush_timeout: Optional[float]) -> None:
         """Wait for the delivery of the queued messages, and raise `TimeoutError` after `flush_timeout` seconds with no delivery.

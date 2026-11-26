@@ -12,7 +12,7 @@ You can find this example under the demo directory of this repo.
 - **resource definitions**: the YAML files that say *where* each dataset lives (path, bucket, table, topic...) for each environment.
 - **source configs**: what `IOConfig` parses a resource definition into, one per dataset; you hand one to an IO class to read or write that dataset.
 - **schema definitions**: the Python classes (Pandera models, see Step 4.1) that say *what* a dataset looks like: columns, dtypes, validations and metrics.
-  Older projects may still declare them in YAML or as plain dictionaries; both keep working.
+  Version 11 removed the YAML and dictionary schemas. See [Upgrading](schemas-and-validation.md#upgrading).
 
 ## Let's start
 
@@ -27,7 +27,7 @@ Assume the below repository structure, which implements this pipeline, for the p
 structure we recommend for a data pipeline repository (see [Recommended project structure](#recommended-project-structure) below):
 
 ```shell
-demo
+demo/pandas
 ├── __init__.py
 ├── src
 │   ├── __init__.py
@@ -103,7 +103,7 @@ Everything that describes *what data the pipeline touches* lives together under 
 
 Rules of thumb: a dataset is added by touching `src/resources` only (definition, model, optionally an IO class); a runner
 changes only when its logic changes. Keep the models next to the definitions that use them so a resource and its contract
-are reviewed together. `demo/` follows this structure.
+are reviewed together. `demo/pandas` and `demo/polars` follow this structure.
 
 ### Step 1: Resource Definitions
 
@@ -118,16 +118,19 @@ resources
     └── transform_output.yaml
 ```
 
-The recommended structure is one input and one output definition per runner, as above and in `demo/`. Each resource lists its environments (`LOCAL`, `DEV`
+The recommended structure is one input and one output definition per runner, as above and in `demo/pandas`. Each resource lists its environments (`LOCAL`, `DEV`
 and `PROD` in the demo), **the local one first**: the first environment listed is the default of the testing tools (see [Choosing the environment](testing-pipelines.md#choosing-the-environment)).
 Environment names are yours to choose: they are only the keys you select with `env_identifier`.
+
+An S3 object has the type `s3_file`. The older type `s3` is a deprecated alias of `s3_file`. dynamicio reads it as `s3_file` and gives a
+`FutureWarning`. dynamicio 13 removes `s3`.
 
 The definitions are plain YAML, so repetition can be removed with anchors: `&name` marks a block, `*name` reuses it, and `<<: *name` merges it with the keys
 written next to it taking precedence. In the demo, `PROD` reuses `DEV`'s `s3`, `postgres` and `kafka` blocks and Kafka `options`, overriding only the host or bucket.
 
 Schemas are not part of the resource definitions: they are declared as Pandera models in the `src/resources/schemas/` package, one module per group of datasets (see Step 4.1).
 
-You will need to define your pipeline's resources by creating four `yaml` files, the ones in `demo/src/resources/definitions`. The first is:
+You will need to define your pipeline's resources by creating four `yaml` files, the ones in `demo/pandas/src/resources/definitions`. The first is:
 
 - `staging_input.yaml`, which concerns data read by the **staging** task:
 
@@ -141,13 +144,13 @@ FOO:
       file_path: "[[ TEST_RESOURCES ]]/data/input/foo.csv"
       file_type: "csv"
   DEV:
-    type: "s3"
+    type: "s3_file"
     s3: &foo_s3
       bucket: "[[ DEV_S3_INPUT_BUCKET ]]"
       file_path: "data/foo.h5"
       file_type: "hdf"
   PROD:
-    type: "s3"
+    type: "s3_file"
     s3:
       <<: *foo_s3
       bucket: "[[ PROD_S3_INPUT_BUCKET ]]"
@@ -205,13 +208,13 @@ STAGED_FOO:
     expected:
       path: "[[ TEST_RESOURCES ]]/data/raw/expected/staged_foo.parquet"
   DEV:
-    type: "s3"
+    type: "s3_file"
     s3: &foo_s3
       bucket: "[[ DEV_S3_OUTPUT_BUCKET ]]"
       file_path: "live/data/raw/staged_foo.parquet"
       file_type: "parquet"
   PROD:
-    type: "s3"
+    type: "s3_file"
     s3:
       <<: *foo_s3
       bucket: "[[ PROD_S3_OUTPUT_BUCKET ]]"
@@ -225,13 +228,13 @@ STAGED_BAR:
     expected:
       path: "[[ TEST_RESOURCES ]]/data/raw/expected/staged_bar.parquet"
   DEV:
-    type: "s3"
+    type: "s3_file"
     s3: &bar_s3
       bucket: "[[ DEV_S3_OUTPUT_BUCKET ]]"
       file_path: "live/data/raw/staged_bar.parquet"
       file_type: "parquet"
   PROD:
-    type: "s3"
+    type: "s3_file"
     s3:
       <<: *bar_s3
       bucket: "[[ PROD_S3_OUTPUT_BUCKET ]]"
@@ -248,13 +251,13 @@ STAGED_FOO:
       file_path: "[[ TEST_RESOURCES ]]/data/raw/staged_foo.parquet"
       file_type: "parquet"
   DEV:
-    type: "s3"
+    type: "s3_file"
     s3: &foo_s3
       bucket: "[[ DEV_S3_OUTPUT_BUCKET ]]"
       file_path: "live/data/raw/staged_foo.parquet"
       file_type: "parquet"
   PROD:
-    type: "s3"
+    type: "s3_file"
     s3:
       <<: *foo_s3
       bucket: "[[ PROD_S3_OUTPUT_BUCKET ]]"
@@ -266,13 +269,13 @@ STAGED_BAR:
       file_path: "[[ TEST_RESOURCES ]]/data/raw/staged_bar.parquet"
       file_type: "parquet"
   DEV:
-    type: "s3"
+    type: "s3_file"
     s3: &bar_s3
       bucket: "[[ DEV_S3_OUTPUT_BUCKET ]]"
       file_path: "live/data/raw/staged_bar.parquet"
       file_type: "parquet"
   PROD:
-    type: "s3"
+    type: "s3_file"
     s3:
       <<: *bar_s3
       bucket: "[[ PROD_S3_OUTPUT_BUCKET ]]"
@@ -291,13 +294,13 @@ FINAL_FOO:
     expected:
       path: "[[ TEST_RESOURCES ]]/data/processed/expected/final_foo.parquet"
   DEV:
-    type: "s3"
+    type: "s3_file"
     s3: &foo_s3
       bucket: "[[ DEV_S3_OUTPUT_BUCKET ]]"
       file_path: "live/data/processed/final_foo.parquet"
       file_type: "parquet"
   PROD:
-    type: "s3"
+    type: "s3_file"
     s3:
       <<: *foo_s3
       bucket: "[[ PROD_S3_OUTPUT_BUCKET ]]"
@@ -338,7 +341,7 @@ We will hence refer to these files as **"resource definitions"**.
 
 Each runner has an input and an output definition: `staging_input.yaml` defines the sources of the **staging** task, handled by the respective module
 (`runners/staging.py`), `staging_output.yaml` what it writes; similarly for **transform**. These files are parsed by `dynamicio.config.IOConfig` to generate
-configuration i/o instances referred to as "source configs" (see `demo/src/__init__.py`).
+configuration i/o instances referred to as "source configs" (see `demo/pandas/src/__init__.py`).
 
 Notice that under every source there are one layer per environment: `LOCAL`, `DEV` and `PROD`. They point to the variants of the same
 dataset, depending on whether it is called from the local environment or from the cloud (we will showcase how this
@@ -356,7 +359,7 @@ state_df = PreviousRunStateIO(source_config=input_config.get(source_key="PREVIOU
 When the source does not exist, `read()` and `async_read()` return `None` and log a warning. "Does not exist" means
 that the reader raised a `FileNotFoundError`. This includes a missing local file, a missing S3 csv or json key
 (`dynamicio.errors.ObjectNotFoundError`), a missing S3 parquet or hdf key (`dynamicio.errors.S3KeyNotFoundError`) and an
-S3 path prefix or a `local_batch` source with no objects (`dynamicio.errors.NoObjectsFoundError`). A parquet read with `filters` raises the
+S3 path prefix or a `local_batch` source with no objects (`dynamicio.errors.NoObjectsFoundError`). On the pandas engine, a parquet read with `filters` raises the
 `FileNotFoundError` of pyarrow for a missing key, which `missing_ok` also covers. A missing bucket raises the botocore
 `ClientError`, so `missing_ok` does not cover it. All other errors,
 for example a denied access, raise as before. The default is `False`. The caller handles the `None`, so the argument

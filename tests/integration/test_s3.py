@@ -40,6 +40,30 @@ class TestS3FileRoundTrip:
         pd.testing.assert_frame_equal(result, df)
 
 
+class TestS3TypeAlias:
+    """A resource of the deprecated type ``s3`` reads and writes as ``s3_file``."""
+
+    @pytest.mark.parametrize("file_type", ["parquet", "csv", "json"])
+    def test_an_s3_resource_writes_the_bytes_of_s3_file_and_reads_back_the_frame(self, floci, prefix, tmp_path, file_type):
+        # Given
+        (tmp_path / "alias").mkdir()
+        with pytest.warns(FutureWarning, match='"s3" is deprecated'):
+            alias = Resources.s3_file(tmp_path / "alias", floci.bucket, f"{prefix}/alias.{file_type}", file_type, type_name="s3")
+        (tmp_path / "file").mkdir()
+        config = Resources.s3_file(tmp_path / "file", floci.bucket, f"{prefix}/file.{file_type}", file_type)
+        df = pd.DataFrame({"col_1": [1, 2, 3], "col_2": ["a", None, "c"]})
+
+        # When
+        WriteS3IO(source_config=alias).write(df)
+        WriteS3IO(source_config=config).write(df)
+        result = WriteS3IO(source_config=alias).read()
+
+        # Then
+        body = floci.s3_client().get_object(Bucket=floci.bucket, Key=f"{prefix}/alias.{file_type}")["Body"].read()
+        assert body == floci.s3_client().get_object(Bucket=floci.bucket, Key=f"{prefix}/file.{file_type}")["Body"].read()
+        pd.testing.assert_frame_equal(result, df)
+
+
 class TestS3PathPrefixWrite:
     """The 3 `mode` values of a path prefix write on S3 that deletes objects with `DeleteObjects`."""
 

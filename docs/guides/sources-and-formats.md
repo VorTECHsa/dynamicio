@@ -2,7 +2,7 @@
 
 ![Sources dynamicio reads from and sinks it writes to: S3 and local files, PostgreSQL, Athena (read only), Kafka (write only)](../images/supported-sources.svg){ width="900" }
 
-- **S3** (or local) Input & Output, for single files (`type: s3`) and for prefixes holding many files (`type: s3_path_prefix`):
+- **S3** (or local) Input & Output, for single files (`type: s3_file`) and for prefixes holding many files (`type: s3_path_prefix`):
   - `parquet`
   - `h5`
   - `json`
@@ -11,11 +11,14 @@
 - **Athena** Input only (`type: athena`)
 - **Kafka** Output
 
+The list is for the pandas engine. The polars engine does not read or write `hdf` files. See [The polars engine](polars-engine.md)
+for its resources.
+
 ## S3 I/O
 
 S3 is accessed directly through `boto3`, with one client shared per process (safe across forked workers):
 
-* **Single files** (`type: s3`): parquet is read with one `GetObject` and parsed in memory, and written with one
+* **Single files** (`type: s3_file`): parquet is read with one `GetObject` and parsed in memory, and written with one
   `PutObject` (multipart above 16 MiB), using the same `pandas`/`pyarrow` options as local I/O. `awswrangler` is only
   used when you pass an option that only it supports, and for `csv`/`json`.
 * **Prefixes** (`type: s3_path_prefix`): objects are listed and fetched by a pool of 32 threads, one request per object.
@@ -102,7 +105,7 @@ Notes:
   `ctas_approach=True` to use awswrangler's CTAS path (faster for large results, but it creates a temporary Glue table
   and lower-cases column names).
 * awswrangler returns nullable pandas dtypes (`Int64`, `string`, `boolean`) and Python `date` objects for `date`
-  columns. When the resource declares a schema, dynamicio casts to the declared dtypes, so declare them.
+  columns. dynamicio casts them to the dtypes of the model, so declare the dtypes that you need.
 * **Breaking (9.0):** the `s3_staging_dir` key from the PyAthena era was removed. Rename it to `s3_output` (same
   value); a definition that still has it fails to load with an error saying so.
 

@@ -16,16 +16,17 @@ Sinking data is done in a very similar way. You need to:
 5. Finally, instantiate instances of those subclasses and call the `.write()` method,
    passing in the dataframe you want to write out, e.g.
 
-`demo/src/runners/staging.py`:
+`demo/pandas/src/runners/staging.py`:
 ```python
     ...
     StagedFoo(source_config=staging_output_config.get(source_key="STAGED_FOO"), **constants.TO_PARQUET_KWARGS).write(foo_df)
     StagedBar(source_config=staging_output_config.get(source_key="STAGED_BAR")).write(bar_df)
 ```
 
-Notice that you can pass all `pandas` options to write out, when for instance you are writing out `parquet`.
+On the pandas engine, the keyword arguments of the IO class go to the `pandas` writer, for example the options of a `parquet` write. The polars engine
+accepts only the options that have a polars entry (see [The polars engine](polars-engine.md#options)).
 
-`demo/src/config/constants.py`:
+`demo/pandas/src/config/constants.py`:
 ```python
 # Parquet
 TO_PARQUET_KWARGS = {
@@ -36,7 +37,7 @@ TO_PARQUET_KWARGS = {
 ```
 
 Of course this is not a problem as parquet is the format used by both resources in either environment. This is not always the case however. See in 
-`demo/src/resources/definitions/transform_output.yaml` (here with its `LOCAL`, `DEV` and `PROD` environments):
+`demo/pandas/src/resources/definitions/transform_output.yaml` (here with its `LOCAL`, `DEV` and `PROD` environments):
 
 ```yaml
 ---
@@ -95,9 +96,9 @@ and looks like:
 """Add module docstring...."""
 import logging
 
-from demo.src import staging_input_config, staging_output_config
-from demo.src.config import constants
-from demo.src.resources.io import InputIO, StagedBar, StagedFoo
+from demo.pandas.src import staging_input_config, staging_output_config
+from demo.pandas.src.config import constants
+from demo.pandas.src.resources.io import InputIO, StagedBar, StagedFoo
 
 logger = logging.getLogger(__name__)
 

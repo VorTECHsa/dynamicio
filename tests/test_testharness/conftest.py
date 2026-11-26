@@ -63,6 +63,16 @@ CSV_WITH_JSON_REFERENCE:
     expected:
       path: "[[ ROOT ]]/expected/mixed.json"
       file_type: "json"
+CSV_GZIP:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ ROOT ]]/out.csv"
+      file_type: "csv"
+    expected:
+      path: "[[ ROOT ]]/expected/out.csv"
+      options:
+        compression: "gzip"
 JSON_INDEX:
   LOCAL:
     type: "local"
@@ -73,6 +83,27 @@ JSON_INDEX:
       path: "[[ ROOT ]]/expected/index.json"
       options:
         orient: "index"
+JSON_INDEX_COLUMN:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ ROOT ]]/labels.json"
+      file_type: "json"
+    options:
+      orient: "index"
+      index_column: "label"
+    expected:
+      path: "[[ ROOT ]]/expected/labels.json"
+JSON_INDEX_COLUMN_DEFAULT_ORIENT:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ ROOT ]]/default_labels.json"
+      file_type: "json"
+    options:
+      index_column: "label"
+    expected:
+      path: "[[ ROOT ]]/expected/default_labels.json"
 """
 
 PARAMS = {"day": "monday"}

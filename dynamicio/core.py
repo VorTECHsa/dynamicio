@@ -11,22 +11,14 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, List, Mapping, MutableMapping, Optional, Tuple, Type
 
 import pandas as pd
-from pandera.pandas import DataFrameModel
+from pandera.api.dataframe.model import DataFrameModel  # the base of the pandas and the polars models
 
 # Application Imports
 from dynamicio.config.pydantic import DataframeSchema, IOEnvironment, SchemaColumn
-from dynamicio.errors import (
-    CASTING_WARNING_MSG,
-    NOTICE_MSG,
-    ColumnsDataTypeError,
-    MissingMixinError,
-    SchemaNotDeclaredError,
-    SchemaNotFoundError,
-    SchemaValidationError,
-    TableNameNotFoundError,
-)
-from dynamicio.schema import validations
-from dynamicio.schema.metrics import get_metric
+from dynamicio.engines.engine_setting import EngineSetting
+from dynamicio.errors import CASTING_WARNING_MSG, NOTICE_MSG, MissingMixinError, SchemaNotDeclaredError, SchemaNotFoundError, TableNameNotFoundError
+from dynamicio.formats.parquet.footer import ParquetFooter
+from dynamicio.formats.parquet.footers import ParquetFooters
 from dynamicio.schema.models import dataframe_validator, to_dataframe_schema
 
 logger = logging.getLogger(__name__)
@@ -108,16 +100,19 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
         self.show_casting_warnings = show_casting_warnings
         self.strict_dtype_check = strict_dtype_check
         self._dataframe_validator = None  # the dataframe-level part of a Pandera model, if any
+        self._model = None  # the Pandera model of the instance; `self.schema` becomes its compiled `DataframeSchema`
         if schema is not None:
             if not (inspect.isclass(schema) and issubclass(schema, DataFrameModel)):
                 raise TypeError(f"schema must be a pandera DataFrameModel subclass, got {schema!r}")
-            active_schema = to_dataframe_schema(schema)
-            self._dataframe_validator = dataframe_validator(schema)
-        elif self.schema is SCHEMA_FROM_ARGUMENT:
+            self._model = schema
+        elif self.schema is not SCHEMA_FROM_ARGUMENT:  # `__init_subclass__` has checked that the class attribute is a model
+            self._model = self.schema
+        if self._model is not None:
+            EngineSetting.current().check_model(self._model)
+            active_schema = to_dataframe_schema(self._model)
+            self._dataframe_validator = dataframe_validator(self._model)
+        else:
             active_schema = None
-        else:  # `__init_subclass__` has checked that the class attribute is a model
-            active_schema = to_dataframe_schema(self.schema)
-            self._dataframe_validator = dataframe_validator(self.schema)
 
         if not active_schema:
             raise SchemaNotFoundError()
@@ -132,6 +127,7 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
 
         if not (hasattr(self, f"_read_from_{source_name}") or hasattr(self, f"_write_to_{source_name}")):
             raise MissingMixinError(f"No method '_read_from_{source_name}' or '_write_to_{source_name}'. Have you registered a mixin for {source_name}?")
+        EngineSetting.current().check_resource(self)
 
     REMOVED_DECLARATIONS = (
         "Dict schemas (`schema = {...}`, `schema_validations`, `schema_metrics`) and YAML schemas (`SCHEMA_FROM_FILE`) were removed in dynamicio 11: "
@@ -172,9 +168,9 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
         Returns:
             A pandas dataframe or an iterable. None if the source does not exist and `missing_ok` is True.
         """
-        source_name = self.sources_config.data_backend_type.value
+        engine = EngineSetting.use(self._model, resource=self)  # checks the model again: `configure()` may have changed the engine since `__init__`
         try:
-            df = getattr(self, f"_read_from_{source_name}")()
+            df = engine.read(self)
         except FileNotFoundError as err:
             if not self.missing_ok:
                 raise
@@ -204,19 +200,107 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
         Args:
             df: The data to be written
         """
-        source_name = self.sources_config.data_backend_type.value
-        if set(df.columns) == set(self.schema.column_names):  # pylint: disable=E1101
-            df = df.copy(deep=False)  # `_apply_schema` casts columns in place: cast on a new frame, not on the caller's, without copying the data
-        else:
-            columns = [column for column in df.columns.to_list() if column in self.schema.column_names]
-            df = df[columns]
+        engine = EngineSetting.use(self._model, (df,), resource=self)
+        # Decision 12 of ADR 0010: the validations and the metrics see the cast frame, as on a read. 11.x validated the frame of the caller.
+        df = self._apply_schema(engine.select_columns(self, df))
 
         if self.apply_schema_validations:
             self.validate_from_schema(df)
         if self.log_schema_metrics:
             self.log_metrics_from_schema(df)
 
-        getattr(self, f"_write_to_{source_name}")(self._apply_schema(df))
+        engine.write(self, df)
+
+    def scan(self) -> Any:
+        """Read the source lazily: a polars ``LazyFrame`` on the polars engine, with the casts of the model in its plan.
+
+        A failed cast raises when the frame is collected. A lazy frame has no rows before it is collected, so ``scan()`` does not validate the frame
+        or log its metrics. Call ``validate_from_schema`` on the collected frame, or use ``read()``.
+
+        Returns:
+            A polars ``LazyFrame``. None if the source does not exist and `missing_ok` is True.
+
+        Raises:
+            NotImplementedError: On the pandas engine, which has no lazy frame.
+
+        Examples:
+            A filter and a selection of the plan read only the row groups and the columns that they need:
+
+            >>> lazy = orders.scan()
+            >>> lazy.filter(pl.col("quantity") > 10).select("order_id").collect()["order_id"].to_list()
+            [3]
+        """
+        engine = EngineSetting.use(self._model, resource=self, operation="scan")
+        try:
+            frame = engine.scan(self)
+        except FileNotFoundError as err:
+            if not self.missing_ok:
+                raise
+            logger.warning(f"Source {self.name!r} does not exist and missing_ok is set: returning None. ({err})")
+            return None
+        if self.apply_schema_validations or self.log_schema_metrics:
+            logger.warning(f"scan() of {self.name!r} does not validate or log metrics: a lazy frame has no rows before it is collected. Use read(), or validate the collected frame.")
+        return self._apply_schema(frame)
+
+    def sink(self, df: Any) -> None:
+        """Write a lazy frame to the source: a polars ``LazyFrame`` on the polars engine.
+
+        The engine runs the validations and the metrics of the schema, then the write. The write goes to a temporary file, and the
+        destination changes only after the validations pass. The metrics are logged after the validations pass. ``sink()`` does not call
+        ``validate_from_schema`` or ``log_metrics_from_schema``.
+
+        Args:
+            df: The lazy frame to write. A polars ``DataFrame`` is written as its lazy frame. A list or a tuple of frames is the parts of one frame, in
+                their order: each part gets the casts of the schema, and the sink concatenates them.
+
+        Raises:
+            NotImplementedError: On the pandas engine, which has no lazy frame, and for a resource that the polars engine does not sink yet.
+            ColumnsDataTypeError: A schema column is not in the frame, or a cast failed.
+            SchemaValidationError: A validation failed. The destination does not change.
+
+        Examples:
+            Sink a filtered scan, then the parts of one frame:
+
+            >>> big_orders.sink(orders.scan().filter(pl.col("quantity") > 10))
+            >>> big_orders.read()["order_id"].to_list()
+            [3]
+            >>> big_orders.sink([orders.scan(), orders.scan().with_columns(pl.col("order_id") + 3)])
+            >>> big_orders.read()["order_id"].to_list()
+            [1, 2, 3, 4, 5, 6]
+        """
+        parts = tuple(df) if isinstance(df, (list, tuple)) else (df,)
+        EngineSetting.use(self._model, parts, resource=self, operation="sink").sink(self, df)
+
+    def footer(self) -> Optional[ParquetFooter]:
+        """Read the footer of a parquet file without its rows: the arrow schema, the key-value metadata and the row count.
+
+        The read is the same on the two engines, and does not fix the engine. A ``local`` file is read with pyarrow. An ``s3_file`` object is read with
+        ranged ``GetObject`` calls on its end.
+
+        Returns:
+            The footer. None if the file does not exist and `missing_ok` is True.
+
+        Raises:
+            EngineResourceError: The resource is not a ``local`` or ``s3_file`` parquet file.
+            FileNotFoundError: The file does not exist, and `missing_ok` is False. An S3 key raises ``S3KeyNotFoundError``.
+            botocore.exceptions.ClientError: ``PreconditionFailed``, if another writer replaces the S3 object between two ranged reads.
+
+        Examples:
+            >>> footer = big_orders.footer()
+            >>> footer.rows, footer.row_groups
+            (6, 1)
+            >>> str(footer.schema.field("created_at").type)
+            'timestamp[ms, tz=UTC]'
+            >>> b"pandas" in footer.metadata
+            True
+        """
+        try:
+            return ParquetFooters.read(self)
+        except FileNotFoundError as err:
+            if not self.missing_ok:
+                raise
+            logger.warning(f"Source {self.name!r} does not exist and missing_ok is set: returning None. ({err})")
+            return None
 
     def validate_from_schema(self, df: pd.DataFrame) -> "DynamicDataIO":
         """Validates a dataframe based on the validations present in its schema definition.
@@ -231,27 +315,9 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
 
         Raises:
             SchemaValidationError: if any of the validations failed. The `message` attribute of
-                the exception object is a `List[str]`, where each element is the name of a
-                validation that failed.
+                the exception object is a dict of the name of each failed validation to its details.
         """
-        failed_validations: dict = {}
-        for column in self.schema_validations.keys():
-            col_validations = self.schema_validations[column]
-            for validation in col_validations:
-                if validation.apply:
-                    validator = validations.pandera_check if "pandera_check" in validation.options else validations.ALL_VALIDATORS[validation.name]
-                    validation_result = validator(self.name, df, column, **validation.options)
-                    if not validation_result.valid:
-                        failed_validations.setdefault(validation.name, []).append(validation_result.message)
-
-        if getattr(self, "_dataframe_validator", None) is not None:
-            for name, message in validations.dataframe_failures(self.name, df, self._dataframe_validator).items():
-                failed_validations.setdefault(name, []).append(message)
-
-        if len(failed_validations) > 0:
-            # One entry per validation name; when several columns fail the same validation their messages are joined, none are lost.
-            raise SchemaValidationError({name: "; ".join(messages) for name, messages in failed_validations.items()})
-
+        EngineSetting.current().validate(self, df)
         return self
 
     def log_metrics_from_schema(self, df: pd.DataFrame) -> "DynamicDataIO":
@@ -263,10 +329,7 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
         Returns:
              self (to allow for method chaining).
         """
-        for column in self.schema_metrics.keys():
-            for metric in self.schema_metrics[column]:
-                get_metric(metric)(self.name, df, column)()  # type: ignore
-
+        EngineSetting.current().log_metrics(self, df)
         return self
 
     def _apply_schema(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -284,9 +347,7 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
         Returns:
             A schema validated dataframe.
         """
-        if not self._has_valid_dtypes(df):
-            raise ColumnsDataTypeError()
-        return df
+        return EngineSetting.current().cast(self, df)
 
     @staticmethod
     def _transform_class_name_to_dataset_name(string_to_transform: str) -> str:

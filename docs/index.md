@@ -1,16 +1,17 @@
 <div class="dynamicio-hero" markdown>
-![dynamicio, wrap your I/O](images/logo-transparent.png){ width="420" } ![The dynamicio panda mascot](images/wrapped-panda.png){ width="100" }
+![dynamicio, wrap your I/O: dataframes, contracts, one wrapper. The pandas panda and the polars bear share one table, checked by Pandera](images/banner.png){ width="900" }
 </div>
 
 # dynamicio
 
-**Keep business logic independent of I/O.** dynamicio is the seam between your `pandas` code and the places your data
+**Keep business logic independent of I/O.** dynamicio is the seam between your `pandas` or `polars` code and the places your data
 lives. Declare *where* a dataset is in YAML, declare *what* it looks like as a [Pandera](https://pandera.readthedocs.io)
 model, and your code calls `read()` and `write()`. The same code then runs on a laptop against sample files and in
 production against S3, PostgreSQL, Athena or Kafka.
 
-!!! note "pandas only"
-    Dataframe execution supports `pandas`. Polars is not supported.
+!!! note "pandas and polars"
+    The pandas engine is the default. The polars engine runs the same IO classes on polars frames. One process uses one engine.
+    See [The polars engine](guides/polars-engine.md).
 
 ## The point
 
@@ -46,7 +47,7 @@ for the full argument.
 | Source | Read | Write | Formats |
 |---|---|---|---|
 | Local files (`local`, `local_batch`) | yes | yes | `parquet`, `hdf`, `json`, `csv` |
-| S3 object (`s3`) and prefix (`s3_path_prefix`) | yes | yes | `parquet`, `hdf`, `json`, `csv` |
+| S3 object (`s3_file`) and prefix (`s3_path_prefix`) | yes | yes | `parquet`, `hdf`, `json`, `csv` |
 | PostgreSQL | yes | yes | tables |
 | AWS Athena | yes | no | SQL query results |
 | Kafka | no | yes | messages |
@@ -61,7 +62,7 @@ pip install dynamicio
 uv add dynamicio
 ```
 
-Python 3.10 to 3.14 is supported. See [Installation](getting-started/installation.md).
+Python 3.11 to 3.14 is supported. See [Installation](getting-started/installation.md).
 
 ## A minimal example
 

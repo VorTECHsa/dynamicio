@@ -6,7 +6,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import pandera.pandas as pa
 
-from dynamicio.schema.metadata import METADATA_KEY, DynamicioMetadata, Metric, ValidationSpec
+from dynamicio.schema.metadata import METADATA_KEY, PANDAS_DTYPE_KEY, DynamicioMetadata, Metric, ValidationSpec
 
 
 class FieldDeclaration:
@@ -44,7 +44,7 @@ class FieldDeclaration:
         return ValidationSpec("is_in", {"categorical_values": set(expected), "exact": True})
 
     @classmethod
-    def metadata(cls, metric_names: Iterable[Metric], max_null_fraction: Optional[float], exactly: Optional[Iterable[Any]]) -> Optional[Dict[str, DynamicioMetadata]]:
+    def metadata(cls, metric_names: Iterable[Metric], max_null_fraction: Optional[float], exactly: Optional[Iterable[Any]]) -> Optional[Dict[str, Any]]:
         """The ``metadata`` of the field, or None when the column declares nothing for dynamicio."""
         validations: List[ValidationSpec] = []
         if max_null_fraction is not None:
@@ -67,6 +67,7 @@ def Field(  # pylint: disable=invalid-name,too-many-arguments,too-many-locals
     exactly: Optional[Iterable[Any]] = None,
     max_null_fraction: Optional[float] = None,
     metrics: Iterable[Metric] = (),
+    pandas_dtype: Optional[str] = None,
     **pandera_options: Any,
 ) -> Any:
     """Declare a column: what its values must satisfy, and which metrics to log for it.
@@ -83,7 +84,19 @@ def Field(  # pylint: disable=invalid-name,too-many-arguments,too-many-locals
         max_null_fraction: A fraction between 0 and 1: the validation fails when this share or more of the column is null (0.2 allows up to, not including, 20%).
         metrics: ``Metric`` members to log for the column on reads and writes that log metrics: ``Metric.MIN``, ``MAX``, ``MEAN``, ``STD``, ``VARIANCE``,
             ``COUNTS``, ``UNIQUE_COUNTS``, ``COUNTS_PER_LABEL``.
+        pandas_dtype: On a polars model only, the pandas dtype of the column, for example ``"Int64"`` for an ``Int64`` column that pandas reads as nullable.
+            The polars engine writes it into the pandas metadata of its files. A column without it takes the dtype of the reverse map (``Int64`` gives ``int64``).
         pandera_options: Any other ``pa.Field`` argument (``alias``, ``coerce``, ``str_matches``, ``description`` ...).
+
+    Examples:
+        >>> from pandera.typing import Series
+        >>> from dynamicio.schema import DataModel, Field, Metric
+        >>> class Orders(DataModel, dataset="orders"):
+        ...     order_id: Series[int] = Field(nullable=False, unique=True, gt=0, metrics=[Metric.MIN, Metric.MAX])
+        ...     price: Series[float] = Field(nullable=True, ge=0, max_null_fraction=0.5)
+        ...     status: Series[str] = Field(nullable=False, isin=["open", "closed"])
+        >>> sorted(Orders.to_schema().columns)
+        ['order_id', 'price', 'status']
     """
     removed = sorted({"between", "include_lower", "include_upper"} & set(pandera_options))
     if removed:  # dynamicio 11.0.0 release candidates had them
@@ -92,8 +105,10 @@ def Field(  # pylint: disable=invalid-name,too-many-arguments,too-many-locals
         raise TypeError("Field() declares dynamicio's metadata itself: use metrics=, exactly= and max_null_fraction= instead of metadata=")
     if exactly is not None and isin is not None:
         raise TypeError("Field() takes either isin= (values may be missing) or exactly= (none may be missing), not both")
-    metadata = FieldDeclaration.metadata(metrics, max_null_fraction, exactly)
-    if metadata is not None:
+    metadata = FieldDeclaration.metadata(metrics, max_null_fraction, exactly) or {}
+    if pandas_dtype is not None:
+        metadata[PANDAS_DTYPE_KEY] = pandas_dtype
+    if metadata:
         pandera_options["metadata"] = metadata
     named = {"gt": gt, "ge": ge, "lt": lt, "le": le, "isin": None if isin is None else list(isin)}
     given = {key: value for key, value in named.items() if value is not None}  # `gt=0` is a bound, so compare with None and not by truth

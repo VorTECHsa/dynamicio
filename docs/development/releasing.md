@@ -48,7 +48,7 @@ it. Internal-only changes (refactors, tests, CI) may omit one. Do not invent ent
 ## What the tag triggers
 
 1. `validate-release`: the tag format, a non-empty changelog section (stable tags), and that the commit is on `master` (stable tags).
-2. Style checks, the test matrix (Python 3.10 to 3.14), the dependency-range jobs and the strict documentation build.
+2. Style checks, the test matrix (Python 3.11 to 3.14), the dependency-range jobs and the strict documentation build.
 3. `package`: one wheel and one sdist, validated with `twine check --strict` and checked against the tag (file names and wheel metadata must carry the tag's version).
 4. `publish`, only when everything above passed: uploads exactly those distributions to PyPI and creates or updates the
    GitHub release from the changelog section, with links to PyPI, the version's documentation, the changelog and the source.

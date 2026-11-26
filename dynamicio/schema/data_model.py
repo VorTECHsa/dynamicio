@@ -27,7 +27,4 @@ class DataModel(pa.DataFrameModel):
                 resource needs it. Sets ``__table_name__``.
         """
         super().__init_subclass__()
-        for attribute, value in ((ModelCompiler.DATASET_NAME, dataset), (ModelCompiler.TABLE_NAME, table)):
-            if value is not None:
-                ModelCompiler.check_name(cls, attribute, value)
-                setattr(cls, attribute, value)
+        ModelCompiler.name_model(cls, dataset, table)

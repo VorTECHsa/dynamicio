@@ -10,6 +10,7 @@ import pandas as pd  # type: ignore
 
 # Application Imports
 from dynamicio.config.pydantic import DataframeSchema
+from dynamicio.engines.engine_setting import EngineSetting
 from dynamicio.errors import InvalidDatasetTypeError
 from dynamicio.schema.migrate import ModelRenderer, migrate
 
@@ -108,13 +109,43 @@ def run_migrate(argv: Sequence[str]) -> None:
     parser.add_argument(
         "-o", "--output", default="schemas.py", help="a models module (ends with .py) or a package directory with one module per sub-directory of the YAML schemas (default: schemas.py)"
     )
-    parser.add_argument("--scan", default="", help="directory searched for call sites to list in the prompt (default: the current directory)")
+    parser.add_argument("--scan", default="", help="directory searched for call sites (or, with --engine polars, resource definitions) to list (default: the current directory)")
+    parser.add_argument(
+        "--engine",
+        choices=("pandas", "polars"),
+        default="pandas",
+        help="pandas: YAML schemas to pandas models (the default). polars: the pandas models of a module or a package directory to polars models",
+    )
     args = parser.parse_args(argv)
+    if args.engine == "polars":
+        run_polars_migrate(args.path, args.output, args.scan)
+        return
     report = migrate(args.path, args.output, args.scan)
     print(f"Wrote {len(report['models'])} models to {report['module']}: {', '.join(report['models'])}")
     if report["todos"]:
         print(f"Dynamic variables to import by hand: {', '.join(report['todos'])}")
     print(f"Wrote {report['prompt']} ({report['call_sites']} call sites to review). Give it to your LLM or edit them by hand.")
+
+
+def run_polars_migrate(path: str, output: str, scan: str) -> None:
+    """``dynamicio migrate --engine polars``: the pandas models at ``path`` to polars models, plus a report of the checks and resources to change.
+
+    Examples:
+        Run it from the root of the repo, because it imports the modules of the models by their dotted name:
+
+        ```bash
+        dynamicio migrate --engine polars src/resources/schemas -o src/resources/polars_schemas --scan src/resources
+        ```
+    """
+    EngineSetting.require_polars()
+    from dynamicio.schema.migrate.to_polars.migration import PolarsMigration  # pylint: disable=import-outside-toplevel
+
+    report = PolarsMigration.migrate(path, output, scan)
+    print(f"Wrote {len(report['models'])} polars models to {report['module']}: {', '.join(report['models'])}")
+    print(
+        f"Wrote {report['report']}: {len(report['todos'])} checks to port, {len(report['objects'])} object columns to review, "
+        f"{len(report['refused'])} refused resources, {len(report['csv_index'])} CSV resources without index."
+    )
 
 
 def run():

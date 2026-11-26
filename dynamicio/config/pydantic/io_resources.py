@@ -4,6 +4,7 @@
 
 import enum
 import posixpath
+import warnings
 from typing import Mapping, Optional, Union
 
 import pydantic
@@ -17,7 +18,7 @@ class DataBackendType(str, enum.Enum):
     # pylint: disable=invalid-name
     local = "local"
     local_batch = "local_batch"
-    s3 = "s3"  # is there a difference between 's3' and 's3_file' ?
+    s3 = "s3"  # deprecated alias of `s3_file`: `IOEnvironment` reads it as `s3_file`
     s3_file = "s3_file"
     s3_path_prefix = "s3_path_prefix"
     postgres = "postgres"
@@ -65,7 +66,6 @@ class IOBinding(BaseModel):
         config_cls_overrides = {
             DataBackendType.local: LocalDataEnvironment,
             DataBackendType.local_batch: LocalBatchDataEnvironment,
-            DataBackendType.s3: S3DataEnvironment,
             DataBackendType.s3_file: S3DataEnvironment,
             DataBackendType.s3_path_prefix: S3PathPrefixEnvironment,
             DataBackendType.kafka: KafkaDataEnvironment,
@@ -77,7 +77,7 @@ class IOBinding(BaseModel):
             base_obj: IOEnvironment = IOEnvironment(**env_data)
             override_cls = config_cls_overrides.get(base_obj.data_backend_type)
             if override_cls:
-                use_obj = override_cls(**env_data)
+                use_obj = override_cls(**{**env_data, "type": base_obj.data_backend_type.value})  # the type after the alias, so the alias warns once
             else:
                 use_obj = base_obj
             out_dict[env_name] = use_obj
@@ -110,6 +110,17 @@ class IOEnvironment(BaseModel):
     options: Mapping = pydantic.Field(default_factory=dict)
     data_backend_type: DataBackendType = pydantic.Field(alias="type", const=None)
     expected: Optional[ExpectedSubSection] = None  # optional, ignored when reading or writing: used by `dynamicio.testharness`
+
+    @pydantic.validator("data_backend_type", pre=True)
+    def _read_s3_as_s3_file(cls, value):
+        """Read the type ``s3`` as ``s3_file``, with a ``FutureWarning``.
+
+        No mixin has a reader or a writer for ``s3``, so a resource of that type raised ``MissingMixinError``. dynamicio 13 removes the alias.
+        """
+        if value in ("s3", DataBackendType.s3):
+            warnings.warn('The resource type "s3" is deprecated: use "s3_file". dynamicio 13 removes "s3".', FutureWarning, stacklevel=2)
+            return DataBackendType.s3_file
+        return value
 
     if pydantic.VERSION.startswith("1."):
         # Pydantic 2 always treats underscore attributes as private and warns about this removed key.

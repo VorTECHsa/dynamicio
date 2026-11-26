@@ -17,7 +17,8 @@ The pieces, one class per module:
 - :class:`EnvironmentSwitch`: runs a test in an explicitly chosen environment of the resource definitions, instead of patching ``env_identifier``.
 - :class:`ExpectedOutputs`: the session. Collects every mismatch, raises one error, cleans up, and can regenerate the expected files.
 - :class:`Expectations`: the curated rules of a comparison (order, dtypes, tolerances, ignored columns, custom assertions), strict or relaxed.
-- :class:`FrameComparison`: applies the rules to two frames.
+- :class:`FrameComparison`: applies the rules to two frames. Two polars frames go to ``PolarsFrameComparison``, in its own module, so that a pandas
+  comparison does not import polars.
 - :class:`OutputFiles`: finds, reads, removes and promotes the generated and expected files of a resource.
 - :class:`OutputMismatchError`: the error that reports all failed checks at once.
 - :class:`OutputSandbox`: redirects the local outputs of a task into a scratch directory, so tests that write the same files can run in parallel.

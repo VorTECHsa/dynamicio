@@ -1,0 +1,58 @@
+---
+# The definitions of the pandas demo, changed where the polars engine refuses them: FOO is a parquet file on S3. FINAL_BAR in transform_output.yaml names its Kafka key column.
+# `&name` anchors a block and `*name` reuses it; `<<: *name` merges it, and keys written next to it override. DEV and PROD only differ by their hosts.
+FOO:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/input/foo.csv"
+      file_type: "csv"
+  DEV:
+    type: "s3_file"
+    s3: &foo_s3
+      bucket: "[[ DEV_S3_INPUT_BUCKET ]]"
+      file_path: "data/foo.parquet"
+      file_type: "parquet"
+  PROD:
+    type: "s3_file"
+    s3:
+      <<: *foo_s3
+      bucket: "[[ PROD_S3_INPUT_BUCKET ]]"
+
+BAR:
+  LOCAL:
+    type: "local"
+    local:
+      file_path: "[[ TEST_RESOURCES ]]/data/input/bar.parquet"
+      file_type: "parquet"
+  DEV:
+    type: "postgres"
+    postgres: &bar_postgres
+      db_host: "[[ DEV_DB_HOST ]]"
+      db_port: "[[ DB_PORT ]]"
+      db_name: "[[ DB_NAME ]]"
+      db_user: "[[ DB_USER ]]"
+      db_password: "[[ DB_PASS ]]"
+  PROD:
+    type: "postgres"
+    postgres:
+      <<: *bar_postgres
+      db_host: "[[ PROD_DB_HOST ]]"
+
+ORDERS:
+  LOCAL:
+    type: "local_batch"
+    local:
+      path_prefix: "[[ TEST_RESOURCES ]]/data/input/orders/"
+      file_type: "parquet"
+  DEV:
+    type: "s3_path_prefix"
+    s3: &orders_s3
+      bucket: "[[ DEV_S3_INPUT_BUCKET ]]"
+      path_prefix: "data/orders/"
+      file_type: "parquet"
+  PROD:
+    type: "s3_path_prefix"
+    s3:
+      <<: *orders_s3
+      bucket: "[[ PROD_S3_INPUT_BUCKET ]]"

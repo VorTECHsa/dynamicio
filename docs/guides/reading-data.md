@@ -24,7 +24,7 @@ The file looks like this:
 # pylint: disable=too-few-public-methods
 __all__ = ["InputIO", "StagedFoo", "StagedBar"]
 
-from demo.src.resources.schemas.raw import StagedBarModel, StagedFooModel
+from demo.pandas.src.resources.schemas.raw import StagedBarModel, StagedFooModel
 from sqlalchemy.ext.declarative import declarative_base
 
 from dynamicio import UnifiedIO, WithLocal, WithPostgres, WithS3File

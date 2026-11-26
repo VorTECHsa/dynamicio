@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Tuple
 
 METADATA_KEY = "dynamicio"
+# The key of the pandas dtype of a column of a polars model, in the field metadata (`Field(pandas_dtype="Int64")`)
+PANDAS_DTYPE_KEY = "pandas_dtype"
 
 
 @enum.unique

@@ -2,9 +2,9 @@
 [![codecov](https://codecov.io/gh/VorTECHsa/dynamicio/graph/badge.svg?token=McZFwD2QPh)](https://codecov.io/gh/VorTECHsa/dynamicio)
 [<img src="https://img.shields.io/badge/slack-@vortexa/dynamicio_public-purple.svg?logo=slack">](https://join.slack.com/share/enQtMzg2Nzk3ODY3MzEzNi0yNTU1ZmIyN2JkMGFhZjhhZWVjNzA2OWUzNWIyMjMyYmYzZmE4MzBjYWQ3YjdhNjU1MGU2NjFkNzMyZDllMzE2?raw=True)
 
-<img src="https://raw.githubusercontent.com/VorTECHsa/dynamicio/master/docs/images/logo-transparent.png" alt="dynamicio — Wrap your I/O" width="500"> <img src="https://raw.githubusercontent.com/VorTECHsa/dynamicio/master/docs/images/wrapped-panda.png" alt="The dynamicio panda mascot" width="100">
+<img src="https://raw.githubusercontent.com/VorTECHsa/dynamicio/master/docs/images/banner.png" alt="dynamicio, wrap your I/O: dataframes, contracts, one wrapper. The pandas panda and the polars bear share one table, checked by Pandera" width="900">
 
-**Keep your business logic independent of I/O.** dynamicio is the seam between your `pandas` code and the places your
+**Keep your business logic independent of I/O.** dynamicio is the seam between your `pandas` or `polars` code and the places your
 data lives: describe each dataset once in YAML, and your code just calls `read()` and `write()`.
 
 The same code reads a parquet file on your laptop, a CSV prefix on S3, a PostgreSQL table or an Athena query. You pick
@@ -24,7 +24,8 @@ arguments and which bucket a task reads this week.
   change was right. A `LOCAL` environment and expected outputs give it both, and production credentials never enter the loop.
 - **Contracts for your dataframes.** A [Pandera](https://pandera.readthedocs.io) model declares columns, dtypes and validations. Bad data
   fails at the boundary with every violation listed, not three steps later, and the same model can emit metrics.
-- **Pandas behaviour, not a new dialect.** Options in the YAML go to `pandas` / `awswrangler`, so what you know still applies.
+- **Library behavior, not a new dialect.** Options in the YAML go to `pandas` / `awswrangler` on the pandas engine, and to the polars readers and writers
+  on the polars engine, so what you know still applies.
 - **Sync and async.** Read and write from plain code or from `asyncio` services.
 
 ## Supported sources
@@ -37,7 +38,9 @@ arguments and which bucket a task reads this week.
 | AWS Athena | yes | no | SQL query results |
 | Kafka | no | yes | messages |
 
-Dataframe execution currently supports pandas only; Polars is not yet supported.
+The pandas engine is the default. The polars engine runs the same IO classes on polars frames. It reads and writes parquet, CSV and JSON
+files on local and S3 resources, and it reads and writes Postgres. It reads Athena and writes Kafka. One process uses one engine. See
+[the polars engine](https://dynamicio.readthedocs.io/en/latest/guides/polars-engine/).
 
 ## Install
 
@@ -45,9 +48,11 @@ Dataframe execution currently supports pandas only; Polars is not yet supported.
 pip install dynamicio
 # or, in a uv project
 uv add dynamicio
+# with the polars engine
+pip install "dynamicio[polars]"
 ```
 
-Python 3.10 to 3.14.
+Python 3.11 to 3.14.
 
 ## See it work
 

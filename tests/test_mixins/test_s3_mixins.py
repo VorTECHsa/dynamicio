@@ -52,6 +52,7 @@ from tests.mocking.io import (
     ReadS3ParquetWithLateColumnIO,
     ReadS3ParquetWithLessColumnsIO,
     TemplatedFile,
+    WriteS3IndexedEventsIO,
     WriteS3IO,
     WriteS3JsonOrientRecordsIO,
 )
@@ -3000,3 +3001,82 @@ class TestIterS3Files:
 
         # Then
         assert sorted(fetched) == [b"first", b"second"]
+
+
+class TestWranglerParquetIndexColumns:
+    @pytest.mark.unit
+    def test_index_columns_with_a_wrangler_option_write_the_index(self):
+        # Given
+        df = pd.DataFrame({"id": [1, 2], "value": ["a", "b"]})
+
+        # When
+        with mock.patch("dynamicio.mixins.with_s3.wr.s3.to_parquet") as to_parquet:
+            dynamicio.mixins.with_s3.WithS3File._write_s3_parquet_file(df, "s3://bucket/data.parquet", index_columns=["id"], s3_additional_kwargs={})  # pylint: disable=protected-access
+
+        # Then
+        written = to_parquet.call_args.kwargs
+        assert written["index"] is True
+        assert written["df"].index.names == ["id"] and written["df"].columns.tolist() == ["value"]
+
+
+class TestS3IndexOptionsThroughThePublicApi:
+    """`index_column` (JSON) and `index_columns` (parquet) of a CLOUD resource, from the options of the IO object to the bytes of the S3 object."""
+
+    @staticmethod
+    def _config(source_key):
+        return IOConfig(path_to_source_yaml=os.path.join(constants.TEST_RESOURCES, "definitions/processed.yaml"), env_identifier="CLOUD", dynamic_vars=constants).get(
+            source_key=source_key
+        )
+
+    @staticmethod
+    def _parquet_object_store():
+        """Stand-in for S3 that keeps the bytes of each parquet object: the default write uploads them, and the wrangler write gets them from pandas, as wrangler does."""
+        store = {}
+
+        def put_object(Bucket, Key, Body, **_):  # pylint: disable=invalid-name
+            store[f"s3://{Bucket}/{Key}"] = bytes(Body)
+
+        def to_parquet(df, path, index=False, **_):
+            buffer = io.BytesIO()
+            df.to_parquet(buffer, index=index)
+            store[path] = buffer.getvalue()
+
+        return store, MagicMock(put_object=MagicMock(side_effect=put_object)), to_parquet
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("orient", ["index", "columns"])
+    def test_index_column_writes_the_json_of_the_indexed_frame_and_reads_the_keys_back_in_the_column(self, orient):
+        # Given
+        df = pd.DataFrame({"release": ["feb09", "feb10"], "timestamp": [1, 2]})
+        config = self._config("WRITE_TO_S3_JSON")
+        store, to_json, read_json = TestAllowedArgsAreConfiguredCorrectlyForWithS3File._json_object_store()  # pylint: disable=protected-access
+
+        # When
+        with patch("dynamicio.mixins.with_s3.wr.s3.to_json", side_effect=to_json), patch("dynamicio.mixins.with_s3.wr.s3.read_json", side_effect=read_json):
+            WriteS3JsonOrientRecordsIO(source_config=config, orient=orient, index_column="release").write(df)
+            read = WriteS3JsonOrientRecordsIO(source_config=config, orient=orient, index_column="release").read()
+
+        # Then
+        assert next(iter(store.values())) == df.set_index("release").to_json(orient=orient)
+        pd.testing.assert_frame_equal(read, df)
+
+    @pytest.mark.unit
+    @pytest.mark.parametrize("wrangler_options", [{}, {"s3_additional_kwargs": {}}], ids=["default", "wrangler"])
+    def test_index_columns_write_the_parquet_file_of_the_indexed_frame(self, wrangler_options, tmp_path):
+        # Given
+        # an unnamed level is held in the field of its position, so its column has that name
+        df = pd.DataFrame({"vessel_id": ["v1", "v2"], "__index_level_1__": ["e1", "e2"], "value": [1, 2]})
+        expected = df.set_index(["vessel_id", "__index_level_1__"])
+        expected.index.names = ["vessel_id", None]
+        expected.to_parquet(tmp_path / "expected.parquet")
+        store, client, to_parquet = self._parquet_object_store()
+
+        # When
+        with patch.object(dynamicio.mixins.with_s3, "_shared_s3_client", return_value=client), patch.object(dynamicio.mixins.with_s3.wr.s3, "to_parquet", side_effect=to_parquet):
+            WriteS3IndexedEventsIO(source_config=self._config("WRITE_TO_S3_PARQUET"), index_columns=["vessel_id", {"__index_level_1__": None}], **wrangler_options).write(df)
+
+        # Then
+        assert client.put_object.called is not bool(wrangler_options)
+        written = io.BytesIO(next(iter(store.values())))
+        assert pq.read_schema(written).equals(pq.read_schema(tmp_path / "expected.parquet"), check_metadata=True)
+        pd.testing.assert_frame_equal(pd.read_parquet(written), expected)

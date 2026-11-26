@@ -13,7 +13,7 @@ uv sync                    # .venv from uv.lock (dev group); add --group docs fo
 uv run pytest              # always prefix commands with `uv run`, never activate or pip install
 ```
 
-- Python `>=3.10`; CI runs 3.10 to 3.14. `.python-version` is the local default.
+- Python `>=3.11`; CI runs 3.11 to 3.14. `.python-version` is the local default.
 - Dependencies: `uv add <pkg>` / `uv add --group dev <pkg>` / `uv remove <pkg>`. Commit `pyproject.toml` and `uv.lock` together.
   CI uses `uv sync --locked`, so a stale lock fails.
 - `[tool.uv] constraint-dependencies` keeps the dev environment on pandas 2 / SQLAlchemy 2.0 (not yet supported on 3 / 2.1).
@@ -27,7 +27,7 @@ uv run black --check dynamicio tests       # line length 185; `uv run black dyna
 uv run flake8 --verbose dynamicio tests    # import order (I100) failures have blocked a release before
 uv run pylint -v dynamicio tests           # must stay 10.00/10
 uv run yamllint -v dynamicio tests
-uv run pytest -vv                          # also: uv run pytest demo/tests
+uv run pytest -vv                          # also: uv run pytest demo/pandas/tests
 ```
 
 `make check-linting`, `make run-tests` and `make generate-docs` wrap the same commands. Pre-commit hooks run the linters
@@ -77,7 +77,7 @@ Do not publish a release candidate just to test locally. Release candidates are 
 
 `[project].dependencies` is what users' resolvers must satisfy, so declare only what the package imports, with the widest range that is true:
 
-- **Floor** = the oldest version CI proves works. The `dependency-ranges (lowest)` and `(lowest-numpy2)` jobs install the minimums (the latter with numpy 2) and run the suite, and publishing waits for them; raise a floor when it fails, never to "match what we use".
+- **Floor** = the oldest version CI proves works. The `dependency-ranges (lowest)` and `(lowest-numpy2)` jobs install the minimums (the latter with numpy 2) and run the suite. The `(lowest, polars)` job installs the minimums with the `polars` extra and runs the suite and the polars demo, and publishing waits for them; raise a floor when it fails, never to "match what we use".
 - **Ceiling** only for a known break (`pydantic<3`, `confluent-kafka<3`, `psycopg2-binary<3`). No precautionary ceilings, no `==` / `~=` pins without a comment saying why.
 - Do not declare libraries the code does not import (they were `fsspec`, `libcst`, `logzero`, `no_implicit_optional`). If a dependency is needed only by a dependency, it belongs to that dependency.
 - The strict side lives in the repo, not the package: `uv.lock` and `[tool.uv] constraint-dependencies` (`pandas<3`, `sqlalchemy<2.1`) keep dev/CI reproducible until those majors are supported. The `dependency-ranges (newest)` job (Python 3.14, everything upgraded within those constraints) shows when the ranges need attention.

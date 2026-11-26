@@ -72,7 +72,7 @@ repos:
     hooks:
       - id: pytest-check
         name: pytest-check-demo
-        entry: uv run --frozen python -m pytest demo/tests
+        entry: uv run --frozen python -m pytest demo/pandas/tests
         exclude: ^(\.github|\.circleci|docs|\.flake8|\.gitlint|\.pylintrc|\.docs\.Dockerfile|README\.md|Makefile|setup\.py)$
         language: system
         pass_filenames: false

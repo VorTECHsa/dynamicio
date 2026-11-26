@@ -1,14 +1,17 @@
 """Locates, reads, removes and promotes the generated and expected files of one resource."""
 
+import io as std_io
 import os
 import shutil
 import string
+from pathlib import Path
 from typing import Any, List, Mapping, Optional
 
 import pandas as pd
 
 from dynamicio.config import IOConfig
 from dynamicio.config.pydantic.io_resources import FileType
+from dynamicio.formats.json.index import JsonIndex
 
 
 class OutputFiles:
@@ -21,7 +24,7 @@ class OutputFiles:
         environment: The environment to look the resource up in; by default the first one the resource definitions list.
     """
 
-    JSON_READ_OPTIONS = ("orient", "lines")
+    JSON_READ_OPTIONS = ("orient", "lines", "index_column", "compression")
 
     def __init__(self, config: IOConfig, source_key: str, params: Optional[Mapping[str, Any]] = None, environment: Optional[str] = None):
         self.config = config
@@ -101,29 +104,77 @@ class OutputFiles:
 
     @property
     def read_options(self) -> Mapping[str, Any]:
-        """Reader options for both files: the JSON ``orient`` and ``lines`` the resource is written with, overridden by ``expected.options``."""
+        """Reader options for both files: the JSON ``orient``, ``lines``, ``index_column`` and ``compression`` the resource is written with, overridden by ``expected.options``."""
         environment = self.resource
         options = {name: environment.options[name] for name in self.JSON_READ_OPTIONS if name in environment.options}
         if environment.expected:
             options.update(environment.expected.options)
         return options
 
-    @staticmethod
-    def read_file(path: str, file_type: str, **options: Any) -> pd.DataFrame:
-        """Read a file with plain pandas, so no schema or cast hides a difference. ``options`` go to the reader (``orient`` and ``lines`` only to JSON)."""
+    @classmethod
+    def read_file(cls, path: str, file_type: str, **options: Any) -> Any:
+        """Read a file with the plain readers of the engine of the process, so no schema or cast hides a difference.
+
+        ``options`` go to the reader (``orient`` and ``lines`` to JSON, ``compression`` to JSON and CSV). On the polars engine they are the arguments of the polars reader. The pandas
+        reader gives the keys of a JSON object in the index, so it does not use ``index_column``.
+
+        Raises:
+            ValueError: The engine has no reader of the file type, or of the JSON orient.
+        """
+        from dynamicio.engines import EngineSetting  # pylint: disable=import-outside-toplevel
+
+        if EngineSetting.current().name == "polars":
+            return cls.read_polars_file(path, file_type, **options)
         readers = {"parquet": pd.read_parquet, "csv": pd.read_csv, "json": pd.read_json, "hdf": pd.read_hdf}
         if file_type not in readers:
             raise ValueError(f"Unsupported file type {file_type!r} for {path}")
+        options.pop("index_column", None)
         if file_type != "json":
             for name in OutputFiles.JSON_READ_OPTIONS:
-                options.pop(name, None)
+                if not (file_type == "csv" and name == "compression"):  # pandas reads a compressed CSV with `compression`
+                    options.pop(name, None)
         return readers[file_type](path, **options)
 
-    def read_generated(self) -> pd.DataFrame:
+    @staticmethod
+    def read_polars_file(path: str, file_type: str, **options: Any) -> Any:
+        """Read a file with the plain polars readers. A JSON file has the ``records`` orient, with ``lines`` for one record on each line.
+
+        A JSON object with the orient ``index`` or ``columns`` needs ``index_column``: the keys of the object go in that column, as the polars engine reads them.
+        Without ``orient``, the orient is ``columns`` with ``index_column``, as the writer gives it, and ``records`` without it. A JSON object decompresses
+        with ``compression`` or the suffix of the file, as ``DataFrame.to_json`` compresses it. polars decompresses a file of records itself.
+
+        Raises:
+            ValueError: The file type has no polars reader (``hdf``), the JSON orient is not ``records``, ``index`` or ``columns``, a JSON object has no
+                ``index_column``, the JSON is not an object of objects, the compression of a JSON object is not gzip, bz2, xz or zip, or polars cannot
+                read the file. The error of polars is the cause of the ``ValueError``.
+        """
+        import polars as pl  # pylint: disable=import-outside-toplevel
+
+        lines, index_column, compression = options.pop("lines", False), options.pop("index_column", None), options.pop("compression", "infer")
+        # the writer of a JSON object with `index_column` and no orient gives the `columns` orient of `DataFrame.to_json`
+        orient = options.pop("orient", None) or ("columns" if index_column is not None else "records")
+        if file_type == "json":
+            if orient in JsonIndex.ORIENTS and not lines:
+                if index_column is None:
+                    raise ValueError(f"polars reads the JSON orient {orient!r} of {path} only with the option index_column, the column of the keys of the object")
+                path = std_io.BytesIO(JsonIndex.records(JsonIndex.decompressed(Path(path).read_bytes(), path, compression), orient, index_column))
+            elif orient != "records":
+                raise ValueError(f"polars reads the JSON orients records, index and columns only, and {path} has the orient {orient!r}")
+            reader = pl.read_ndjson if lines else pl.read_json
+        else:
+            reader = {"parquet": pl.read_parquet, "csv": pl.read_csv}.get(file_type)
+            if reader is None:
+                raise ValueError(f"Unsupported file type {file_type!r} for {path} on the polars engine")
+        try:
+            return reader(path, **options)
+        except pl.exceptions.PolarsError as error:  # ExpectedOutputs.check() records a ValueError and checks the other outputs
+            raise ValueError(f"polars cannot read {path}: {error}") from error
+
+    def read_generated(self) -> Any:
         """The output the task generated."""
         return self.read_file(self.generated_path, self._file_type(self.generated_path, use_expected=False), **self.read_options)
 
-    def read_expected(self) -> pd.DataFrame:
+    def read_expected(self) -> Any:
         """The reference output."""
         return self.read_file(self.expected_path, self._file_type(self.expected_path, use_expected=True), **self.read_options)
 

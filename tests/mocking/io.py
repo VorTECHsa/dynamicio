@@ -92,6 +92,10 @@ class WriteS3JsonOrientRecordsIO(UnifiedIO):
     schema = models.ReleaseTimestamp
 
 
+class WriteS3IndexedEventsIO(UnifiedIO):
+    schema = models.IndexedEvents
+
+
 class WriteS3ParquetExternalIO(UnifiedIO):
     schema = models.ExternalEvents
 

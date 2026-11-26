@@ -46,7 +46,7 @@ create-jupyter-kernel:
 # Tests
 run-tests:
 	@uv run pytest --cache-clear --cov=${CODE_DIR} ${TESTS}
-	@uv run pytest --cache-clear --cov=demo/src demo/tests
+	@uv run pytest --cache-clear --cov=demo/pandas/src demo/pandas/tests
 
 run-unit-tests:
 	@uv run pytest -v -m unit ${TESTS}

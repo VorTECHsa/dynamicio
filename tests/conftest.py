@@ -73,7 +73,7 @@ def expected_input_yaml_dict():
                     },
                     "CLOUD": {
                         "options": {},
-                        "data_backend_type": "s3",
+                        "data_backend_type": "s3_file",
                         "expected": None,
                         "s3": {
                             "file_path": "mock-key",
@@ -97,7 +97,7 @@ def expected_input_yaml_dict():
                     },
                     "CLOUD": {
                         "options": {},
-                        "data_backend_type": "s3",
+                        "data_backend_type": "s3_file",
                         "expected": None,
                         "s3": {
                             "file_path": "mock-key",
@@ -121,7 +121,7 @@ def expected_input_yaml_dict():
                     },
                     "CLOUD": {
                         "options": {},
-                        "data_backend_type": "s3",
+                        "data_backend_type": "s3_file",
                         "expected": None,
                         "s3": {
                             "file_path": "mock-key",
@@ -145,7 +145,7 @@ def expected_input_yaml_dict():
                     },
                     "CLOUD": {
                         "options": {},
-                        "data_backend_type": "s3",
+                        "data_backend_type": "s3_file",
                         "expected": None,
                         "s3": {
                             "file_path": "mock-key",
@@ -169,7 +169,7 @@ def expected_input_yaml_dict():
                     },
                     "CLOUD": {
                         "options": {},
-                        "data_backend_type": "s3",
+                        "data_backend_type": "s3_file",
                         "expected": None,
                         "s3": {
                             "file_path": "s3:sample-prefix/mock-key",
@@ -242,7 +242,7 @@ def expected_input_yaml_dict():
                     },
                     "CLOUD": {
                         "options": {},
-                        "data_backend_type": "s3",
+                        "data_backend_type": "s3_file",
                         "expected": None,
                         "s3": {
                             "file_path": "path/to/{file_name_to_replace}.csv",
@@ -266,7 +266,7 @@ def expected_input_yaml_dict():
                     },
                     "CLOUD": {
                         "options": {},
-                        "data_backend_type": "s3",
+                        "data_backend_type": "s3_file",
                         "expected": None,
                         "s3": {
                             "file_path": "path/to/{file_name_to_replace}.parquet",
@@ -310,7 +310,7 @@ def expected_s3_csv_local_mapping():
             },
             "CLOUD": {
                 "options": {},
-                "data_backend_type": "s3",
+                "data_backend_type": "s3_file",
                 "expected": None,
                 "s3": {
                     "file_path": "mock-key",

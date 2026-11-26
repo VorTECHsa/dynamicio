@@ -1,5 +1,7 @@
 # Why dynamicio
 
+![The pandas panda and the polars bear work on the same table](../images/pandas-and-polars.png){ width="600" }
+
 Business logic should not know where its data lives.
 
 A pipeline has two kinds of code. One kind decides things: it joins, filters, scores and aggregates. The other kind moves
@@ -93,10 +95,11 @@ pipelines. It gives the agent, and you, a loop in which the result of each chang
 
 ## What dynamicio does not do
 
-- It does not transform data. Your logic does that, with `pandas`.
-- It does not hide `pandas`. Options in the YAML go to the reader or writer, and what a frame looks like after a read is
-  what `pandas` and your schema say.
-- It does not support dataframe engines other than `pandas`. Polars is not supported.
+- It does not transform data. Your logic does that, with `pandas` or `polars`.
+- It does not hide the dataframe library. Options in the YAML go to the reader or writer, and what a frame looks like after a read is
+  what the library and your schema say.
+- It does not mix dataframe libraries. One process uses the pandas engine or the polars engine, and dynamicio does not convert a frame
+  of one library to the other. See [The polars engine](../guides/polars-engine.md).
 - It is not a workflow scheduler. It runs inside the tasks that a scheduler calls.
 
 ## Where next
