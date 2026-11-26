@@ -10,6 +10,7 @@ import pandas as pd
 import pytest
 
 from dynamicio.engines import EngineSetting
+from dynamicio.engines.polars_sinks import PolarsSinks
 from dynamicio.errors import ColumnsDataTypeError, SchemaValidationError
 from dynamicio.schema import Field, Metric
 from tests import constants
@@ -261,6 +262,36 @@ class TestSinkRewriteMemory:
 
         # Then
         assert [call.kwargs.get("pre_buffer") for call in parquet_file.call_args_list] == [False]
+
+
+class TestSinkWritesInOnePass:
+    @staticmethod
+    def sink_and_count_rewrites(tmp_path: Path, frame: Any) -> int:
+        config = Files.config(tmp_path, "parquet")
+        with patch("dynamicio.engines.polars_sinks.PolarsSinks.rewrite", wraps=PolarsSinks.rewrite) as rewrite:
+            Files.polars(config, Pair).sink(frame.lazy())
+        return rewrite.call_count
+
+    @pytest.mark.unit
+    def test_a_plain_parquet_file_is_written_once_without_a_rewrite(self, tmp_path):
+        assert self.sink_and_count_rewrites(tmp_path, pl.DataFrame({"a": [1, 2, 3], "b": ["x", None, "z"]})) == 0
+
+    @pytest.mark.unit
+    def test_a_frame_without_rows_is_written_with_the_rewrite(self, tmp_path):
+        assert self.sink_and_count_rewrites(tmp_path, pl.DataFrame({"a": [1], "b": ["x"]}).head(0)) == 1
+
+    @pytest.mark.unit
+    def test_the_one_pass_file_has_the_arrow_types_of_the_pandas_file(self, tmp_path):
+        # Given
+        frame = pl.DataFrame({"a": [1, 2, 3], "b": ["x", None, "z"]})
+
+        # When
+        written, sunk = Sinks.write_and_sink(tmp_path, "parquet", {}, frame, Pair)
+
+        # Then
+        assert pq.read_schema(sunk).equals(pq.read_schema(written), check_metadata=True)
+        assert str(pq.read_schema(sunk).field("b").type) == "string"
+        assert pq.read_table(sunk).equals(pq.read_table(written))
 
 
 class TestSinkValidationsAndMetrics:

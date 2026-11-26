@@ -11,10 +11,11 @@ file with the arrow types, the pandas metadata and the write options of ``write(
 JSON file and an ``s3_path_prefix`` resource collect the frame and go to the writer of ``write()``, so the bytes and the objects are the same.
 """
 
+import base64
 import os
 import stat
 import tempfile
-from typing import TYPE_CHECKING, Any, Dict, List, MutableMapping
+from typing import TYPE_CHECKING, Any, Dict, List, MutableMapping, Tuple
 
 import polars as pl
 import pyarrow as pa
@@ -40,6 +41,8 @@ class PolarsSinks:
     MAX_ROW_GROUP_ROWS = 64 * 1024 * 1024
     # The temporary file is read once, on the same host, so a fast codec is enough
     STAGE_COMPRESSION = "lz4"
+    # The write options that `write_once` passes to `sink_parquet`
+    ONE_PASS_OPTIONS = {"compression", "row_group_size", "coerce_timestamps", "allow_truncated_timestamps", "use_deprecated_int96_timestamps"}
     STAGE_PREFIX = ".dynamicio-sink-"
 
     @classmethod
@@ -85,7 +88,12 @@ class PolarsSinks:
         directory = os.path.dirname(os.path.abspath(target)) if source == "local" else None
         with tempfile.TemporaryDirectory(prefix=cls.STAGE_PREFIX, dir=directory) as stage:
             staged, final = os.path.join(stage, "staged.parquet"), os.path.join(stage, "final.parquet")
-            cls.rewrite(staged, final, cls.stage(engine, io, lazy, staged, options), options)
+            schema, height = cls.checked_schema(engine, io, lazy, options)
+            if cls.one_pass(schema, height, options):
+                cls.write_once(lazy, final, schema, options)
+            else:
+                cls.stage(lazy, staged)
+                cls.rewrite(staged, final, schema, options)
             if source == "local":
                 cls.keep_mode(final, target)
                 os.replace(final, target)
@@ -103,8 +111,8 @@ class PolarsSinks:
         os.chmod(final, mode)
 
     @classmethod
-    def stage(cls, engine: "PolarsEngine", io: "DynamicDataIO", lazy: pl.LazyFrame, staged: str, options: MutableMapping[str, Any]) -> pa.Schema:
-        """Sink the rows to the staged file, with the validations and the metrics in the same ``collect_all``, and return the arrow schema of the file.
+    def checked_schema(cls, engine: "PolarsEngine", io: "DynamicDataIO", lazy: pl.LazyFrame, options: MutableMapping[str, Any]) -> Tuple[pa.Schema, int]:
+        """Run the validations and the metrics of the model, with the count of the rows, and return the arrow schema of the file and its number of rows.
 
         The same ``collect_all`` counts the rows, for the ``RangeIndex`` of the pandas metadata, the categories of each ``Categorical`` column, and the
         nulls of each column, for the nullable pandas dtype of an integer or a boolean column and the ``null`` type of an ``object`` column of nulls.
@@ -119,10 +127,42 @@ class PolarsSinks:
             *[pl.col(column).drop_nulls().n_unique().alias(f"categories_{number}") for number, column in enumerate(categorical)],
             *[pl.col(column).null_count().alias(f"nulls_{number}") for number, column in enumerate(nullable)],
         )
-        collected = cls.collect(engine, io, lazy, [lazy.sink_parquet(staged, compression=cls.STAGE_COMPRESSION, lazy=True), shape])
-        height, *aggregates = collected[1].row(0)
+        collected = cls.collect(engine, io, lazy, [shape])
+        height, *aggregates = collected[0].row(0)
         null_counts = dict(zip(nullable, aggregates[len(categorical) :]))
-        return PolarsParquet.arrow_schema(io, schema, height, dict(zip(categorical, aggregates)), options, null_counts=null_counts)
+        return PolarsParquet.arrow_schema(io, schema, height, dict(zip(categorical, aggregates)), options, null_counts=null_counts), height
+
+    @classmethod
+    def one_pass(cls, schema: pa.Schema, height: int, options: MutableMapping[str, Any]) -> bool:
+        """Whether polars can write the final file itself: the file has rows, its arrow types and the write options are all ones that ``sink_parquet`` writes as ``write()`` does.
+
+        A frame without rows gives no row group in polars, and one row group without rows in ``write()``."""
+        arguments = PolarsParquet.parquet_arguments(options)
+        plain = all(not (pa.types.is_null(field.type) or pa.types.is_dictionary(field.type)) for field in schema)
+        coerced = arguments.get("coerce_timestamps") in (None, "ms", "us") and not arguments.get("use_deprecated_int96_timestamps")
+        return bool(height) and plain and coerced and set(arguments) <= cls.ONE_PASS_OPTIONS
+
+    @classmethod
+    def write_once(cls, lazy: pl.LazyFrame, final: str, schema: pa.Schema, options: MutableMapping[str, Any]) -> None:
+        """Sink the rows to the final file in one pass. The ``ARROW:schema`` and the pandas metadata of ``schema`` replace the ones that polars writes.
+
+        Polars writes the arrow type ``large_string`` for a string column. The key value ``ARROW:schema`` gives a reader the arrow types of ``schema``
+        (``string``), and the pages of the 2 types are the same.
+        """
+        arguments = PolarsParquet.parquet_arguments(options)
+        rows = min(arguments.get("row_group_size") or cls.ROW_GROUP_ROWS, cls.MAX_ROW_GROUP_ROWS)
+        metadata = {key.decode(): value.decode() for key, value in (schema.metadata or {}).items()}
+        metadata["ARROW:schema"] = base64.b64encode(schema.serialize().to_pybytes()).decode()
+        unit = arguments.get("coerce_timestamps")
+        if unit:
+            # ``write()`` coerces each timestamp to `unit`, and drops the finer digits
+            lazy = lazy.with_columns(pl.col(pl.Datetime).dt.cast_time_unit(unit))
+        lazy.sink_parquet(final, compression=arguments.get("compression", "snappy"), row_group_size=rows, metadata=metadata)
+
+    @classmethod
+    def stage(cls, lazy: pl.LazyFrame, staged: str) -> None:
+        """Sink the rows to the staged file, for ``rewrite`` to copy to the final file."""
+        lazy.sink_parquet(staged, compression=cls.STAGE_COMPRESSION)
 
     @classmethod
     def collect(cls, engine: "PolarsEngine", io: "DynamicDataIO", lazy: pl.LazyFrame, queries: List[pl.LazyFrame]) -> List[pl.DataFrame]:

@@ -245,7 +245,7 @@ class DynamicDataIO:  # pylint: disable=too-many-instance-attributes
     def sink(self, df: Any) -> None:
         """Write a lazy frame to the source: a polars ``LazyFrame`` on the polars engine.
 
-        The engine runs the write, the validations and the metrics of the schema in one ``collect_all``. The write goes to a temporary file, and the
+        The engine runs the validations and the metrics of the schema, then the write. The write goes to a temporary file, and the
         destination changes only after the validations pass. The metrics are logged after the validations pass. ``sink()`` does not call
         ``validate_from_schema`` or ``log_metrics_from_schema``.
 
