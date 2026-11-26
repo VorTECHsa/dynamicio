@@ -58,37 +58,41 @@ class PolarsSinks:
             SchemaValidationError: A validation failed. The destination does not change.
             ValueError: The S3 key of a parquet file ends in ``/``, as on ``write()``, or a list of parts is empty.
         """
-        lazy = cls.combined(engine, io, frame)
+        parts = cls.cast_parts(engine, io, frame)
+        lazy = cls.combined(parts)
         source, section = Engine.source_of(io), PolarsFiles.section_of(io)
         options = dict(io.options)
         if get_file_type_value(section.file_type) != "parquet" or source == "s3_path_prefix":
             collected = cls.collect(engine, io, lazy, [lazy])
             PolarsFiles.write(io, collected[0])
             return
-        cls.sink_parquet(engine, io, lazy, options)
+        cls.sink_parquet(engine, io, lazy, options, parts)
 
     @classmethod
-    def combined(cls, engine: "PolarsEngine", io: "DynamicDataIO", frame: Any) -> pl.LazyFrame:
-        """The lazy frame of a frame, or the concatenation of the parts of a frame, each with the schema columns and the casts of the model."""
+    def cast_parts(cls, engine: "PolarsEngine", io: "DynamicDataIO", frame: Any) -> List[pl.LazyFrame]:
+        """The parts of a frame, or the frame as one part, each with the schema columns and the casts of the model. The parts have the column order of the first part."""
         parts = list(frame) if isinstance(frame, (list, tuple)) else [frame]
         if not parts:
             raise ValueError(f"sink() of {io.name!r} got no parts")
         cast = [engine.cast(io, engine.schema_columns(io, part.lazy())) for part in parts]
-        if len(cast) == 1:
-            return cast[0]
         # A vertical concat needs the columns in the same positions, and each part keeps the column order of its input
         order = cast[0].collect_schema().names()
-        return pl.concat([cast[0], *(part.select(order) for part in cast[1:])], how="vertical")
+        return [cast[0], *(part.select(order) for part in cast[1:])]
+
+    @staticmethod
+    def combined(parts: List[pl.LazyFrame]) -> pl.LazyFrame:
+        """The concatenation of the parts of a frame."""
+        return parts[0] if len(parts) == 1 else pl.concat(parts, how="vertical")
 
     @classmethod
-    def sink_parquet(cls, engine: "PolarsEngine", io: "DynamicDataIO", lazy: pl.LazyFrame, options: MutableMapping[str, Any]) -> None:
+    def sink_parquet(cls, engine: "PolarsEngine", io: "DynamicDataIO", lazy: pl.LazyFrame, options: MutableMapping[str, Any], parts: List[pl.LazyFrame]) -> None:
         """Sink a parquet file of a ``local`` or ``s3_file`` resource to a temporary file, then move it into place or upload it."""
         source, target = Engine.source_of(io), PolarsFiles.target_of(io, options)
         # A local file is moved into place, so its temporary file is in the same directory, on the same file system
         directory = os.path.dirname(os.path.abspath(target)) if source == "local" else None
         with tempfile.TemporaryDirectory(prefix=cls.STAGE_PREFIX, dir=directory) as stage:
             staged, final = os.path.join(stage, "staged.parquet"), os.path.join(stage, "final.parquet")
-            schema, height = cls.checked_schema(engine, io, lazy, options)
+            schema, height = cls.checked_schema(engine, io, lazy, options, parts)
             if cls.one_pass(schema, height, options):
                 cls.write_once(lazy, final, schema, options)
             else:
@@ -111,26 +115,31 @@ class PolarsSinks:
         os.chmod(final, mode)
 
     @classmethod
-    def checked_schema(cls, engine: "PolarsEngine", io: "DynamicDataIO", lazy: pl.LazyFrame, options: MutableMapping[str, Any]) -> Tuple[pa.Schema, int]:
+    def checked_schema(cls, engine: "PolarsEngine", io: "DynamicDataIO", lazy: pl.LazyFrame, options: MutableMapping[str, Any], parts: List[pl.LazyFrame]) -> Tuple[pa.Schema, int]:
         """Run the validations and the metrics of the model, with the count of the rows, and return the arrow schema of the file and its number of rows.
 
-        The same ``collect_all`` counts the rows, for the ``RangeIndex`` of the pandas metadata, the categories of each ``Categorical`` column, and the
-        nulls of each column, for the nullable pandas dtype of an integer or a boolean column and the ``null`` type of an ``object`` column of nulls.
+        The count of the rows is for the ``RangeIndex`` of the pandas metadata, the categories of each ``Categorical`` column, and the nulls of each
+        column are for the nullable pandas dtype of an integer or a boolean column and the ``null`` type of an ``object`` column of nulls.
+        For the parts of a frame, each part counts its rows and its nulls on its own, one after the other. One query of the concatenated parts
+        reads all the parts at the same time, and it held 16 GiB for 17 parquet parts on S3 of 72M rows, against 1.9 GiB part by part.
         """
         schema = lazy.collect_schema()
         categorical = [column for column, dtype in schema.items() if dtype == pl.Categorical]
         # The nulls of an integer or a boolean column give its pandas dtype, and a column of nulls only has the `null` type if its pandas dtype is `object`
         nullable = list(schema.names())
         # Each aggregate has its own alias, so a column of the model cannot have the name of another aggregate
-        shape = lazy.select(
-            pl.len().alias("rows"),
-            *[pl.col(column).drop_nulls().n_unique().alias(f"categories_{number}") for number, column in enumerate(categorical)],
-            *[pl.col(column).null_count().alias(f"nulls_{number}") for number, column in enumerate(nullable)],
-        )
-        collected = cls.collect(engine, io, lazy, [shape])
-        height, *aggregates = collected[0].row(0)
-        null_counts = dict(zip(nullable, aggregates[len(categorical) :]))
-        return PolarsParquet.arrow_schema(io, schema, height, dict(zip(categorical, aggregates)), options, null_counts=null_counts), height
+        categories = [pl.col(column).drop_nulls().n_unique().alias(f"categories_{number}") for number, column in enumerate(categorical)]
+        counts = [pl.len().alias("rows"), *[pl.col(column).null_count().alias(f"nulls_{number}") for number, column in enumerate(nullable)]]
+        if len(parts) == 1:
+            height, *aggregates = cls.collect(engine, io, lazy, [lazy.select(*counts[:1], *categories, *counts[1:])])[0].row(0)
+            category_counts, nulls = aggregates[: len(categorical)], aggregates[len(categorical) :]
+        else:
+            collected = cls.collect(engine, io, lazy, [lazy.select(*categories)] if categories else [])
+            category_counts = collected[0].row(0) if categories else ()
+            with PolarsChecks.failed_casts(io, "sink"):
+                rows = [part.select(*counts).collect().row(0) for part in parts]
+            height, nulls = sum(row[0] for row in rows), [sum(row[number] for row in rows) for number in range(1, len(nullable) + 1)]
+        return PolarsParquet.arrow_schema(io, schema, height, dict(zip(categorical, category_counts)), options, null_counts=dict(zip(nullable, nulls))), height
 
     @classmethod
     def one_pass(cls, schema: pa.Schema, height: int, options: MutableMapping[str, Any]) -> bool:

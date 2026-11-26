@@ -294,6 +294,28 @@ class TestSinkWritesInOnePass:
         assert pq.read_table(sunk).equals(pq.read_table(written))
 
 
+    @pytest.mark.unit
+    def test_parts_count_their_rows_and_nulls_one_after_another_for_the_file_metadata(self, tmp_path):
+        # Given
+        first, second = pl.DataFrame({"a": [1, 2], "b": ["x", "y"]}), pl.DataFrame({"a": [None, 4, 5], "b": [None, None, "z"]})
+        config = Files.config(tmp_path, "parquet")
+        counted = []
+
+        # When
+        with patch("dynamicio.engines.polars_sinks.PolarsSinks.collect", wraps=PolarsSinks.collect) as collect:
+            Files.polars(config, Pair).sink([first.lazy(), second.lazy()])
+            counted.extend(collect.call_args_list)
+        whole = tmp_path / "whole"
+        whole.mkdir()
+        Files.polars(Files.config(whole, "parquet"), Pair).sink(pl.concat([first, second]).lazy())
+
+        # Then
+        sunk = pq.read_table(tmp_path / "data.parquet")
+        assert sunk.num_rows == 5
+        assert pq.read_schema(tmp_path / "data.parquet").equals(pq.read_schema(whole / "data.parquet"), check_metadata=True)
+        assert len(counted) == 1
+
+
 class TestSinkValidationsAndMetrics:
     @pytest.mark.unit
     def test_a_failed_validation_leaves_the_old_file_and_logs_no_metrics(self, tmp_path):
